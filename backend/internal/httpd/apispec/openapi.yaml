@@ -1,0 +1,2912 @@
+openapi: 3.0.3
+info:
+  description: Loopback API of the babysitter daemon. Generated from the Go types
+    in internal/httpd; do not edit by hand.
+  title: babysitter daemon API
+  version: 1.0.0
+servers:
+- url: http://127.0.0.1:{port}/api/v1
+  variables:
+    port:
+      default: "0"
+paths:
+  /api/v1/control/shutdown:
+    post:
+      operationId: shutdown
+      responses:
+        "202":
+          description: Accepted
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Forbidden
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Stop the daemon. Rejected for browser origins.
+  /api/v1/events:
+    get:
+      operationId: streamEvents
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Change feed as server-sent events
+  /api/v1/healthz:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdHealth'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Liveness of the daemon
+  /api/v1/notifications:
+    get:
+      operationId: listNotifications
+      parameters:
+      - description: all (default) or unread
+        in: query
+        name: status
+        schema:
+          description: all (default) or unread
+          enum:
+          - all
+          - unread
+          type: string
+      - description: 'How many rows at most: 1 to 1000, 200 by default'
+        in: query
+        name: limit
+        schema:
+          description: 'How many rows at most: 1 to 1000, 200 by default'
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdNotificationList'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: The notifications the daemon recorded, newest first
+    post:
+      operationId: addNotification
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HttpdNewNotificationRequest'
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdNotification'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Record one notification and show it
+  /api/v1/notifications/read:
+    post:
+      operationId: readNotifications
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HttpdReadNotificationsRequest'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdNotificationsRead'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Mark notifications as seen; no ids marks every unread one
+  /api/v1/providers:
+    get:
+      operationId: listProviders
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdProviderList'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: The AI providers and the models they offer
+  /api/v1/prs:
+    get:
+      operationId: listPullRequests
+      parameters:
+      - description: Only one repository, as owner/name
+        in: query
+        name: repo
+        schema:
+          description: Only one repository, as owner/name
+          type: string
+      - description: open (default) or all
+        in: query
+        name: state
+        schema:
+          description: open (default) or all
+          enum:
+          - open
+          - all
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdPullRequestList'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: List the stored pull requests
+  /api/v1/ratelimit:
+    get:
+      operationId: getRateLimit
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdRateLimit'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: The GitHub API budget the token of the daemon has left
+  /api/v1/readyz:
+    get:
+      operationId: getReady
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdHealth'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Readiness of the daemon
+  /api/v1/repos:
+    get:
+      operationId: listRepos
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdRepoList'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: List the watched repositories
+    post:
+      operationId: addRepo
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HttpdAddRepoRequest'
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdRepo'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Watch a repository
+  /api/v1/repos/{id}:
+    delete:
+      operationId: removeRepo
+      parameters:
+      - description: Repository id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Repository id
+          format: int64
+          type: integer
+      responses:
+        "204":
+          description: No Content
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Stop watching a repository
+  /api/v1/settings:
+    get:
+      operationId: getSettings
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdSettings'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: The settings of the daemon
+    put:
+      operationId: putSettings
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HttpdSettings'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdSettings'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Write the settings of the daemon
+  /api/v1/sync:
+    post:
+      operationId: requestSync
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdSyncAccepted'
+          description: Accepted
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Ask the watcher for a sync pass now
+  /api/v1/viewer:
+    get:
+      operationId: getViewer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdViewer'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The GitHub account the daemon acts as
+  /api/v1/watches:
+    get:
+      operationId: listWatches
+      parameters:
+      - description: active (default) or all
+        in: query
+        name: status
+        schema:
+          description: active (default) or all
+          enum:
+          - active
+          - all
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatchList'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: List the watched pull requests
+    post:
+      operationId: startWatch
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HttpdStartWatchRequest'
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatch'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Watch a pull request
+  /api/v1/watches/{id}:
+    get:
+      operationId: getWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatch'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: One watched pull request
+    patch:
+      operationId: updateWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateWatchParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatch'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Change the approvals and the merge method of a watch while it runs.
+        The other fields of a watch cannot change.
+  /api/v1/watches/{id}/activity:
+    get:
+      operationId: listWatchActivity
+      parameters:
+      - description: Only rows with an id above this
+        in: query
+        name: since
+        schema:
+          description: Only rows with an id above this
+          format: int64
+          type: integer
+      - description: At most this many rows, default 200
+        in: query
+        name: limit
+        schema:
+          description: At most this many rows, default 200
+          type: integer
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdActivityList'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Activity of a watched pull request
+  /api/v1/watches/{id}/approval:
+    post:
+      operationId: setWatchApproval
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApprovalParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatch'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Change who releases the turns of a watch while it runs
+  /api/v1/watches/{id}/handback:
+    post:
+      operationId: handbackWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HandbackParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatch'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdHandbackRefusal'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Give the agent session of a watch back to the daemon. A 409 with the
+        code unconfirmed_work lists the commits and the changes to confirm.
+  /api/v1/watches/{id}/hook:
+    post:
+      operationId: reportWatchHook
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HookParams'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Report an event of the agent of a watched pull request. The hook command
+        of the agent calls it.
+  /api/v1/watches/{id}/merge:
+    post:
+      operationId: mergeWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MergeWatchParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatch'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Merge the pull request of a watch and stop the watch
+  /api/v1/watches/{id}/next:
+    post:
+      operationId: nextWatchMessage
+      parameters:
+      - description: How long to wait for a message when there is none, as a Go duration
+          such as 5m; default 0
+        in: query
+        name: wait
+        schema:
+          description: How long to wait for a message when there is none, as a Go
+            duration such as 5m; default 0
+          type: string
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdNextMessage'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Hand the agent of a self watch its next message, after a wait when
+        there is none
+  /api/v1/watches/{id}/output:
+    get:
+      operationId: getWatchOutput
+      parameters:
+      - description: At most this many lines from the end, default 200
+        in: query
+        name: lines
+        schema:
+          description: At most this many lines from the end, default 200
+          type: integer
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdSessionOutput'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The last lines the agent of a watched pull request printed
+  /api/v1/watches/{id}/poll:
+    post:
+      operationId: pollWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdSyncAccepted'
+          description: Accepted
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Poll a watched pull request now
+  /api/v1/watches/{id}/proposals:
+    get:
+      operationId: listProposals
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdProposalList'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The proposals of a watch, newest first
+  /api/v1/watches/{id}/proposals/{number}:
+    get:
+      operationId: getProposal
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      - description: Proposal number, counted per watch from 1
+        in: path
+        name: number
+        required: true
+        schema:
+          description: Proposal number, counted per watch from 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdProposalDetail'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: One proposal with its commits, files, diff and replies
+  /api/v1/watches/{id}/proposals/{number}/approve:
+    post:
+      operationId: approveProposal
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      - description: Proposal number, counted per watch from 1
+        in: path
+        name: number
+        required: true
+        schema:
+          description: Proposal number, counted per watch from 1
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ApproveParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdProposal'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Release a proposal that waits on the author, with the replies they
+        changed
+  /api/v1/watches/{id}/proposals/{number}/reject:
+    post:
+      operationId: rejectProposal
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      - description: Proposal number, counted per watch from 1
+        in: path
+        name: number
+        required: true
+        schema:
+          description: Proposal number, counted per watch from 1
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RejectParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdProposal'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: 'Reject a proposal: nothing of it goes out, and the reason goes to
+        the agent'
+  /api/v1/watches/{id}/proposals/{number}/retry:
+    post:
+      operationId: retryProposal
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      - description: Proposal number, counted per watch from 1
+        in: path
+        name: number
+        required: true
+        schema:
+          description: Proposal number, counted per watch from 1
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdProposal'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Release a failed proposal of a watch again, rebased onto a pull request
+        branch that moved
+  /api/v1/watches/{id}/reply:
+    post:
+      operationId: replyOnWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplyParams'
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdReplyResult'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Unprocessable Entity
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Take a reply of the agent on a watched pull request; the daemon posts
+        it when the turn ends, or at once for a self watch
+  /api/v1/watches/{id}/send:
+    post:
+      operationId: sendWatchMessage
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendParams'
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdActivity'
+          description: Created
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Send a message to the agent of a watched pull request
+  /api/v1/watches/{id}/stop:
+    post:
+      operationId: stopWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StopWatchParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdWatch'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Stop watching a pull request
+  /api/v1/watches/{id}/takeover:
+    post:
+      operationId: takeoverWatch
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TakeoverParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdTakeoverResponse'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: 'Move the agent session of a watch to the terminal of the author: the
+        session of the daemon ends and the proposals that wait are declined'
+components:
+  schemas:
+    ApprovalParams:
+      properties:
+        autoApproveRebase:
+          nullable: true
+          type: boolean
+        mode:
+          enum:
+          - auto
+          - manual
+          nullable: true
+          type: string
+        release:
+          description: Confirm that a switch to auto releases the proposal that waits
+            on the author
+          type: boolean
+      type: object
+    ApproveParams:
+      properties:
+        drop:
+          description: The ids of the replies the author took out
+          items:
+            format: int64
+            type: integer
+          type: array
+        edits:
+          description: The replies the author rewrote
+          items:
+            $ref: '#/components/schemas/HttpdReplyEdit'
+          type: array
+        rejectPush:
+          description: Post the replies without pushing the commits
+          type: boolean
+        stopAsking:
+          description: Release the proposal and set the watch to auto
+          type: boolean
+      type: object
+    HandbackParams:
+      properties:
+        confirm:
+          description: Hand back although the worktree has commits or changes that
+            are not on the pull request
+          type: boolean
+        force:
+          description: Hand back although the process that took the session still
+            runs
+          type: boolean
+      type: object
+    HookParams:
+      properties:
+        event:
+          enum:
+          - session-start
+          - user-prompt-submit
+          - pre-tool-use
+          - post-tool-use
+          - post-tool-use-failure
+          - permission-request
+          - stop
+          - notification
+          - session-end
+          type: string
+        payload:
+          additionalProperties: {}
+          nullable: true
+          type: object
+      required:
+      - event
+      - payload
+      type: object
+    HttpdAPIError:
+      properties:
+        error:
+          $ref: '#/components/schemas/HttpdErrorBody'
+      required:
+      - error
+      type: object
+    HttpdActivity:
+      properties:
+        actor:
+          type: string
+        at:
+          format: date-time
+          type: string
+        id:
+          format: int64
+          type: integer
+        kind:
+          enum:
+          - comment
+          - review_comment
+          - review
+          - check_failed
+          - check_recovered
+          - checks_green
+          - commit
+          - behind
+          - conflict
+          - merged
+          - closed
+          - heartbeat
+          - watch_started
+          - watch_stopped
+          - session_started
+          - session_exited
+          - nudged
+          - agent_failed
+          - merge_ready
+          - merge_failed
+          - replied
+          - review_requested
+          - proposal
+          - taken_over
+          - handed_back
+          type: string
+        nudgedAt:
+          description: When the row reached the agent
+          format: date-time
+          nullable: true
+          type: string
+        payload:
+          additionalProperties: {}
+          nullable: true
+          type: object
+        ref:
+          type: string
+        reported:
+          type: boolean
+        reportedAt:
+          format: date-time
+          nullable: true
+          type: string
+        summary:
+          type: string
+        url:
+          type: string
+        watchId:
+          format: int64
+          type: integer
+      required:
+      - id
+      - watchId
+      - kind
+      - ref
+      - at
+      - actor
+      - summary
+      - url
+      - payload
+      - reported
+      type: object
+    HttpdActivityList:
+      properties:
+        activity:
+          items:
+            $ref: '#/components/schemas/HttpdActivity'
+          nullable: true
+          type: array
+      required:
+      - activity
+      type: object
+    HttpdAddRepoRequest:
+      properties:
+        fullName:
+          type: string
+      required:
+      - fullName
+      type: object
+    HttpdErrorBody:
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+      required:
+      - code
+      - message
+      type: object
+    HttpdHandbackRefusal:
+      properties:
+        commits:
+          description: The commits of the work branch that the pull request branch
+            does not have; present with the code unconfirmed_work
+          items:
+            $ref: '#/components/schemas/HttpdWorkCommit'
+          type: array
+        error:
+          $ref: '#/components/schemas/HttpdErrorBody'
+        files:
+          description: The changes of the worktree that are not committed, as git
+            status --porcelain prints them; present with the code unconfirmed_work
+          items:
+            type: string
+          type: array
+      required:
+      - error
+      type: object
+    HttpdHealth:
+      properties:
+        pid:
+          type: integer
+        startedAt:
+          type: string
+        status:
+          type: string
+        version:
+          type: string
+      required:
+      - status
+      - version
+      - pid
+      - startedAt
+      type: object
+    HttpdNewNotificationRequest:
+      properties:
+        body:
+          type: string
+        kind:
+          description: 'Empty means agent: the agent asks you for something'
+          enum:
+          - ""
+          - agent
+          - review
+          - checks
+          - watch
+          - merge
+          type: string
+        number:
+          type: integer
+        repo:
+          type: string
+        silent:
+          description: Do not make a sound
+          type: boolean
+        subtitle:
+          description: The second line of the notification the operating system shows
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+        watchId:
+          format: int64
+          type: integer
+      required:
+      - title
+      - body
+      type: object
+    HttpdNextMessage:
+      properties:
+        message:
+          $ref: '#/components/schemas/HttpdActivity'
+        watch:
+          $ref: '#/components/schemas/HttpdWatch'
+      required:
+      - watch
+      type: object
+    HttpdNotification:
+      properties:
+        body:
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        id:
+          format: int64
+          type: integer
+        kind:
+          description: 'agent: the agent asks you for something; review: a review
+            item nobody takes; checks: the checks of the pull request; watch: the
+            life of a watch and of its session; merge: the pull request can merge,
+            or failed to'
+          enum:
+          - agent
+          - review
+          - checks
+          - watch
+          - merge
+          type: string
+        number:
+          type: integer
+        readAt:
+          description: When the user saw the notification; absent while it is unread
+          format: date-time
+          nullable: true
+          type: string
+        repo:
+          type: string
+        silent:
+          description: The notification asked for no sound, whatever the settings
+            hold
+          type: boolean
+        title:
+          type: string
+        url:
+          type: string
+        watchId:
+          description: The watch the notification belongs to; absent for one that
+            belongs to none
+          format: int64
+          type: integer
+      required:
+      - id
+      - kind
+      - repo
+      - number
+      - title
+      - body
+      - url
+      - createdAt
+      type: object
+    HttpdNotificationList:
+      properties:
+        notifications:
+          items:
+            $ref: '#/components/schemas/HttpdNotification'
+          nullable: true
+          type: array
+        unreadCount:
+          description: How many notifications are unread, whatever the page holds
+          type: integer
+      required:
+      - notifications
+      - unreadCount
+      type: object
+    HttpdNotificationsRead:
+      properties:
+        unreadCount:
+          type: integer
+      required:
+      - unreadCount
+      type: object
+    HttpdProposal:
+      properties:
+        approvedAt:
+          description: When the author approved it
+          format: date-time
+          nullable: true
+          type: string
+        baseSha:
+          description: Where the work branch met that head when the turn started
+          type: string
+        decidedAt:
+          description: When the author approved or rejected it
+          format: date-time
+          nullable: true
+          type: string
+        endedAt:
+          format: date-time
+          nullable: true
+          type: string
+        error:
+          description: Why the last release failed
+          type: string
+        hasPush:
+          description: The turn made commits the daemon pushes
+          type: boolean
+        headSha:
+          description: The head of the pull request branch when the turn started;
+            a turn that only added commits on top of it is rebased onto a head that
+            moved
+          type: string
+        number:
+          description: Counts the proposals of one watch from 1
+          type: integer
+        openedAt:
+          format: date-time
+          type: string
+        pushRejected:
+          description: The author let the replies go out without the commits
+          type: boolean
+        reason:
+          description: What the author said when they rejected it
+          type: string
+        rebasedFrom:
+          description: The work the daemon rebased onto a head that moved
+          type: string
+        releasedAt:
+          format: date-time
+          nullable: true
+          type: string
+        replies:
+          items:
+            $ref: '#/components/schemas/HttpdProposalReply'
+          nullable: true
+          type: array
+        status:
+          enum:
+          - open
+          - pending
+          - released
+          - failed
+          - rejected
+          - declined
+          - superseded
+          type: string
+        workSha:
+          description: 'The work branch when the turn ended: what the daemon pushes'
+          type: string
+      required:
+      - number
+      - status
+      - headSha
+      - baseSha
+      - workSha
+      - hasPush
+      - openedAt
+      - pushRejected
+      - replies
+      type: object
+    HttpdProposalCommit:
+      properties:
+        heldBack:
+          description: 'The commit comes from before the turn: an earlier decision
+            of the author kept it off the pull request, and this proposal carries
+            it again'
+          type: boolean
+        sha:
+          type: string
+        subject:
+          type: string
+      required:
+      - sha
+      - subject
+      type: object
+    HttpdProposalDetail:
+      properties:
+        approvedAt:
+          description: When the author approved it
+          format: date-time
+          nullable: true
+          type: string
+        baseSha:
+          description: Where the work branch met that head when the turn started
+          type: string
+        codeError:
+          description: Why the commits, files and diff could not be read from the
+            worktree; when set, they are empty and the work is unknown, not absent
+          type: string
+        commits:
+          items:
+            $ref: '#/components/schemas/HttpdProposalCommit'
+          nullable: true
+          type: array
+        decidedAt:
+          description: When the author approved or rejected it
+          format: date-time
+          nullable: true
+          type: string
+        diff:
+          description: The plain unified diff of the work
+          type: string
+        endedAt:
+          format: date-time
+          nullable: true
+          type: string
+        error:
+          description: Why the last release failed
+          type: string
+        files:
+          items:
+            $ref: '#/components/schemas/HttpdProposalFile'
+          nullable: true
+          type: array
+        hasPush:
+          description: The turn made commits the daemon pushes
+          type: boolean
+        headSha:
+          description: The head of the pull request branch when the turn started;
+            a turn that only added commits on top of it is rebased onto a head that
+            moved
+          type: string
+        number:
+          description: Counts the proposals of one watch from 1
+          type: integer
+        openedAt:
+          format: date-time
+          type: string
+        pushRejected:
+          description: The author let the replies go out without the commits
+          type: boolean
+        reason:
+          description: What the author said when they rejected it
+          type: string
+        rebasedFrom:
+          description: The work the daemon rebased onto a head that moved
+          type: string
+        releasedAt:
+          format: date-time
+          nullable: true
+          type: string
+        replies:
+          items:
+            $ref: '#/components/schemas/HttpdProposalReply'
+          nullable: true
+          type: array
+        status:
+          enum:
+          - open
+          - pending
+          - released
+          - failed
+          - rejected
+          - declined
+          - superseded
+          type: string
+        truncated:
+          description: The diff was cut at one megabyte
+          type: boolean
+        workSha:
+          description: 'The work branch when the turn ended: what the daemon pushes'
+          type: string
+      required:
+      - number
+      - status
+      - headSha
+      - baseSha
+      - workSha
+      - hasPush
+      - openedAt
+      - pushRejected
+      - replies
+      - commits
+      - files
+      - diff
+      - truncated
+      type: object
+    HttpdProposalFile:
+      properties:
+        added:
+          type: integer
+        deleted:
+          type: integer
+        path:
+          type: string
+        status:
+          description: 'The letter git gives the change: A, M, D or T'
+          type: string
+      required:
+      - path
+      - status
+      - added
+      - deleted
+      type: object
+    HttpdProposalList:
+      properties:
+        proposals:
+          items:
+            $ref: '#/components/schemas/HttpdProposal'
+          nullable: true
+          type: array
+      required:
+      - proposals
+      type: object
+    HttpdProposalReply:
+      properties:
+        answers:
+          $ref: '#/components/schemas/HttpdActivity'
+        body:
+          description: The text of the agent
+          type: string
+        dropped:
+          description: 'The author took the reply out: it is never posted'
+          type: boolean
+        droppedAt:
+          description: When the daemon gave up on the reply because GitHub can never
+            take it; error says why
+          format: date-time
+          nullable: true
+          type: string
+        edited:
+          description: The text of the author, which goes out in place of the body
+          type: string
+        error:
+          description: Why the last post failed
+          type: string
+        id:
+          format: int64
+          type: integer
+        inReplyTo:
+          description: 'The comment the reply answers: a review comment, in its thread,
+            or a comment on the conversation; absent comments on the pull request
+            and answers no comment'
+          format: int64
+          type: integer
+        postedAt:
+          format: date-time
+          nullable: true
+          type: string
+        postedUrl:
+          description: The comment the reply made, once it went out
+          type: string
+      required:
+      - id
+      - body
+      - dropped
+      type: object
+    HttpdProvider:
+      properties:
+        available:
+          type: boolean
+        id:
+          enum:
+          - claude
+          - copilot
+          type: string
+        label:
+          type: string
+        models:
+          items:
+            $ref: '#/components/schemas/HttpdProviderModel'
+          nullable: true
+          type: array
+      required:
+      - id
+      - label
+      - models
+      - available
+      type: object
+    HttpdProviderList:
+      properties:
+        providers:
+          items:
+            $ref: '#/components/schemas/HttpdProvider'
+          nullable: true
+          type: array
+      required:
+      - providers
+      type: object
+    HttpdProviderModel:
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+      required:
+      - id
+      - label
+      type: object
+    HttpdPullRequest:
+      properties:
+        additions:
+          type: integer
+        approvals:
+          type: integer
+        author:
+          type: string
+        baseRef:
+          type: string
+        changesRequested:
+          type: integer
+        ciStatus:
+          enum:
+          - success
+          - failure
+          - pending
+          - none
+          type: string
+        closedAt:
+          format: date-time
+          nullable: true
+          type: string
+        createdAt:
+          format: date-time
+          type: string
+        deletions:
+          type: integer
+        draft:
+          type: boolean
+        headRef:
+          type: string
+        headSha:
+          type: string
+        htmlUrl:
+          type: string
+        labels:
+          items:
+            type: string
+          nullable: true
+          type: array
+        mergeableState:
+          type: string
+        mergedAt:
+          format: date-time
+          nullable: true
+          type: string
+        number:
+          type: integer
+        repo:
+          type: string
+        requestedReviewers:
+          items:
+            type: string
+          nullable: true
+          type: array
+        reviewDecision:
+          enum:
+          - approved
+          - changes_requested
+          - review_required
+          - none
+          type: string
+        state:
+          enum:
+          - open
+          - closed
+          - merged
+          type: string
+        syncedAt:
+          format: date-time
+          type: string
+        title:
+          type: string
+        updatedAt:
+          format: date-time
+          type: string
+      required:
+      - repo
+      - number
+      - title
+      - author
+      - state
+      - draft
+      - baseRef
+      - headRef
+      - headSha
+      - htmlUrl
+      - createdAt
+      - updatedAt
+      - mergeableState
+      - reviewDecision
+      - approvals
+      - changesRequested
+      - requestedReviewers
+      - labels
+      - additions
+      - deletions
+      - ciStatus
+      - syncedAt
+      type: object
+    HttpdPullRequestList:
+      properties:
+        pullRequests:
+          items:
+            $ref: '#/components/schemas/HttpdPullRequest'
+          nullable: true
+          type: array
+      required:
+      - pullRequests
+      type: object
+    HttpdRateLimit:
+      properties:
+        limit:
+          description: Requests the token may make in one window; 0 while unknown
+          type: integer
+        remaining:
+          description: Requests left in the window
+          type: integer
+        resetAt:
+          description: When the window resets; absent while unknown and once the window
+            passed
+          format: date-time
+          nullable: true
+          type: string
+        retryAt:
+          description: When the secondary limit ends; only in state slowed
+          format: date-time
+          nullable: true
+          type: string
+        state:
+          description: 'How much is left. unknown: GitHub has not answered yet; ok:
+            more than a tenth; low: a tenth or less; paused: the polls wait for the
+            reset; slowed: GitHub refused a call for its secondary limit and the polls
+            wait for the retry'
+          enum:
+          - unknown
+          - ok
+          - low
+          - paused
+          - slowed
+          type: string
+      required:
+      - state
+      - limit
+      - remaining
+      type: object
+    HttpdReadNotificationsRequest:
+      properties:
+        ids:
+          items:
+            format: int64
+            type: integer
+          type: array
+      type: object
+    HttpdReplyEdit:
+      properties:
+        body:
+          type: string
+        replyId:
+          format: int64
+          type: integer
+      required:
+      - replyId
+      - body
+      type: object
+    HttpdReplyResult:
+      properties:
+        posted:
+          $ref: '#/components/schemas/HttpdActivity'
+        proposal:
+          description: The number of the proposal the reply waits in, when it waits
+            for the end of the turn
+          type: integer
+      type: object
+    HttpdRepo:
+      properties:
+        addedAt:
+          format: date-time
+          type: string
+        fullName:
+          type: string
+        id:
+          format: int64
+          type: integer
+        lastError:
+          type: string
+        lastSyncedAt:
+          format: date-time
+          nullable: true
+          type: string
+        name:
+          type: string
+        owner:
+          type: string
+      required:
+      - id
+      - owner
+      - name
+      - fullName
+      - addedAt
+      - lastError
+      type: object
+    HttpdRepoList:
+      properties:
+        repos:
+          items:
+            $ref: '#/components/schemas/HttpdRepo'
+          nullable: true
+          type: array
+      required:
+      - repos
+      type: object
+    HttpdSession:
+      properties:
+        logPath:
+          description: The file with everything the agent printed
+          type: string
+        pid:
+          type: integer
+        signalAt:
+          description: When the agent last reported what it does
+          format: date-time
+          nullable: true
+          type: string
+        startedAt:
+          format: date-time
+          nullable: true
+          type: string
+        state:
+          description: 'What the agent does now. none: no session; starting: the process
+            runs and said nothing yet; idle: waits for a message; active: works; waiting_input:
+            asked you a question; blocked: waits on a permission decision; exited:
+            the process ended'
+          enum:
+          - none
+          - starting
+          - idle
+          - active
+          - waiting_input
+          - blocked
+          - exited
+          type: string
+      required:
+      - state
+      - pid
+      - logPath
+      type: object
+    HttpdSessionOutput:
+      properties:
+        output:
+          type: string
+      required:
+      - output
+      type: object
+    HttpdSettings:
+      properties:
+        approvalMode:
+          description: 'Who releases the work of a turn of the agent of a new watch:
+            the daemon on its own, or the author'
+          enum:
+          - auto
+          - manual
+          type: string
+        approvalsRequired:
+          description: How many approvals a new watch wants before it calls the pull
+            request ready to merge; null takes the rule of the base branch
+          minimum: 0
+          nullable: true
+          type: integer
+        autoApproveRebase:
+          description: Approved work goes out after a clean rebase without asking
+            again
+          type: boolean
+        includeExisting:
+          description: A new watch reports the review items the pull request has already
+          type: boolean
+        includeOwn:
+          description: A new watch reports the comments of the token's own user
+          type: boolean
+        keepWorktree:
+          description: A watch that stops leaves its worktree on disk
+          type: boolean
+        mergeMethod:
+          description: The merge method of a new watch; empty takes the first one
+            the repository allows
+          enum:
+          - ""
+          - squash
+          - merge
+          - rebase
+          type: string
+        mutedNotificationKinds:
+          description: The notification kinds that reach nobody. The history keeps
+            them either way
+          items:
+            enum:
+            - agent
+            - review
+            - checks
+            - watch
+            - merge
+            type: string
+          nullable: true
+          type: array
+        notificationSound:
+          description: A notification makes a sound
+          type: boolean
+        notificationsEnabled:
+          description: What happens on a watched pull request is shown as a notification
+            of the operating system
+          type: boolean
+        pollIntervalSeconds:
+          description: Time between passes of the repository watcher
+          maximum: 86400
+          minimum: 10
+          type: integer
+        watchIntervalSeconds:
+          description: Time between polls of a watched pull request
+          maximum: 86400
+          minimum: 10
+          type: integer
+      required:
+      - pollIntervalSeconds
+      - watchIntervalSeconds
+      - approvalsRequired
+      - mergeMethod
+      - includeExisting
+      - includeOwn
+      - keepWorktree
+      - notificationsEnabled
+      - notificationSound
+      - mutedNotificationKinds
+      - approvalMode
+      - autoApproveRebase
+      type: object
+    HttpdStartWatchRequest:
+      properties:
+        approvalMode:
+          description: Who releases the work of a turn of the agent; absent takes
+            the setting of the daemon, and a self watch runs in auto
+          enum:
+          - auto
+          - manual
+          nullable: true
+          type: string
+        approvalsRequired:
+          description: How many approvals the pull request needs before the watch
+            calls it ready to merge; absent takes the setting of the daemon, 0 asks
+            for none, and null asks for the rule of the base branch whatever the setting
+            holds
+          minimum: 0
+          nullable: true
+          type: integer
+        autoApproveRebase:
+          description: Approved work goes out after a clean rebase without asking
+            again; absent takes the setting of the daemon
+          nullable: true
+          type: boolean
+        includeExisting:
+          description: Report the review items the pull request has already; absent
+            takes the setting of the daemon
+          nullable: true
+          type: boolean
+        includeOwn:
+          description: Report the comments of the token's own user; absent takes the
+            setting of the daemon
+          nullable: true
+          type: boolean
+        mergeMethod:
+          description: 'The merge method of the watch: squash, merge, rebase, or empty
+            for the first method the repository allows; absent takes the setting of
+            the daemon'
+          enum:
+          - ""
+          - squash
+          - merge
+          - rebase
+          nullable: true
+          type: string
+        model:
+          type: string
+        provider:
+          description: The AI provider that runs the agent session, or self when the
+            caller's own session is the agent
+          enum:
+          - claude
+          - copilot
+          - self
+          type: string
+        repo:
+          type: string
+        sourceDir:
+          type: string
+        target:
+          type: string
+      required:
+      - target
+      - repo
+      - sourceDir
+      type: object
+    HttpdSyncAccepted:
+      properties:
+        accepted:
+          type: boolean
+      required:
+      - accepted
+      type: object
+    HttpdTakeoverResponse:
+      properties:
+        argv:
+          description: The command that continues the conversation of the agent, with
+            none of the rules of the daemon
+          items:
+            type: string
+          nullable: true
+          type: array
+        declined:
+          description: The numbers of the proposals the takeover declined
+          items:
+            type: integer
+          nullable: true
+          type: array
+        headRef:
+          description: The branch of the pull request; push with git push origin HEAD:<headRef>
+          type: string
+        newConversation:
+          description: The watch had no conversation yet, so the command starts one
+          type: boolean
+        watch:
+          $ref: '#/components/schemas/HttpdWatch'
+        workBranch:
+          description: The private branch of the watch in the worktree
+          type: string
+        worktreeDir:
+          description: The worktree the command of the author runs in
+          type: string
+      required:
+      - watch
+      - worktreeDir
+      - workBranch
+      - headRef
+      - argv
+      - declined
+      - newConversation
+      type: object
+    HttpdViewer:
+      properties:
+        avatarUrl:
+          type: string
+        login:
+          type: string
+        name:
+          type: string
+      required:
+      - login
+      - name
+      - avatarUrl
+      type: object
+    HttpdWatch:
+      properties:
+        agentSession:
+          description: The conversation id of the agent, kept across restarts of its
+            session
+          type: string
+        approvalMode:
+          description: 'Who releases the work of a turn of the agent: the daemon on
+            its own, or the author'
+          enum:
+          - auto
+          - manual
+          type: string
+        approvalsRequired:
+          description: How many approvals the pull request needs before the watch
+            calls it ready to merge
+          type: integer
+        author:
+          type: string
+        autoApproveRebase:
+          description: Approved work goes out after a clean rebase without asking
+            again
+          type: boolean
+        baseRef:
+          type: string
+        checkStates:
+          additionalProperties:
+            type: string
+          nullable: true
+          type: object
+        dependabot:
+          description: Dependabot owns the branch of the pull request, so the daemon
+            never pushes it and the agent only replies
+          type: boolean
+        greenSha:
+          type: string
+        headRef:
+          type: string
+        headSha:
+          type: string
+        id:
+          format: int64
+          type: integer
+        includeExisting:
+          type: boolean
+        includeOwn:
+          type: boolean
+        lastError:
+          type: string
+        lastHeartbeatAt:
+          format: date-time
+          nullable: true
+          type: string
+        lastPollAt:
+          format: date-time
+          nullable: true
+          type: string
+        mergeMethod:
+          description: The merge method of the watch; empty takes the first one the
+            repository allows
+          enum:
+          - ""
+          - squash
+          - merge
+          - rebase
+          type: string
+        mergeableState:
+          type: string
+        model:
+          type: string
+        number:
+          type: integer
+        pendingProposal:
+          description: The number of the proposal that waits on the author, absent
+            when none waits
+          type: integer
+        prState:
+          type: string
+        provider:
+          description: The AI provider of the agent session the daemon runs; self
+            means the session that started the watch is its agent and takes each message
+            with the next route
+          enum:
+          - claude
+          - copilot
+          - self
+          type: string
+        readyBlockers:
+          description: What keeps the pull request from merging, one sentence each
+          items:
+            type: string
+          nullable: true
+          type: array
+        readySince:
+          description: Since when the pull request is ready to merge; absent while
+            something blocks it, and until the readiness stood a whole poll interval
+          format: date-time
+          nullable: true
+          type: string
+        repo:
+          type: string
+        session:
+          $ref: '#/components/schemas/HttpdSession'
+        sourceDir:
+          type: string
+        startedAt:
+          format: date-time
+          type: string
+        status:
+          enum:
+          - active
+          - stopped
+          type: string
+        stopReason:
+          enum:
+          - ""
+          - user
+          - merged
+          - closed
+          - lost_access
+          - error
+          type: string
+        stoppedAt:
+          format: date-time
+          nullable: true
+          type: string
+        summary:
+          $ref: '#/components/schemas/HttpdWatchSummary'
+        takenOverAt:
+          description: Since when the session is with the author in their terminal;
+            absent while the daemon has it
+          format: date-time
+          nullable: true
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+        workBranch:
+          description: The private branch of the watch in its worktree
+          type: string
+        worktreeDir:
+          type: string
+      required:
+      - id
+      - repo
+      - number
+      - url
+      - title
+      - author
+      - dependabot
+      - headRef
+      - baseRef
+      - provider
+      - model
+      - sourceDir
+      - worktreeDir
+      - workBranch
+      - status
+      - stopReason
+      - includeExisting
+      - includeOwn
+      - startedAt
+      - lastError
+      - headSha
+      - prState
+      - mergeableState
+      - checkStates
+      - greenSha
+      - agentSession
+      - approvalsRequired
+      - mergeMethod
+      - readyBlockers
+      - approvalMode
+      - autoApproveRebase
+      - session
+      type: object
+    HttpdWatchList:
+      properties:
+        watches:
+          items:
+            $ref: '#/components/schemas/HttpdWatch'
+          nullable: true
+          type: array
+      required:
+      - watches
+      type: object
+    HttpdWatchSummary:
+      properties:
+        activity:
+          additionalProperties:
+            type: integer
+          nullable: true
+          type: object
+        checks:
+          type: string
+        detail:
+          type: string
+        headSha:
+          type: string
+        mergeableState:
+          type: string
+        messages:
+          description: How many messages the agent got
+          type: integer
+        prState:
+          type: string
+        reason:
+          type: string
+        workBranchLeft:
+          description: The private branch of the watch that stayed in the checkout
+            of the author
+          type: string
+        worktreeRemoved:
+          description: The stop deleted the worktree of the watch
+          type: boolean
+      required:
+      - prState
+      - headSha
+      - checks
+      - mergeableState
+      - activity
+      - messages
+      - reason
+      - worktreeRemoved
+      type: object
+    HttpdWorkCommit:
+      properties:
+        sha:
+          type: string
+        subject:
+          type: string
+      required:
+      - sha
+      - subject
+      type: object
+    MergeWatchParams:
+      properties:
+        method:
+          description: The merge method for this merge; empty takes the method of
+            the watch
+          enum:
+          - ""
+          - squash
+          - merge
+          - rebase
+          type: string
+      type: object
+    RejectParams:
+      properties:
+        discard:
+          description: Reset the work branch to the head the turn started on, whatever
+            the setting of the worktree says
+          type: boolean
+        reason:
+          description: What the agent should do instead; it works on it
+          type: string
+      type: object
+    ReplyParams:
+      properties:
+        body:
+          type: string
+        inReplyTo:
+          description: 'The comment the reply answers: a review comment, in its thread,
+            or a comment on the conversation, on the conversation; absent posts a
+            comment on the pull request'
+          format: int64
+          type: integer
+      required:
+      - body
+      type: object
+    SendParams:
+      properties:
+        message:
+          type: string
+      required:
+      - message
+      type: object
+    StopWatchParams:
+      properties:
+        keepWorktree:
+          description: Leave the worktree of the watch on disk instead of deleting
+            it; absent takes the setting of the daemon
+          nullable: true
+          type: boolean
+      type: object
+    TakeoverParams:
+      properties:
+        pid:
+          description: The pid of the process that takes the session; the hand-back
+            waits until it ends
+          type: integer
+        shell:
+          description: The author runs a shell in the worktree and not the agent,
+            so a watch with no conversation keeps none
+          type: boolean
+      required:
+      - pid
+      type: object
+    UpdateWatchParams:
+      properties:
+        approvalsRequired:
+          description: How many approvals the pull request needs before the watch
+            calls it ready to merge; absent keeps what the watch has, 0 asks for none,
+            and null reads the rule of the base branch again
+          minimum: 0
+          nullable: true
+          type: integer
+        mergeMethod:
+          description: 'The merge method of the watch: squash, merge, rebase, or empty
+            for the first method the repository allows; absent keeps what the watch
+            has'
+          enum:
+          - ""
+          - squash
+          - merge
+          - rebase
+          nullable: true
+          type: string
+      type: object

@@ -1,0 +1,207 @@
+package watcher
+
+import (
+	"context"
+	"time"
+
+	"github.com/google/go-github/v91/github"
+
+	"github.com/deividfortuna/babysitter/internal/checks"
+	"github.com/deividfortuna/babysitter/internal/ghclient"
+	"github.com/deividfortuna/babysitter/internal/store"
+)
+
+func (w *Watcher) syncRepo(ctx context.Context, c *github.Client, repo store.Repo) error {
+	stored, err := w.store.OpenPRs(ctx, repo.ID)
+	if err != nil {
+		return err
+	}
+	prev := make(map[int]store.PullRequest, len(stored))
+	for _, pr := range stored {
+		prev[pr.Number] = pr
+	}
+
+	remote, resp, err := ghclient.ListOpenPulls(ctx, c, repo.Owner, repo.Name)
+	if err := w.afterCall(ctx, resp, err); err != nil {
+		return err
+	}
+
+	seen := make(map[int]bool, len(remote))
+	live := make(map[checkKey]bool, len(remote))
+	for _, pr := range remote {
+		seen[pr.GetNumber()] = true
+		live[checkKey{repo.ID, pr.GetNumber(), pr.GetHead().GetSHA()}] = true
+		if err := w.syncOpenPR(ctx, c, repo, pr, prev); err != nil {
+			return err
+		}
+	}
+	for number, old := range prev {
+		if seen[number] {
+			continue
+		}
+		if err := w.syncGonePR(ctx, c, repo, old); err != nil {
+			return err
+		}
+	}
+	w.forgetChecks(repo.ID, live)
+	return nil
+}
+
+func (w *Watcher) syncOpenPR(ctx context.Context, c *github.Client, repo store.Repo, pr *github.PullRequest, prev map[int]store.PullRequest) error {
+	now := w.now()
+	old, known := prev[pr.GetNumber()]
+	cur := toStorePR(repo, pr, old, now)
+
+	changed := !known ||
+		!old.UpdatedAt.Equal(pr.GetUpdatedAt().Time) ||
+		old.HeadSHA != pr.GetHead().GetSHA() ||
+		!old.MergeableState.Known()
+
+	if changed {
+		detail, resp, err := ghclient.GetPull(ctx, c, repo.Owner, repo.Name, pr.GetNumber())
+		if err := w.afterCall(ctx, resp, err); err != nil {
+			return err
+		}
+		cur.MergeableState = store.MergeableState(detail.GetMergeableState())
+		cur.Additions = detail.GetAdditions()
+		cur.Deletions = detail.GetDeletions()
+
+		reviews, resp, err := ghclient.ListReviews(ctx, c, repo.Owner, repo.Name, pr.GetNumber())
+		if err := w.afterCall(ctx, resp, err); err != nil {
+			return err
+		}
+		cur.ReviewDecision, cur.Approvals, cur.ChangesRequested = ReviewDecision(reviews, cur.Author, len(cur.RequestedReviewers))
+	}
+
+	status, err := w.syncChecks(ctx, c, repo, cur, now)
+	if err != nil {
+		return err
+	}
+	cur.CIStatus = status
+
+	return w.store.UpsertPR(ctx, cur)
+}
+
+func (w *Watcher) syncChecks(ctx context.Context, c *github.Client, repo store.Repo, pr store.PullRequest, now time.Time) (checks.CIStatus, error) {
+	if !w.staleChecks(pr, now) {
+		return pr.CIStatus, nil
+	}
+	runs, resp, err := ghclient.ListCheckRuns(ctx, c, repo.Owner, repo.Name, pr.HeadSHA)
+	if err := w.afterCall(ctx, resp, err); err != nil {
+		return "", err
+	}
+	combined, resp, err := ghclient.GetCombinedStatus(ctx, c, repo.Owner, repo.Name, pr.HeadSHA)
+	if err := w.afterCall(ctx, resp, err); err != nil {
+		return "", err
+	}
+	w.markChecked(pr, now)
+	return checks.Overall(runs, combined), nil
+}
+
+func (w *Watcher) staleChecks(pr store.PullRequest, now time.Time) bool {
+	if pr.CIStatus == checks.CIPending {
+		return true
+	}
+	w.checksMu.Lock()
+	defer w.checksMu.Unlock()
+	at, ok := w.checked[checkKey{pr.RepoID, pr.Number, pr.HeadSHA}]
+	return !ok || now.Sub(at) >= w.checkTTL
+}
+
+func (w *Watcher) markChecked(pr store.PullRequest, now time.Time) {
+	w.checksMu.Lock()
+	defer w.checksMu.Unlock()
+	w.checked[checkKey{pr.RepoID, pr.Number, pr.HeadSHA}] = now
+}
+
+func (w *Watcher) forgetChecks(repoID int64, live map[checkKey]bool) {
+	w.checksMu.Lock()
+	defer w.checksMu.Unlock()
+	for key := range w.checked {
+		if key.repoID == repoID && !live[key] {
+			delete(w.checked, key)
+		}
+	}
+}
+
+func (w *Watcher) syncGonePR(ctx context.Context, c *github.Client, repo store.Repo, old store.PullRequest) error {
+	cur := old
+	cur.SyncedAt = w.now()
+
+	detail, resp, err := ghclient.GetPull(ctx, c, repo.Owner, repo.Name, old.Number)
+	switch {
+	case ghclient.IsNotFound(err):
+		now := w.now()
+		cur.State = store.StateClosed
+		cur.ClosedAt = &now
+	case err != nil:
+		return w.afterCall(ctx, resp, err)
+	default:
+		cur = toStorePR(repo, detail, old, w.now())
+		cur.MergeableState = store.MergeableState(detail.GetMergeableState())
+		cur.Additions = detail.GetAdditions()
+		cur.Deletions = detail.GetDeletions()
+		switch {
+		case detail.GetMerged():
+			cur.State = store.StateMerged
+		case store.PRState(detail.GetState()) == store.StateOpen:
+			cur.State = store.StateOpen
+		default:
+			cur.State = store.StateClosed
+		}
+	}
+	if err := w.afterCall(ctx, resp, nil); err != nil {
+		return err
+	}
+	return w.store.UpsertPR(ctx, cur)
+}
+
+func toStorePR(repo store.Repo, pr *github.PullRequest, old store.PullRequest, now time.Time) store.PullRequest {
+	cur := store.PullRequest{
+		RepoID:             repo.ID,
+		RepoFullName:       repo.FullName(),
+		Number:             pr.GetNumber(),
+		GitHubID:           pr.GetID(),
+		Title:              pr.GetTitle(),
+		Author:             pr.GetUser().GetLogin(),
+		State:              store.StateOpen,
+		Draft:              pr.GetDraft(),
+		BaseRef:            pr.GetBase().GetRef(),
+		HeadRef:            pr.GetHead().GetRef(),
+		HeadSHA:            pr.GetHead().GetSHA(),
+		HTMLURL:            pr.GetHTMLURL(),
+		CreatedAt:          pr.GetCreatedAt().Time,
+		UpdatedAt:          pr.GetUpdatedAt().Time,
+		MergeableState:     old.MergeableState,
+		ReviewDecision:     old.ReviewDecision,
+		Approvals:          old.Approvals,
+		ChangesRequested:   old.ChangesRequested,
+		RequestedReviewers: make([]string, 0, len(pr.RequestedReviewers)),
+		Labels:             make([]string, 0, len(pr.Labels)),
+		Additions:          old.Additions,
+		Deletions:          old.Deletions,
+		CIStatus:           old.CIStatus,
+		SyncedAt:           now,
+	}
+	if t := pr.GetMergedAt(); !t.IsZero() {
+		cur.MergedAt = &t.Time
+	}
+	if t := pr.GetClosedAt(); !t.IsZero() {
+		cur.ClosedAt = &t.Time
+	}
+	for _, u := range pr.RequestedReviewers {
+		if login := u.GetLogin(); login != "" {
+			cur.RequestedReviewers = append(cur.RequestedReviewers, login)
+		}
+	}
+	for _, l := range pr.Labels {
+		if name := l.GetName(); name != "" {
+			cur.Labels = append(cur.Labels, name)
+		}
+	}
+	return cur
+}
+
+func (w *Watcher) afterCall(ctx context.Context, resp *github.Response, err error) error {
+	return w.guard.After(ctx, resp, err)
+}

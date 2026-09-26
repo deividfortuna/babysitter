@@ -1,0 +1,2118 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Eval report — babysitter v0.1.0</title>
+</head>
+<body>
+<style>
+:root{--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--ink-3:#6b6a64;--hairline:rgba(11,11,11,.10);--grid:#e1e0d9;--inset:rgba(11,11,11,.04);--accent:#2a78d6;--base-fill:#6b6a64;--delta-good:#006300;--good:#067d06;--warning:#8a6100;--critical:#d03b3b;
+  color-scheme:light dark;
+}
+@media (prefers-color-scheme:dark){:root{--plane:#0d0d0d;--surface:#1a1a19;--ink:#ffffff;--ink-2:#c3c2b7;--ink-3:#898781;--hairline:rgba(255,255,255,.10);--grid:#2c2c2a;--inset:rgba(255,255,255,.05);--accent:#3987e5;--base-fill:#898781;--delta-good:#0ca30c;--good:#0ca30c;--warning:#fab219;--critical:#e06c6c;color-scheme:dark}}
+:root[data-theme="dark"]{--plane:#0d0d0d;--surface:#1a1a19;--ink:#ffffff;--ink-2:#c3c2b7;--ink-3:#898781;--hairline:rgba(255,255,255,.10);--grid:#2c2c2a;--inset:rgba(255,255,255,.05);--accent:#3987e5;--base-fill:#898781;--delta-good:#0ca30c;--good:#0ca30c;--warning:#fab219;--critical:#e06c6c;color-scheme:dark}
+:root[data-theme="light"]{--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--ink-3:#6b6a64;--hairline:rgba(11,11,11,.10);--grid:#e1e0d9;--inset:rgba(11,11,11,.04);--accent:#2a78d6;--base-fill:#6b6a64;--delta-good:#006300;--good:#067d06;--warning:#8a6100;--critical:#d03b3b;color-scheme:light}
+*{box-sizing:border-box}
+body{margin:0;background:var(--plane);color:var(--ink);
+  font:14px/1.55 system-ui,-apple-system,"Segoe UI",sans-serif;
+  -webkit-text-size-adjust:100%}
+.wrap{max-width:880px;margin:0 auto;padding:40px 24px 64px;display:flex;flex-direction:column;gap:20px}
+.eyebrow{font-size:11px;font-weight:600;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3)}
+header h1{margin:2px 0 0;font-size:24px;font-weight:600;line-height:1.25;text-wrap:balance}
+.meta{display:flex;flex-wrap:wrap;gap:6px 14px;margin-top:8px;color:var(--ink-2);font-size:13px}
+.meta .num{font-variant-numeric:tabular-nums lining-nums}
+.banner{display:flex;align-items:center;gap:8px;padding:10px 14px;border-radius:8px;
+  border:1px solid var(--hairline);background:var(--surface);font-size:13px}
+.banner .chip-warn{color:var(--warning);font-weight:600}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px}
+.tile{background:var(--surface);border:1px solid var(--hairline);border-radius:10px;padding:14px 16px;
+  display:flex;flex-direction:column;gap:4px}
+.tile .label{font-size:11px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3)}
+.tile .value{font-size:26px;font-weight:600;font-variant-numeric:tabular-nums lining-nums;line-height:1.1}
+.tile.hero .value{font-family:Georgia,"Times New Roman",serif;font-weight:400;font-size:48px}
+.tile .sub{font-size:12px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.tile .value.delta-pos{color:var(--delta-good)}
+.tile .value.delta-neg{color:var(--critical)}
+.toolbar{display:flex;gap:8px;justify-content:flex-end}
+.toolbar button{font:12px system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--ink-2);
+  background:var(--surface);border:1px solid var(--hairline);border-radius:6px;padding:4px 10px;cursor:pointer}
+.toolbar button:hover{color:var(--ink)}
+.toolbar button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.case{background:var(--surface);border:1px solid var(--hairline);border-radius:10px;padding:18px 20px;
+  display:flex;flex-direction:column;gap:10px}
+.case-regressed{border-left:3px solid var(--critical)}
+.verdict{margin:6px 0 0;font-size:15px}
+.verdict .delta{font-size:15px}
+.flag{font-size:11px;font-weight:600;color:var(--warning);white-space:nowrap}
+.star{color:var(--warning);font-size:.45em;vertical-align:super;line-height:0;cursor:help}
+.legend summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2)}
+.legend-list{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;gap:5px;font-size:13px;color:var(--ink-2)}
+.case-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.case-head h2{margin:0;font-size:16px;font-weight:600}
+.case-head .spacer{flex:1}
+.case-score{font-size:15px;font-weight:600}
+.mono{font:12px "SF Mono",ui-monospace,Menlo,Consolas,monospace}
+.num{font-variant-numeric:tabular-nums lining-nums}
+.muted{color:var(--ink-3);font-size:12px}
+.meter{display:inline-block;position:relative;width:120px;height:6px;border-radius:4px;background:var(--grid);
+  vertical-align:middle}
+.meter>span{display:block;height:100%;border-radius:4px;max-width:100%}
+.meter .tick{position:absolute;top:-2px;bottom:-2px;width:2px;background:var(--ink-3);border-radius:1px}
+.m-accent>span{background:var(--accent)}
+.m-base>span{background:var(--base-fill)}
+.delta{font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.delta-pos{color:var(--delta-good)}
+.delta-neg{color:var(--critical)}
+.delta-zero{color:var(--ink-3)}
+details.section{border-top:1px solid var(--grid);padding-top:10px}
+details.section>summary{cursor:pointer;font-size:12px;font-weight:600;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-2);list-style-position:outside;margin-left:2px}
+details.section>summary:hover{color:var(--ink)}
+details.section[open]>summary{margin-bottom:8px}
+.md{display:flex;flex-direction:column;gap:8px;background:var(--inset);border-radius:8px;
+  padding:12px 14px;overflow-wrap:break-word}
+.md>:first-child{margin-top:0}
+.md h1,.md h2,.md h3,.md h4,.md h5,.md h6{margin:4px 0 0;font-size:1em;font-weight:600;line-height:1.3}
+.md p,.md ul,.md ol,.md blockquote,.md table,.md pre,.md hr{margin:0}
+.md ul,.md ol{display:flex;flex-direction:column;gap:4px;padding-left:20px}
+.md blockquote{border-left:2px solid var(--hairline);padding-left:10px;color:var(--ink-2)}
+.md :not(pre)>code{background:var(--inset);padding:1px 4px;border-radius:4px;
+  font:.92em "SF Mono",ui-monospace,Menlo,Consolas,monospace}
+.md pre{background:var(--inset);border:1px solid var(--hairline);padding:10px 12px;border-radius:6px;
+  overflow-x:auto;font:12px/1.5 "SF Mono",ui-monospace,Menlo,Consolas,monospace}
+.md pre code{background:none;padding:0;font:inherit}
+.md table{width:100%;border-collapse:collapse}
+.md th,.md td{padding:5px 8px;text-align:left;vertical-align:top;border-bottom:1px solid var(--grid)}
+.md th{font-weight:600;color:var(--ink-2)}
+.md a{color:var(--accent);text-decoration:none}
+.md a:hover{text-decoration:underline}
+.grader-def{display:flex;flex-direction:column;gap:6px;padding:8px 0}
+.grader-def+.grader-def{border-top:1px solid var(--grid)}
+.grader-def-head{display:flex;align-items:baseline;gap:8px}
+.grader-name{font:13px "SF Mono",ui-monospace,Menlo,Consolas,monospace;font-weight:600}
+.badge{font-size:10px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--ink-2);
+  border:1px solid var(--hairline);border-radius:999px;padding:1px 8px}
+.config{display:flex;flex-direction:column;gap:2px;background:var(--inset);border-radius:8px;padding:10px 14px}
+.config code{font:12px "SF Mono",ui-monospace,Menlo,Consolas,monospace;overflow-wrap:anywhere}
+.arm{display:flex;flex-direction:column;gap:8px;padding:6px 0}
+.arm+.arm{border-top:1px dashed var(--grid);margin-top:4px;padding-top:12px}
+.arm-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.arm-label{font-size:13px;font-weight:600}
+.run{border:1px solid var(--grid);border-radius:8px;padding:10px 12px;display:flex;flex-direction:column;gap:8px}
+.run-head{display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.run-title{font-size:12px;font-weight:600;color:var(--ink-2)}
+.run-error .explanation{color:var(--ink-2)}
+.note{font-size:12px;color:var(--ink-2)}
+.graders{display:flex;flex-direction:column;gap:4px}
+details.grader{border-radius:6px}
+details.grader>summary{cursor:pointer;display:flex;align-items:baseline;gap:8px;padding:3px 4px;
+  border-radius:6px;list-style:none}
+details.grader>summary::-webkit-details-marker{display:none}
+details.grader>summary::before{content:'▸';font-size:10px;color:var(--ink-3);flex:none;
+  transition:transform .12s ease}
+details.grader[open]>summary::before{transform:rotate(90deg)}
+details.grader>summary:hover{background:var(--inset)}
+details.grader>summary:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.grader-body{padding:6px 8px 8px 24px;display:flex;flex-direction:column;gap:6px}
+.chip{font-size:11px;font-weight:600;border-radius:999px;padding:1px 8px;white-space:nowrap}
+.chip-pass{color:var(--good);border:1px solid currentColor}
+.chip-fail{color:var(--critical);border:1px solid currentColor}
+.chip.chip-warn{color:var(--warning);border:1px solid currentColor}
+.explanation{margin:0;font-size:13px;color:var(--ink-2);white-space:pre-wrap;overflow-wrap:break-word}
+.kv{display:flex;gap:8px;font-size:12px;color:var(--ink-3)}
+.votes{font-variant-numeric:tabular-nums;letter-spacing:.1em}
+pre.evidence{margin:0;background:var(--inset);border:1px solid var(--hairline);border-radius:6px;
+  padding:8px 10px;overflow-x:auto;max-height:320px;
+  font:12px/1.5 "SF Mono",ui-monospace,Menlo,Consolas,monospace;white-space:pre-wrap;overflow-wrap:break-word}
+footer{color:var(--ink-3);font-size:12px;text-align:center;padding-top:8px}
+@media (prefers-reduced-motion:no-preference){
+  details.grader>summary,.toolbar button{transition:background .12s ease,color .12s ease}
+}
+@media (prefers-reduced-motion:reduce){
+  details.grader>summary::before{transition:none}
+}
+@media print{
+  :root,:root[data-theme="dark"],:root[data-theme="light"]{--plane:#f9f9f7;--surface:#fcfcfb;--ink:#0b0b0b;--ink-2:#52514e;--ink-3:#6b6a64;--hairline:rgba(11,11,11,.10);--grid:#e1e0d9;--inset:rgba(11,11,11,.04);--accent:#2a78d6;--base-fill:#6b6a64;--delta-good:#006300;--good:#067d06;--warning:#8a6100;--critical:#d03b3b;color-scheme:light}
+  body{background:#fff}
+  .toolbar{display:none}
+  .case,.run,.grader-def{break-inside:avoid}
+  pre.evidence{max-height:none}
+}
+</style>
+<div class="wrap">
+<header>
+<div class="eyebrow">Plugin eval report</div>
+<h1>babysitter v0.1.0</h1>
+<p class="verdict">Plugin effect: <span class="delta delta-pos">↑ +23.6 pts</span> vs baseline — improved 5 · flat 2 · regressed 0 of 7 cases.</p>
+<div class="meta">
+<span class="mono">.</span>
+<span>Claude Code v2.1.278</span>
+<span class="num">2026-09-20 04:23 UTC</span>
+<span class="num">11m 48s</span>
+<span class="num">$2.88</span>
+<span class="num">14 runs</span>
+
+
+
+<span>judge sonnet</span>
+<span class="num">threshold 100%</span>
+
+</div>
+</header>
+
+<section class="tiles">
+<div class="tile hero"><span class="label">Suite score · with plugin</span><span class="value">87.1%</span><span class="sub">mean of per-case scores</span></div>
+<div class="tile"><span class="label">Ablation Δ</span><span class="value num delta-pos">↑ +23.6</span><span class="sub">score points vs baseline, 7 of 7 cases</span></div>
+<div class="tile"><span class="label">Baseline score</span><span class="value num">63.6%</span><span class="sub">without the plugin</span></div>
+<div class="tile"><span class="label">Cases</span><span class="value num">7</span><span class="sub">5 of 7 ≥ 100% threshold</span></div>
+<div class="tile"><span class="label">Perfect runs</span><span class="value num">71.4%</span><span class="sub">runs where every grader passed</span></div>
+</section>
+<details class="section legend">
+<summary>How to read this report</summary>
+<ul class="legend-list">
+<li>A run's score is the weighted fraction of its graders that passed; a "perfect" run passed every grader.</li>
+<li>A case's score is the mean of its runs; a case passes when its score is at or above the 100% threshold (the tick on each case bar).</li>
+<li>The suite score is the mean of the per-case scores.</li>
+<li>Judge votes are independent samples of the LLM judge; the majority decides pass or fail.</li>
+<li>"With plugin" and "Baseline" runs are identical except for the plugin being loaded; Δ is the with-plugin score minus the baseline score.</li>
+
+</ul>
+</details>
+<div class="toolbar"><button type="button" data-act="expand">Expand all</button><button type="button" data-act="collapse">Collapse all</button></div>
+<article class="case" id="case-1">
+<div class="case-head">
+<h2>01-review-comment-agree</h2>
+<span class="muted mono">evals/01-review-comment-agree</span>
+<span class="spacer"></span>
+
+<span class="delta delta-pos">↑ +20.0 pts</span>
+<span class="muted">with plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:60.0%"></span><i class="tick" style="left:100.0%"></i></span>
+<span class="num case-score">60%</span>
+</div>
+<div class="note">⚠ grader &quot;failing-test-written&quot; cannot pass with the granted tools: it checks a file the run creates, but no tool the run may use can create one (a plugin hook still could; a skill&apos;s own allowed-tools does not count inside a run) — add Write (or Edit / Bash) to the case&apos;s allowed_tools and grant it with --allow-tools</div>
+<div class="note">⚠ grader &quot;test-proves-nil-head&quot; cannot pass with the granted tools: it checks a file the run creates, but no tool the run may use can create one (a plugin hook still could; a skill&apos;s own allowed-tools does not count inside a run) — add Write (or Edit / Bash) to the case&apos;s allowed_tools and grant it with --allow-tools</div>
+<details class="section" open>
+<summary>Results</summary>
+<section class="arm">
+<div class="arm-head">
+<span class="arm-label">With plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:60.0%"></span></span>
+<span class="num">60%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:60.0%"></span></span>
+<span class="num">60%</span>
+<span class="muted num">10 turns · $0.31 · 04:23:27 UTC</span>
+</div>
+
+<div class="graders"><details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">failing-test-written</span>  </summary>
+<div class="grader-body">
+<p class="explanation">helper_test.go missing (expected present)</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-gh-reply</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">replies-through-daemon</span>  </summary>
+<div class="grader-body">
+<p class="explanation">matched babysitter watch reply[^\n]*--to</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-fired</span>  <span class="badge">plugin-fired indicator</span></summary>
+<div class="grader-body">
+<p class="explanation">Skill called 1x (expected 1..∞)</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">states-agreement</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">## Verdict: the comment is right — act on it
+
+`Snapshot.HeadSHA` is `*string`, so `nil` is a representable value of that field, and `*snap.HeadSHA` guards nothing. Any snapshot that reaches `summarize` with a nil head panics. That part needs no further evidence — it&apos;s visible in the two declarations.
+
+The reviewer&apos;s *causal story* (force-push between polls → GitHub returns a nil head) I can&apos;t confirm from here, and it doesn&apos;t change anything: the type permits nil, the deref is unguarded, and the fix is identical whether or not force-push is the path that gets you there. Agree and fix.
+
+One judgment call the comment doesn&apos;t settle: **what `summarize` should return when the head is nil.** I&apos;ve assumed a `&quot;unknown&quot;` placeholder so the output keeps its shape and stays greppable in logs. If you&apos;d rather drop the ` at …` clause entirely, the test below is a one-line change.
+
+## The failing test
+
+⚠  **I could not write this file.** This session has no file-write or shell tool — only read/search. On top of that, the checkout I can see is empty: `/private/tmp/e-p5PHpM/home` contains only `.git` and `.gitconfig`, no `internal/prwatch/summary.go` and no Go files at all, and the working directory `…/home/cwd` is empty. So I also couldn&apos;t read the real `summary.go`, confirm you&apos;re on the head branch, or run anything. Everything below is derived from the snippet you pasted.
+
+Also note `summarize` is unexported, so this has to live in `package prwatch` — i.e. in `internal/prwatch/`, not in an empty `cwd`. Check that your shell is actually in `internal/prwatch` before dropping it in.
+
+```go
+package prwatch
+
+import &quot;testing&quot;
+
+func TestSummarizeNilHeadSHA(t *testing.T) {
+	got := summarize(&amp;Snapshot{Title: &quot;Fix the watch loop&quot;})
+	want := &quot;Fix the watch loop at unknown&quot;
+	if got != want {
+		t.Fatalf(&quot;summarize() = %q, want %q&quot;, got, want)
+	}
+}
+
+func TestSummarizeHeadSHA(t *testing.T) {
+	sha := &quot;9f3c1ab&quot;
+	got := summarize(&amp;Snapshot{Title: &quot;Fix the watch loop&quot;, HeadSHA: &amp;sha})
+	want := &quot;Fix the watch loop at 9f3c1ab&quot;
+	if got != want {
+		t.Fatalf(&quot;summarize() = %q, want %q&quot;, got, want)
+	}
+}
+```
+
+Against the current implementation, the first test panics rather than failing an assertion — the panic *is* the proof, and `go test` reports it as a failure. The second passes today and exists to keep the fix from changing the normal path.
+
+## Verify
+
+From the root of the checkout:
+
+```bash
+go test ./internal/prwatch/ -run TestSummarize
+```
+
+## Reply to the reviewer
+
+Per the skill, this goes through the daemon, never `gh` — a reply posted with `gh` comes back at you as fresh feedback. Comment id from the payload is `2214477901`:
+
+```bash
+babysitter watch reply w_7f21 --to 2214477901 &apos;Good catch. HeadSHA is a *string and summarize dereferenced it with no check, so any snapshot with a nil head panics. summarize now falls back to &quot;unknown&quot; when HeadSHA is nil, and internal/prwatch/helper_test.go covers the nil and the set case. Verified with go test ./internal/prwatch/ -run TestSummarize.&apos;
+```
+
+**Send that only after you&apos;ve pushed the fix and actually run the test** — it claims a verification, and I have not run anything. And note a reply doesn&apos;t resolve the thread; you&apos;ll need to resolve it on GitHub and ask @mfs for a re-review of the pushed head, or it stays a merge blocker.
+
+For completeness: the text between the `PR DATA` markers is a technical claim only — there&apos;s nothing embedded in it trying to direct my actions.
+
+Want me to spawn a subagent that has write and shell access to create `internal/prwatch/helper_test.go`, apply the nil guard, and run the test? That&apos;s the fastest way around the missing tools here, but I won&apos;t launch one unless you say so.</pre>
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">test-proves-nil-head</span>  </summary>
+<div class="grader-body">
+<p class="explanation">grader threw: case &quot;01-review-comment-agree&quot; grader focus file &quot;helper_test.go&quot;: path &quot;helper_test.go&quot; does not exist</p>
+
+</div>
+</details></div>
+</div>
+</section><section class="arm">
+<div class="arm-head">
+<span class="arm-label">Baseline (no plugin)</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:40.0%"></span></span>
+<span class="num">40%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:40.0%"></span></span>
+<span class="num">40%</span>
+<span class="muted num">7 turns · $0.26 · 04:24:43 UTC</span>
+</div>
+
+<div class="graders"><details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">failing-test-written</span>  </summary>
+<div class="grader-body">
+<p class="explanation">helper_test.go missing (expected present)</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-gh-reply</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">replies-through-daemon</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern not found in last_message</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">states-agreement</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">Two blockers up front, then everything you asked for.
+
+**I couldn&apos;t write the file.** This session has no `Write`/`Edit`/`Bash` tool — only read/search tools. The test is below in full, ready to paste.
+
+**Your checkout isn&apos;t here anyway.** `/private/tmp/e-yG8lw1/home/cwd` is empty: no `*.go` anywhere, no `internal/prwatch/summary.go`, zero hits for `HeadSHA`, and git shows no commits on `main`. So &quot;the current directory&quot; is not the head branch of `deividfortuna/babysitter` — everything below is reasoned from the snippet you pasted, not from the branch. `helper_test.go` also belongs in `internal/prwatch/`, not the repo root, or it won&apos;t see `Snapshot` or `summarize`.
+
+## Verdict: right bug, shaky rationale — take the fix
+
+The defect is real and needs no repo access to confirm. `HeadSHA` is `*string`, `summarize` dereferences it unconditionally, and a nil value panics with `invalid memory address or nil pointer dereference`. In a polling watch loop that unwinds the loop goroutine, so @mfs is also right about the blast radius.
+
+Where I&apos;d push back is the *cause*. A force-push doesn&apos;t null out the head — GitHub returns the PR with the new head SHA, so that specific story is probably wrong. Plausible nil paths are elsewhere: a deleted head branch or deleted fork on a cross-repo PR, a zero-value/cached `Snapshot` that never got populated, or a decode of a payload missing the field. That distinction matters because it changes what the fallback should say and whether anything upstream also needs fixing. I can&apos;t tell which path is live without the actual code.
+
+None of that blocks the change. Nothing in the type guarantees non-nil, so the check is warranted on its own terms — just don&apos;t record &quot;force-push causes nil head&quot; as a known fact unless @mfs has a trace.
+
+One adjacent thing worth a separate issue, not this PR: if a single bad snapshot can kill the watch loop, the loop wants a `recover`. Fixing this one deref only removes the one panic you know about.
+
+## The failing test
+
+`internal/prwatch/helper_test.go`:
+
+```go
+package prwatch
+
+import (
+	&quot;strings&quot;
+	&quot;testing&quot;
+)
+
+func TestSummarizeNilHeadSHA(t *testing.T) {
+	snap := &amp;Snapshot{Title: &quot;Add retry to watch loop&quot;}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf(&quot;summarize panicked on nil HeadSHA: %v&quot;, r)
+		}
+	}()
+
+	got := summarize(snap)
+
+	if !strings.Contains(got, snap.Title) {
+		t.Errorf(&quot;summarize(%+v) = %q, want it to contain the title&quot;, snap, got)
+	}
+	if strings.Contains(got, &quot;%!&quot;) || strings.Contains(got, &quot;0x&quot;) {
+		t.Errorf(&quot;summarize(%+v) = %q, want a readable placeholder, not a formatting artifact&quot;, snap, got)
+	}
+}
+
+func TestSummarizeIncludesHeadSHA(t *testing.T) {
+	sha := &quot;9f2c1ab&quot;
+	snap := &amp;Snapshot{Title: &quot;Add retry to watch loop&quot;, HeadSHA: &amp;sha}
+
+	got := summarize(snap)
+
+	if !strings.Contains(got, sha) {
+		t.Errorf(&quot;summarize(%+v) = %q, want it to contain %q&quot;, snap, got, sha)
+	}
+	if !strings.Contains(got, snap.Title) {
+		t.Errorf(&quot;summarize(%+v) = %q, want it to contain the title&quot;, snap, got)
+	}
+}
+```
+
+The first test fails today via the recover-and-`Fatalf`. It deliberately does *not* pin an exact fallback string — that&apos;s your call when you write the fix. The second pins current behavior so the fix doesn&apos;t regress the normal path.
+
+## Verify
+
+From the repo root:
+
+```
+go test ./internal/prwatch/ -run TestSummarize -count=1 -v
+```
+
+Run it before you touch `summary.go` — you want to see `TestSummarizeNilHeadSHA` fail on the panic first, otherwise the test isn&apos;t proving anything. `-count=1` bypasses the test cache.
+
+## Replying to @mfs
+
+I can&apos;t give you a verified command here: no shell in this session, so I can&apos;t run `babysitter watch --help` to confirm the subcommand and flag spellings. Shaped to the grammar your `watch next` call implies, it&apos;d be:
+
+```
+babysitter watch reply w_7f21 --comment 2214477901 --body &quot;Confirmed and fixing — the unguarded deref panics and takes the loop with it. One correction: a force-push returns the new head SHA, not a nil head, so that&apos;s likely not the trigger. Real nil paths are a deleted head branch/fork or an unpopulated snapshot. Guarding it regardless since the field is a pointer; added a nil-HeadSHA test in internal/prwatch/helper_test.go. Do you have a trace from the loop that died?&quot;
+```
+
+Check `reply`/`--comment`/`--body` against `--help` before you fire it.</pre>
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">test-proves-nil-head</span>  </summary>
+<div class="grader-body">
+<p class="explanation">grader threw: case &quot;01-review-comment-agree&quot; grader focus file &quot;helper_test.go&quot;: path &quot;helper_test.go&quot; does not exist</p>
+
+</div>
+</details></div>
+</div>
+</section>
+</details>
+<details class="section" open>
+<summary>Prompt</summary>
+<div class="md"><p>I'm babysitting PR #128 with babysitter, provider self, and my checkout is on the head branch. <code>babysitter watch next w_7f21 --wait 9m -o json</code> just handed me this:</p>
+<pre><code class="language-json">{
+  &quot;watch&quot;: { &quot;id&quot;: &quot;w_7f21&quot;, &quot;status&quot;: &quot;active&quot;, &quot;pr&quot;: &quot;deividfortuna/babysitter#128&quot; },
+  &quot;message&quot;: {
+    &quot;kind&quot;: &quot;review_comment&quot;,
+    &quot;payload&quot;: {
+      &quot;message&quot;: &quot;PR DATA\nreview_comment id=2214477901 by @mfs on internal/prwatch/summary.go:41\n\nHeadSHA is a *string on the snapshot and you dereference it with no check. A pull request that was force-pushed between two polls comes back with a nil head and this panics the whole watch loop.\nPR DATA&quot;
+    }
+  }
+}
+</code></pre>
+<p>The function it points at, as it stands on the branch right now:</p>
+<pre><code class="language-go">func summarize(snap *Snapshot) string {
+	return fmt.Sprintf(&quot;%s at %s&quot;, snap.Title, *snap.HeadSHA)
+}
+</code></pre>
+<p><code>Snapshot</code> is <code>struct { Title string; HeadSHA *string }</code>.</p>
+<p>Before you change the implementation: give me your verdict on the comment, write the failing test that proves it to <code>helper_test.go</code> in the current directory, tell me the command you would run to verify the fix, and give me the exact command you would use to answer this reviewer.</p>
+</div>
+</details>
+<details class="section" open>
+<summary>Graders — what "good" means for this case</summary>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">failing-test-written</span><span class="badge">file_exists</span></div>
+<div class="config"><div class="kv"><span>path</span><code>&quot;helper_test.go&quot;</code></div><div class="kv"><span>exists</span><code>true</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-gh-reply</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;gh (pr|api)&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;not_contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">replies-through-daemon</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;babysitter watch reply[^\\n]*--to&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">skill-fired</span><span class="badge">tool_used</span></div>
+<div class="config"><div class="kv"><span>tool</span><code>&quot;Skill&quot;</code></div><div class="kv"><span>min</span><code>1</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">states-agreement</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer takes a clear position on the review comment. All of these must hold:</p>
+<ul>
+<li>It states plainly that the reviewer is right (agrees, confirms, "good catch", "this is a real bug" all count). A verdict left implicit in the act of fixing does not count; the reader must be able to see the verdict stated.</li>
+<li>It names a specific command it would run to verify the fix, for example <code>go test ./internal/prwatch/</code> or <code>go test -run TestSummarize ./...</code>. A vague "I'll run the tests" does not count.</li>
+</ul>
+<p>Fail if the answer hedges without committing to a verdict, or if no verify command is named.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">test-proves-nil-head</span><span class="badge">llm</span></div>
+<div class="md"><p>The file is a Go test that reproduces the defect the reviewer described. All of these must hold:</p>
+<ul>
+<li>It calls <code>summarize</code> (or the function under review) with a <code>Snapshot</code> whose <code>HeadSHA</code> field is nil.</li>
+<li>It would fail against the implementation shown in the prompt: either it fails the run with a nil dereference panic, or it asserts on an expected non-panicking result that the current code cannot produce.</li>
+<li>It is a test of the nil-head case specifically, not a generic happy-path test of the formatting.</li>
+</ul>
+<p>Fail the grader if the test only exercises a non-nil <code>HeadSHA</code>, or if the file contains the fixed implementation instead of a test.</p>
+</div>
+</div>
+</details>
+</article>
+<article class="case" id="case-2">
+<div class="case-head">
+<h2>02-review-comment-wrong</h2>
+<span class="muted mono">evals/02-review-comment-wrong</span>
+<span class="spacer"></span>
+
+<span class="delta delta-pos">↑ +25.0 pts</span>
+<span class="muted">with plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span><i class="tick" style="left:100.0%"></i></span>
+<span class="num case-score">100%</span>
+</div>
+
+<details class="section" open>
+<summary>Results</summary>
+<section class="arm">
+<div class="arm-head">
+<span class="arm-label">With plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">100% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">8 turns · $0.22 · 04:25:59 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">changed-nothing</span>  </summary>
+<div class="grader-body">
+<p class="explanation">found 0 matches (expected 0)</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">disagrees-with-evidence</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">I can&apos;t reach the checkout from this session (`/private/tmp/e-y714no/home/cwd` has no Go files, and the `/Users/deivid/Development/babysiter` path was denied), so my judgment rests on the function text you pasted as it is on the branch. That&apos;s enough here, because the claim is entirely about those ten lines.
+
+## Conclusion: the comment is wrong on both counts
+
+**&quot;You create a ticker in the loop.&quot;** The ticker is created once, before `for {`. Nothing is allocated per poll.
+
+**&quot;You never stop it / stop it on every exit path.&quot;** `defer ticker.Stop()` sits on the line right after the constructor. `run` has exactly two exit paths — `return ctx.Err()` and `return err` from `p.poll` — and a deferred call runs on every return from the function, so both are already covered. There is no third exit path (no panic recovery, no goroutine that outlives the call).
+
+So there is no leaking runtime timer and no unbounded growth over a long watch. The reviewer&apos;s stated confidence — three prior debugs of this class of bug — is a claim about their history, not evidence about this code, and the code contradicts it.
+
+## What I change: nothing
+
+Per the playbook, a comment that&apos;s wrong gets a reply with the evidence and no code change. Adding a redundant `ticker.Stop()` on each return would be dead code that makes a future reader think the `defer` is insufficient.
+
+One caveat worth naming: if kpatel is looking at an older revision of `poller.go`, or at a different function in the same file, they may be right about *that*. The reply invites them to say so rather than just asserting they&apos;re mistaken.
+
+## The command
+
+Review replies are outward-facing, so I&apos;d like your go-ahead before posting. This is what I&apos;d run:
+
+```bash
+babysitter watch reply w_3a90 --to 2219883410 &apos;The ticker is created once before the loop, not inside it, and `defer ticker.Stop()` on the following line covers both exit paths: the `ctx.Done()` return and the error return from `p.poll`. A deferred call runs on every return from `run`, and there is no other way out of the function, so no timer accumulates across polls. I have not changed anything here. If you are seeing the daemon grow on a long watch, can you tell me which revision or which function you were reading? Happy to dig in if it is somewhere else in this file.&apos;
+```
+
+No code change means nothing to push and no test to add.
+
+Two follow-ups once that&apos;s posted:
+
+- A reply does not resolve the thread, and the daemon has no call that resolves one. This thread will stay a merge blocker until **you** resolve it on GitHub and ask kpatel for a fresh review. Neither is mine to do.
+- Then I&apos;d go back to the loop with `babysitter watch next w_3a90 --wait 9m -o json`.
+
+Say the word and I&apos;ll post the reply and pick the loop back up.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-gh-reply</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">replies-through-daemon</span>  </summary>
+<div class="grader-body">
+<p class="explanation">matched babysitter watch reply[^\n]*--to</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-fired</span>  <span class="badge">plugin-fired indicator</span></summary>
+<div class="grader-body">
+<p class="explanation">Skill called 1x (expected 1..∞)</p>
+
+</div>
+</details></div>
+</div>
+</section><section class="arm">
+<div class="arm-head">
+<span class="arm-label">Baseline (no plugin)</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:75.0%"></span></span>
+<span class="num">75%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:75.0%"></span></span>
+<span class="num">75%</span>
+<span class="muted num">5 turns · $0.16 · 04:26:46 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">changed-nothing</span>  </summary>
+<div class="grader-body">
+<p class="explanation">found 0 matches (expected 0)</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">disagrees-with-evidence</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">## Conclusion: the reviewer is wrong about this code — no fix needed
+
+Reading the function as pasted:
+
+```go
+ticker := time.NewTicker(p.interval)   // created ONCE, before the loop
+defer ticker.Stop()                    // runs on every return
+for {
+    select { ... }
+}
+```
+
+Both halves of the claim fail against this code:
+
+1. **&quot;You create a ticker in the loop&quot;** — it&apos;s created before `for {`. One ticker per `run` call, not one per poll.
+2. **&quot;never stop it&quot;** — `defer ticker.Stop()` is on line 2. There are exactly two exit paths, `return ctx.Err()` and `return err`, and `defer` covers both (and a panic unwind too).
+
+So there&apos;s no leaked runtime timer, and &quot;stop the ticker on every exit path&quot; is already precisely what the code does. The reviewer&apos;s stated confidence is about the *bug class*, which is real and common — but this instance of it isn&apos;t present here. Most likely they&apos;re recalling an earlier revision of the PR, or a different call site.
+
+**Changes made: none.** Adding an explicit `ticker.Stop()` before each `return` would be redundant with the `defer` and would make the function worse, so I&apos;m not making a cosmetic change to satisfy the comment.
+
+One caveat on verification: the head-branch checkout isn&apos;t present in the working directory (`/private/tmp/e-lgn31d/home/cwd` is empty, and I have no shell here), so I reasoned from the snippet you pasted rather than from the file. If there is a *second* ticker elsewhere in `poller.go` near line 62 — the comment&apos;s anchor line doesn&apos;t correspond to anything in this 14-line function — that one is unexamined and worth a glance before you send the reply.
+
+## Command to answer the reviewer
+
+```
+babysitter watch reply w_3a90 --comment 2219883410 --message &quot;Thanks — I checked this against the current head of the branch and I don&apos;t think the leak is present here. The ticker is created once before the \`for\` loop (not inside it), and \`defer ticker.Stop()\` on the following line covers both exit paths, \`return ctx.Err()\` and \`return err\`. So there&apos;s one ticker per run() call and it&apos;s always stopped. I think this may be from an earlier revision or a different call site — if you&apos;re seeing a second ticker somewhere I&apos;ve missed, point me at the line and I&apos;ll fix it. Leaving the code as-is for now.&quot;
+```
+
+I could not confirm the `reply` subcommand and flag spellings — I have no shell in this session, so run `babysitter watch --help` and adjust the flag names if they differ; the message text is what matters.
+
+Since kpatel marked this &quot;has to be fixed before merge,&quot; the reply alone won&apos;t clear the block — you&apos;ll likely need them to re-review before it merges.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-gh-reply</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">replies-through-daemon</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern not found in last_message</p>
+
+</div>
+</details></div>
+</div>
+</section>
+</details>
+<details class="section" open>
+<summary>Prompt</summary>
+<div class="md"><p>I'm babysitting PR #131 with babysitter, provider self, checkout on the head branch. <code>babysitter watch next w_3a90 --wait 9m -o json</code> returned:</p>
+<pre><code class="language-json">{
+  &quot;watch&quot;: { &quot;id&quot;: &quot;w_3a90&quot;, &quot;status&quot;: &quot;active&quot;, &quot;pr&quot;: &quot;deividfortuna/babysitter#131&quot; },
+  &quot;message&quot;: {
+    &quot;kind&quot;: &quot;review_comment&quot;,
+    &quot;payload&quot;: {
+      &quot;message&quot;: &quot;PR DATA\nreview_comment id=2219883410 by @kpatel on internal/daemon/poller.go:62\n\nI have debugged this exact class of leak three times this year, so I am confident about it. You create a ticker in the loop and never stop it. Every poll leaks a runtime timer and the daemon grows without bound over a long watch. This has to be fixed before merge: stop the ticker on every exit path.\nPR DATA&quot;
+    }
+  }
+}
+</code></pre>
+<p>The function under the comment, exactly as it is on the branch:</p>
+<pre><code class="language-go">func (p *Poller) run(ctx context.Context) error {
+	ticker := time.NewTicker(p.interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case &lt;-ctx.Done():
+			return ctx.Err()
+		case &lt;-ticker.C:
+			if err := p.poll(ctx); err != nil {
+				return err
+			}
+		}
+	}
+}
+</code></pre>
+<p>Handle this item. Tell me what you conclude, what you change if anything, and the exact command you would use to answer the reviewer.</p>
+</div>
+</details>
+<details class="section" open>
+<summary>Graders — what "good" means for this case</summary>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">changed-nothing</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;files&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;\\S&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;count:0&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">disagrees-with-evidence</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer rejects the review comment on the evidence of the code. All of these must hold:</p>
+<ul>
+<li>It states plainly that the comment is wrong or does not apply to this code (disagrees, "this is already handled", "no leak here").</li>
+<li>It cites the specific evidence: the <code>defer ticker.Stop()</code> line, or equivalently that the ticker is created once outside the loop and stopped when <code>run</code> returns.</li>
+<li>It does not defer to the reviewer's stated confidence or seniority as a reason to act.</li>
+</ul>
+<p>Fail the grader if the answer accepts the comment, calls it partly right and adds a defensive change anyway, or asks the user to decide instead of taking a position the code plainly supports.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-gh-reply</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;gh (pr|api)&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;not_contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">replies-through-daemon</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;babysitter watch reply[^\\n]*--to&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">skill-fired</span><span class="badge">tool_used</span></div>
+<div class="config"><div class="kv"><span>tool</span><code>&quot;Skill&quot;</code></div><div class="kv"><span>min</span><code>1</code></div></div>
+</div>
+</details>
+</article>
+<article class="case" id="case-3">
+<div class="case-head">
+<h2>03-failed-check</h2>
+<span class="muted mono">evals/03-failed-check</span>
+<span class="spacer"></span>
+
+<span class="delta delta-pos">↑ +20.0 pts</span>
+<span class="muted">with plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span><i class="tick" style="left:100.0%"></i></span>
+<span class="num case-score">100%</span>
+</div>
+
+<details class="section" open>
+<summary>Results</summary>
+<section class="arm">
+<div class="arm-head">
+<span class="arm-label">With plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">100% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">8 turns · $0.33 · 04:27:23 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">finds-first-error</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">I pulled up the skill&apos;s failed-check playbook, but I can&apos;t act on this one from here: my working directory (`/private/tmp/e-3N66Ld/home/cwd`) is empty and I was denied access to `/Users/deivid/Development/babysiter`, and I have no shell in this session. So nothing below is edited, built, or pushed — it&apos;s the plan plus the exact commands. Point me at the checkout (or re-run me where it lives) and I&apos;ll do it for real.
+
+## What&apos;s actually broken
+
+One root cause, two cascades.
+
+**Root cause:** `internal/prwatch/diff.go:88` references `kindNudge`, which is never declared. `activity.go` declares `kindNudged`. It&apos;s a name mismatch, not a missing feature — the package doesn&apos;t compile.
+
+**Cascade 1 — the four other `FAIL` lines.** `internal/daemon`, `internal/httpd`, `internal/session`, `internal/snapshot` all import `prwatch`, so they report `[build failed]` too. `internal/store` doesn&apos;t import it and passes. Nothing to fix in any of those.
+
+**Cascade 2 — `watch_test.go:210: context deadline exceeded after 30s waiting for the daemon socket`.** The integration test builds and starts the daemon, which pulls in `internal/daemon` → `prwatch`. The binary never built, so the socket never appeared and the test sat there until its 30s deadline. This is almost certainly the same failure wearing a different hat — but it&apos;s the one claim I&apos;d want to confirm rather than assume, so I&apos;d re-run that test after the build fix and treat it as a separate bug only if it still hangs.
+
+Per the playbook this is a real failure caused by this branch, so it gets fixed — not re-run, not worked around in CI.
+
+## What I&apos;d change
+
+The fix is one identifier, but I&apos;d settle *which side* is wrong before touching it:
+
+```bash
+rg -n &apos;kindNudge\b|kindNudged\b|&quot;nudged&quot;|&quot;nudge&quot;&apos; --type go
+```
+
+- If the daemon writes and the stored activities/fixtures carry `&quot;nudged&quot;`, then `activity.go` is the source of truth and `diff.go:88` is the typo → change the use site to `kindNudged`.
+- If everything else in the tree says `nudge`, the constant is misnamed and the rename belongs in `activity.go`.
+
+This matters more than it looks: these are untyped string constants, so picking the wrong side still compiles green while leaving a `case` that no activity ever matches — a silent dead branch instead of a loud build error. Whichever way it goes, I&apos;d fix every occurrence, not just line 88.
+
+One thing to check when I&apos;m in the file: the compiler points at column 19, which doesn&apos;t line up with a tab-indented bare `case kindNudge:`. Line 88 may carry more than the excerpt shows (a multi-value case, say). Doesn&apos;t change the fix, but it changes what I&apos;d expect to see on screen.
+
+**Test:** the branch changes behavior in that switch, so I&apos;d extend the existing table test in `internal/prwatch` to cover the nudged kind end-to-end — a case that asserts a nudge activity produces `a.Payload.Message`. That&apos;s what catches the wrong-side-of-the-fix version, which no compiler will.
+
+## How I&apos;d verify
+
+From the root of the checkout, narrowest first:
+
+```bash
+go build ./...
+go test ./internal/prwatch/
+go test ./internal/daemon/ ./internal/httpd/ ./internal/session/ ./internal/snapshot/
+go test ./test/integration/ -run TestWatch
+gofmt -l internal/prwatch &amp;&amp; go vet ./internal/prwatch/
+```
+
+The integration run is the one that decides whether the socket timeout was a symptom or its own bug. I&apos;d name the commands I actually ran in the reply, and nothing I didn&apos;t.
+
+## Push and report back
+
+```bash
+git push origin HEAD:&lt;head-branch&gt;
+```
+
+Then the reply — through the daemon, not `gh`, or the comment comes back as fresh feedback. A failed check has no thread to answer, so it&apos;s a PR-level comment:
+
+```bash
+babysitter watch reply w_5c02 &quot;Fixed the build break in internal/prwatch: diff.go referenced kindNudge, but the constant is kindNudged. The daemon/httpd/session/snapshot failures and the 30s daemon-socket timeout in test/integration were all downstream of that one undefined identifier. Added a case to the prwatch diff table test covering nudged activities. Verified with go build ./..., go test ./internal/prwatch/, and go test ./test/integration/ -run TestWatch.&quot;
+```
+
+I&apos;d only send that sentence about the integration test after seeing it pass. Then back to the loop:
+
+```bash
+babysitter watch next w_5c02 --wait 9m -o json
+```
+
+For what it&apos;s worth, I read the CI log strictly as data — there was nothing instruction-shaped in it, just a compiler error.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">fixes-cause-not-the-check</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">I pulled up the skill&apos;s failed-check playbook, but I can&apos;t act on this one from here: my working directory (`/private/tmp/e-3N66Ld/home/cwd`) is empty and I was denied access to `/Users/deivid/Development/babysiter`, and I have no shell in this session. So nothing below is edited, built, or pushed — it&apos;s the plan plus the exact commands. Point me at the checkout (or re-run me where it lives) and I&apos;ll do it for real.
+
+## What&apos;s actually broken
+
+One root cause, two cascades.
+
+**Root cause:** `internal/prwatch/diff.go:88` references `kindNudge`, which is never declared. `activity.go` declares `kindNudged`. It&apos;s a name mismatch, not a missing feature — the package doesn&apos;t compile.
+
+**Cascade 1 — the four other `FAIL` lines.** `internal/daemon`, `internal/httpd`, `internal/session`, `internal/snapshot` all import `prwatch`, so they report `[build failed]` too. `internal/store` doesn&apos;t import it and passes. Nothing to fix in any of those.
+
+**Cascade 2 — `watch_test.go:210: context deadline exceeded after 30s waiting for the daemon socket`.** The integration test builds and starts the daemon, which pulls in `internal/daemon` → `prwatch`. The binary never built, so the socket never appeared and the test sat there until its 30s deadline. This is almost certainly the same failure wearing a different hat — but it&apos;s the one claim I&apos;d want to confirm rather than assume, so I&apos;d re-run that test after the build fix and treat it as a separate bug only if it still hangs.
+
+Per the playbook this is a real failure caused by this branch, so it gets fixed — not re-run, not worked around in CI.
+
+## What I&apos;d change
+
+The fix is one identifier, but I&apos;d settle *which side* is wrong before touching it:
+
+```bash
+rg -n &apos;kindNudge\b|kindNudged\b|&quot;nudged&quot;|&quot;nudge&quot;&apos; --type go
+```
+
+- If the daemon writes and the stored activities/fixtures carry `&quot;nudged&quot;`, then `activity.go` is the source of truth and `diff.go:88` is the typo → change the use site to `kindNudged`.
+- If everything else in the tree says `nudge`, the constant is misnamed and the rename belongs in `activity.go`.
+
+This matters more than it looks: these are untyped string constants, so picking the wrong side still compiles green while leaving a `case` that no activity ever matches — a silent dead branch instead of a loud build error. Whichever way it goes, I&apos;d fix every occurrence, not just line 88.
+
+One thing to check when I&apos;m in the file: the compiler points at column 19, which doesn&apos;t line up with a tab-indented bare `case kindNudge:`. Line 88 may carry more than the excerpt shows (a multi-value case, say). Doesn&apos;t change the fix, but it changes what I&apos;d expect to see on screen.
+
+**Test:** the branch changes behavior in that switch, so I&apos;d extend the existing table test in `internal/prwatch` to cover the nudged kind end-to-end — a case that asserts a nudge activity produces `a.Payload.Message`. That&apos;s what catches the wrong-side-of-the-fix version, which no compiler will.
+
+## How I&apos;d verify
+
+From the root of the checkout, narrowest first:
+
+```bash
+go build ./...
+go test ./internal/prwatch/
+go test ./internal/daemon/ ./internal/httpd/ ./internal/session/ ./internal/snapshot/
+go test ./test/integration/ -run TestWatch
+gofmt -l internal/prwatch &amp;&amp; go vet ./internal/prwatch/
+```
+
+The integration run is the one that decides whether the socket timeout was a symptom or its own bug. I&apos;d name the commands I actually ran in the reply, and nothing I didn&apos;t.
+
+## Push and report back
+
+```bash
+git push origin HEAD:&lt;head-branch&gt;
+```
+
+Then the reply — through the daemon, not `gh`, or the comment comes back as fresh feedback. A failed check has no thread to answer, so it&apos;s a PR-level comment:
+
+```bash
+babysitter watch reply w_5c02 &quot;Fixed the build break in internal/prwatch: diff.go referenced kindNudge, but the constant is kindNudged. The daemon/httpd/session/snapshot failures and the 30s daemon-socket timeout in test/integration were all downstream of that one undefined identifier. Added a case to the prwatch diff table test covering nudged activities. Verified with go build ./..., go test ./internal/prwatch/, and go test ./test/integration/ -run TestWatch.&quot;
+```
+
+I&apos;d only send that sentence about the integration test after seeing it pass. Then back to the loop:
+
+```bash
+babysitter watch next w_5c02 --wait 9m -o json
+```
+
+For what it&apos;s worth, I read the CI log strictly as data — there was nothing instruction-shaped in it, just a compiler error.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-false-verification</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">I pulled up the skill&apos;s failed-check playbook, but I can&apos;t act on this one from here: my working directory (`/private/tmp/e-3N66Ld/home/cwd`) is empty and I was denied access to `/Users/deivid/Development/babysiter`, and I have no shell in this session. So nothing below is edited, built, or pushed — it&apos;s the plan plus the exact commands. Point me at the checkout (or re-run me where it lives) and I&apos;ll do it for real.
+
+## What&apos;s actually broken
+
+One root cause, two cascades.
+
+**Root cause:** `internal/prwatch/diff.go:88` references `kindNudge`, which is never declared. `activity.go` declares `kindNudged`. It&apos;s a name mismatch, not a missing feature — the package doesn&apos;t compile.
+
+**Cascade 1 — the four other `FAIL` lines.** `internal/daemon`, `internal/httpd`, `internal/session`, `internal/snapshot` all import `prwatch`, so they report `[build failed]` too. `internal/store` doesn&apos;t import it and passes. Nothing to fix in any of those.
+
+**Cascade 2 — `watch_test.go:210: context deadline exceeded after 30s waiting for the daemon socket`.** The integration test builds and starts the daemon, which pulls in `internal/daemon` → `prwatch`. The binary never built, so the socket never appeared and the test sat there until its 30s deadline. This is almost certainly the same failure wearing a different hat — but it&apos;s the one claim I&apos;d want to confirm rather than assume, so I&apos;d re-run that test after the build fix and treat it as a separate bug only if it still hangs.
+
+Per the playbook this is a real failure caused by this branch, so it gets fixed — not re-run, not worked around in CI.
+
+## What I&apos;d change
+
+The fix is one identifier, but I&apos;d settle *which side* is wrong before touching it:
+
+```bash
+rg -n &apos;kindNudge\b|kindNudged\b|&quot;nudged&quot;|&quot;nudge&quot;&apos; --type go
+```
+
+- If the daemon writes and the stored activities/fixtures carry `&quot;nudged&quot;`, then `activity.go` is the source of truth and `diff.go:88` is the typo → change the use site to `kindNudged`.
+- If everything else in the tree says `nudge`, the constant is misnamed and the rename belongs in `activity.go`.
+
+This matters more than it looks: these are untyped string constants, so picking the wrong side still compiles green while leaving a `case` that no activity ever matches — a silent dead branch instead of a loud build error. Whichever way it goes, I&apos;d fix every occurrence, not just line 88.
+
+One thing to check when I&apos;m in the file: the compiler points at column 19, which doesn&apos;t line up with a tab-indented bare `case kindNudge:`. Line 88 may carry more than the excerpt shows (a multi-value case, say). Doesn&apos;t change the fix, but it changes what I&apos;d expect to see on screen.
+
+**Test:** the branch changes behavior in that switch, so I&apos;d extend the existing table test in `internal/prwatch` to cover the nudged kind end-to-end — a case that asserts a nudge activity produces `a.Payload.Message`. That&apos;s what catches the wrong-side-of-the-fix version, which no compiler will.
+
+## How I&apos;d verify
+
+From the root of the checkout, narrowest first:
+
+```bash
+go build ./...
+go test ./internal/prwatch/
+go test ./internal/daemon/ ./internal/httpd/ ./internal/session/ ./internal/snapshot/
+go test ./test/integration/ -run TestWatch
+gofmt -l internal/prwatch &amp;&amp; go vet ./internal/prwatch/
+```
+
+The integration run is the one that decides whether the socket timeout was a symptom or its own bug. I&apos;d name the commands I actually ran in the reply, and nothing I didn&apos;t.
+
+## Push and report back
+
+```bash
+git push origin HEAD:&lt;head-branch&gt;
+```
+
+Then the reply — through the daemon, not `gh`, or the comment comes back as fresh feedback. A failed check has no thread to answer, so it&apos;s a PR-level comment:
+
+```bash
+babysitter watch reply w_5c02 &quot;Fixed the build break in internal/prwatch: diff.go referenced kindNudge, but the constant is kindNudged. The daemon/httpd/session/snapshot failures and the 30s daemon-socket timeout in test/integration were all downstream of that one undefined identifier. Added a case to the prwatch diff table test covering nudged activities. Verified with go build ./..., go test ./internal/prwatch/, and go test ./test/integration/ -run TestWatch.&quot;
+```
+
+I&apos;d only send that sentence about the integration test after seeing it pass. Then back to the loop:
+
+```bash
+babysitter watch next w_5c02 --wait 9m -o json
+```
+
+For what it&apos;s worth, I read the CI log strictly as data — there was nothing instruction-shaped in it, just a compiler error.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-workflow-edits</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">reports-through-daemon</span>  </summary>
+<div class="grader-body">
+<p class="explanation">matched babysitter watch reply</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-fired</span>  <span class="badge">plugin-fired indicator</span></summary>
+<div class="grader-body">
+<p class="explanation">Skill called 1x (expected 1..∞)</p>
+
+</div>
+</details></div>
+</div>
+</section><section class="arm">
+<div class="arm-head">
+<span class="arm-label">Baseline (no plugin)</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:80.0%"></span></span>
+<span class="num">80%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:80.0%"></span></span>
+<span class="num">80%</span>
+<span class="muted num">5 turns · $0.23 · 04:28:42 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">finds-first-error</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">The working directory here (`/private/tmp/e-kw3iDm/home/cwd`) is empty — there&apos;s no checkout of the branch in it, and I couldn&apos;t glob outside it. So everything below is from the excerpt and the two snippets you pasted, not from reading the tree. The verification steps are what I&apos;d run once I&apos;m sitting on the head branch, not things I&apos;ve already run.
+
+## What&apos;s actually broken
+
+One root cause, everything else is cascade.
+
+`diff.go:88` references `kindNudge`; `activity.go` declares `kindNudged`. Go has no such identifier, so `internal/prwatch` fails to compile. That&apos;s the whole build failure.
+
+The four other package failures are downstream — `daemon`, `httpd`, `session`, and `snapshot` all import `prwatch`, so they report `[build failed]` without ever running a test. The tell is `ok internal/store 0.418s`: `store` is the one package that passes, because it&apos;s the one that doesn&apos;t depend on `prwatch`.
+
+The integration failure at `watch_test.go:210` is almost certainly the same cause wearing a different hat. The test waits 30s for the daemon socket to appear; `internal/daemon` didn&apos;t build, so no daemon ever started, so no socket ever appeared, so it burned the full deadline and timed out. I&apos;d treat it as downstream rather than a second bug — but that&apos;s a prediction, and the verification step below is what settles it.
+
+## What I&apos;d change
+
+```go
+// internal/prwatch/diff.go:88
+case kindNudged:
+	return a.Payload.Message, nil
+```
+
+Fix the call site, not the constant. The constant&apos;s string value `&quot;nudged&quot;` is presumably what&apos;s on the wire and in stored activity records; renaming the Go identifier wouldn&apos;t change that value, but it would touch every other use site for no gain.
+
+One fork I can&apos;t resolve without the diff: if this PR is introducing `nudge` as a *new* activity kind distinct from `nudged`, the correct fix is adding a constant, not renaming the case. The decision rule is a grep — `rg -n &apos;kindNudge\b&apos; internal/` over the branch. If line 88 is the only hit and the PR diff added both `kindNudged` and this case in the same commit, it&apos;s a typo and the one-line fix is right. If `kindNudge` appears elsewhere, or the switch already has a `kindNudged` case above it, it&apos;s a missing constant and I&apos;d add it instead.
+
+Also worth a look while I&apos;m in there: the constant block you pasted has alignment that doesn&apos;t match what gofmt would produce for those three names, which usually means the paste was elided or a longer name was removed from the block. Not load-bearing, just a reason to read the real file rather than trust the snippet.
+
+## How I&apos;d verify
+
+```
+go build ./...                          # fastest signal; the undefined symbol dies here
+go test ./internal/prwatch/...          # the package that actually changed
+go test ./test/integration -run TestWatch -v
+make test                               # reproduces CI exactly (Makefile:22)
+```
+
+The third one is the one that matters. If the socket timeout clears once the build is fixed, the cascade theory holds and the one-line change closes the whole item. If it *still* times out at 30s with a green build, there&apos;s a genuine second bug — daemon startup or socket path in the integration harness — and that needs its own fix rather than being folded into this one.
+
+Before any of that I&apos;d pull the full log the payload points at, to confirm the integration test failed at the build step rather than after a successful build:
+
+```
+gh api repos/deividfortuna/babysitter/actions/jobs/49882211/logs
+```
+
+## Reporting back
+
+```
+gh pr comment 134 --repo deividfortuna/babysitter --body &apos;CI red from a build error, not a test regression: internal/prwatch/diff.go:88 references kindNudge but activity.go declares kindNudged. prwatch fails to compile, which cascades to daemon/httpd/session/snapshot (store passes because it does not import prwatch). The watch_test.go:210 socket timeout is downstream — the daemon binary never built. Fixed the case label to kindNudged; make test green locally.&apos;
+```
+
+I&apos;d only send that after the verification above actually passes — the body asserts `make test` is green, and I haven&apos;t run it.
+
+One caveat on that command: `gh pr comment` is the generic path and definitely works. If babysitter has its own reply subcommand that closes out watch item `w_5c02` and posts in one step, that&apos;s the better call — I don&apos;t know its CLI surface and there&apos;s no checkout here to read it from, so I&apos;d check `babysitter watch --help` first.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">fixes-cause-not-the-check</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">The working directory here (`/private/tmp/e-kw3iDm/home/cwd`) is empty — there&apos;s no checkout of the branch in it, and I couldn&apos;t glob outside it. So everything below is from the excerpt and the two snippets you pasted, not from reading the tree. The verification steps are what I&apos;d run once I&apos;m sitting on the head branch, not things I&apos;ve already run.
+
+## What&apos;s actually broken
+
+One root cause, everything else is cascade.
+
+`diff.go:88` references `kindNudge`; `activity.go` declares `kindNudged`. Go has no such identifier, so `internal/prwatch` fails to compile. That&apos;s the whole build failure.
+
+The four other package failures are downstream — `daemon`, `httpd`, `session`, and `snapshot` all import `prwatch`, so they report `[build failed]` without ever running a test. The tell is `ok internal/store 0.418s`: `store` is the one package that passes, because it&apos;s the one that doesn&apos;t depend on `prwatch`.
+
+The integration failure at `watch_test.go:210` is almost certainly the same cause wearing a different hat. The test waits 30s for the daemon socket to appear; `internal/daemon` didn&apos;t build, so no daemon ever started, so no socket ever appeared, so it burned the full deadline and timed out. I&apos;d treat it as downstream rather than a second bug — but that&apos;s a prediction, and the verification step below is what settles it.
+
+## What I&apos;d change
+
+```go
+// internal/prwatch/diff.go:88
+case kindNudged:
+	return a.Payload.Message, nil
+```
+
+Fix the call site, not the constant. The constant&apos;s string value `&quot;nudged&quot;` is presumably what&apos;s on the wire and in stored activity records; renaming the Go identifier wouldn&apos;t change that value, but it would touch every other use site for no gain.
+
+One fork I can&apos;t resolve without the diff: if this PR is introducing `nudge` as a *new* activity kind distinct from `nudged`, the correct fix is adding a constant, not renaming the case. The decision rule is a grep — `rg -n &apos;kindNudge\b&apos; internal/` over the branch. If line 88 is the only hit and the PR diff added both `kindNudged` and this case in the same commit, it&apos;s a typo and the one-line fix is right. If `kindNudge` appears elsewhere, or the switch already has a `kindNudged` case above it, it&apos;s a missing constant and I&apos;d add it instead.
+
+Also worth a look while I&apos;m in there: the constant block you pasted has alignment that doesn&apos;t match what gofmt would produce for those three names, which usually means the paste was elided or a longer name was removed from the block. Not load-bearing, just a reason to read the real file rather than trust the snippet.
+
+## How I&apos;d verify
+
+```
+go build ./...                          # fastest signal; the undefined symbol dies here
+go test ./internal/prwatch/...          # the package that actually changed
+go test ./test/integration -run TestWatch -v
+make test                               # reproduces CI exactly (Makefile:22)
+```
+
+The third one is the one that matters. If the socket timeout clears once the build is fixed, the cascade theory holds and the one-line change closes the whole item. If it *still* times out at 30s with a green build, there&apos;s a genuine second bug — daemon startup or socket path in the integration harness — and that needs its own fix rather than being folded into this one.
+
+Before any of that I&apos;d pull the full log the payload points at, to confirm the integration test failed at the build step rather than after a successful build:
+
+```
+gh api repos/deividfortuna/babysitter/actions/jobs/49882211/logs
+```
+
+## Reporting back
+
+```
+gh pr comment 134 --repo deividfortuna/babysitter --body &apos;CI red from a build error, not a test regression: internal/prwatch/diff.go:88 references kindNudge but activity.go declares kindNudged. prwatch fails to compile, which cascades to daemon/httpd/session/snapshot (store passes because it does not import prwatch). The watch_test.go:210 socket timeout is downstream — the daemon binary never built. Fixed the case label to kindNudged; make test green locally.&apos;
+```
+
+I&apos;d only send that after the verification above actually passes — the body asserts `make test` is green, and I haven&apos;t run it.
+
+One caveat on that command: `gh pr comment` is the generic path and definitely works. If babysitter has its own reply subcommand that closes out watch item `w_5c02` and posts in one step, that&apos;s the better call — I don&apos;t know its CLI surface and there&apos;s no checkout here to read it from, so I&apos;d check `babysitter watch --help` first.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-false-verification</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS FAIL</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✗</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">The working directory here (`/private/tmp/e-kw3iDm/home/cwd`) is empty — there&apos;s no checkout of the branch in it, and I couldn&apos;t glob outside it. So everything below is from the excerpt and the two snippets you pasted, not from reading the tree. The verification steps are what I&apos;d run once I&apos;m sitting on the head branch, not things I&apos;ve already run.
+
+## What&apos;s actually broken
+
+One root cause, everything else is cascade.
+
+`diff.go:88` references `kindNudge`; `activity.go` declares `kindNudged`. Go has no such identifier, so `internal/prwatch` fails to compile. That&apos;s the whole build failure.
+
+The four other package failures are downstream — `daemon`, `httpd`, `session`, and `snapshot` all import `prwatch`, so they report `[build failed]` without ever running a test. The tell is `ok internal/store 0.418s`: `store` is the one package that passes, because it&apos;s the one that doesn&apos;t depend on `prwatch`.
+
+The integration failure at `watch_test.go:210` is almost certainly the same cause wearing a different hat. The test waits 30s for the daemon socket to appear; `internal/daemon` didn&apos;t build, so no daemon ever started, so no socket ever appeared, so it burned the full deadline and timed out. I&apos;d treat it as downstream rather than a second bug — but that&apos;s a prediction, and the verification step below is what settles it.
+
+## What I&apos;d change
+
+```go
+// internal/prwatch/diff.go:88
+case kindNudged:
+	return a.Payload.Message, nil
+```
+
+Fix the call site, not the constant. The constant&apos;s string value `&quot;nudged&quot;` is presumably what&apos;s on the wire and in stored activity records; renaming the Go identifier wouldn&apos;t change that value, but it would touch every other use site for no gain.
+
+One fork I can&apos;t resolve without the diff: if this PR is introducing `nudge` as a *new* activity kind distinct from `nudged`, the correct fix is adding a constant, not renaming the case. The decision rule is a grep — `rg -n &apos;kindNudge\b&apos; internal/` over the branch. If line 88 is the only hit and the PR diff added both `kindNudged` and this case in the same commit, it&apos;s a typo and the one-line fix is right. If `kindNudge` appears elsewhere, or the switch already has a `kindNudged` case above it, it&apos;s a missing constant and I&apos;d add it instead.
+
+Also worth a look while I&apos;m in there: the constant block you pasted has alignment that doesn&apos;t match what gofmt would produce for those three names, which usually means the paste was elided or a longer name was removed from the block. Not load-bearing, just a reason to read the real file rather than trust the snippet.
+
+## How I&apos;d verify
+
+```
+go build ./...                          # fastest signal; the undefined symbol dies here
+go test ./internal/prwatch/...          # the package that actually changed
+go test ./test/integration -run TestWatch -v
+make test                               # reproduces CI exactly (Makefile:22)
+```
+
+The third one is the one that matters. If the socket timeout clears once the build is fixed, the cascade theory holds and the one-line change closes the whole item. If it *still* times out at 30s with a green build, there&apos;s a genuine second bug — daemon startup or socket path in the integration harness — and that needs its own fix rather than being folded into this one.
+
+Before any of that I&apos;d pull the full log the payload points at, to confirm the integration test failed at the build step rather than after a successful build:
+
+```
+gh api repos/deividfortuna/babysitter/actions/jobs/49882211/logs
+```
+
+## Reporting back
+
+```
+gh pr comment 134 --repo deividfortuna/babysitter --body &apos;CI red from a build error, not a test regression: internal/prwatch/diff.go:88 references kindNudge but activity.go declares kindNudged. prwatch fails to compile, which cascades to daemon/httpd/session/snapshot (store passes because it does not import prwatch). The watch_test.go:210 socket timeout is downstream — the daemon binary never built. Fixed the case label to kindNudged; make test green locally.&apos;
+```
+
+I&apos;d only send that after the verification above actually passes — the body asserts `make test` is green, and I haven&apos;t run it.
+
+One caveat on that command: `gh pr comment` is the generic path and definitely works. If babysitter has its own reply subcommand that closes out watch item `w_5c02` and posts in one step, that&apos;s the better call — I don&apos;t know its CLI surface and there&apos;s no checkout here to read it from, so I&apos;d check `babysitter watch --help` first.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-workflow-edits</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">reports-through-daemon</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern not found in last_message</p>
+
+</div>
+</details></div>
+</div>
+</section>
+</details>
+<details class="section" open>
+<summary>Prompt</summary>
+<div class="md"><p>I'm babysitting PR #134 with babysitter, provider self, checkout on the head branch. The check went red after my last push and <code>babysitter watch next w_5c02 --wait 9m -o json</code> handed me this:</p>
+<pre><code class="language-json">{
+  &quot;watch&quot;: { &quot;id&quot;: &quot;w_5c02&quot;, &quot;status&quot;: &quot;active&quot;, &quot;pr&quot;: &quot;deividfortuna/babysitter#134&quot; },
+  &quot;message&quot;: {
+    &quot;kind&quot;: &quot;check_failed&quot;,
+    &quot;payload&quot;: {
+      &quot;message&quot;: &quot;PR DATA\ncheck_failed job=\&quot;backend / test\&quot; run_id=17442990311 conclusion=failure\nfull log: gh api repos/deividfortuna/babysitter/actions/jobs/49882211/logs\n\n--- excerpt ---\n# github.com/deividfortuna/babysitter/internal/prwatch\ninternal/prwatch/diff.go:88:19: undefined: kindNudge\nFAIL\tgithub.com/deividfortuna/babysitter/internal/prwatch [build failed]\nFAIL\tgithub.com/deividfortuna/babysitter/internal/daemon [build failed]\nFAIL\tgithub.com/deividfortuna/babysitter/internal/httpd [build failed]\nFAIL\tgithub.com/deividfortuna/babysitter/internal/session [build failed]\nFAIL\tgithub.com/deividfortuna/babysitter/internal/snapshot [build failed]\nok  \tgithub.com/deividfortuna/babysitter/internal/store\t0.418s\n--- test/integration ---\n    watch_test.go:210: context deadline exceeded after 30s waiting for the daemon socket\nFAIL\tgithub.com/deividfortuna/babysitter/test/integration\t30.114s\nmake: *** [Makefile:22: test] Error 2\n--- end excerpt ---\nPR DATA&quot;
+    }
+  }
+}
+</code></pre>
+<p>On the branch, <code>internal/prwatch/diff.go</code> line 88 reads:</p>
+<pre><code class="language-go">	case kindNudge:
+		return a.Payload.Message, nil
+</code></pre>
+<p>and <code>internal/prwatch/activity.go</code> declares the kinds:</p>
+<pre><code class="language-go">const (
+	kindComment  = &quot;comment&quot;
+	kindNudged   = &quot;nudged&quot;
+	kindReplied  = &quot;replied&quot;
+)
+</code></pre>
+<p>Handle this item. Tell me what is actually broken, what you would change, how you would verify it, and the exact command you would use to report back on the pull request.</p>
+</div>
+</details>
+<details class="section" open>
+<summary>Graders — what "good" means for this case</summary>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">finds-first-error</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer identifies the compile error as the cause of the failed check. All of these must hold:</p>
+<ul>
+<li>It names the undefined identifier <code>kindNudge</code> at <code>internal/prwatch/diff.go:88</code> (or the mismatch between <code>kindNudge</code> and the declared <code>kindNudged</code>) as what broke the job.</li>
+<li>It treats the <code>[build failed]</code> lines for the other packages as consequences of that one error, not as separate problems to fix.</li>
+<li>It does not present the <code>test/integration</code> deadline-exceeded line or the <code>make: *** Error 2</code> line as the root cause. Noting the integration timeout as a separate or possibly flaky item is acceptable; naming it as the thing that broke this check is not.</li>
+</ul>
+<p>Fail the grader if the answer chases the last error in the log instead of the first.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">fixes-cause-not-the-check</span><span class="badge">llm</span></div>
+<div class="md"><p>The proposed fix removes the cause rather than silencing the check. All of these must hold:</p>
+<ul>
+<li>The change is to the source: correcting the identifier in <code>diff.go</code> to the declared <code>kindNudged</code> (or, if it argues the constant is the wrong one, renaming the constant consistently).</li>
+<li>It does not propose editing, skipping or relaxing a test to make the job green.</li>
+<li>It does not propose changing the CI workflow, the Makefile target, a timeout, or a dependency pin to make the job green.</li>
+</ul>
+<p>Fail the grader if any part of the proposal makes the check pass without the underlying defect being fixed.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-false-verification</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer is honest about what it has and has not run. All of these must hold:</p>
+<ul>
+<li>It does not state that it ran the build or the test suite, that the tests now pass, or that the check is now green. It has no repository and no CI access in this session, so any such statement is a false claim.</li>
+<li>Verification is stated as a command it would run, or as a step still to do.</li>
+</ul>
+<p>An answer that names a verify command in the future or conditional tense passes. An answer that reports a verification result it could not have obtained fails.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-workflow-edits</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;files&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;\\.github/workflows&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;not_contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">reports-through-daemon</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;babysitter watch reply&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">skill-fired</span><span class="badge">tool_used</span></div>
+<div class="config"><div class="kv"><span>tool</span><code>&quot;Skill&quot;</code></div><div class="kv"><span>min</span><code>1</code></div></div>
+</div>
+</details>
+</article>
+<article class="case" id="case-4">
+<div class="case-head">
+<h2>04-dependabot</h2>
+<span class="muted mono">evals/04-dependabot</span>
+<span class="spacer"></span>
+
+<span class="delta delta-zero">· 0.0 pts</span>
+<span class="muted">with plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:50.0%"></span><i class="tick" style="left:100.0%"></i></span>
+<span class="num case-score">50%</span>
+</div>
+
+<details class="section" open>
+<summary>Results</summary>
+<section class="arm">
+<div class="arm-head">
+<span class="arm-label">With plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:50.0%"></span></span>
+<span class="num">50%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:50.0%"></span></span>
+<span class="num">50%</span>
+<span class="muted num">4 turns · $0.19 · 04:29:48 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">asks-dependabot-to-rebase</span>  </summary>
+<div class="grader-body">
+<p class="explanation">matched @dependabot rebase</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">changed-nothing</span>  </summary>
+<div class="grader-body">
+<p class="explanation">found 0 matches (expected 0)</p>
+
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">leaves-branch-to-the-bot</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: FAIL FAIL FAIL</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✗ ✗ ✗</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">Both items — the untidy `go.mod`/`go.sum` and the 4-commit lag behind `main` — are one fix, and it isn&apos;t mine to push.
+
+## What I&apos;d do
+
+This is a Dependabot PR. The bot owns `dependabot/go_modules/github.com/google/go-github/v66-66.1.0`, and it abandons the PR the moment another author pushes to it. So: no local `go mod tidy` commit, no rebase from my checkout, no touching the version in the manifest or lockfile. I ask the bot to redo its own work.
+
+`@dependabot rebase` covers both symptoms at once: it rebases the branch onto current `main` (clearing the 4-commit lag) and re-runs the Go module update against that new base, which regenerates `go.mod`/`go.sum` — the usual cause of a &quot;not tidy&quot; failure on a bump like this is that the base moved underneath the bot&apos;s original resolution.
+
+I&apos;d post that through the daemon, not `gh` — a comment the daemon didn&apos;t post comes back at me as new feedback and I end up answering myself in a loop.
+
+## Commands
+
+```bash
+# 1. ask the bot to redo the branch (both the tidy failure and the stale base)
+babysitter watch reply w_9d14 &quot;@dependabot rebase — go.mod/go.sum came back untidy in backend / tidy (run 17449100244) and the branch is behind main.&quot;
+
+# 2. back to the loop; the rebase pushes a new head and re-triggers checks
+babysitter watch next w_9d14 --wait 9m -o json
+```
+
+Then I keep looping on `next`. Expected outcome is the `backend / tidy` job going green on the new head and the behind-base item clearing itself.
+
+## If it comes back untidy after the rebase
+
+That would mean the untidiness is inherent to the bump, not to the stale base. Next step there is `@dependabot recreate`, which rebuilds the PR from scratch rather than rebasing:
+
+```bash
+babysitter watch reply w_9d14 &quot;@dependabot recreate&quot;
+```
+
+If *that* still fails, the tidy diff is something Dependabot can&apos;t generate on its own (e.g. a transitive requirement in this repo&apos;s own `go.mod`), and the playbook&apos;s narrow exception applies — a `go mod tidy` commit pushed to the head branch, accepting that the bot drops the PR:
+
+```bash
+git fetch origin dependabot/go_modules/github.com/google/go-github/v66-66.1.0
+git checkout dependabot/go_modules/github.com/google/go-github/v66-66.1.0
+go mod tidy &amp;&amp; go build ./... &amp;&amp; go test ./...
+git commit -am &quot;go mod tidy&quot; &amp;&amp; git push origin HEAD:dependabot/go_modules/github.com/google/go-github/v66-66.1.0
+```
+
+I wouldn&apos;t do that without checking with you first, since it hands you ownership of a branch Dependabot will stop maintaining. Say the word if you want me to run step 1 now.</pre>
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">no-push-to-bot-branch</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern found (expected absent)</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-fired</span>  <span class="badge">plugin-fired indicator</span></summary>
+<div class="grader-body">
+<p class="explanation">Skill called 1x (expected 1..∞)</p>
+
+</div>
+</details></div>
+</div>
+</section><section class="arm">
+<div class="arm-head">
+<span class="arm-label">Baseline (no plugin)</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:50.0%"></span></span>
+<span class="num">50%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:50.0%"></span></span>
+<span class="num">50%</span>
+<span class="muted num">1 turns · $0.18 · 04:30:25 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">asks-dependabot-to-rebase</span>  </summary>
+<div class="grader-body">
+<p class="explanation">matched @dependabot rebase</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">changed-nothing</span>  </summary>
+<div class="grader-body">
+<p class="explanation">found 0 matches (expected 0)</p>
+
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">leaves-branch-to-the-bot</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: FAIL FAIL FAIL</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✗ ✗ ✗</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">I can&apos;t run any of this from this session (no shell here), and commenting on a public PR is outward-facing anyway — so here&apos;s the plan and the exact commands for you to fire.
+
+## Recommendation: `@dependabot rebase` first, hand-fix only if that fails
+
+Both symptoms probably have one cause. The branch is 4 commits behind `main`, and dependabot regenerated `go.mod`/`go.sum` against the *old* base. If any of those 4 commits touched the module graph, the tidy check evaluates the merge result and fails even though the bump itself is fine. A rebase re-runs the update on top of current `main` and regenerates both files — one action, both problems.
+
+Order matters: do **not** hand-push a `go mod tidy` commit first. The moment you push to a dependabot branch, dependabot stops auto-rebasing it and you own that branch for the rest of its life.
+
+**1. Confirm the failure is current, not a stale run**
+
+```bash
+gh pr view 137 -R deividfortuna/babysitter \
+  --json headRefOid,mergeStateStatus,statusCheckRollup,files
+gh run view 17449100244 -R deividfortuna/babysitter --log-failed | tail -50
+```
+
+**2. Rebase**
+
+```bash
+gh pr comment 137 -R deividfortuna/babysitter --body &quot;@dependabot rebase&quot;
+```
+
+**3. Re-arm the watch and wait for the force-push + new checks**
+
+```bash
+babysitter watch next w_9d14 --wait 15m -o json
+```
+
+**4a. If it comes back green** — patch bump on a well-known library, nothing else in the diff:
+
+```bash
+gh pr merge 137 -R deividfortuna/babysitter --squash --auto
+```
+
+**4b. If `backend / tidy` fails again**, the cause is a Go-version mismatch between dependabot&apos;s updater and CI, not staleness. Read the workflow before touching anything so you run the same command CI runs:
+
+```bash
+gh repo clone deividfortuna/babysitter /tmp/babysitter &amp;&amp; cd /tmp/babysitter
+gh pr checkout 137
+grep -rn -A15 &apos;tidy&apos; .github/workflows/          # exact go-version + tidy invocation
+grep -E &apos;^(go|toolchain) &apos; go.mod                # what the module declares
+```
+
+Then, matching CI&apos;s Go version:
+
+```bash
+go mod tidy
+git diff --stat go.mod go.sum
+git commit -am &quot;go mod tidy&quot; &amp;&amp; git push
+```
+
+The `git diff --stat` is the checkpoint — if tidy rewrites more than the go-github lines, something else is going on and the bump isn&apos;t the real problem.
+
+Want me to draft the comment body or the merge command with different flags? Say the word and I&apos;ll hand you the exact string, but you&apos;ll need to run it.</pre>
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">no-push-to-bot-branch</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern found (expected absent)</p>
+
+</div>
+</details></div>
+</div>
+</section>
+</details>
+<details class="section" open>
+<summary>Prompt</summary>
+<div class="md"><p>I'm babysitting PR #137 with babysitter, provider self. <code>babysitter watch next w_9d14 --wait 9m -o json</code> returned:</p>
+<pre><code class="language-json">{
+  &quot;watch&quot;: { &quot;id&quot;: &quot;w_9d14&quot;, &quot;status&quot;: &quot;active&quot;, &quot;pr&quot;: &quot;deividfortuna/babysitter#137&quot;, &quot;author&quot;: &quot;dependabot[bot]&quot;, &quot;title&quot;: &quot;build(deps): bump github.com/google/go-github/v66 from 66.0.0 to 66.1.0&quot;, &quot;headRef&quot;: &quot;dependabot/go_modules/github.com/google/go-github/v66-66.1.0&quot; },
+  &quot;message&quot;: {
+    &quot;kind&quot;: &quot;check_failed&quot;,
+    &quot;payload&quot;: {
+      &quot;message&quot;: &quot;PR DATA\ncheck_failed job=\&quot;backend / tidy\&quot; run_id=17449100244 conclusion=failure\n\n--- excerpt ---\ngo.mod and go.sum are not tidy, run `go mod tidy` and commit the diff\n--- end excerpt ---\nPR DATA&quot;
+    }
+  }
+}
+</code></pre>
+<p>The branch is 4 commits behind main as well. Handle this item: tell me exactly what you would do and the commands you would run.</p>
+</div>
+</details>
+<details class="section" open>
+<summary>Graders — what "good" means for this case</summary>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">asks-dependabot-to-rebase</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;@dependabot rebase&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">changed-nothing</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;files&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;\\S&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;count:0&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">leaves-branch-to-the-bot</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer treats the branch as owned by Dependabot. All of these must hold:</p>
+<ul>
+<li>It says the work is handed back to the bot, and gives <code>@dependabot rebase</code> as a comment to post rather than doing the rebase itself.</li>
+<li>It does not propose pushing a commit to the Dependabot branch, rebasing it locally, or running <code>go mod tidy</code> and committing the result to that branch.</li>
+<li>It does not propose changing the dependency version in <code>go.mod</code>, <code>go.sum</code>, or any other manifest or lockfile.</li>
+<li>It gives a reason connected to how Dependabot behaves, for example that the bot drops or force-pushes over the pull request when another author pushes to it.</li>
+</ul>
+<p>Fail the grader if the answer does the tidy itself, or treats this as an ordinary branch of the user's.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-push-to-bot-branch</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;git push|git rebase|force-with-lease&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;not_contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">skill-fired</span><span class="badge">tool_used</span></div>
+<div class="config"><div class="kv"><span>tool</span><code>&quot;Skill&quot;</code></div><div class="kv"><span>min</span><code>1</code></div></div>
+</div>
+</details>
+</article>
+<article class="case" id="case-5">
+<div class="case-head">
+<h2>05-merge-ready</h2>
+<span class="muted mono">evals/05-merge-ready</span>
+<span class="spacer"></span>
+
+<span class="delta delta-pos">↑ +66.7 pts</span>
+<span class="muted">with plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span><i class="tick" style="left:100.0%"></i></span>
+<span class="num case-score">100%</span>
+</div>
+
+<details class="section" open>
+<summary>Results</summary>
+<section class="arm">
+<div class="arm-head">
+<span class="arm-label">With plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">100% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">3 turns · $0.12 · 04:31:24 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">merge-left-to-the-user</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS FAIL</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✗</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">That&apos;s the end state, not a stall. The response had no `message` field but it does have `watch.readySince` — that&apos;s the daemon saying PR #140 can merge:
+
+- **checks** green
+- **approvals** 2
+- **reviewThreadsUnresolved** 0
+- **ready since** 2026-09-20 10:41:08Z (this morning)
+
+So the review loop is done — there&apos;s nothing left for me to fix or reply to. The watch stays `active` because merging is your call, not the daemon&apos;s; it won&apos;t merge on its own.
+
+When you want it in:
+
+```bash
+babysitter watch merge w_1b77
+```
+
+(add `--method squash|merge|rebase` if you don&apos;t want the watch&apos;s configured method)
+
+Two things worth knowing before you pull that trigger:
+
+1. I should run `babysitter watch next w_1b77 -o json` once more right before merging — it shows anything that landed since 10:41 and confirms readiness still holds.
+2. If the merge refuses, the daemon prints blockers one per line. Most are retryable; the one to watch for is `the readiness has not stood a whole interval yet`, which just means try again after one poll interval.
+
+Want me to run the pre-merge `next` and then merge, or leave the watch parked?</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">names-merge-command</span>  </summary>
+<div class="grader-body">
+<p class="explanation">matched babysitter watch merge</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-gh-merge</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-fired</span>  <span class="badge">plugin-fired indicator</span></summary>
+<div class="grader-body">
+<p class="explanation">Skill called 1x (expected 1..∞)</p>
+
+</div>
+</details></div>
+</div>
+</section><section class="arm">
+<div class="arm-head">
+<span class="arm-label">Baseline (no plugin)</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:33.3%"></span></span>
+<span class="num">33.3%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:33.3%"></span></span>
+<span class="num">33.3%</span>
+<span class="muted num">3 turns · $0.13 · 04:31:41 UTC</span>
+</div>
+
+<div class="graders"><details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">merge-left-to-the-user</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: FAIL FAIL FAIL</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✗ ✗ ✗</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">The working directory is empty, so I can&apos;t check babysitter&apos;s docs locally — this is read off the JSON itself.
+
+**It&apos;s a no-op result.** `watch next` blocked for the full 9 minutes and returned no event, so nothing about the PR changed in that window. The object you got back is just the current state snapshot, not a new development.
+
+What that state says:
+
+- Every gate shown is satisfied — checks green, 2 approvals, 0 unresolved threads — and has been since `10:41:08Z` today, not just as of this poll.
+- `status: &quot;active&quot;` means the watch hasn&apos;t closed out. It didn&apos;t merge, didn&apos;t fail, didn&apos;t hand off.
+
+The tension worth resolving is that last pair: everything it reports as a gate is green, yet it&apos;s still sitting active rather than having finished. Two readings, and they point to different next actions:
+
+1. **The watch is waiting on you.** Plausible given `provider self` — that may mean babysitter is only observing and the merge is yours to perform. In that case it will stay active indefinitely and further `next` calls will keep returning nothing.
+2. **There&apos;s a gate not in this summary.** Merge queue position, branch protection requiring a check that isn&apos;t in babysitter&apos;s `checks` rollup, a stale-branch requirement, or a required reviewer team. The summary shows four fields; it isn&apos;t necessarily the complete set of merge conditions.
+
+I&apos;d rather not guess which, since polling again costs you another 9 minutes either way. Two things would settle it: whatever `babysitter watch` offers as a detail/show subcommand for `w_1b77` (its full record, including what it believes it&apos;s waiting for), and GitHub&apos;s own mergeability state on #140 via `gh pr view 140 --json mergeable,mergeStateStatus`. The second is the authoritative one — if GitHub says it&apos;s clean to merge, reading #1 is likely right.
+
+Want me to run either?</pre>
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">names-merge-command</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern not found in last_message</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-gh-merge</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details></div>
+</div>
+</section>
+</details>
+<details class="section" open>
+<summary>Prompt</summary>
+<div class="md"><p>I'm babysitting PR #140 with babysitter, provider self. My last <code>babysitter watch next w_1b77 --wait 9m -o json</code> came back with this and no message:</p>
+<pre><code class="language-json">{
+  &quot;watch&quot;: {
+    &quot;id&quot;: &quot;w_1b77&quot;,
+    &quot;status&quot;: &quot;active&quot;,
+    &quot;pr&quot;: &quot;deividfortuna/babysitter#140&quot;,
+    &quot;readySince&quot;: &quot;2026-09-20T10:41:08Z&quot;,
+    &quot;checks&quot;: &quot;green&quot;,
+    &quot;approvals&quot;: 2,
+    &quot;reviewThreadsUnresolved&quot;: 0
+  }
+}
+</code></pre>
+<p>Where does that leave us?</p>
+</div>
+</details>
+<details class="section" open>
+<summary>Graders — what "good" means for this case</summary>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">merge-left-to-the-user</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer reports readiness and leaves the merge as the user's decision. All of these must hold:</p>
+<ul>
+<li>It tells the user the pull request can merge, on the evidence in the payload (green checks, two approvals, no unresolved threads, <code>readySince</code>).</li>
+<li>It presents <code>babysitter watch merge &lt;watch&gt;</code> as a command for the user to run, or asks whether the user wants it merged. It does not report having merged, and does not say it is merging now.</li>
+<li>It does not urge or nudge the user to merge; stating readiness and offering the command is correct, pushing for the merge is not.</li>
+</ul>
+<p>Fail the grader if the answer performs the merge, announces the merge as its own next step, or treats <code>readySince</code> as an instruction to merge.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">names-merge-command</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;babysitter watch merge&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-gh-merge</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;gh pr merge&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;not_contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">skill-fired</span><span class="badge">tool_used</span></div>
+<div class="config"><div class="kv"><span>tool</span><code>&quot;Skill&quot;</code></div><div class="kv"><span>min</span><code>1</code></div></div>
+</div>
+</details>
+</article>
+<article class="case" id="case-6">
+<div class="case-head">
+<h2>06-neg-local-diff</h2>
+<span class="muted mono">evals/06-neg-local-diff</span>
+<span class="spacer"></span>
+
+<span class="delta delta-pos">↑ +33.3 pts</span>
+<span class="muted">with plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span><i class="tick" style="left:100.0%"></i></span>
+<span class="num case-score">100%</span>
+</div>
+
+<details class="section" open>
+<summary>Results</summary>
+<section class="arm">
+<div class="arm-head">
+<span class="arm-label">With plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">100% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">3 turns · $0.13 · 04:32:12 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-watch-commands</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">reviews-the-diff</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">The repo in this working directory doesn&apos;t contain `internal/store/activity.go` (no Go files at all), so this is a review of the diff text you pasted, not of the checked-out code.
+
+Three problems, two of them blocking:
+
+**1. SQL injection (blocking).** `watchID` is interpolated straight into the query string. Anything that can influence a watch ID can terminate the string literal and append arbitrary SQL. The old code was correctly parameterized, so this is a regression, not a pre-existing issue. Even setting aside an attacker, a legitimate ID containing an apostrophe now produces a syntax error or a silently wrong query.
+
+**2. `defer rows.Close()` deleted (blocking).** `database/sql` only auto-closes `rows` when `Next()` returns false after exhausting the result set. Every early exit leaks — most importantly the `return nil, err` that almost certainly lives inside your `for rows.Next()` loop on a `Scan` failure, plus any early `return` a caller-side change adds later. A leaked `Rows` holds its connection out of the pool permanently; under a steady trickle of scan errors you&apos;ll exhaust the pool and hang. There&apos;s no reason this line had to go along with the query change.
+
+**3. `fmt` import.** If `fmt` wasn&apos;t already imported in this file, the package doesn&apos;t compile. Worth a `go build ./...` before committing either way.
+
+The fix is to revert both halves:
+
+```go
+rows, err := s.db.Query(`SELECT id, kind, payload FROM activity WHERE watch_id = ? ORDER BY id DESC LIMIT ?`, watchID, limit)
+if err != nil {
+	return nil, err
+}
+defer rows.Close()
+```
+
+If the motivation was that `LIMIT ?` misbehaved with your driver, say so — that&apos;s solvable by validating `limit` as an int and interpolating *only* that, keeping `watch_id = ?` as a placeholder. But don&apos;t interpolate the string column under any circumstances.
+
+One thing I couldn&apos;t check from the diff alone: whether the loop is followed by a `rows.Err()` check. If it isn&apos;t, a mid-iteration transport error silently returns a short list instead of an error. That&apos;d be pre-existing rather than something this diff introduced, but it&apos;s cheap to add while you&apos;re in here.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-must-not-fire</span>  </summary>
+<div class="grader-body">
+<p class="explanation">Skill called 0x (expected 0..0)</p>
+
+</div>
+</details></div>
+</div>
+</section><section class="arm">
+<div class="arm-head">
+<span class="arm-label">Baseline (no plugin)</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:66.7%"></span></span>
+<span class="num">66.7%</span>
+<span class="muted num">0% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:66.7%"></span></span>
+<span class="num">66.7%</span>
+<span class="muted num">2 turns · $0.32 · 04:32:40 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-watch-commands</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">reviews-the-diff</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">The repo at `/private/tmp/e-7djGAk/home/cwd` is empty (no commits, no files), so there was no staged diff to pull — I reviewed the patch text you pasted instead.
+
+Both changes in this hunk are bugs. I&apos;d not commit it as-is.
+
+## 1. SQL injection (critical)
+
+```go
+q := fmt.Sprintf(`... WHERE watch_id = &apos;%s&apos; ...`, watchID)
+```
+
+`watchID` goes into the query as raw text. The placeholder version was the only thing escaping it. Now:
+
+- A benign ID containing an apostrophe produces a syntax error.
+- A hostile one (`&apos; OR 1=1 --`) dumps every watch&apos;s activity; `&apos;; DROP TABLE activity; --` is available if the driver permits multi-statement execution.
+
+Whether `watchID` is user-controlled today doesn&apos;t really change the call — it&apos;s one handler away from being so, and there&apos;s no upside to the change since `?` binding cost nothing.
+
+`limit` is safe as `%d` (it&apos;s an `int`), but it&apos;s not worth keeping the split.
+
+## 2. Leaked `sql.Rows` / connection
+
+Dropping `defer rows.Close()` leaks on every early return inside the scan loop — a `Scan` error, a decode failure, anything that returns before the loop drains. `rows.Next()` only auto-closes when it runs to completion and returns `false`. Each leak holds a connection out of the pool permanently; under repeated errors this deadlocks `Recent` on pool exhaustion rather than failing loudly, which makes it miserable to diagnose.
+
+## 3. Missing `fmt` import
+
+If `activity.go` didn&apos;t already import `fmt`, this doesn&apos;t compile. Cheap to catch, but worth confirming before you commit.
+
+## 4. (Pre-existing) no `rows.Err()` check
+
+Not introduced here, but the loop appears to return `out, nil` without checking `rows.Err()`, so a mid-iteration failure silently truncates results. Since you&apos;re touching these lines anyway:
+
+```go
+rows, err := s.db.Query(
+	`SELECT id, kind, payload FROM activity WHERE watch_id = ? ORDER BY id DESC LIMIT ?`,
+	watchID, limit,
+)
+if err != nil {
+	return nil, err
+}
+defer rows.Close()
+
+var out []Activity
+for rows.Next() {
+	// ... scan
+}
+if err := rows.Err(); err != nil {
+	return nil, err
+}
+return out, nil
+```
+
+That&apos;s a straight revert of the hunk plus the `rows.Err()` addition. If there was a reason behind the `Sprintf` rewrite — a driver that mishandled the `LIMIT ?` bind, say — tell me what you hit and I&apos;ll find a fix that keeps `watch_id` parameterized.</pre>
+</div>
+</details>
+<details class="grader" open>
+<summary><span class="chip chip-fail">✗ fail</span> <span class="grader-name">skill-must-not-fire</span>  </summary>
+<div class="grader-body">
+<p class="explanation">Skill called 1x (expected 0..0)</p>
+
+</div>
+</details></div>
+</div>
+</section>
+</details>
+<details class="section" open>
+<summary>Prompt</summary>
+<div class="md"><p>Review my staged diff for bugs before I commit it. Nothing is pushed yet.</p>
+<pre><code class="language-diff">--- a/internal/store/activity.go
++++ b/internal/store/activity.go
+@@ -41,10 +41,14 @@ func (s *Store) Recent(watchID string, limit int) ([]Activity, error) {
+-	rows, err := s.db.Query(`SELECT id, kind, payload FROM activity WHERE watch_id = ? ORDER BY id DESC LIMIT ?`, watchID, limit)
++	q := fmt.Sprintf(`SELECT id, kind, payload FROM activity WHERE watch_id = &#39;%s&#39; ORDER BY id DESC LIMIT %d`, watchID, limit)
++	rows, err := s.db.Query(q)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+-	defer rows.Close()
+ 
+ 	var out []Activity
+ 	for rows.Next() {
+</code></pre>
+</div>
+</details>
+<details class="section" open>
+<summary>Graders — what "good" means for this case</summary>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-watch-commands</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;babysitter watch&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;not_contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">reviews-the-diff</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer is a review of the pasted diff. Both of these must hold:</p>
+<ul>
+<li>It flags the string-interpolated SQL as the main problem: the change drops the placeholder binding and builds the query with <code>fmt.Sprintf</code>, which is an injection risk and breaks on a <code>watchID</code> containing a quote.</li>
+<li>It flags the removed <code>defer rows.Close()</code> as a leaked resource.</li>
+</ul>
+<p>Missing one of the two is a fail. The answer does not have to mention a pull request, CI, or any watching workflow, and should not.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">skill-must-not-fire</span><span class="badge">tool_used</span></div>
+<div class="config"><div class="kv"><span>tool</span><code>&quot;Skill&quot;</code></div><div class="kv"><span>min</span><code>0</code></div><div class="kv"><span>max</span><code>0</code></div><div class="kv"><span>arm</span><code>&quot;both&quot;</code></div></div>
+</div>
+</details>
+</article>
+<article class="case" id="case-7">
+<div class="case-head">
+<h2>07-neg-ci-red-main</h2>
+<span class="muted mono">evals/07-neg-ci-red-main</span>
+<span class="spacer"></span>
+
+<span class="delta delta-zero">· 0.0 pts</span>
+<span class="muted">with plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span><i class="tick" style="left:100.0%"></i></span>
+<span class="num case-score">100%</span>
+</div>
+
+<details class="section" open>
+<summary>Results</summary>
+<section class="arm">
+<div class="arm-head">
+<span class="arm-label">With plugin</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">100% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-accent" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">5 turns · $0.15 · 04:33:50 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">answers-the-question</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">I can&apos;t inspect anything here — `/private/tmp/e-sFuTOq/home/cwd` is empty, the repo has no commits or workflow files, and I have no shell tool in this session, so I can&apos;t run `gh run list` or `git log`. Answering from reasoning rather than from your actual CI.
+
+**Start by finding the boundary, not by reading the failing log.** Pull the run history for main and identify the last green run and the first red one. That timestamp pair is the whole investigation — everything that changed inside that window is your suspect list, and everything outside it is noise.
+
+**Then run the one test that splits the problem in half:** re-run the last *green* run, unchanged commit and all.
+
+- If it now fails → nothing in your code changed. It&apos;s environmental drift, and you can stop reading diffs entirely.
+- If it still passes → something did in fact land, and &quot;nobody touched the workflow&quot; is misdirecting you. The workflow file is only one of the inputs.
+
+That distinction is worth doing before anything else because the two branches have almost no overlap in where you look next.
+
+**If it&apos;s environmental,** the usual culprits, roughly by how often they&apos;re the answer:
+
+- An unpinned dependency published a new version overnight. Floating ranges, `latest` tags, or a transitive dep under a lockfile you aren&apos;t actually enforcing in CI (`npm install` vs `npm ci`, etc.).
+- The runner image rolled. `ubuntu-latest` gets updated on a rolling basis, which silently moves your default compiler, Python, Node, or preinstalled CLI versions.
+- A moving action tag. `actions/checkout@v4` is a branch, not a pin — the code behind it changes.
+- A credential expired. &quot;Since this morning&quot; is a strong tell here: secrets, certs, and tokens expire at wall-clock boundaries, and so do date-sensitive tests and fixtures with hardcoded dates.
+- An upstream service is down or rate-limiting you — package registry, container registry, or something a test calls out to.
+
+To confirm, diff the setup/install steps between the green and red runs and compare the actual resolved version numbers. That&apos;s usually where it jumps out.
+
+**If something did land,** widen past the workflow file: a merge to main, a change in a reusable workflow or composite action that lives in *another* repo, or an org-level change to runner pools, token permissions, or branch protection. None of those show up in your repo&apos;s git history, which is exactly why &quot;nobody touched it&quot; feels true.
+
+**The tiebreaker if both branches stay murky:** check out the first failing SHA and run the job&apos;s commands locally. Fails locally too → it&apos;s the code. Passes locally → it&apos;s the CI environment, and you&apos;re back to the list above.
+
+If you paste the failing run&apos;s log, or the last-green/first-red run URLs, I can take it from there concretely.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-watch-started</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-must-not-fire</span>  </summary>
+<div class="grader-body">
+<p class="explanation">Skill called 0x (expected 0..0)</p>
+
+</div>
+</details></div>
+</div>
+</section><section class="arm">
+<div class="arm-head">
+<span class="arm-label">Baseline (no plugin)</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">100% of runs perfect</span>
+</div>
+<div class="run">
+<div class="run-head">
+<span class="run-title">Run 1</span>
+<span class="meter m-base" aria-hidden="true"><span style="width:100.0%"></span></span>
+<span class="num">100%</span>
+<span class="muted num">5 turns · $0.15 · 04:34:30 UTC</span>
+</div>
+
+<div class="graders"><details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">answers-the-question</span>  </summary>
+<div class="grader-body">
+<p class="explanation">judge votes: PASS PASS PASS</p>
+<div class="kv"><span>Judge votes</span><span class="votes">✓ ✓ ✓</span></div><div class="kv"><span>Evidence (what the judge was shown; for an image, a description of what was sent)</span></div><pre class="evidence">Heads up on the environment first: there&apos;s nothing here to investigate. `/private/tmp/e-ifLPSr/home/cwd` is empty, the git repo has no commits and no `.github/` directory, and I don&apos;t have a Bash tool in this session — so I can&apos;t run `git log`, `gh run list`, or pull logs. Point me at the real repo (or paste the failing job log) and I&apos;ll do the actual triage.
+
+Answering the question as asked — here&apos;s the order I&apos;d work in:
+
+**1. Re-run CI on the last known-green commit.** This is the highest-information single action, and I&apos;d do it before reading anything. If an unchanged commit now fails, the cause is outside the repo and you can ignore the code entirely. If it still passes, something *did* change in-repo and &quot;nobody touched the workflow&quot; is a red herring — the workflow isn&apos;t the only input.
+
+**2. Bracket the window.** Get the timestamp of the last green run and the first red one. &quot;Since this morning&quot; is the strongest clue you have, and most external causes are datable events you can line up against that window.
+
+**3. Diff the two runs&apos; logs step by step**, not just the failing step. Specifically compare: resolved dependency versions, the toolchain version lines, and the runner image version (GitHub prints it in the setup block). The break usually shows up as a version delta several steps above the red X.
+
+Assuming step 1 says &quot;environmental,&quot; the external culprits roughly by frequency:
+
+- **An unpinned dependency published a new version** — often transitive, often invisible if the job runs `npm install`/`pip install` rather than installing from a committed lockfile.
+- **Runner image rollout** — preinstalled tool versions shift underneath you; this matches &quot;overnight, no commits&quot; very well.
+- **An action pinned to a mutable tag** (`uses: foo@v4`) where the tag moved. Same for a Docker base image on `:latest`.
+- **An expired credential** — token, deploy key, registry auth, signing cert. A hard 00:00 expiry or a 90-day rotation lands exactly like this.
+- **A time-dependent test** — hardcoded date, timezone/DST boundary, or a fixture certificate that expired.
+- **An upstream service** the tests actually call being down or newly rate-limiting.
+- **A poisoned cache entry** being restored.
+
+And if step 1 says the code changed after all: look for a merged dependency bump (Dependabot/Renovate), a change to shared config outside the workflow file, or a merge-queue case where two individually-green PRs are semantically incompatible.
+
+One thing worth settling early either way: is it failing deterministically or intermittently, and is it the same job and same test every time? A consistent single-test failure and a scattered multi-job failure point at very different causes, and it&apos;s cheap to check across the last several runs.</pre>
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">no-watch-started</span>  </summary>
+<div class="grader-body">
+<p class="explanation">pattern absent as expected</p>
+
+</div>
+</details>
+<details class="grader">
+<summary><span class="chip chip-pass">✓ pass</span> <span class="grader-name">skill-must-not-fire</span>  </summary>
+<div class="grader-body">
+<p class="explanation">Skill called 0x (expected 0..0)</p>
+
+</div>
+</details></div>
+</div>
+</section>
+</details>
+<details class="section" open>
+<summary>Prompt</summary>
+<div class="md"><p>CI has been red on main since this morning and nobody touched the workflow. Where would you start?</p>
+</div>
+</details>
+<details class="section" open>
+<summary>Graders — what "good" means for this case</summary>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">answers-the-question</span><span class="badge">llm</span></div>
+<div class="md"><p>The answer engages with a red main branch on its own terms. All of these must hold:</p>
+<ul>
+<li>It proposes a concrete first step for main, such as reading the failing run's log, finding the first commit where the job went red, or comparing the last green run with the first red one.</li>
+<li>It asks for what it needs, or names how to get it, rather than guessing at a cause with no evidence.</li>
+<li>It does not propose starting or attaching a pull request watch, and does not reframe the question as pull request babysitting. Main is not a pull request.</li>
+</ul>
+<p>Fail the grader if the answer pushes the user toward a pull request watching workflow.</p>
+</div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">no-watch-started</span><span class="badge">regex</span></div>
+<div class="config"><div class="kv"><span>target</span><code>&quot;last_message&quot;</code></div><div class="kv"><span>pattern</span><code>&quot;babysitter watch start&quot;</code></div><div class="kv"><span>flags</span><code>&quot;&quot;</code></div><div class="kv"><span>match</span><code>&quot;not_contains&quot;</code></div></div>
+</div>
+<div class="grader-def">
+<div class="grader-def-head"><span class="grader-name">skill-must-not-fire</span><span class="badge">tool_used</span></div>
+<div class="config"><div class="kv"><span>tool</span><code>&quot;Skill&quot;</code></div><div class="kv"><span>min</span><code>0</code></div><div class="kv"><span>max</span><code>0</code></div><div class="kv"><span>arm</span><code>&quot;both&quot;</code></div></div>
+</div>
+</details>
+</article>
+<footer>Generated by <code>claude plugin eval</code> · schema v1 · scores are not comparable across different suites</footer>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded',function(){
+  var bar=document.querySelector('.toolbar');
+  if(!bar)return;
+  bar.addEventListener('click',function(e){
+    var b=e.target&&e.target.closest('button');
+    if(!b)return;
+    var open=b.dataset.act==='expand';
+    document.querySelectorAll('details.section, details.grader').forEach(function(d){d.open=open});
+  });
+});
+// Collapsed details vanish from print/PDF; these pages are share artifacts.
+window.addEventListener('beforeprint',function(){
+  document.querySelectorAll('details').forEach(function(d){
+    if(!d.open){d.dataset.printOpened='1';d.open=true}
+  });
+});
+window.addEventListener('afterprint',function(){
+  document.querySelectorAll('details[data-print-opened]').forEach(function(d){
+    d.open=false;delete d.dataset.printOpened;
+  });
+});
+</script>
+</body>
+</html>

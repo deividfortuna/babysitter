@@ -1,0 +1,13 @@
+{
+  "extraKnownMarketplaces": {
+    "babysitter": {
+      "source": {
+        "source": "directory",
+        "path": "."
+      }
+    }
+  },
+  "enabledPlugins": {
+    "babysitter@babysitter": true
+  }
+}

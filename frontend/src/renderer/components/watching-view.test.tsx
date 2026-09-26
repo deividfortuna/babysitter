@@ -1,0 +1,119 @@
+import { act, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { expect, test, vi } from "vitest";
+import { http, HttpResponse } from "msw";
+import { buildWatch } from "@test/fixtures";
+import { expectViewTitle, renderWithProviders } from "@test/test-utils";
+import { apiUrl, server, serveApi } from "@test/msw";
+import { WatchingView } from "./watching-view";
+
+test("shows the first-run screen when no pull requests are watched", async () => {
+  serveApi();
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  expect(await screen.findByText("No pull request is watched")).toBeVisible();
+});
+
+test("announces that watched pull requests are loading", async () => {
+  serveApi();
+  server.use(http.get(apiUrl("/api/v1/watches"), async () => new Promise<never>(() => undefined)));
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+
+  expect(screen.getByRole("status", { name: "Loading watched pull requests" })).toBeVisible();
+});
+
+test("groups active pull requests by repository and opens a selected pull request", async () => {
+  const watch = buildWatch();
+  const onNavigate = vi.fn();
+  const user = userEvent.setup();
+  serveApi({ watches: [watch] });
+
+  renderWithProviders(<WatchingView enabled onNavigate={onNavigate} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  expect(await screen.findByText("octo/babysitter · 1")).toBeVisible();
+  await screen.findByText("Add notifications");
+  await user.click(await screen.findByRole("button", { name: /Add notifications/ }));
+
+  expect(onNavigate).toHaveBeenCalledWith({ kind: "watch", id: 42 });
+});
+
+test("offers to clear a repository filter with no active pull requests", async () => {
+  const onNavigate = vi.fn();
+  const user = userEvent.setup();
+  serveApi({ watches: [buildWatch({ repo: "octo/other" })] });
+
+  renderWithProviders(
+    <WatchingView enabled repo="octo/babysitter" onNavigate={onNavigate} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />,
+  );
+
+  expect(await screen.findByText("No watch in octo/babysitter")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Show every repository" }));
+
+  expect(onNavigate).toHaveBeenCalledWith({ kind: "watching" });
+});
+
+test("counts the watches whose agent waits on the author", async () => {
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 1, title: "Quiet one" }),
+      buildWatch({ id: 2, number: 2, title: "Loud one", session: { state: "blocked", pid: 8, logPath: "" } }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  expect(await screen.findByText("2 active · 1 needs you")).toBeVisible();
+  expect(screen.getByText("agent waits on a permission")).toBeVisible();
+  expect(screen.getByText("agent idle")).toBeVisible();
+});
+
+test("shows a live dot on the row of a pull request whose agent works", async () => {
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 1, title: "Working", session: { ...buildWatch().session, state: "active" } }),
+      buildWatch({ id: 2, number: 2, title: "Quiet" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const working = await screen.findByRole("button", { name: /Working/ });
+  expect(within(working).getByTitle("The agent works right now")).toBeVisible();
+  const quiet = screen.getByRole("button", { name: /Quiet/ });
+  expect(within(quiet).queryByTitle("The agent works right now")).toBeNull();
+});
+
+test("keeps the title in the view header", async () => {
+  serveApi({ watches: [buildWatch()] });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  expect(await screen.findByRole("banner")).toContainElement(
+    screen.getByRole("heading", { level: 1, name: "Watched pull requests" }),
+  );
+});
+
+test("keeps the title in the view header while watches load, fail or are none", async () => {
+  serveApi();
+  const { unmount } = renderWithProviders(
+    <WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />,
+  );
+  expectViewTitle("Watched pull requests");
+  expect(await screen.findByText("No pull request is watched")).toBeVisible();
+  expectViewTitle("Watched pull requests");
+  unmount();
+
+  server.use(
+    http.get(apiUrl("/api/v1/watches"), () =>
+      HttpResponse.json({ error: { message: "daemon gone" } }, { status: 500 }),
+    ),
+  );
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  expect(await screen.findByText("daemon gone")).toBeVisible();
+  expectViewTitle("Watched pull requests");
+});

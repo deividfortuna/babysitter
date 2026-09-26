@@ -1,0 +1,21 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "babysitter",
+  "description": "The plugins of babysitter, the daemon that watches GitHub pull requests.",
+  "owner": {
+    "name": "Deivid Fortuna",
+    "url": "https://github.com/deividfortuna"
+  },
+  "metadata": {
+    "pluginRoot": "./plugins"
+  },
+  "plugins": [
+    {
+      "name": "babysitter",
+      "source": "babysitter",
+      "description": "Babysit a GitHub pull request with the babysitter daemon: take each review comment, review, failed check and stale or conflicting branch one at a time, fix it, push and reply until the pull request can merge.",
+      "category": "workflow",
+      "homepage": "https://github.com/deividfortuna/babysitter/tree/main/plugins/babysitter"
+    }
+  ]
+}

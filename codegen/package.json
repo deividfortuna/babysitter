@@ -1,0 +1,16 @@
+{
+  "name": "babysitter-codegen",
+  "private": true,
+  "description": "Generates the frontend API types from the OpenAPI document of the daemon",
+  "license": "MIT",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "api:ts": "openapi-typescript ../backend/internal/httpd/apispec/openapi.yaml -o ../frontend/src/api/schema.ts"
+  },
+  "devDependencies": {
+    "openapi-typescript": "^7.13.0",
+    "typescript": "^5.9.3"
+  }
+}

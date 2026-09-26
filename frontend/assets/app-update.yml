@@ -1,0 +1,4 @@
+provider: github
+owner: deividfortuna
+repo: babysitter
+updaterCacheDirName: babysitter-updater

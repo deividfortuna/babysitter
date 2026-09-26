@@ -1,0 +1,8 @@
+.vite/
+components.json
+coverage/
+daemon/
+out/
+package-lock.json
+src/api/schema.ts
+src/renderer/components/ui/

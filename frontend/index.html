@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Babysitter</title>
+    <script>
+      // The theme the user chose, before the first paint. The bundle
+      // applies it on its first commit, which leaves a white window and
+      // then a whole document restyle for anybody on a light system who
+      // chose dark. It reads the same storage key and the same media
+      // query as src/renderer/lib/theme.ts.
+      (function () {
+        try {
+          var stored = window.localStorage.getItem("theme");
+          var chosen = stored === "dark" || stored === "light" ? stored : "system";
+          var dark =
+            chosen === "dark" || (chosen === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          document.documentElement.classList.toggle("dark", dark);
+          document.documentElement.style.backgroundColor = dark ? "#0d1117" : "#ffffff";
+        } catch (err) {
+          // Storage the window cannot read only costs the first paint.
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/renderer/main.tsx"></script>
+  </body>
+</html>

@@ -1,0 +1,8 @@
+export const TITLEBAR_HEIGHT = 48;
+
+export const MAC_WINDOW_BUTTON_HEIGHT = 14;
+
+export const MAC_WINDOW_BUTTON_POSITION = {
+  x: 14,
+  y: (TITLEBAR_HEIGHT - MAC_WINDOW_BUTTON_HEIGHT) / 2,
+};

@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+.playwright-mcp/
+*.p12
+*.p8
+*.cer
+*.certSigningRequest
+.claude/worktrees/

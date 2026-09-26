@@ -1,0 +1,1 @@
+All feature should be implemented in both the CLI app and the skill. If a feature is added to one, it should also be added to the other to maintain parity. This ensures that users have a consistent experience regardless of the interface they choose to use.

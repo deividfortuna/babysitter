@@ -1,0 +1,18 @@
+{
+  "name": "babysitter",
+  "description": "Babysit a GitHub pull request with the babysitter daemon: take each review comment, review, failed check and stale or conflicting branch one at a time, fix it, push and reply until the pull request can merge.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Deivid Fortuna",
+    "url": "https://github.com/deividfortuna"
+  },
+  "homepage": "https://github.com/deividfortuna/babysitter",
+  "repository": "https://github.com/deividfortuna/babysitter",
+  "keywords": [
+    "github",
+    "pull-request",
+    "code-review",
+    "ci",
+    "automation"
+  ]
+}
