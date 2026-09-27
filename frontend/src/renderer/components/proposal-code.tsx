@@ -1,6 +1,5 @@
 import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   Columns2Icon,
@@ -18,6 +17,7 @@ import { useTheme } from "@/hooks/use-theme";
 import type { DiffFile, ProposalDiff, ReplyAnchor } from "@/lib/proposal-diff";
 import { Meta } from "@/components/status-badges";
 import { count } from "@/components/proposal-dialogs";
+import { FileTree } from "@/components/proposal-file-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -114,7 +114,7 @@ export function CodeArea({
     <div className={cn("grid gap-4 md:grid-cols-[300px_1fr]", fill && "min-h-0 flex-1", dimmed && "opacity-50")}>
       <div className={cn("flex min-w-0 flex-col gap-3", fill && "overflow-y-auto")}>
         <CommitList commits={commits} />
-        <FileList diff={diff} reading={reading} onJump={jump} />
+        <FileTree diff={diff} viewed={reading.viewed} onJump={jump} />
       </div>
       <div className="flex min-w-0 flex-col gap-2">
         <Toolbar
@@ -179,46 +179,6 @@ function CommitList({ commits }: { commits: Commit[] }) {
             : `${heldBack} commits here are ones you kept off the pull request in an earlier decision. Approving pushes them with the rest.`}
         </p>
       ) : null}
-    </div>
-  );
-}
-
-function FileList({ diff, reading, onJump }: { diff: ProposalDiff; reading: Reading; onJump: (path: string) => void }) {
-  const total = diff.files.length + diff.missing.length;
-  const viewed = diff.files.filter((f) => reading.viewed.has(f.path)).length;
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span className="eyebrow">
-        {count(total, "changed file")}
-        {viewed > 0 ? ` · ${viewed} viewed` : ""}
-      </span>
-      {diff.files.map((f) => (
-        <button
-          key={f.path}
-          type="button"
-          onClick={() => onJump(f.path)}
-          className="flex items-baseline justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted"
-        >
-          <span className="flex min-w-0 items-baseline gap-1.5">
-            {reading.viewed.has(f.path) ? (
-              <>
-                <CheckIcon aria-hidden className="size-3 shrink-0 self-center text-success" />
-                <span className="sr-only">Viewed: </span>
-              </>
-            ) : null}
-            <span className="truncate font-mono text-xs/normal">{f.path}</span>
-          </span>
-          <Meta className="shrink-0">
-            +{f.added} −{f.deleted}
-          </Meta>
-        </button>
-      ))}
-      {diff.missing.map((f) => (
-        <div key={f.path} className="flex items-baseline justify-between gap-2 px-2 py-1 text-muted-foreground">
-          <span className="truncate font-mono text-xs/normal">{f.path}</span>
-          <Meta className="shrink-0">not in the diff</Meta>
-        </div>
-      ))}
     </div>
   );
 }

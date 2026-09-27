@@ -97,7 +97,7 @@ test("a file in the list scrolls the diff to it", async () => {
   const { user } = renderPending();
   const panel = await section();
 
-  await user.click(await within(panel).findByRole("button", { name: /^internal\/webhook\/deliver_test.go/ }));
+  await user.click(await within(panel).findByRole("button", { name: /^deliver_test.go/ }));
 
   expect(viewer(panel)).toHaveAttribute("data-scrolled-to", "internal/webhook/deliver_test.go");
 });
@@ -742,12 +742,28 @@ test("a viewed file folds away and is ticked in the list", async () => {
 
   expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "true");
   expect(within(panel).getByText("2 changed files · 1 viewed")).toBeVisible();
-  expect(within(panel).getByRole("button", { name: /^Viewed:\s*internal\/webhook\/deliver.go/ })).toBeVisible();
+  expect(within(panel).getByRole("button", { name: /^Viewed:\s*deliver.go/ })).toBeVisible();
 
   await user.click(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver.go" }));
 
   expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "false");
   expect(within(panel).getByText("2 changed files")).toBeVisible();
+});
+
+test("the changed files show as a tree of folders", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  const tree = await within(panel).findByRole("navigation", { name: "Changed files" });
+
+  const folder = within(tree).getByRole("button", { name: "internal/webhook" });
+  expect(folder).toHaveAttribute("aria-expanded", "true");
+  expect(within(tree).getByRole("button", { name: /^deliver.go, changed/ })).toBeVisible();
+  expect(within(tree).getByRole("button", { name: /^deliver_test.go, added/ })).toBeVisible();
+
+  await user.click(folder);
+
+  expect(folder).toHaveAttribute("aria-expanded", "false");
+  expect(within(tree).queryByRole("button", { name: /^deliver.go/ })).toBeNull();
 });
 
 test("a lockfile waits folded until the author loads it", async () => {
