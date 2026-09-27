@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test, vi } from "vitest";
+import { expect, test, vi } from "vite-plus/test";
 import { http, HttpResponse } from "msw";
 import { buildWatch } from "@test/fixtures";
 import { chooseOption, renderWithProviders } from "@test/test-utils";

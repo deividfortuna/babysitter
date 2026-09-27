@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { ChecksBadge, MergeableBadge, SessionBadge, StopBadge } from "./status-badges";
 
 test("reports failing checks and merge conflicts", () => {

@@ -96,3 +96,4 @@ dist/
 
 # Go daemon compiled by scripts/build-daemon.mjs
 daemon/
+.vitest/

@@ -1,6 +1,6 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import { buildProviders, buildRepo, buildRepoConfig, buildSettings } from "@test/fixtures";
 import { chooseOption, renderWithProviders } from "@test/test-utils";
 import { serveApi } from "@test/msw";

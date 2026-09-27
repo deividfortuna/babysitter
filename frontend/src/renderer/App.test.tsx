@@ -1,5 +1,5 @@
 import { act, screen } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import { bridge } from "@/lib/bridge";
 import type { DaemonStatus } from "../shared/daemon-status";
 import { renderWithProviders } from "@test/test-utils";

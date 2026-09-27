@@ -4,7 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import { PassThrough } from "node:stream";
 import { http, HttpResponse } from "msw";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import { server } from "@test/msw";
 import type { DaemonStatus } from "../shared/daemon-status";
 import type { Env } from "../shared/shell-env";

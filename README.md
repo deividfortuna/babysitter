@@ -1326,7 +1326,7 @@ holds openapi-typescript, which writes `src/api/schema.ts`. See
 ## Tests
 
 At the root, one command runs the same checks as CI: golangci-lint,
-`go test`, tsc, prettier, oxlint, vitest, actionlint and zizmor:
+`go test`, tsc, `vp fmt`, `vp lint`, `vp test`, actionlint and zizmor:
 
 ```sh
 npm run check
@@ -1345,7 +1345,7 @@ npm run actions:lint
 ```
 
 CI (`.github/workflows/pr.yaml`) also runs the Go tests with `-race` and
-coverage, the vitest coverage thresholds of `frontend/vitest.config.mts`,
+coverage, the Vitest coverage thresholds of `frontend/vite.config.ts`,
 govulncheck, and a check of the GoReleaser configuration. It fails when
 `go mod tidy`, `go generate` for the OpenAPI document, or `npm run api:ts`
 change a file.

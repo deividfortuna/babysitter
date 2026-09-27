@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "vitest";
+import { afterEach, expect, test } from "vite-plus/test";
 import { terminalTheme } from "./terminal-palette";
 
 function hostWithTokens(tokens: Record<string, string>) {

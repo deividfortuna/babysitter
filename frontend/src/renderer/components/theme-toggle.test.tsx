@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { renderWithProviders } from "@test/test-utils";
 import { ThemeToggle } from "./theme-toggle";
 

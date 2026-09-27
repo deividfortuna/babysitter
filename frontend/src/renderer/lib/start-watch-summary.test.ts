@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { settingsSummary } from "./start-watch-summary";
 
 const defaults = { agent: "Claude", model: "", approvalMode: "manual", approvals: "", mergeMethod: "" } as const;

@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import { bridge } from "@/lib/bridge";
 import { renderWithProviders } from "@test/test-utils";
 import { DaemonDown } from "./daemon-down";

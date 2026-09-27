@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { buildActivity } from "@test/fixtures";
 import type { ProposalReply } from "@/hooks/useProposals";
 import { anchorReplies, isNoisy, placeOnHead, readProposalDiff } from "./proposal-diff";

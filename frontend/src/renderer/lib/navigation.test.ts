@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { sameView } from "./navigation";
 
 test("distinguishes navigation destinations by their visible resource", () => {

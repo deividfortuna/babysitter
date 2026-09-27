@@ -30,8 +30,11 @@ and the watch flow in detail. Read it before changing `httpd`, `prwatch`,
 
 - `backend/`: Go module `github.com/deividfortuna/babysitter`, Go 1.27,
   cgo for SQLite. `go.work` at the root points to it.
-- `frontend/`: Electron Forge + Vite + React 19 + Tailwind 4 + shadcn.
-  Node 26, see `.node-version`. TypeScript 7 type checks it.
+- `frontend/`: Electron Forge + Vite+ + React 19 + Tailwind 4 + shadcn.
+  Node 26, see `.node-version`. TypeScript 7 type checks it. Vite+ (`vp`)
+  runs Vitest, Oxlint and Oxfmt; `frontend/vite.config.ts` holds their
+  `test`, `lint` and `fmt` blocks. Forge builds with the
+  `vite.{main,preload,renderer}.config.mts` files, not `vite.config.ts`.
 - `codegen/`: openapi-typescript, which writes `frontend/src/api/schema.ts`
   from `openapi.yaml`. It has its own lockfile because it uses the compiler
   API of TypeScript 5, which TypeScript 7 does not have.
@@ -48,12 +51,12 @@ and the watch flow in detail. Read it before changing `httpd`, `prwatch`,
 Run from the repository root unless noted.
 
 ```sh
-npm run check              # golangci-lint, go test, tsc, prettier, oxlint, vitest, actionlint, zizmor: what CI runs
+npm run check              # golangci-lint, go test, tsc, vp fmt, vp lint, vp test, actionlint, zizmor: what CI runs
 npm run backend:lint       # golangci-lint, rules in backend/.golangci.yml
 npm run backend:test       # go test ./...
 npm run frontend:typecheck
-npm run frontend:format    # prettier --write with the Tailwind class sorter, rules in frontend/.prettierrc.json
-npm run frontend:lint      # type-aware oxlint with @shadcn/lint and better-tailwindcss, rules in frontend/.oxlintrc.json
+npm run frontend:format    # vp fmt with the Tailwind class sorter, rules in the fmt block of frontend/vite.config.ts
+npm run frontend:lint      # type-aware vp lint with @shadcn/lint and better-tailwindcss, rules in the lint block of frontend/vite.config.ts
 npm run frontend:test
 npm run actions:lint       # actionlint and zizmor on .github/workflows
 npm run api                # regenerate openapi.yaml and frontend/src/api/schema.ts, needs npm ci in codegen/
@@ -75,7 +78,7 @@ Frontend, from `frontend/`:
 
 ```sh
 npm run test -- src/renderer/hooks/useRepos.test.tsx   # one test file
-npm run test:coverage                                   # CI enforces thresholds in vitest.config.mts
+npm run test:coverage                                   # CI enforces thresholds in vite.config.ts
 npm run package                                         # distributable in frontend/out
 ```
 
@@ -125,8 +128,9 @@ every request as an `Action`, and takes reactors (`React`, `Fail`,
 `Observe`, `GraphQLError`) for the failures a test needs. `ghfake.Serve`
 starts a raw handler as GitHub, for the `ghclient` tests of exact wire
 behavior such as ETags and pagination. A test builds state, not JSON, and
-never starts its own GitHub server. Frontend tests use vitest with
-jsdom, Testing Library and msw; `src/test/setup.ts` starts the msw server
+never starts its own GitHub server. Frontend tests use Vitest through
+`vp test`, import it from `vite-plus/test`, and run with jsdom, Testing
+Library and msw; `src/test/setup.ts` starts the msw server
 with `onUnhandledRequest: "error"`, so every HTTP call a test makes needs a
 handler in `src/test/msw.ts` or in the test. Fixtures live in
 `src/test/fixtures.ts`.

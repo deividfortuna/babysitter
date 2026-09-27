@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { presents } from "./presenting";
 
 const reading = { isSuccess: false, isError: false };
