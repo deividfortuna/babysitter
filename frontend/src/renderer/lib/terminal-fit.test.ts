@@ -1,5 +1,6 @@
-import { afterEach, expect, test } from "vite-plus/test";
-import { scrollingAncestor, terminalBox } from "./terminal-fit";
+import { afterEach, expect, test, vi } from "vite-plus/test";
+import type { TerminalGrid } from "./ghostty/surface";
+import { scrollingAncestor, settledReporter, terminalBox } from "./terminal-fit";
 
 function element(size: Partial<Record<"clientWidth" | "clientHeight" | "offsetHeight", number>>) {
   const el = document.createElement("div");
@@ -53,4 +54,25 @@ test("gives the terminal the height of the window left by the panel around it", 
   });
 
   expect(box.height).toBe(690);
+});
+
+test("reports only the grid the terminal settles at", () => {
+  vi.useFakeTimers();
+  try {
+    const reported: TerminalGrid[] = [];
+    const reporter = settledReporter((grid) => reported.push(grid), 150);
+    const small = { cols: 87, rows: 30 };
+    const large = { cols: 177, rows: 60 };
+
+    reporter.offer(small);
+    vi.advanceTimersByTime(150);
+    reporter.offer(large);
+    vi.advanceTimersByTime(50);
+    reporter.offer(small);
+    vi.advanceTimersByTime(150);
+
+    expect(reported).toEqual([small]);
+  } finally {
+    vi.useRealTimers();
+  }
 });

@@ -1,7 +1,7 @@
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/hooks/use-theme";
 import { GhosttySurface, type GridLimits, type TerminalGrid } from "@/lib/ghostty/surface";
-import { scrollingAncestor, terminalBox } from "@/lib/terminal-fit";
+import { scrollingAncestor, settledReporter, terminalBox } from "@/lib/terminal-fit";
 import { terminalTheme } from "@/lib/terminal-palette";
 import { plainOutput } from "@/lib/watch-status";
 
@@ -12,10 +12,6 @@ type Props = {
   output: string;
   onResize?: (grid: TerminalGrid) => void;
 };
-
-function sameGrid(left: TerminalGrid | null, right: TerminalGrid): boolean {
-  return left?.cols === right.cols && left.rows === right.rows;
-}
 
 export function AgentTerminal({ output, onResize }: Props) {
   const frame = useRef<HTMLDivElement>(null);
@@ -54,25 +50,18 @@ export function AgentTerminal({ output, onResize }: Props) {
     const pane = scroller.current;
     const panel = frame.current.parentElement ?? frame.current;
     const viewport = scrollingAncestor(panel);
-    let reported: TerminalGrid | null = null;
-    let settle = 0;
+    const reporter = settledReporter((grid) => reportResize(grid), RESIZE_SETTLE_MS);
     const fit = () => {
       const box = terminalBox({ scroller: pane, panel, viewport, terminalHeight: surface.height });
       surface.fit(box.width, box.height);
-      const grid = surface.grid;
-      if (sameGrid(reported, grid)) return;
-      window.clearTimeout(settle);
-      settle = window.setTimeout(() => {
-        reported = grid;
-        reportResize(grid);
-      }, RESIZE_SETTLE_MS);
+      reporter.offer(surface.grid);
     };
     const observer = new ResizeObserver(fit);
     for (const element of [pane, panel, viewport]) observer.observe(element);
     fit();
     return () => {
       observer.disconnect();
-      window.clearTimeout(settle);
+      reporter.cancel();
     };
   }, [surface]);
 

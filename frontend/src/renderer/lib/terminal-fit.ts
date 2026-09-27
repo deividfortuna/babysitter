@@ -1,3 +1,5 @@
+import type { TerminalGrid } from "./ghostty/surface";
+
 function scrolls(element: Element): boolean {
   const overflow = getComputedStyle(element).overflowY;
   return overflow === "auto" || overflow === "scroll";
@@ -26,5 +28,27 @@ export function terminalBox(options: {
   return {
     width: scroller.clientWidth - horizontalPadding(scroller),
     height: viewport.clientHeight - aroundTerminal,
+  };
+}
+
+function sameGrid(left: TerminalGrid | null, right: TerminalGrid): boolean {
+  return left?.cols === right.cols && left.rows === right.rows;
+}
+
+export function settledReporter(report: (grid: TerminalGrid) => void, settleMs: number) {
+  let reported: TerminalGrid | null = null;
+  let settle = 0;
+  return {
+    offer(grid: TerminalGrid) {
+      window.clearTimeout(settle);
+      if (sameGrid(reported, grid)) return;
+      settle = window.setTimeout(() => {
+        reported = grid;
+        report(grid);
+      }, settleMs);
+    },
+    cancel() {
+      window.clearTimeout(settle);
+    },
   };
 }
