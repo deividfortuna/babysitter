@@ -5,7 +5,7 @@ import { delay, http, HttpResponse } from "msw";
 import { buildActivity, buildProposal, buildProposalDetail, buildWatch } from "@test/fixtures";
 import { renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi, type Decision } from "@test/msw";
-import type { Proposal, ProposalDetail } from "@/hooks/useProposals";
+import type { Proposal, ProposalDetail, ProposalReply } from "@/hooks/useProposals";
 import type { Watch } from "@/hooks/useWatches";
 import { watchesQueryKey } from "@/lib/query-keys";
 import { WatchDetail } from "./watch-detail";
@@ -53,6 +53,17 @@ async function section() {
   return screen.findByRole("region", { name: "Proposal" });
 }
 
+function viewer(panel: HTMLElement): HTMLElement {
+  const diff = within(panel).getByLabelText("Diff");
+  const view = diff.firstElementChild;
+  if (!(view instanceof HTMLElement)) throw new Error("the diff has no viewer");
+  return view;
+}
+
+function file(panel: HTMLElement, path: string): HTMLElement {
+  return within(panel).getByRole("region", { name: `File ${path}` });
+}
+
 test("a proposal that waits shows what goes out", async () => {
   renderPending();
   const panel = await section();
@@ -69,12 +80,12 @@ test("a proposal that waits shows what goes out", async () => {
   expect(await within(panel).findByText("2 commits on the work branch")).toBeVisible();
   expect(within(panel).getByText("Move the retry into deliver")).toBeVisible();
   expect(within(panel).getByText("2 changed files")).toBeVisible();
-  expect(within(panel).getByRole("button", { name: /internal\/webhook\/deliver.go/, pressed: true })).toBeVisible();
-  expect(within(panel).getByLabelText("Diff")).toHaveTextContent("return retry(ctx, send, req)");
-  expect(within(panel).getByLabelText("Diff")).not.toHaveTextContent("TestDeliverRetries");
-  expect(within(panel).getByText("2 replies · posted under your account")).toBeVisible();
-  expect(within(panel).getByText("This retry belongs in deliver, not in the handler.")).toBeVisible();
-  expect(within(panel).getByLabelText("Reply to mhernandez")).toHaveValue(
+  const diff = within(panel).getByLabelText("Diff");
+  expect(diff).toHaveTextContent("return retry(ctx, send, req)");
+  expect(diff).toHaveTextContent("TestDeliverRetries");
+  expect(within(panel).getByText("2 replies · posted under your account · 1 in the diff")).toBeVisible();
+  expect(within(diff).getByText("This retry belongs in deliver, not in the handler.")).toBeVisible();
+  expect(within(diff).getByLabelText("Reply to mhernandez")).toHaveValue(
     "Moved the retry into deliver and added a test.",
   );
   expect(
@@ -82,14 +93,13 @@ test("a proposal that waits shows what goes out", async () => {
   ).toBeVisible();
 });
 
-test("a file shows its own diff", async () => {
+test("a file in the list scrolls the diff to it", async () => {
   const { user } = renderPending();
   const panel = await section();
 
-  await user.click(await within(panel).findByRole("button", { name: /deliver_test.go/ }));
+  await user.click(await within(panel).findByRole("button", { name: /^deliver_test.go/ }));
 
-  expect(within(panel).getByRole("button", { name: /deliver_test.go/, pressed: true })).toBeVisible();
-  expect(within(panel).getByLabelText("Diff")).toHaveTextContent("TestDeliverRetries");
+  expect(viewer(panel)).toHaveAttribute("data-scrolled-to", "internal/webhook/deliver_test.go");
 });
 
 test("approve releases the proposal and says what went out", async () => {
@@ -202,7 +212,7 @@ test("a dropped comment that answers no comment promises nothing back", async ()
 test("the heading of the replies does not count a dropped one", async () => {
   const { user } = renderPending();
   const panel = await section();
-  expect(await within(panel).findByText("2 replies · posted under your account")).toBeVisible();
+  expect(await within(panel).findByText("2 replies · posted under your account · 1 in the diff")).toBeVisible();
 
   const [first] = await within(panel).findAllByRole("button", { name: "Drop reply" });
   await user.click(first);
@@ -699,4 +709,184 @@ test("an open stop asking dialog holds the release when the work moves to code t
   expect(release).toBeDisabled();
   await user.click(release);
   expect(decisions).toHaveLength(0);
+});
+
+const lockfilePatch = [
+  "diff --git a/package-lock.json b/package-lock.json",
+  "index 1111111..2222222 100644",
+  "--- a/package-lock.json",
+  "+++ b/package-lock.json",
+  "@@ -1,2 +1,2 @@",
+  " {",
+  '-  "version": "1.0.0"',
+  '+  "version": "1.0.1"',
+  "",
+].join("\n");
+
+function inlineReply(payload: Record<string, unknown>, body = "Done."): ProposalReply {
+  return {
+    id: 5,
+    inReplyTo: 31,
+    body,
+    dropped: false,
+    answers: buildActivity({ kind: "review_comment", actor: "mhernandez", payload }),
+  };
+}
+
+test("a viewed file folds away and is ticked in the list", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+
+  await user.click(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver.go" }));
+
+  expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "true");
+  expect(within(panel).getByText("2 changed files · 1 viewed")).toBeVisible();
+  expect(within(panel).getByRole("button", { name: /^Viewed:\s*deliver.go/ })).toBeVisible();
+
+  await user.click(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver.go" }));
+
+  expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "false");
+  expect(within(panel).getByText("2 changed files")).toBeVisible();
+});
+
+test("the changed files show as a tree of folders", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  const tree = await within(panel).findByRole("navigation", { name: "Changed files" });
+
+  const folder = within(tree).getByRole("button", { name: "internal/webhook" });
+  expect(folder).toHaveAttribute("aria-expanded", "true");
+  expect(within(tree).getByRole("button", { name: /^deliver.go, changed/ })).toBeVisible();
+  expect(within(tree).getByRole("button", { name: /^deliver_test.go, added/ })).toBeVisible();
+
+  await user.click(folder);
+
+  expect(folder).toHaveAttribute("aria-expanded", "false");
+  expect(within(tree).queryByRole("button", { name: /^deliver.go/ })).toBeNull();
+});
+
+test("a lockfile waits folded until the author loads it", async () => {
+  const { user } = renderPending({
+    detail: {
+      files: [{ path: "package-lock.json", status: "M", added: 1, deleted: 1 }],
+      diff: lockfilePatch,
+    },
+  });
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+
+  expect(file(panel, "package-lock.json")).toHaveAttribute("data-collapsed", "true");
+  expect(within(panel).getByText("large or generated")).toBeVisible();
+
+  await user.click(within(panel).getByRole("button", { name: "Load diff" }));
+
+  expect(file(panel, "package-lock.json")).toHaveAttribute("data-collapsed", "false");
+  expect(within(panel).getByLabelText("Diff")).toHaveTextContent('"version": "1.0.1"');
+});
+
+test("a comment on a line the change does not show sits at the top of its file", async () => {
+  renderPending({
+    proposal: {
+      replies: [
+        inlineReply(
+          { path: "internal/webhook/deliver.go", line: 120, side: "RIGHT", body: "Rename this." },
+          "Renamed it.",
+        ),
+      ],
+    },
+  });
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+  const deliver = file(panel, "internal/webhook/deliver.go");
+
+  expect(within(deliver).getByText("On line 120, which this change does not show.")).toBeVisible();
+  expect(within(deliver).getByLabelText("Reply to mhernandez")).toHaveValue("Renamed it.");
+});
+
+test("a comment on a line of an older commit is not placed on the new code", async () => {
+  renderPending({
+    proposal: {
+      replies: [
+        inlineReply({ path: "internal/webhook/deliver.go", line: 34, side: "RIGHT", commit_id: "0ld", body: "Why?" }),
+      ],
+    },
+  });
+  const panel = await section();
+
+  expect(await within(panel).findByText("On line 34, which this change does not show.")).toBeVisible();
+});
+
+test("a comment on a file outside the diff stays in the list", async () => {
+  renderPending({
+    proposal: {
+      replies: [inlineReply({ path: "internal/webhook/handler.go", line: 8, body: "Handle the error." }, "Fixed it.")],
+    },
+  });
+  const panel = await section();
+
+  expect(await within(panel).findByText("1 reply · posted under your account")).toBeVisible();
+  expect(within(within(panel).getByLabelText("Diff")).queryByLabelText("Reply to mhernandez")).toBeNull();
+  expect(within(panel).getByLabelText("Reply to mhernandez")).toHaveValue("Fixed it.");
+});
+
+test("the split layout and the wrap stay for the next proposal", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+
+  await user.click(within(panel).getByRole("radio", { name: "Split" }));
+  await user.click(within(panel).getByRole("button", { name: "Wrap lines" }));
+
+  expect(viewer(panel)).toHaveAttribute("data-diff-style", "split");
+  expect(viewer(panel)).toHaveAttribute("data-overflow", "wrap");
+  expect(JSON.parse(window.localStorage.getItem("diff_preferences") ?? "{}")).toEqual({ style: "split", wrap: true });
+});
+
+test("a cut diff says so and names the files it lost", async () => {
+  renderPending({
+    detail: {
+      truncated: true,
+      files: [
+        { path: "internal/webhook/deliver.go", status: "M", added: 14, deleted: 3 },
+        { path: "internal/webhook/deliver_test.go", status: "A", added: 40, deleted: 0 },
+        { path: "internal/webhook/retry.go", status: "A", added: 90, deleted: 0 },
+      ],
+    },
+  });
+  const panel = await section();
+
+  expect(await within(panel).findByText("The diff is longer than one megabyte and was cut.")).toBeVisible();
+  expect(
+    within(panel).getByText("The last file shown stops where the cut is, and 1 file after it is not in the diff."),
+  ).toBeVisible();
+  expect(within(file(panel, "internal/webhook/deliver_test.go")).getByText("cut here")).toBeVisible();
+  expect(within(panel).getByText("not in the diff")).toBeVisible();
+  expect(within(panel).getByText("3 changed files")).toBeVisible();
+});
+
+test("the full window opens the diff with its replies", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+
+  await user.click(within(panel).getByRole("button", { name: "Full window" }));
+
+  const dialog = await screen.findByRole("dialog", { name: "Files changed" });
+  expect(within(dialog).getByLabelText("Diff")).toHaveTextContent("return retry(ctx, send, req)");
+  expect(within(dialog).getByLabelText("Reply to mhernandez")).toBeVisible();
+  expect(within(panel).getByText("The diff is open in the full window.")).toBeVisible();
+});
+
+test("a rejected push keeps every reply in the list", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+
+  await user.click(within(panel).getByRole("button", { name: "Reject push" }));
+  const dialog = await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: /Reject push/ }));
+
+  expect(await within(panel).findByText("2 replies · posted under your account")).toBeVisible();
+  expect(within(within(panel).getByLabelText("Diff")).queryByLabelText("Reply to mhernandez")).toBeNull();
 });

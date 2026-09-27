@@ -466,7 +466,11 @@ The snapshot holds:
   submitted reviews that no earlier snapshot of this pull request showed.
   Pending reviews and their inline comments do not appear until the
   reviewer submits them, and a review that only comments with an empty
-  body does not appear at all.
+  body does not appear at all. An inline comment gives its `path`, its
+  `line`, the `side` of the diff that line is on (`LEFT` or `RIGHT`), and
+  the `commit_id` the line refers to. When GitHub can no longer place an
+  outdated comment on the current diff, `line` and `commit_id` are those
+  of the commit the comment was written on.
 - `threads`: the count of `unresolved` review threads, from the GraphQL
   API, and `err` when they could not be read. `unanswered` counts the
   unresolved threads where the last comment is not from the user of the

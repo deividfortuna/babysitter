@@ -139,6 +139,12 @@ type ReviewComment struct {
 	Path         string
 	Line         int
 	OriginalLine int
+	// Side is LEFT or RIGHT: the side of the diff the line is on.
+	Side string
+	// CommitID is the commit Line is on, and OriginalCommitID the one
+	// OriginalLine is on.
+	CommitID         string
+	OriginalCommitID string
 }
 
 // Thread is a review thread as GraphQL lists it.

@@ -185,6 +185,8 @@ type ReviewItem struct {
 	Body              string               `json:"body"`
 	Path              string               `json:"path,omitempty"`
 	Line              *int                 `json:"line,omitempty"`
+	Side              string               `json:"side,omitempty"`
+	CommitID          string               `json:"commit_id,omitempty"`
 	State             watcher.ReviewState  `json:"state,omitempty"`
 	URL               string               `json:"url"`
 }
@@ -420,9 +422,9 @@ func reviewItems(issueComments []*github.IssueComment, reviewComments []*github.
 		if pending[c.GetPullRequestReviewID()] {
 			continue
 		}
-		line := c.Line
+		line, commit := c.Line, c.GetCommitID()
 		if line == nil {
-			line = c.OriginalLine
+			line, commit = c.OriginalLine, c.GetOriginalCommitID()
 		}
 		items = append(items, ReviewItem{
 			Kind:              store.KindReviewComment,
@@ -433,6 +435,8 @@ func reviewItems(issueComments []*github.IssueComment, reviewComments []*github.
 			Body:              c.GetBody(),
 			Path:              c.GetPath(),
 			Line:              line,
+			Side:              c.GetSide(),
+			CommitID:          commit,
 			URL:               c.GetHTMLURL(),
 		})
 	}

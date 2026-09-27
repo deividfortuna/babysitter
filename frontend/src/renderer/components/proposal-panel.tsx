@@ -27,6 +27,8 @@ import {
   type Outgoing,
 } from "@/components/proposal-dialogs";
 import { outgoing, useProposalDecision, type Preview } from "@/components/proposal-decision";
+import { CodeArea, type RenderReply } from "@/components/proposal-code";
+import { anchorReplies, readProposalDiff, type AnchoredReplies, type ProposalDiff } from "@/lib/proposal-diff";
 import { relativeTime, shortSha } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -36,16 +38,6 @@ function conflicted(p: Proposal): boolean {
 
 function failure(p: Proposal): string {
   return (p.error ?? "").replace(/^[^:]*proposal \d+: /, "");
-}
-
-function splitDiff(diff: string): Map<string, string> {
-  const files = new Map<string, string>();
-  for (const part of diff.split(/^(?=diff --git )/m)) {
-    const header = part.split("\n", 1)[0];
-    const path = header.split(" b/").at(-1) ?? "";
-    if (path) files.set(path, part);
-  }
-  return files;
 }
 
 export function ProposalPanel({ watch }: { watch: Watch }) {
@@ -92,10 +84,50 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
   const [rejecting, setRejecting] = useState(false);
   const [stopAsking, setStopAsking] = useState(false);
 
-  const replies = detail?.replies ?? proposal.replies ?? [];
+  const replies = useMemo(() => detail?.replies ?? proposal.replies ?? [], [detail?.replies, proposal.replies]);
+  const code = preview.ready ? preview.detail : undefined;
+  const diff = useMemo(() => (code ? readProposalDiff(code.diff, code.truncated, code.files ?? []) : null), [code]);
+  const inline = proposal.hasPush && !pushRejected;
+  const anchored = useMemo(
+    (): AnchoredReplies =>
+      diff && inline
+        ? anchorReplies(replies, diff.files, proposal.headSha)
+        : { annotations: new Map(), unanchored: replies },
+    [diff, inline, replies, proposal.headSha],
+  );
+  const inDiff = [...anchored.annotations.values()].flat().filter((a) => !dropped.includes(a.metadata.replyId)).length;
+  const placing = inline && !diff && !preview.error;
   const bot = watch.dependabot;
   const pushes = proposal.hasPush && !pushRejected;
   const out = decision.out ?? outgoing(watch, proposal, detail, draft);
+
+  const renderReply: RenderReply = (r, anchor) =>
+    dropped.includes(r.id) ? (
+      <div key={r.id} className="flex items-center gap-2 text-sm text-muted-foreground">
+        <Trash2Icon className="size-4 shrink-0" />
+        <span>
+          {replyWho(r).label} dropped. Nothing is posted
+          {r.inReplyTo ? ", and the comment reaches the agent again" : ""}.
+        </span>
+        <Button
+          variant="ghost"
+          size="xs"
+          onClick={() => change((d) => ({ ...d, dropped: d.dropped.filter((id) => id !== r.id) }))}
+        >
+          Undo
+        </Button>
+      </div>
+    ) : (
+      <ReplyCard
+        key={r.id}
+        reply={r}
+        note={anchor && !anchor.placed ? `On line ${anchor.line}, which this change does not show.` : undefined}
+        value={edits[r.id] ?? r.edited ?? r.body}
+        edited={edits[r.id] !== undefined && edits[r.id] !== r.body}
+        onChange={(text) => change((d) => ({ ...d, edits: { ...d.edits, [r.id]: text } }))}
+        onDrop={() => setDropping(r)}
+      />
+    );
 
   const intro = bot
     ? "The agent answered a comment. Dependabot owns this branch, so the proposal carries replies only: the daemon pushes nothing and rebases nothing."
@@ -142,41 +174,25 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
         </div>
       ) : null}
 
-      {proposal.hasPush ? <CodeArea preview={preview} dimmed={pushRejected} /> : null}
+      {proposal.hasPush ? (
+        <ProposalCode
+          preview={preview}
+          diff={diff}
+          anchored={anchored}
+          replies={replies}
+          renderReply={renderReply}
+          dimmed={pushRejected}
+        />
+      ) : null}
 
-      {replies.length > 0 ? (
+      {replies.length > 0 && !placing ? (
         <div className="flex flex-col gap-2.5">
           <span className="eyebrow">
             {count(replies.length - dropped.length, "reply", "replies")} · posted under your account
             {dropped.length > 0 ? ` · ${dropped.length} dropped` : ""}
+            {inDiff > 0 ? ` · ${inDiff} in the diff` : ""}
           </span>
-          {replies.map((r) =>
-            dropped.includes(r.id) ? (
-              <div key={r.id} className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Trash2Icon className="size-4 shrink-0" />
-                <span>
-                  {replyWho(r).label} dropped. Nothing is posted
-                  {r.inReplyTo ? ", and the comment reaches the agent again" : ""}.
-                </span>
-                <Button
-                  variant="ghost"
-                  size="xs"
-                  onClick={() => change((d) => ({ ...d, dropped: d.dropped.filter((id) => id !== r.id) }))}
-                >
-                  Undo
-                </Button>
-              </div>
-            ) : (
-              <ReplyCard
-                key={r.id}
-                reply={r}
-                value={edits[r.id] ?? r.edited ?? r.body}
-                edited={edits[r.id] !== undefined && edits[r.id] !== r.body}
-                onChange={(text) => change((d) => ({ ...d, edits: { ...d.edits, [r.id]: text } }))}
-                onDrop={() => setDropping(r)}
-              />
-            ),
-          )}
+          {anchored.unanchored.map((r) => renderReply(r))}
         </div>
       ) : null}
 
@@ -280,12 +296,14 @@ function whereOf(r: ProposalReply): string | null {
 
 function ReplyCard({
   reply,
+  note,
   value,
   edited,
   onChange,
   onDrop,
 }: {
   reply: ProposalReply;
+  note?: string;
   value: string;
   edited: boolean;
   onChange: (text: string) => void;
@@ -324,6 +342,7 @@ function ReplyCard({
           Drop reply
         </Button>
       </div>
+      {note ? <p className="text-xs text-attention">{note}</p> : null}
       {typeof comment === "string" && comment ? <p className="text-sm text-foreground/75">{comment}</p> : null}
       <label htmlFor={id} className="sr-only">
         {label}
@@ -349,69 +368,33 @@ function CodeUnread({ preview }: { preview: Preview }) {
   );
 }
 
-function CodeArea({ preview, dimmed }: { preview: Preview; dimmed: boolean }) {
-  const detail = preview.ready ? preview.detail : undefined;
-  const files = detail?.files ?? [];
-  const commits = detail?.commits ?? [];
-  const heldBack = commits.filter((c) => c.heldBack).length;
-  const diffs = useMemo(() => splitDiff(detail?.diff ?? ""), [detail?.diff]);
-  const [picked, setPicked] = useState<string | null>(null);
-  const selected = picked ?? files[0]?.path ?? null;
+function ProposalCode({
+  preview,
+  diff,
+  anchored,
+  replies,
+  renderReply,
+  dimmed,
+}: {
+  preview: Preview;
+  diff: ProposalDiff | null;
+  anchored: AnchoredReplies;
+  replies: ProposalReply[];
+  renderReply: RenderReply;
+  dimmed: boolean;
+}) {
   if (preview.error) return <CodeUnread preview={preview} />;
-  if (!detail) return <Spinner />;
+  if (!preview.ready || !preview.detail || !diff) return <Spinner />;
   return (
-    <div className={cn("grid gap-4 md:grid-cols-[300px_1fr]", dimmed && "opacity-50")}>
-      <div className="flex min-w-0 flex-col gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="eyebrow">{count(commits.length, "commit")} on the work branch</span>
-          {commits.map((c) => (
-            <div key={c.sha} className="flex items-baseline gap-2 text-sm">
-              <Meta>{shortSha(c.sha)}</Meta>
-              <span className="truncate">{c.subject}</span>
-              {c.heldBack ? (
-                <Badge variant="outline" className="shrink-0 font-mono">
-                  kept off before
-                </Badge>
-              ) : null}
-            </div>
-          ))}
-          {heldBack > 0 ? (
-            <p className="text-sm text-attention">
-              {heldBack === 1
-                ? "1 commit here is one you kept off the pull request in an earlier decision. Approving pushes it with the rest."
-                : `${heldBack} commits here are ones you kept off the pull request in an earlier decision. Approving pushes them with the rest.`}
-            </p>
-          ) : null}
-        </div>
-        <div className="flex flex-col gap-0.5">
-          <span className="eyebrow">{count(files.length, "changed file")}</span>
-          {files.map((f) => (
-            <button
-              key={f.path}
-              type="button"
-              aria-pressed={f.path === selected}
-              onClick={() => setPicked(f.path)}
-              className={cn(
-                "flex items-baseline justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted",
-                f.path === selected && "bg-accent",
-              )}
-            >
-              <span className="truncate font-mono text-xs/normal">{f.path}</span>
-              <Meta className="shrink-0">
-                +{f.added} −{f.deleted}
-              </Meta>
-            </button>
-          ))}
-        </div>
-      </div>
-      <pre
-        aria-label="Diff"
-        className="h-90 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-2xs/relaxed whitespace-pre"
-      >
-        {(selected ? diffs.get(selected) : undefined) ?? detail.diff}
-        {detail.truncated ? "\n… the diff is longer than one megabyte and was cut here" : ""}
-      </pre>
-    </div>
+    <CodeArea
+      diff={diff}
+      commits={preview.detail.commits ?? []}
+      truncated={preview.detail.truncated}
+      annotations={anchored.annotations}
+      replies={replies}
+      renderReply={renderReply}
+      dimmed={dimmed}
+    />
   );
 }
 

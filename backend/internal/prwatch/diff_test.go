@@ -72,7 +72,7 @@ func TestDiffReviewItems(t *testing.T) {
 	s := greenSnapshot("abc")
 	s.NewReviewItems = []snapshot.ReviewItem{
 		{Kind: store.KindIssueComment, ID: 1, Author: "bob", Body: "Looks good\nmore", URL: "https://c/1"},
-		{Kind: store.KindReviewComment, ID: 2, Author: "bob", Body: "Return the error", Path: "main.go", Line: &line, URL: "https://c/2"},
+		{Kind: store.KindReviewComment, ID: 2, Author: "bob", Body: "Return the error", Path: "main.go", Line: &line, Side: "RIGHT", CommitID: "abc", URL: "https://c/2"},
 		{Kind: store.KindReview, ID: 3, Author: "carol", Body: "", State: "CHANGES_REQUESTED", URL: "https://c/3"},
 	}
 	prev := State{HeadSHA: "abc", GreenSHA: "abc", MergeableState: "clean", Checks: map[string]checks.State{"build": checks.Passed, "lint": checks.Passed}}
@@ -90,6 +90,13 @@ func TestDiffReviewItems(t *testing.T) {
 	var payload map[string]any
 	if err := json.Unmarshal(items[2].Payload, &payload); err != nil || payload["state"] != "CHANGES_REQUESTED" || payload["item_id"] != float64(3) {
 		t.Fatalf("payload = %s, %v", items[2].Payload, err)
+	}
+	var inline map[string]any
+	if err := json.Unmarshal(items[1].Payload, &inline); err != nil {
+		t.Fatal(err)
+	}
+	if inline["path"] != "main.go" || inline["line"] != float64(12) || inline["side"] != "RIGHT" || inline["commit_id"] != "abc" {
+		t.Fatalf("inline payload = %s", items[1].Payload)
 	}
 }
 
