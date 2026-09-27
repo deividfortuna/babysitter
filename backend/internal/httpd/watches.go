@@ -412,6 +412,23 @@ func (a *api) handleWatchOutput(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, SessionOutput{Output: out})
 }
 
+func (a *api) handleResizeWatch(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	var req ResizeRequest
+	if err := readJSON(w, r, &req); err != nil || !req.valid() {
+		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with rows from 1 to 500 and cols from 1 to 1000")
+		return
+	}
+	size := prwatch.TerminalSize{Rows: req.Rows, Cols: req.Cols}
+	if resizeErrors.write(w, a.watches.Resize(r.Context(), id, size)) {
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func (a *api) handleWatchHook(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {

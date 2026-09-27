@@ -14,10 +14,32 @@ export interface GhosttySurfaceElements {
   readonly frame: HTMLElement;
 }
 
-export interface GhosttySurfaceOptions {
+export interface TerminalGrid {
   readonly cols: number;
   readonly rows: number;
+}
+
+export interface GridLimits {
+  readonly minCols: number;
+  readonly minRows: number;
+  readonly maxRows: number;
+}
+
+export interface GhosttySurfaceOptions {
+  readonly limits: GridLimits;
   readonly theme: GhosttyTheme;
+}
+
+export function terminalGrid(
+  box: { width: number; height: number },
+  cell: { width: number; height: number },
+  limits: GridLimits,
+): TerminalGrid {
+  const rows = Math.floor(box.height / cell.height);
+  return {
+    cols: Math.max(limits.minCols, Math.floor(box.width / cell.width)),
+    rows: Math.min(limits.maxRows, Math.max(limits.minRows, rows)),
+  };
 }
 
 export function scrollbarThumb(
@@ -48,7 +70,12 @@ function isBefore(point: GhosttyPoint, other: GhosttyPoint): boolean {
 
 async function createCore(options: GhosttySurfaceOptions): Promise<GhosttyTerminalCore> {
   const { loadGhosttyRuntime } = await import("./runtime");
-  return new GhosttyTerminalCore(await loadGhosttyRuntime(), options.cols, options.rows, options.theme);
+  return new GhosttyTerminalCore(
+    await loadGhosttyRuntime(),
+    options.limits.minCols,
+    options.limits.minRows,
+    options.theme,
+  );
 }
 
 export class GhosttySurface {
@@ -58,8 +85,9 @@ export class GhosttySurface {
   private readonly thumb: HTMLDivElement;
   private readonly context: CanvasRenderingContext2D;
   private readonly core: GhosttyTerminalCore;
-  private readonly cols: number;
-  private readonly rows: number;
+  private readonly limits: GridLimits;
+  private cols: number;
+  private rows: number;
   private theme: GhosttyTheme;
   private metrics: GhosttyCellMetrics;
   private renderRequest = 0;
@@ -87,8 +115,9 @@ export class GhosttySurface {
     this.thumb = thumb;
     this.context = context;
     this.core = core;
-    this.cols = options.cols;
-    this.rows = options.rows;
+    this.limits = options.limits;
+    this.cols = options.limits.minCols;
+    this.rows = options.limits.minRows;
     this.theme = options.theme;
     this.metrics = measureGhosttyCell(context, FONT_SIZE, FONT_FAMILY, LINE_HEIGHT);
     this.installEvents();
@@ -135,6 +164,24 @@ export class GhosttySurface {
     this.theme = theme;
     this.core.setTheme(theme);
     this.requestRender();
+  }
+
+  fit(width: number, height: number): TerminalGrid | null {
+    if (this.disposed) return null;
+    const grid = terminalGrid({ width, height }, this.metrics, this.limits);
+    if (grid.cols === this.cols && grid.rows === this.rows) return null;
+    this.cols = grid.cols;
+    this.rows = grid.rows;
+    this.layout();
+    return grid;
+  }
+
+  get grid(): TerminalGrid {
+    return { cols: this.cols, rows: this.rows };
+  }
+
+  get height(): number {
+    return this.rows * this.metrics.height;
   }
 
   selectionText(): string {

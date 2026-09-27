@@ -592,6 +592,7 @@ type fakeHandle struct {
 	stopErr error
 	screen  string
 	onSend  func()
+	size    TerminalSize
 }
 
 func (h *fakeHandle) Send(_ context.Context, text string) error {
@@ -618,6 +619,25 @@ func (h *fakeHandle) Send(_ context.Context, text string) error {
 func (h *fakeHandle) Ready(context.Context) error { return nil }
 
 func (h *fakeHandle) Interrupt() error { return nil }
+
+func (h *fakeHandle) Resize(rows, cols uint16) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	select {
+	case <-h.done:
+		return session.ErrExited
+	default:
+	}
+	h.size = TerminalSize{Rows: rows, Cols: cols}
+	return nil
+}
+
+func (h *fakeHandle) terminalSize() TerminalSize {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.size
+}
+
 func (h *fakeHandle) Output(int) string {
 	h.mu.Lock()
 	defer h.mu.Unlock()

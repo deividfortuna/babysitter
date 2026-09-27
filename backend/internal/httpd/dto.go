@@ -486,6 +486,20 @@ type SendMessageRequest struct {
 	Message string `json:"message"`
 }
 
+const (
+	MaxTerminalRows = 500
+	MaxTerminalCols = 1000
+)
+
+type ResizeRequest struct {
+	Rows uint16 `json:"rows" description:"Rows of the terminal of the agent, 1 to 500"`
+	Cols uint16 `json:"cols" description:"Columns of the terminal of the agent, 1 to 1000"`
+}
+
+func (r ResizeRequest) valid() bool {
+	return r.Rows >= 1 && r.Rows <= MaxTerminalRows && r.Cols >= 1 && r.Cols <= MaxTerminalCols
+}
+
 type SessionOutput struct {
 	Output string `json:"output"`
 }

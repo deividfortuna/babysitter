@@ -265,6 +265,21 @@ func (p *process) Interrupt() error {
 	return p.write(interruptKey)
 }
 
+func (p *process) Resize(rows, cols uint16) error {
+	p.writeMu.Lock()
+	defer p.writeMu.Unlock()
+	if p.exited() {
+		return ErrExited
+	}
+	if err := pty.Setsize(p.master, &pty.Winsize{Rows: rows, Cols: cols}); err != nil {
+		if p.exited() {
+			return ErrExited
+		}
+		return fmt.Errorf("resize the agent terminal: %w", err)
+	}
+	return nil
+}
+
 func (p *process) Output(n int) string {
 	p.outMu.Lock()
 	out := append([]byte(nil), p.out...)

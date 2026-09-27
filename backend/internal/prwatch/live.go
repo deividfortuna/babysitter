@@ -162,7 +162,10 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	}
 	env = append(env, "BABYSITTER_WATCH="+strconv.FormatInt(w.ID, 10), "BABYSITTER_DATA_DIR="+s.dataDir)
 	logPath := s.sessionLogPath(w.ID)
-	h, err := s.host.Start(ctx, session.Spec{Dir: w.WorktreeDir, Argv: argv, Env: env, LogPath: logPath})
+	size := s.sizes.get(w.ID)
+	h, err := s.host.Start(ctx, session.Spec{
+		Dir: w.WorktreeDir, Argv: argv, Env: env, LogPath: logPath, Rows: size.Rows, Cols: size.Cols,
+	})
 	if err != nil {
 		return nil, err
 	}

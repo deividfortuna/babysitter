@@ -554,6 +554,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/watches/{id}/resize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Set the size of the terminal of the agent of a watched pull request. A session that starts later takes the same size. */
+        post: operations["resizeWatchTerminal"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/watches/{id}/send": {
         parameters: {
             query?: never;
@@ -1337,6 +1354,12 @@ export interface components {
             dependabotScope?: "patch" | "minor" | "major" | null;
             includeDrafts?: boolean | null;
             overrides?: components["schemas"]["HttpdWatchOverrides"];
+        };
+        ResizeParams: {
+            /** @description Columns of the terminal of the agent, 1 to 1000 */
+            cols: number;
+            /** @description Rows of the terminal of the agent, 1 to 500 */
+            rows: number;
         };
         SendParams: {
             message: string;
@@ -3272,6 +3295,76 @@ export interface operations {
             };
             /** @description Unprocessable Entity */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    resizeWatchTerminal: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Watch id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ResizeParams"];
+            };
+        };
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

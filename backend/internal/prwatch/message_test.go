@@ -3,6 +3,7 @@ package prwatch
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -118,5 +119,81 @@ func TestOutputReadsOnlyTheTailOfALargeLog(t *testing.T) {
 	}
 	if read := after.TotalAlloc - before.TotalAlloc; read > 1<<20 {
 		t.Fatalf("Output() took %d bytes to read the end of a log of %d bytes", read, b.Len())
+	}
+}
+
+func TestResizeGivesTheLiveSessionTheSize(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	size := TerminalSize{Rows: 48, Cols: 210}
+
+	if err := fx.svc.Resize(context.Background(), w.ID, size); err != nil {
+		t.Fatalf("Resize() error = %v", err)
+	}
+
+	if got := fx.host.last().terminalSize(); got != size {
+		t.Fatalf("terminal size = %+v, want %+v", got, size)
+	}
+}
+
+func TestANewSessionStartsAtTheLastSize(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	if err := fx.svc.Resize(ctx, w.ID, TerminalSize{Rows: 48, Cols: 210}); err != nil {
+		t.Fatal(err)
+	}
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+
+	if _, err := fx.svc.Send(ctx, w.ID, "go on"); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if spec := fx.host.last().spec; fx.host.count() != 2 || spec.Rows != 48 || spec.Cols != 210 {
+		t.Fatalf("sessions = %d, spec size = %dx%d, want a second session at 48x210", fx.host.count(), spec.Rows, spec.Cols)
+	}
+}
+
+func TestResizeWithoutASessionKeepsTheSizeForTheNextOne(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	fx.host.last().exit(nil)
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+
+	if err := fx.svc.Resize(ctx, w.ID, TerminalSize{Rows: 60, Cols: 90}); err != nil {
+		t.Fatalf("Resize() after the exit error = %v", err)
+	}
+	if _, err := fx.svc.Send(ctx, w.ID, "go on"); err != nil {
+		t.Fatal(err)
+	}
+
+	if spec := fx.host.last().spec; spec.Rows != 60 || spec.Cols != 90 {
+		t.Fatalf("spec size = %dx%d, want 60x90", spec.Rows, spec.Cols)
+	}
+}
+
+func TestResizeRefusesAWatchWithoutASessionOfTheDaemon(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	ctx := context.Background()
+	self := fx.startSelf()
+	size := TerminalSize{Rows: 40, Cols: 100}
+
+	if err := fx.svc.Resize(ctx, self.ID, size); !errors.Is(err, ErrSelfWatch) {
+		t.Fatalf("Resize() of a self watch error = %v, want ErrSelfWatch", err)
+	}
+	if err := fx.svc.Resize(ctx, 999, size); !errors.Is(err, store.ErrWatchNotFound) {
+		t.Fatalf("Resize() of a missing watch error = %v, want ErrWatchNotFound", err)
+	}
+	if _, err := fx.svc.Stop(ctx, self.ID, StopOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.svc.Resize(ctx, self.ID, size); !errors.Is(err, ErrWatchStopped) {
+		t.Fatalf("Resize() of a stopped watch error = %v, want ErrWatchStopped", err)
 	}
 }

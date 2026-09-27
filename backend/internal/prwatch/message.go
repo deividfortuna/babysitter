@@ -157,6 +157,32 @@ func (s *Service) Hook(ctx context.Context, id int64, event string, payload []by
 	return nil
 }
 
+type TerminalSize struct {
+	Rows, Cols uint16
+}
+
+func (s *Service) Resize(ctx context.Context, id int64, size TerminalSize) error {
+	w, err := s.store.GetWatch(ctx, id)
+	if err != nil {
+		return err
+	}
+	if w.Status != store.WatchActive {
+		return ErrWatchStopped
+	}
+	if !s.hosted(w) {
+		return ErrSelfWatch
+	}
+	s.sizes.set(id, size)
+	l := s.sessions.get(id)
+	if l == nil {
+		return nil
+	}
+	if err := l.handle.Resize(size.Rows, size.Cols); err != nil && !errors.Is(err, session.ErrExited) {
+		return err
+	}
+	return nil
+}
+
 func (s *Service) Output(ctx context.Context, id int64, n int) (string, error) {
 	if l := s.sessions.get(id); l != nil {
 		return redact.Text(l.handle.Output(n)), nil

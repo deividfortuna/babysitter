@@ -28,7 +28,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Proposal } from "@/hooks/useProposals";
-import { useSendMessage, useWatchOutput } from "@/hooks/useSession";
+import { useResizeTerminal, useSendMessage, useWatchOutput } from "@/hooks/useSession";
 import { ProposalPanel } from "@/components/proposal-panel";
 import { ProposalDecisionProvider, useCurrentProposal, useProposalDecision } from "@/components/proposal-decision";
 import { WatchSettingsPanel } from "@/components/watch-settings-panel";
@@ -472,6 +472,7 @@ function SessionPanel({ watch, enabled }: { watch: Watch; enabled: boolean }) {
   const active = watch.status === "active";
   const output = useWatchOutput(enabled ? watch.id : null);
   const send = useSendMessage();
+  const resize = useResizeTerminal();
   const [message, setMessage] = useState("");
   const [open, setOpen] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
@@ -541,7 +542,10 @@ function SessionPanel({ watch, enabled }: { watch: Watch; enabled: boolean }) {
             {output.error ? output.error.message : "Nothing printed yet."}
           </pre>
         ) : (
-          <AgentTerminal output={output.data} />
+          <AgentTerminal
+            output={output.data}
+            onResize={active ? (grid) => resize.mutate({ id: watch.id, ...grid }) : undefined}
+          />
         )
       ) : null}
       {withYou ? <TakenOverPanel watch={watch} /> : null}

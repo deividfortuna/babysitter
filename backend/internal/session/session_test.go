@@ -286,3 +286,47 @@ func TestReadyAnswersTheExitOfTheProcess(t *testing.T) {
 		t.Fatalf("Ready() error = %v, want ErrExited", err)
 	}
 }
+
+func TestStartGivesTheTerminalTheSizeOfTheSpec(t *testing.T) {
+	t.Parallel()
+	h, err := New().Start(context.Background(), Spec{
+		Dir: t.TempDir(), Argv: []string{"sh", "-c", "stty size; sleep 5"}, Rows: 42, Cols: 132,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Stop(context.Background())
+	waitFor(t, h, "42 132")
+}
+
+func TestResizeChangesTheSizeTheProgramSees(t *testing.T) {
+	t.Parallel()
+	h, err := New().Start(context.Background(), Spec{
+		Dir:  t.TempDir(),
+		Argv: []string{"sh", "-c", `trap 'echo "size $(stty size)"' WINCH; echo ready; while :; do sleep 0.05; done`},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer h.Stop(context.Background())
+	waitFor(t, h, "ready")
+
+	if err := h.Resize(55, 210); err != nil {
+		t.Fatalf("Resize() error = %v", err)
+	}
+
+	waitFor(t, h, "size 55 210")
+}
+
+func TestResizeAnswersTheExitOfTheProcess(t *testing.T) {
+	t.Parallel()
+	h, err := New().Start(context.Background(), Spec{Dir: t.TempDir(), Argv: []string{"sh", "-c", "exit 0"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	<-h.Done()
+
+	if err := h.Resize(40, 100); !errors.Is(err, ErrExited) {
+		t.Fatalf("Resize() error = %v, want ErrExited", err)
+	}
+}

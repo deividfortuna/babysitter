@@ -17,6 +17,18 @@ export function useWatchOutput(id: number | null, lines = 200) {
   });
 }
 
+export function useResizeTerminal() {
+  return useMutation({
+    mutationFn: async ({ id, rows, cols }: { id: number; rows: number; cols: number }) => {
+      const { error } = await api().POST("/api/v1/watches/{id}/resize", {
+        params: { path: { id } },
+        body: { rows, cols },
+      });
+      if (error) throw new Error(apiErrorMessage(error, "Could not resize the terminal of the agent."));
+    },
+  });
+}
+
 export function useSendMessage() {
   const queryClient = useQueryClient();
   return useMutation({
