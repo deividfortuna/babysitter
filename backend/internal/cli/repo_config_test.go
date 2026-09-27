@@ -89,6 +89,40 @@ func TestRepoConfigChangesAndShowsTheConfiguration(t *testing.T) {
 	}
 }
 
+func TestRepoConfigProviderGivesTheNewProviderItsDefaultModel(t *testing.T) {
+	t.Parallel()
+	g := ghfake.New()
+	g.Repo("acme/billing")
+	db := filepath.Join(t.TempDir(), "babysitter.db")
+	run := func(args ...string) (repoConfigOutput, error) {
+		t.Helper()
+		out, err := runCLI(t, g, db, append(args, "-o", "json")...)
+		if err != nil {
+			return repoConfigOutput{}, err
+		}
+		var cfg repoConfigOutput
+		if err := json.Unmarshal([]byte(out), &cfg); err != nil {
+			t.Fatalf("invalid JSON %q: %v", out, err)
+		}
+		return cfg, nil
+	}
+	if _, err := runCLI(t, g, db, "repo", "add", "acme/billing"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run("repo", "config", "acme/billing", "--provider", "claude", "--model", "opus"); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := run("repo", "config", "acme/billing", "--provider", "copilot")
+	if err != nil || cfg.Overrides.Provider != "copilot" || cfg.Overrides.Model != "" {
+		t.Fatalf("repo config --provider copilot = %+v, %v; want copilot on its default model", cfg.Overrides, err)
+	}
+	cfg, err = run("repo", "config", "acme/billing", "--provider", "claude", "--model", "sonnet")
+	if err != nil || cfg.Overrides.Provider != "claude" || cfg.Overrides.Model != "sonnet" {
+		t.Fatalf("repo config --provider claude --model sonnet = %+v, %v", cfg.Overrides, err)
+	}
+}
+
 func TestRepoConfigHelpNamesTheOverridesAsFlagsOfTheCommand(t *testing.T) {
 	t.Parallel()
 	db := filepath.Join(t.TempDir(), "babysitter.db")

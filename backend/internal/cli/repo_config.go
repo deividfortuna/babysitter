@@ -271,7 +271,7 @@ func (f repoConfigFlags) overrides(cmd *cobra.Command, o store.WatchOverrides) (
 		o = store.WatchOverrides{}
 	}
 	if flags.Changed("provider") {
-		o.Provider = f.provider
+		o.Provider, o.Model = f.provider, ""
 	}
 	if flags.Changed("model") {
 		o.Model = f.model
