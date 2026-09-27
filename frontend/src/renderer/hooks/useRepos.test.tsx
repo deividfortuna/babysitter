@@ -1,7 +1,7 @@
 import type { ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { renderHook, waitFor } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { serveApi } from "@test/msw";
 import { createQueryClientForTests } from "@test/test-utils";
 import { useRemoveRepo, useRequestSync } from "./useRepos";

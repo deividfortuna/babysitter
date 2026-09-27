@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import type { UpdateSettings, UpdateStatus } from "../shared/updates";
 import {
   createUpdateController,

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test, vi } from "vitest";
+import { expect, test, vi } from "vite-plus/test";
 import { SidebarResizeHandle } from "./sidebar-resize-handle";
 
 test("resizes the sidebar with keyboard controls", async () => {

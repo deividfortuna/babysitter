@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { canvasColor, CANVAS } from "./theme";
 
 test("a window paints in the theme the user chose, not the one of the system", () => {

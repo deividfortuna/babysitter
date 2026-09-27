@@ -47,17 +47,16 @@ updates:
         patterns:
           - tailwindcss
           - "@tailwindcss/*"
-          - prettier-plugin-tailwindcss
           - eslint-plugin-better-tailwindcss
-      vitest:
+      vite-plus:
         patterns:
+          - vite-plus
+          - "@voidzero-dev/*"
+          - vite
           - vitest
           - "@vitest/*"
-      lint-and-format:
+      lint:
         patterns:
-          - oxlint
-          - oxlint-tsgolint
-          - prettier
           - "@shadcn/lint"
       npm-minor-and-patch:
         update-types:

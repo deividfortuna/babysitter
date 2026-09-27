@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { NOTIFICATION_KINDS } from "../../shared/notifications";
 import { KIND_ICON } from "./notification-icons";
 

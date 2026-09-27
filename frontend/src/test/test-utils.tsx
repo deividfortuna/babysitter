@@ -1,7 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen, type RenderOptions as TestingLibraryRenderOptions } from "@testing-library/react";
-import { expect, vi } from "vitest";
+import { expect, vi } from "vite-plus/test";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/hooks/use-theme";
 

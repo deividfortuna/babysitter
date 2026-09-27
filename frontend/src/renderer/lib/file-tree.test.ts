@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { expect, test } from "vite-plus/test";
 import { fileTree, type TreeNode } from "./file-tree";
 
 function outline(nodes: TreeNode<string>[], depth = 0): string[] {

@@ -1,5 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vite-plus/test";
 import { setApiBaseUrl } from "./api-client";
 import { connectEventTransport } from "./event-transport";
 import {

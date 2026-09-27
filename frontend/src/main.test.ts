@@ -1,4 +1,4 @@
-import { beforeEach, expect, test, vi } from "vitest";
+import { beforeEach, expect, test, vi } from "vite-plus/test";
 import {
   NOTIFICATIONS_CLICK_CHANNEL,
   NOTIFICATIONS_OPEN_READY_CHANNEL,

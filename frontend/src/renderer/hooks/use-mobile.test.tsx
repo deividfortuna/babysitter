@@ -1,5 +1,5 @@
 import { act, renderHook } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import { stubMatchMedia } from "@test/test-utils";
 import { useIsMobile } from "./use-mobile";
 

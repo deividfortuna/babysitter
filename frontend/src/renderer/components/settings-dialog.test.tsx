@@ -1,6 +1,6 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { expect, test, vi } from "vitest";
+import { expect, test, vi } from "vite-plus/test";
 import { serveApi } from "@test/msw";
 import { renderWithProviders } from "@test/test-utils";
 import { SettingsDialog } from "./settings-dialog";

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
 import { chooseOption } from "@test/test-utils";
 import { bridge } from "@/lib/bridge";
 import type { UpdateSettings, UpdateStatus } from "../../shared/updates";

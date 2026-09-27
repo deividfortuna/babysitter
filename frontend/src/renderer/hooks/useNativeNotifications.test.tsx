@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { expect, test, vi } from "vitest";
+import { expect, test, vi } from "vite-plus/test";
 import { buildNotification, buildSettings } from "@test/fixtures";
 import { http, HttpResponse } from "msw";
 import { apiUrl, server, serveApi } from "@test/msw";

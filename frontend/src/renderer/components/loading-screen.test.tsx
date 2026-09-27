@@ -1,5 +1,5 @@
 import { render, screen } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import { LoadingScreen } from "./loading-screen";
 
 const platform = vi.hoisted(() => ({ isMac: false }));

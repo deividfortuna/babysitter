@@ -1,5 +1,5 @@
 import { act, renderHook, waitFor } from "@testing-library/react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, expect, test, vi } from "vite-plus/test";
 import { bridge } from "@/lib/bridge";
 import type { UpdateSettings, UpdateStatus } from "../../shared/updates";
 import { useAppUpdate, useUpdateSettings } from "./useAppUpdate";

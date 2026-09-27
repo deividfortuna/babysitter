@@ -31,6 +31,7 @@
     "scripts/**/*.ts",
     "forge.env.d.ts",
     "forge.config.ts",
+    "vite.config.ts",
     "vite.main.config.mts",
     "vite.preload.config.mts",
     "vite.renderer.config.mts"
