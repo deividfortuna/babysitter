@@ -3341,11 +3341,13 @@ components:
       properties:
         cols:
           description: Columns of the terminal of the agent, 1 to 1000
-          minimum: 0
+          maximum: 1000
+          minimum: 1
           type: integer
         rows:
           description: Rows of the terminal of the agent, 1 to 500
-          minimum: 0
+          maximum: 500
+          minimum: 1
           type: integer
       required:
       - rows

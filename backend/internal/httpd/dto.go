@@ -492,8 +492,8 @@ const (
 )
 
 type ResizeRequest struct {
-	Rows uint16 `json:"rows" description:"Rows of the terminal of the agent, 1 to 500"`
-	Cols uint16 `json:"cols" description:"Columns of the terminal of the agent, 1 to 1000"`
+	Rows uint16 `json:"rows" minimum:"1" maximum:"500" description:"Rows of the terminal of the agent, 1 to 500"`
+	Cols uint16 `json:"cols" minimum:"1" maximum:"1000" description:"Columns of the terminal of the agent, 1 to 1000"`
 }
 
 func (r ResizeRequest) valid() bool {
