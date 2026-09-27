@@ -122,3 +122,21 @@ func TestMergeWhenReadyChangesOnAWatch(t *testing.T) {
 		t.Fatalf("merges = %+v, want one with approve", fw.merges)
 	}
 }
+
+func TestStartPassesMergeWhenReadyToTheWatch(t *testing.T) {
+	t.Parallel()
+	h, _, fw := newTestAPI(t)
+	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#3","sourceDir":"/src","mergeWhenReady":true}`, nil); rec.Code != http.StatusCreated {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#4","sourceDir":"/src"}`, nil); rec.Code != http.StatusCreated {
+		t.Fatalf("start: %d %s", rec.Code, rec.Body)
+	}
+	starts := fw.started()
+	if len(starts) != 2 || starts[0].MergeWhenReady == nil || !*starts[0].MergeWhenReady {
+		t.Fatalf("starts = %+v, want mergeWhenReady true on the first", starts)
+	}
+	if starts[1].MergeWhenReady != nil {
+		t.Fatalf("a start without the field sent mergeWhenReady %v", *starts[1].MergeWhenReady)
+	}
+}
