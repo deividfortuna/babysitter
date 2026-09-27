@@ -38,6 +38,8 @@ func TestSaveSettingsKeepsWhatItWasGiven(t *testing.T) {
 		KeepWorktree:      true,
 		ApprovalMode:      ApprovalAuto,
 		AutoApproveRebase: true,
+		Provider:          "copilot",
+		Model:             "auto",
 	}
 
 	saved, err := s.SaveSettings(ctx, want)
@@ -61,11 +63,11 @@ func TestSaveSettingsForgetsTheApprovalsAndTakesTheRuleOfTheBranch(t *testing.T)
 	s, _ := openTemp(t)
 	ctx := context.Background()
 	approvals := 3
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, ApprovalMode: ApprovalManual}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 

@@ -23,6 +23,8 @@ export function buildSettings(overrides: Partial<Settings> = {}): Settings {
     mutedNotificationKinds: [],
     approvalMode: "manual",
     autoApproveRebase: false,
+    provider: "claude",
+    model: "",
     ...overrides,
   };
 }
@@ -68,6 +70,7 @@ export function buildWatch(overrides: Partial<Watch> = {}): Watch {
     mergeableState: "clean",
     mergeMethod: "",
     mergeWhenReady: false,
+    keepWorktree: false,
     number: 12,
     prState: "open",
     readyBlockers: [],

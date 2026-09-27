@@ -10,12 +10,15 @@ import (
 )
 
 type WatchOverrides struct {
-	Provider          string        `json:"provider" enum:",claude,copilot" description:"The AI provider of the watches auto start begins; empty takes the provider of watch start"`
-	Model             string        `json:"model" description:"The model of the agent; empty takes the model of the provider"`
+	Provider          string        `json:"provider" enum:",claude,copilot" description:"The AI provider of a watch on the repository; empty takes the provider of the daemon"`
+	Model             string        `json:"model" description:"The model of that provider; empty takes the default of the provider. Needs a provider"`
 	ApprovalMode      string        `json:"approvalMode" enum:",auto,manual" description:"Who releases the work of a turn of the agent; empty takes the setting of the daemon"`
 	MergeMethod       string        `json:"mergeMethod" enum:",squash,merge,rebase" description:"The merge method of the watches; empty takes the setting of the daemon"`
 	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch"`
 	IncludeExisting   *bool         `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the setting of the daemon"`
+	AutoApproveRebase *bool         `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon"`
+	IncludeOwn        *bool         `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the setting of the daemon"`
+	KeepWorktree      *bool         `json:"keepWorktree,omitempty" description:"A stop leaves the worktree of the watch on disk; absent takes the setting of the daemon"`
 }
 
 type RepoConfig struct {
@@ -67,6 +70,7 @@ func repoConfigOut(repo store.Repo, c store.RepoConfig) RepoConfig {
 		Overrides: WatchOverrides{
 			Provider: o.Provider, Model: o.Model, ApprovalMode: string(o.ApprovalMode), MergeMethod: o.MergeMethod,
 			ApprovalsRequired: Optional[int]{Set: o.ApprovalsSet, Value: o.Approvals}, IncludeExisting: o.IncludeExisting,
+			AutoApproveRebase: o.AutoApproveRebase, IncludeOwn: o.IncludeOwn, KeepWorktree: o.KeepWorktree,
 		},
 		DependabotScope: string(c.DependabotScope), DependabotApproval: string(c.DependabotApproval), DependabotLimit: c.DependabotLimit,
 	}
@@ -81,6 +85,7 @@ func (req UpdateRepoConfigRequest) change() autostart.Change {
 		c.Overrides = &store.WatchOverrides{
 			Provider: o.Provider, Model: o.Model, ApprovalMode: store.ApprovalMode(o.ApprovalMode), MergeMethod: o.MergeMethod,
 			ApprovalsSet: o.ApprovalsRequired.Set, Approvals: o.ApprovalsRequired.Value, IncludeExisting: o.IncludeExisting,
+			AutoApproveRebase: o.AutoApproveRebase, IncludeOwn: o.IncludeOwn, KeepWorktree: o.KeepWorktree,
 		}
 	}
 	if req.DependabotScope != nil {

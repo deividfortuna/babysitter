@@ -25,6 +25,9 @@ type overridesOutput struct {
 	MergeMethod       string `json:"merge_method,omitempty"`
 	ApprovalsRequired string `json:"approvals_required,omitempty"`
 	IncludeExisting   *bool  `json:"include_existing,omitempty"`
+	AutoApproveRebase *bool  `json:"auto_approve_rebase,omitempty"`
+	IncludeOwn        *bool  `json:"include_own,omitempty"`
+	KeepWorktree      *bool  `json:"keep_worktree,omitempty"`
 }
 
 type repoConfigOutput struct {
@@ -49,7 +52,7 @@ func configOutput(repo store.Repo, c store.RepoConfig) repoConfigOutput {
 		AutoWatchDependabot: c.DependabotOn(), AutoWatchSince: c.DependabotSince,
 		Overrides: overridesOutput{
 			Provider: o.Provider, Model: o.Model, ApprovalMode: string(o.ApprovalMode), MergeMethod: o.MergeMethod,
-			IncludeExisting: o.IncludeExisting,
+			IncludeExisting: o.IncludeExisting, AutoApproveRebase: o.AutoApproveRebase, IncludeOwn: o.IncludeOwn, KeepWorktree: o.KeepWorktree,
 		},
 		DependabotScope: string(c.DependabotScope), DependabotApproval: string(c.DependabotApproval), DependabotLimit: c.DependabotLimit,
 	}
@@ -72,7 +75,7 @@ func (c repoConfigOutput) writeText(w io.Writer) error {
 	fmt.Fprintf(tw, "Merge scope:\t%s\n", c.DependabotScope)
 	fmt.Fprintf(tw, "Approval:\t%s\n", c.DependabotApproval)
 	fmt.Fprintf(tw, "At the same time:\t%d\n", c.DependabotLimit)
-	fmt.Fprintf(tw, "Watches it starts:\t%s\n", c.Overrides.words())
+	fmt.Fprintf(tw, "Watch defaults:\t%s\n", c.Overrides.words())
 	return tw.Flush()
 }
 
@@ -102,9 +105,15 @@ func (o overridesOutput) words() string {
 	add("approval mode", o.ApprovalMode)
 	add("merge method", o.MergeMethod)
 	add("approvals", o.ApprovalsRequired)
-	if o.IncludeExisting != nil {
-		add("include existing", strconv.FormatBool(*o.IncludeExisting))
+	addBool := func(label string, value *bool) {
+		if value != nil {
+			add(label, strconv.FormatBool(*value))
+		}
 	}
+	addBool("include existing", o.IncludeExisting)
+	addBool("auto approve rebase", o.AutoApproveRebase)
+	addBool("include own", o.IncludeOwn)
+	addBool("keep worktree", o.KeepWorktree)
 	if len(parts) == 0 {
 		return "the settings of the daemon"
 	}
@@ -122,6 +131,9 @@ type repoConfigFlags struct {
 	mergeMethod     string
 	approvals       string
 	includeExisting bool
+	autoRebase      bool
+	includeOwn      bool
+	keepWorktree    bool
 	resetOverrides  bool
 	scope           string
 	approval        string
@@ -146,10 +158,13 @@ time; the rest wait in the queue ('babysitter repo queue'). A toggle
 takes only the pull requests created after it went on. Turn one off with
 --auto-start-mine=false. The watches that run go on.
 
-The watch start flags (--provider, --model, --approval-mode,
---merge-method, --approvals, --include-existing) set the overrides of the
-watches that auto start begins. --approvals default and
---reset-overrides give the field back to the settings of the daemon.
+The override flags (--provider, --model, --approval-mode, --merge-method,
+--approvals, --include-existing, --auto-approve-rebase, --include-own,
+--keep-worktree) set the overrides of each watch that starts on the
+repository, by hand or by auto start. A field that 'watch start' does
+not name takes the override, and a field without an override takes the
+setting of the daemon. --approvals default and --reset-overrides give
+the field back to the settings of the daemon.
 
 --dependabot-scope is the highest update that merges on its own: patch,
 minor or major. --dependabot-approval is never, ask (a notification asks
@@ -195,12 +210,15 @@ The daemon starts nothing with 'babysitter serve'; auto start runs in
 	fl.BoolVar(&f.mine, "auto-start-mine", false, "start a watch on each new pull request that you opened or that is assigned to you")
 	fl.BoolVar(&f.drafts, "include-drafts", false, "auto start also takes your drafts")
 	fl.BoolVar(&f.dependabot, "auto-watch-dependabot", false, "start a watch on each new pull request of Dependabot")
-	fl.StringVar(&f.provider, "provider", "", "AI provider of the watches auto start begins: claude or copilot; empty takes the provider of watch start")
+	fl.StringVar(&f.provider, "provider", "", "AI provider of the watches on the repository: claude or copilot; empty takes the provider of the daemon")
 	fl.StringVar(&f.model, "model", "", "model of that provider, empty for its default")
-	fl.StringVar(&f.approvalMode, "approval-mode", "", "manual or auto for the watches auto start begins; empty takes the setting of the daemon")
-	fl.StringVar(&f.mergeMethod, "merge-method", "", "merge method of the watches auto start begins: squash, merge or rebase; empty takes the setting of the daemon")
-	fl.StringVar(&f.approvals, "approvals", "", "approvals the watches auto start begins need: a number, 0 for none, 'branch' for the rule of the base branch, or 'default' for the setting of the daemon")
-	fl.BoolVar(&f.includeExisting, "include-existing", false, "the watches auto start begins also report the review items that already exist")
+	fl.StringVar(&f.approvalMode, "approval-mode", "", "manual or auto for the watches on the repository; empty takes the setting of the daemon")
+	fl.StringVar(&f.mergeMethod, "merge-method", "", "merge method of the watches on the repository: squash, merge or rebase; empty takes the setting of the daemon")
+	fl.StringVar(&f.approvals, "approvals", "", "approvals the watches on the repository need: a number, 0 for none, 'branch' for the rule of the base branch, or 'default' for the setting of the daemon")
+	fl.BoolVar(&f.includeExisting, "include-existing", false, "the watches on the repository also report the review items that already exist")
+	fl.BoolVar(&f.autoRebase, "auto-approve-rebase", false, "the watches on the repository let approved work go out after a clean rebase without asking again")
+	fl.BoolVar(&f.includeOwn, "include-own", false, "the watches on the repository also report your own comments")
+	fl.BoolVar(&f.keepWorktree, "keep-worktree", false, "a stop leaves the worktree of a watch on the repository on disk")
 	fl.BoolVar(&f.resetOverrides, "reset-overrides", false, "give every override back to the settings of the daemon")
 	fl.StringVar(&f.scope, "dependabot-scope", "", "the highest Dependabot update that merges on its own: patch, minor or major")
 	fl.StringVar(&f.approval, "dependabot-approval", "", "never, ask or green")
@@ -253,7 +271,7 @@ func (f repoConfigFlags) overrides(cmd *cobra.Command, o store.WatchOverrides) (
 		o = store.WatchOverrides{}
 	}
 	if flags.Changed("provider") {
-		o.Provider = f.provider
+		o.Provider, o.Model = f.provider, ""
 	}
 	if flags.Changed("model") {
 		o.Model = f.model
@@ -267,14 +285,28 @@ func (f repoConfigFlags) overrides(cmd *cobra.Command, o store.WatchOverrides) (
 	if flags.Changed("include-existing") {
 		o.IncludeExisting = &f.includeExisting
 	}
+	if flags.Changed("auto-approve-rebase") {
+		o.AutoApproveRebase = &f.autoRebase
+	}
+	if flags.Changed("include-own") {
+		o.IncludeOwn = &f.includeOwn
+	}
+	if flags.Changed("keep-worktree") {
+		o.KeepWorktree = &f.keepWorktree
+	}
 	if flags.Changed("approvals") {
 		var err error
 		if o.ApprovalsSet, o.Approvals, err = overrideApprovals(f.approvals); err != nil {
 			return store.WatchOverrides{}, false, err
 		}
 	}
-	changed := f.resetOverrides || anyChanged(cmd, "provider", "model", "approval-mode", "merge-method", "include-existing", "approvals")
+	changed := f.resetOverrides || anyChanged(cmd, overrideFlags...)
 	return o, changed, nil
+}
+
+var overrideFlags = []string{
+	"provider", "model", "approval-mode", "merge-method", "include-existing", "approvals",
+	"auto-approve-rebase", "include-own", "keep-worktree",
 }
 
 func overrideApprovals(value string) (bool, *int, error) {

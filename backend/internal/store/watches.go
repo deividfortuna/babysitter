@@ -130,6 +130,7 @@ type Watch struct {
 	AutoReason        AutoReason
 	MergeWhenReady    bool
 	UpdateType        dependabot.Level
+	KeepWorktree      bool
 }
 
 func (w Watch) Asks() bool { return w.ApprovalMode == ApprovalManual }
@@ -162,7 +163,7 @@ const watchColumns = `id, owner, name, number, url, title, author, bot_login, he
 	include_existing, started_at, stopped_at, last_poll_at, last_heartbeat_at, last_error,
 	consecutive_errors, head_sha, pr_state, mergeable_state, check_states, green_sha, summary, include_own, agent_session,
 	approvals_required, merge_method, ready_since, ready_blockers, approval_mode, auto_approve_rebase,
-	taken_over_at, taken_over_pid, handback_start, auto_reason, merge_when_ready, update_type`
+	taken_over_at, taken_over_pid, handback_start, auto_reason, merge_when_ready, update_type, keep_worktree`
 
 func (s *Store) CreateWatch(ctx context.Context, w Watch) (Watch, error) {
 	if w.CheckStates == nil {
@@ -186,12 +187,12 @@ func (s *Store) CreateWatch(ctx context.Context, w Watch) (Watch, error) {
 INSERT INTO watches (owner, name, number, url, title, author, bot_login, head_ref, base_ref,
 	source_dir, worktree_dir, work_branch, git_user_name, git_user_email, provider, model, status, stop_reason,
 	include_existing, started_at, head_sha, pr_state, mergeable_state, check_states, green_sha, summary, include_own, agent_session,
-	approvals_required, merge_method, approval_mode, auto_approve_rebase, auto_reason, merge_when_ready, update_type)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	approvals_required, merge_method, approval_mode, auto_approve_rebase, auto_reason, merge_when_ready, update_type, keep_worktree)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		w.Owner, w.Name, w.Number, w.URL, w.Title, w.Author, w.BotLogin, w.HeadRef, w.BaseRef,
 		w.SourceDir, w.WorktreeDir, w.WorkBranch, w.GitUserName, w.GitUserEmail, w.Provider, w.Model, w.Status, w.StopReason,
 		w.IncludeExisting, timeToDB(w.StartedAt), w.HeadSHA, w.PRState, w.MergeableState, string(checkStates), w.GreenSHA, string(w.Summary), w.IncludeOwn, w.AgentSession,
-		w.ApprovalsRequired, w.MergeMethod, w.ApprovalMode, w.AutoApproveRebase, w.AutoReason, w.MergeWhenReady, w.UpdateType)
+		w.ApprovalsRequired, w.MergeMethod, w.ApprovalMode, w.AutoApproveRebase, w.AutoReason, w.MergeWhenReady, w.UpdateType, w.KeepWorktree)
 	if err != nil {
 		var sqliteErr sqlite3.Error
 		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -351,7 +352,7 @@ func scanWatch(row scanner) (Watch, error) {
 		&includeExisting, &startedAt, &stoppedAt, &lastPollAt, &lastHeartbeatAt, &w.LastError,
 		&w.ConsecutiveErrors, &w.HeadSHA, &w.PRState, &w.MergeableState, &checkStates, &w.GreenSHA, &summary, &includeOwn, &w.AgentSession,
 		&w.ApprovalsRequired, &w.MergeMethod, &readySince, &blockers, &w.ApprovalMode, &w.AutoApproveRebase,
-		&takenOverAt, &w.TakenOverPID, &w.HandbackStart, &w.AutoReason, &w.MergeWhenReady, &w.UpdateType)
+		&takenOverAt, &w.TakenOverPID, &w.HandbackStart, &w.AutoReason, &w.MergeWhenReady, &w.UpdateType, &w.KeepWorktree)
 	if err != nil {
 		return Watch{}, err
 	}

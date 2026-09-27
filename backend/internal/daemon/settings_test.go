@@ -11,7 +11,7 @@ import (
 
 func TestRunningSettingsKeepTheStoredOnesWithoutAFlag(t *testing.T) {
 	t.Parallel()
-	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto}
+	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto, Provider: "claude"}
 
 	got, err := runningSettings(stored, Config{})
 	if err != nil {
@@ -24,7 +24,7 @@ func TestRunningSettingsKeepTheStoredOnesWithoutAFlag(t *testing.T) {
 
 func TestRunningSettingsTakeTheIntervalsOfTheFlags(t *testing.T) {
 	t.Parallel()
-	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto}
+	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto, Provider: "claude"}
 
 	got, err := runningSettings(stored, Config{Interval: 30 * time.Second, WatchInterval: time.Minute})
 	if err != nil {

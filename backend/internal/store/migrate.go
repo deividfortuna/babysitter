@@ -642,6 +642,17 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE notifications_new RENAME TO notifications;
 	CREATE INDEX notifications_unread_idx ON notifications (read_at, id);
 	`,
+	`
+	ALTER TABLE settings ADD COLUMN provider TEXT NOT NULL DEFAULT 'claude' CHECK (provider IN ('claude', 'copilot'));
+	ALTER TABLE settings ADD COLUMN model TEXT NOT NULL DEFAULT '';
+
+	ALTER TABLE repo_config ADD COLUMN auto_approve_rebase INTEGER;
+	ALTER TABLE repo_config ADD COLUMN include_own INTEGER;
+	ALTER TABLE repo_config ADD COLUMN keep_worktree INTEGER;
+
+	ALTER TABLE watches ADD COLUMN keep_worktree INTEGER NOT NULL DEFAULT 0;
+	UPDATE watches SET keep_worktree = (SELECT keep_worktree FROM settings WHERE id = 1);
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

@@ -47,8 +47,8 @@ func TestRepoConfigChangesAndShowsTheConfiguration(t *testing.T) {
 	}
 
 	out, err := run("repo", "config", "acme/billing")
-	if err != nil || !strings.Contains(out, "My pull requests:   off") || !strings.Contains(out, "Merge scope:        patch") ||
-		!strings.Contains(out, "Approval:           never") || !strings.Contains(out, "Watches it starts:  the settings of the daemon") {
+	if err != nil || !strings.Contains(out, "My pull requests:  off") || !strings.Contains(out, "Merge scope:       patch") ||
+		!strings.Contains(out, "Approval:          never") || !strings.Contains(out, "Watch defaults:    the settings of the daemon") {
 		t.Fatalf("repo config = %q, %v", out, err)
 	}
 	if _, err := run("repo", "config", "acme/billing", "--auto-start-mine"); err == nil || !strings.Contains(err.Error(), "set the checkout") {
@@ -62,6 +62,7 @@ func TestRepoConfigChangesAndShowsTheConfiguration(t *testing.T) {
 	dir := gitCheckoutOf(t, "git@github.com:acme/billing.git")
 	out, err = run("repo", "config", "acme/billing", "-o", "json", "--checkout", dir, "--auto-start-mine", "--auto-watch-dependabot",
 		"--provider", "copilot", "--approvals", "branch", "--merge-method", "squash",
+		"--keep-worktree", "--include-own=false",
 		"--dependabot-scope", "minor", "--dependabot-approval", "green", "--dependabot-limit", "2")
 	if err != nil {
 		t.Fatal(err)
@@ -72,18 +73,66 @@ func TestRepoConfigChangesAndShowsTheConfiguration(t *testing.T) {
 	}
 	if cfg.CheckoutDir != dir || !cfg.AutoStartMine || !cfg.AutoWatchDependabot || cfg.Overrides.Provider != "copilot" ||
 		cfg.Overrides.ApprovalsRequired != "branch" || cfg.Overrides.MergeMethod != "squash" ||
+		!*cfg.Overrides.KeepWorktree || *cfg.Overrides.IncludeOwn || cfg.Overrides.AutoApproveRebase != nil ||
 		cfg.DependabotScope != "minor" || cfg.DependabotApproval != "green" || cfg.DependabotLimit != 2 {
 		t.Fatalf("config = %+v", cfg)
 	}
 
 	out, err = run("repo", "config", "acme/billing", "--approvals", "default", "--auto-start-mine=false")
-	if err != nil || !strings.Contains(out, "My pull requests:   off") || !strings.Contains(out, "Dependabot:         on since") ||
-		!strings.Contains(out, "provider copilot, merge method squash\n") {
+	if err != nil || !strings.Contains(out, "My pull requests:  off") || !strings.Contains(out, "Dependabot:        on since") ||
+		!strings.Contains(out, "provider copilot, merge method squash, include own false, keep worktree true\n") {
 		t.Fatalf("repo config after a change = %q, %v", out, err)
 	}
 	out, err = run("repo", "list")
 	if err != nil || !strings.Contains(out, "AUTO START") || !strings.Contains(out, "dependabot") {
 		t.Fatalf("repo list = %q, %v", out, err)
+	}
+}
+
+func TestRepoConfigProviderGivesTheNewProviderItsDefaultModel(t *testing.T) {
+	t.Parallel()
+	g := ghfake.New()
+	g.Repo("acme/billing")
+	db := filepath.Join(t.TempDir(), "babysitter.db")
+	run := func(args ...string) (repoConfigOutput, error) {
+		t.Helper()
+		out, err := runCLI(t, g, db, append(args, "-o", "json")...)
+		if err != nil {
+			return repoConfigOutput{}, err
+		}
+		var cfg repoConfigOutput
+		if err := json.Unmarshal([]byte(out), &cfg); err != nil {
+			t.Fatalf("invalid JSON %q: %v", out, err)
+		}
+		return cfg, nil
+	}
+	if _, err := runCLI(t, g, db, "repo", "add", "acme/billing"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := run("repo", "config", "acme/billing", "--provider", "claude", "--model", "opus"); err != nil {
+		t.Fatal(err)
+	}
+
+	cfg, err := run("repo", "config", "acme/billing", "--provider", "copilot")
+	if err != nil || cfg.Overrides.Provider != "copilot" || cfg.Overrides.Model != "" {
+		t.Fatalf("repo config --provider copilot = %+v, %v; want copilot on its default model", cfg.Overrides, err)
+	}
+	cfg, err = run("repo", "config", "acme/billing", "--provider", "claude", "--model", "sonnet")
+	if err != nil || cfg.Overrides.Provider != "claude" || cfg.Overrides.Model != "sonnet" {
+		t.Fatalf("repo config --provider claude --model sonnet = %+v, %v", cfg.Overrides, err)
+	}
+}
+
+func TestRepoConfigHelpNamesTheOverridesAsFlagsOfTheCommand(t *testing.T) {
+	t.Parallel()
+	db := filepath.Join(t.TempDir(), "babysitter.db")
+
+	out, err := runCLI(t, ghfake.New(), db, "repo", "config", "--help")
+	if err != nil {
+		t.Fatalf("repo config --help error = %v", err)
+	}
+	if strings.Contains(out, "watch start flags") || !strings.Contains(out, "The override flags") {
+		t.Fatalf("help = %q, want the overrides named as flags of repo config, not of watch start", out)
 	}
 }
 

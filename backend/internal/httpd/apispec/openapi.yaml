@@ -2685,6 +2685,10 @@ components:
           - merge
           - rebase
           type: string
+        model:
+          description: The model of that provider; empty takes the default of the
+            provider
+          type: string
         mutedNotificationKinds:
           description: The notification kinds that reach nobody. The history keeps
             them either way
@@ -2711,6 +2715,12 @@ components:
           maximum: 86400
           minimum: 10
           type: integer
+        provider:
+          description: The AI provider of a new watch
+          enum:
+          - claude
+          - copilot
+          type: string
         watchIntervalSeconds:
           description: Time between polls of a watched pull request
           maximum: 86400
@@ -2729,12 +2739,14 @@ components:
       - mutedNotificationKinds
       - approvalMode
       - autoApproveRebase
+      - provider
+      - model
       type: object
     HttpdStartWatchRequest:
       properties:
         approvalMode:
           description: Who releases the work of a turn of the agent; absent takes
-            the setting of the daemon, and a self watch runs in auto
+            the repository, then the daemon, and a self watch runs in auto
           enum:
           - auto
           - manual
@@ -2742,31 +2754,36 @@ components:
           type: string
         approvalsRequired:
           description: How many approvals the pull request needs before the watch
-            calls it ready to merge; absent takes the setting of the daemon, 0 asks
-            for none, and null asks for the rule of the base branch whatever the setting
-            holds
+            calls it ready to merge; absent takes the repository, then the daemon,
+            0 asks for none, and null asks for the rule of the base branch whatever
+            the setting holds
           minimum: 0
           nullable: true
           type: integer
         autoApproveRebase:
           description: Approved work goes out after a clean rebase without asking
-            again; absent takes the setting of the daemon
+            again; absent takes the repository, then the daemon
           nullable: true
           type: boolean
         includeExisting:
           description: Report the review items the pull request has already; absent
-            takes the setting of the daemon
+            takes the repository, then the daemon
           nullable: true
           type: boolean
         includeOwn:
           description: Report the comments of the token's own user; absent takes the
-            setting of the daemon
+            repository, then the daemon
+          nullable: true
+          type: boolean
+        keepWorktree:
+          description: A stop leaves the worktree of the watch on disk; absent takes
+            the repository, then the daemon
           nullable: true
           type: boolean
         mergeMethod:
           description: 'The merge method of the watch: squash, merge, rebase, or empty
-            for the first method the repository allows; absent takes the setting of
-            the daemon'
+            for the first method the repository allows; absent takes the repository,
+            then the daemon'
           enum:
           - ""
           - squash
@@ -2780,11 +2797,15 @@ components:
           nullable: true
           type: boolean
         model:
+          description: The model of the provider; empty takes the model of the layer
+            that gives the provider
           type: string
         provider:
           description: The AI provider that runs the agent session, or self when the
-            caller's own session is the agent
+            caller's own session is the agent; empty takes the repository, then the
+            daemon
           enum:
+          - ""
           - claude
           - copilot
           - self
@@ -2914,6 +2935,10 @@ components:
         includeExisting:
           type: boolean
         includeOwn:
+          type: boolean
+        keepWorktree:
+          description: A stop leaves the worktree of the watch on disk unless the
+            stop says otherwise
           type: boolean
         lastError:
           type: string
@@ -3057,6 +3082,7 @@ components:
       - approvalMode
       - autoApproveRebase
       - mergeWhenReady
+      - keepWorktree
       - session
       type: object
     HttpdWatchList:
@@ -3086,9 +3112,24 @@ components:
           minimum: 0
           nullable: true
           type: integer
+        autoApproveRebase:
+          description: Approved work goes out after a clean rebase without asking
+            again; absent takes the setting of the daemon
+          nullable: true
+          type: boolean
         includeExisting:
           description: Report the review items the pull request has already; absent
             takes the setting of the daemon
+          nullable: true
+          type: boolean
+        includeOwn:
+          description: Report the comments of the token's own user; absent takes the
+            setting of the daemon
+          nullable: true
+          type: boolean
+        keepWorktree:
+          description: A stop leaves the worktree of the watch on disk; absent takes
+            the setting of the daemon
           nullable: true
           type: boolean
         mergeMethod:
@@ -3101,11 +3142,12 @@ components:
           - rebase
           type: string
         model:
-          description: The model of the agent; empty takes the model of the provider
+          description: The model of that provider; empty takes the default of the
+            provider. Needs a provider
           type: string
         provider:
-          description: The AI provider of the watches auto start begins; empty takes
-            the provider of watch start
+          description: The AI provider of a watch on the repository; empty takes the
+            provider of the daemon
           enum:
           - ""
           - claude
@@ -3254,7 +3296,7 @@ components:
       properties:
         keepWorktree:
           description: Leave the worktree of the watch on disk instead of deleting
-            it; absent takes the setting of the daemon
+            it; absent takes the rule the watch started with
           nullable: true
           type: boolean
       type: object

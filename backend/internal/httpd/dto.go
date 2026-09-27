@@ -176,6 +176,7 @@ type Watch struct {
 	TakenOverAt       *time.Time              `json:"takenOverAt,omitempty" description:"Since when the session is with the author in their terminal; absent while the daemon has it"`
 	AutoReason        store.AutoReason        `json:"autoReason,omitempty" enum:",mine,assigned,dependabot" description:"Why auto start began the watch: the author opened the pull request, it is assigned to the author, or Dependabot opened it; absent for a watch started by hand"`
 	MergeWhenReady    bool                    `json:"mergeWhenReady" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge"`
+	KeepWorktree      bool                    `json:"keepWorktree" description:"A stop leaves the worktree of the watch on disk unless the stop says otherwise"`
 	UpdateType        dependabot.Level        `json:"updateType,omitempty" enum:",patch,minor,major" description:"The highest update of a Dependabot pull request; a type the daemon cannot read counts as major"`
 	Session           Session                 `json:"session"`
 	Summary           *WatchSummary           `json:"summary,omitempty"`
@@ -213,16 +214,17 @@ type WatchQuery struct {
 type StartWatchRequest struct {
 	Target            string        `json:"target"`
 	Repo              string        `json:"repo"`
-	Provider          string        `json:"provider,omitempty" enum:"claude,copilot,self" description:"The AI provider that runs the agent session, or self when the caller's own session is the agent"`
-	Model             string        `json:"model,omitempty"`
+	Provider          string        `json:"provider,omitempty" enum:",claude,copilot,self" description:"The AI provider that runs the agent session, or self when the caller's own session is the agent; empty takes the repository, then the daemon"`
+	Model             string        `json:"model,omitempty" description:"The model of the provider; empty takes the model of the layer that gives the provider"`
 	SourceDir         string        `json:"sourceDir"`
-	IncludeExisting   *bool         `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the setting of the daemon"`
-	IncludeOwn        *bool         `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the setting of the daemon"`
-	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds"`
-	MergeMethod       *string       `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the setting of the daemon"`
-	ApprovalMode      *string       `json:"approvalMode,omitempty" enum:"auto,manual" description:"Who releases the work of a turn of the agent; absent takes the setting of the daemon, and a self watch runs in auto"`
-	AutoApproveRebase *bool         `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon"`
+	IncludeExisting   *bool         `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the repository, then the daemon"`
+	IncludeOwn        *bool         `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the repository, then the daemon"`
+	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent takes the repository, then the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds"`
+	MergeMethod       *string       `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the repository, then the daemon"`
+	ApprovalMode      *string       `json:"approvalMode,omitempty" enum:"auto,manual" description:"Who releases the work of a turn of the agent; absent takes the repository, then the daemon, and a self watch runs in auto"`
+	AutoApproveRebase *bool         `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase without asking again; absent takes the repository, then the daemon"`
 	MergeWhenReady    *bool         `json:"mergeWhenReady,omitempty" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge; absent means off"`
+	KeepWorktree      *bool         `json:"keepWorktree,omitempty" description:"A stop leaves the worktree of the watch on disk; absent takes the repository, then the daemon"`
 }
 
 type ReplyRequest struct {
@@ -367,7 +369,7 @@ type UpdateWatchRequest struct {
 }
 
 type StopWatchRequest struct {
-	KeepWorktree *bool `json:"keepWorktree,omitempty" description:"Leave the worktree of the watch on disk instead of deleting it; absent takes the setting of the daemon"`
+	KeepWorktree *bool `json:"keepWorktree,omitempty" description:"Leave the worktree of the watch on disk instead of deleting it; absent takes the rule the watch started with"`
 }
 
 type TakeoverRequest struct {
@@ -414,6 +416,8 @@ type Settings struct {
 	MutedNotificationKinds []string `json:"mutedNotificationKinds" items.enum:"agent,review,checks,watch,merge,auto" description:"The notification kinds that reach nobody. The history keeps them either way"`
 	ApprovalMode           string   `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent of a new watch: the daemon on its own, or the author"`
 	AutoApproveRebase      bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
+	Provider               string   `json:"provider" enum:"claude,copilot" description:"The AI provider of a new watch"`
+	Model                  string   `json:"model" description:"The model of that provider; empty takes the default of the provider"`
 }
 
 type Notification struct {
@@ -542,7 +546,7 @@ func watchFromStore(w store.Watch, s prwatch.SessionInfo, readySince *time.Time,
 		CheckStates: states, GreenSHA: w.GreenSHA, AgentSession: w.AgentSession,
 		ApprovalsRequired: w.ApprovalsRequired, MergeMethod: w.MergeMethod, ReadySince: readySince, ReadyBlockers: blockers,
 		ApprovalMode: w.ApprovalMode, AutoApproveRebase: w.AutoApproveRebase, TakenOverAt: w.TakenOverAt,
-		AutoReason: w.AutoReason, MergeWhenReady: w.MergeWhenReady, UpdateType: w.UpdateType,
+		AutoReason: w.AutoReason, MergeWhenReady: w.MergeWhenReady, KeepWorktree: w.KeepWorktree, UpdateType: w.UpdateType,
 		Session: Session{State: s.State, PID: s.PID, StartedAt: s.StartedAt, SignalAt: s.SignalAt, LogPath: s.LogPath},
 	}
 	if out.Session.State == "" {

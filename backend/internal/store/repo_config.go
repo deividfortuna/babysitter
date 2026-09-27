@@ -32,13 +32,16 @@ var DependabotApprovals = []DependabotApproval{ApproveNever, ApproveAsk, Approve
 func (a DependabotApproval) Valid() bool { return slices.Contains(DependabotApprovals, a) }
 
 type WatchOverrides struct {
-	Provider        string
-	Model           string
-	ApprovalMode    ApprovalMode
-	MergeMethod     string
-	ApprovalsSet    bool
-	Approvals       *int
-	IncludeExisting *bool
+	Provider          string
+	Model             string
+	ApprovalMode      ApprovalMode
+	MergeMethod       string
+	ApprovalsSet      bool
+	Approvals         *int
+	IncludeExisting   *bool
+	AutoApproveRebase *bool
+	IncludeOwn        *bool
+	KeepWorktree      *bool
 }
 
 type RepoConfig struct {
@@ -91,7 +94,7 @@ func (c RepoConfig) Validate() error {
 
 const repoConfigColumns = `repo_id, checkout_dir, own_since, include_drafts, dependabot_since,
 	provider, model, approval_mode, merge_method, approvals_set, approvals_count, include_existing,
-	dependabot_scope, dependabot_approval, dependabot_limit`
+	dependabot_scope, dependabot_approval, dependabot_limit, auto_approve_rebase, include_own, keep_worktree`
 
 func (s *Store) GetRepoConfig(ctx context.Context, repoID int64) (RepoConfig, error) {
 	row := s.db.QueryRowContext(ctx, "SELECT "+repoConfigColumns+" FROM repo_config WHERE repo_id = ?", repoID)
@@ -112,7 +115,7 @@ func (s *Store) SaveRepoConfig(ctx context.Context, c RepoConfig) (RepoConfig, e
 	o := c.Overrides
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO repo_config (`+repoConfigColumns+`)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (repo_id) DO UPDATE SET
 	checkout_dir = excluded.checkout_dir,
 	own_since = excluded.own_since,
@@ -127,10 +130,13 @@ ON CONFLICT (repo_id) DO UPDATE SET
 	include_existing = excluded.include_existing,
 	dependabot_scope = excluded.dependabot_scope,
 	dependabot_approval = excluded.dependabot_approval,
-	dependabot_limit = excluded.dependabot_limit`,
+	dependabot_limit = excluded.dependabot_limit,
+	auto_approve_rebase = excluded.auto_approve_rebase,
+	include_own = excluded.include_own,
+	keep_worktree = excluded.keep_worktree`,
 		c.RepoID, c.CheckoutDir, timePtrToDB(c.OwnSince), c.IncludeDrafts, timePtrToDB(c.DependabotSince),
 		o.Provider, o.Model, o.ApprovalMode, o.MergeMethod, o.ApprovalsSet, o.Approvals, o.IncludeExisting,
-		c.DependabotScope, c.DependabotApproval, c.DependabotLimit)
+		c.DependabotScope, c.DependabotApproval, c.DependabotLimit, o.AutoApproveRebase, o.IncludeOwn, o.KeepWorktree)
 	if isForeignKeyFailure(err) {
 		return RepoConfig{}, ErrRepoNotFound
 	}
@@ -147,11 +153,14 @@ func scanRepoConfig(sc scanner) (RepoConfig, error) {
 		ownSince, depSince sql.NullString
 		approvals          sql.NullInt64
 		includeExisting    sql.NullBool
+		autoRebase         sql.NullBool
+		includeOwn         sql.NullBool
+		keepWorktree       sql.NullBool
 		o                  = &c.Overrides
 	)
 	err := sc.Scan(&c.RepoID, &c.CheckoutDir, &ownSince, &c.IncludeDrafts, &depSince,
 		&o.Provider, &o.Model, &o.ApprovalMode, &o.MergeMethod, &o.ApprovalsSet, &approvals, &includeExisting,
-		&c.DependabotScope, &c.DependabotApproval, &c.DependabotLimit)
+		&c.DependabotScope, &c.DependabotApproval, &c.DependabotLimit, &autoRebase, &includeOwn, &keepWorktree)
 	if err != nil {
 		return RepoConfig{}, err
 	}
@@ -165,10 +174,18 @@ func scanRepoConfig(sc scanner) (RepoConfig, error) {
 		n := int(approvals.Int64)
 		o.Approvals = &n
 	}
-	if includeExisting.Valid {
-		o.IncludeExisting = &includeExisting.Bool
-	}
+	o.IncludeExisting = boolPtrFromDB(includeExisting)
+	o.AutoApproveRebase = boolPtrFromDB(autoRebase)
+	o.IncludeOwn = boolPtrFromDB(includeOwn)
+	o.KeepWorktree = boolPtrFromDB(keepWorktree)
 	return c, nil
+}
+
+func boolPtrFromDB(v sql.NullBool) *bool {
+	if !v.Valid {
+		return nil
+	}
+	return &v.Bool
 }
 
 func (s *Store) ClaimAutoStart(ctx context.Context, repoID int64, number int, now, staleBefore time.Time) error {

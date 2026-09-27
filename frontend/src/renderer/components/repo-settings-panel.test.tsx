@@ -1,9 +1,10 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import { buildRepo, buildRepoConfig, buildSettings } from "@test/fixtures";
+import { buildProviders, buildRepo, buildRepoConfig, buildSettings } from "@test/fixtures";
 import { chooseOption, renderWithProviders } from "@test/test-utils";
 import { serveApi } from "@test/msw";
+import type { Provider } from "@/hooks/useProviders";
 import type { RepoConfig, RepoConfigUpdate } from "@/hooks/useRepos";
 import { RepoSettingsPanel } from "./repo-settings-panel";
 
@@ -20,12 +21,16 @@ afterEach(() => {
 
 const withCheckout = { checkoutDir: "/home/me/code/babysitter" };
 
-function renderPanel(config: Partial<RepoConfig> = {}, more: { refusal?: { code: string; message: string } } = {}) {
+function renderPanel(
+  config: Partial<RepoConfig> = {},
+  more: { refusal?: { code: string; message: string }; providers?: Provider[] } = {},
+) {
   const repoConfigBodies: RepoConfigUpdate[] = [];
   serveApi({
     repoConfig: buildRepoConfig(config),
     repoConfigBodies,
     repoConfigRefusal: more.refusal,
+    providers: more.providers,
     settings: buildSettings({ approvalMode: "manual" }),
   });
   const onClose = vi.fn();
@@ -62,7 +67,7 @@ test("the panel shows the configuration of the repository", async () => {
   ).toBeVisible();
   expect(screen.getByLabelText("At the same time")).toHaveValue(2);
   await waitFor(() =>
-    expect(within(panel()).getByRole("button", { name: /Watches it starts/ })).toHaveTextContent("Claude · manual"),
+    expect(within(panel()).getByRole("button", { name: /Watch defaults/ })).toHaveTextContent("Claude · manual"),
   );
 });
 
@@ -161,10 +166,10 @@ test("an override sends every override of the repository at once", async () => {
     overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "squash", approvalsRequired: 2 },
   });
 
-  await user.click(await screen.findByRole("button", { name: /Watches it starts/ }));
-  expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Daemon setting");
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+  expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)");
   expect(screen.getByLabelText("Merge method")).toHaveTextContent("Squash");
-  expect(screen.getByLabelText("Approvals")).toHaveValue(2);
+  await waitFor(() => expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2));
 
   await chooseOption(user, screen.getByLabelText("Approval mode"), "auto");
   await waitFor(() => expect(repoConfigBodies).toHaveLength(1));
@@ -172,26 +177,99 @@ test("an override sends every override of the repository at once", async () => {
     overrides: { provider: "", model: "", approvalMode: "auto", mergeMethod: "squash", approvalsRequired: 2 },
   });
   await waitFor(() =>
-    expect(within(panel()).getByRole("button", { name: /Watches it starts/ })).toHaveTextContent("Claude · auto"),
+    expect(within(panel()).getByRole("button", { name: /Watch defaults/ })).toHaveTextContent("Claude · auto"),
   );
 
-  await chooseOption(user, screen.getByLabelText("Approvals before ready to merge"), "Branch rule");
+  await user.click(screen.getByRole("switch", { name: "Report existing review items" }));
   await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
-  expect(repoConfigBodies[1].overrides?.approvalsRequired).toBeNull();
-
-  await chooseOption(user, screen.getByLabelText("Report existing review items"), "Report them");
-  await waitFor(() => expect(repoConfigBodies).toHaveLength(3));
-  expect(repoConfigBodies[2].overrides).toMatchObject({ includeExisting: true, approvalsRequired: null });
-
-  await chooseOption(user, screen.getByLabelText("Approvals before ready to merge"), "Daemon setting");
-  await waitFor(() => expect(repoConfigBodies).toHaveLength(4));
-  expect(repoConfigBodies[3].overrides).not.toHaveProperty("approvalsRequired");
+  expect(repoConfigBodies[1].overrides).toMatchObject({ includeExisting: true, approvalsRequired: 2 });
 });
 
-test("the agent of the watches it starts takes a provider and one of its models", async () => {
+test("the approvals store an override only when they differ from the daemon", async () => {
+  const { repoConfigBodies, user } = renderPanel({
+    ...withCheckout,
+    overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "", approvalsRequired: 2 },
+  });
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+  const approvals = await screen.findByLabelText("Approvals before ready to merge");
+  await waitFor(() => expect(approvals).toHaveValue(2));
+
+  await user.clear(approvals);
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(1));
+  expect(repoConfigBodies[0].overrides).not.toHaveProperty("approvalsRequired");
+
+  const field = screen.getByLabelText("Approvals before ready to merge");
+  await user.type(field, "3");
+  await user.keyboard("{Enter}");
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
+  expect(repoConfigBodies[1].overrides).toMatchObject({ approvalsRequired: 3 });
+});
+
+test("each field shows the value a watch takes", async () => {
+  const repoConfigBodies: RepoConfigUpdate[] = [];
+  serveApi({
+    repoConfig: buildRepoConfig({
+      ...withCheckout,
+      overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "", includeOwn: true },
+    }),
+    repoConfigBodies,
+    settings: buildSettings({
+      provider: "copilot",
+      model: "gpt-5.3-codex",
+      approvalMode: "auto",
+      autoApproveRebase: true,
+      approvalsRequired: 2,
+      mergeMethod: "rebase",
+      includeExisting: true,
+      includeOwn: false,
+      keepWorktree: false,
+    }),
+  });
+  renderWithProviders(<RepoSettingsPanel repo={buildRepo()} onClose={vi.fn()} />);
+  const user = userEvent.setup();
+
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+
+  await waitFor(() => expect(screen.getByLabelText("Agent")).toHaveTextContent("Default (Copilot)"));
+  expect(screen.getByLabelText("Model")).toHaveTextContent("Default (GPT-5.3 Codex)");
+  expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (auto)");
+  expect(screen.getByLabelText("Merge method")).toHaveTextContent("Default (rebase)");
+  expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2);
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Report existing review items" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Report my own comments" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Keep the worktree when a watch stops" })).not.toBeChecked();
+  expect(within(panel()).getByRole("button", { name: /Watch defaults/ })).toHaveTextContent(
+    "Copilot GPT-5.3 Codex · auto",
+  );
+});
+
+test("a switch stores an override only while it differs from the daemon", async () => {
   const { repoConfigBodies, user } = renderPanel(withCheckout);
 
-  await user.click(await screen.findByRole("button", { name: /Watches it starts/ }));
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+  const keep = await screen.findByRole("switch", { name: "Keep the worktree when a watch stops" });
+  await waitFor(() => expect(keep).toBeEnabled());
+  await user.click(keep);
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(1));
+  expect(repoConfigBodies[0].overrides).toMatchObject({ keepWorktree: true });
+  await waitFor(() => expect(keep).toBeChecked());
+
+  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase on its own" }));
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
+  expect(repoConfigBodies[1].overrides).toMatchObject({ keepWorktree: true, autoApproveRebase: true });
+
+  await user.click(keep);
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(3));
+  expect(repoConfigBodies[2].overrides).not.toHaveProperty("keepWorktree");
+  expect(repoConfigBodies[2].overrides).toMatchObject({ autoApproveRebase: true });
+});
+
+test("the agent of the watches takes a provider and one of its models", async () => {
+  const { repoConfigBodies, user } = renderPanel(withCheckout);
+
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
   await waitFor(() => expect(screen.getByLabelText("Agent")).toBeEnabled());
   expect(screen.getByLabelText("Model")).toBeDisabled();
 
@@ -203,6 +281,17 @@ test("the agent of the watches it starts takes a provider and one of its models"
   await chooseOption(user, screen.getByLabelText("Model"), "GPT-5.3 Codex");
   await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
   expect(repoConfigBodies[1].overrides).toMatchObject({ provider: "copilot", model: "gpt-5.3-codex" });
+});
+
+test("the agent of the watches does not offer a provider whose command the daemon did not find", async () => {
+  const { user } = renderPanel(withCheckout, { providers: buildProviders([{}, { available: false }]) });
+
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+  await waitFor(() => expect(screen.getByLabelText("Agent")).toBeEnabled());
+  await user.click(screen.getByLabelText("Agent"));
+  const copilot = await screen.findByRole("option", { name: /Copilot/ });
+  expect(copilot).toHaveAttribute("aria-disabled", "true");
+  expect(copilot).toHaveTextContent("command not found");
 });
 
 test("the close button hands the panel back", async () => {

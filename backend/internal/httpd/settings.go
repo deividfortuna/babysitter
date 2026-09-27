@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
@@ -25,6 +26,10 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "body must be the settings to change as JSON")
 		return
 	}
+	if err := prwatch.CheckHostedAgent(req.Provider, req.Model); err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
+		return
+	}
 	saved, err := a.store.SaveSettings(r.Context(), store.Settings{
 		PollInterval:      time.Duration(req.PollIntervalSeconds) * time.Second,
 		WatchInterval:     time.Duration(req.WatchIntervalSeconds) * time.Second,
@@ -39,6 +44,8 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		MutedNotificationKinds: mutedKindsIn(req.MutedNotificationKinds),
 		ApprovalMode:           store.ApprovalMode(req.ApprovalMode),
 		AutoApproveRebase:      req.AutoApproveRebase,
+		Provider:               req.Provider,
+		Model:                  req.Model,
 	})
 	if storeErrors.write(w, err) {
 		return
@@ -63,6 +70,8 @@ func settingsOut(s store.Settings) Settings {
 		MutedNotificationKinds: mutedKindsOut(s.MutedNotificationKinds),
 		ApprovalMode:           string(s.ApprovalMode),
 		AutoApproveRebase:      s.AutoApproveRebase,
+		Provider:               s.Provider,
+		Model:                  s.Model,
 	}
 }
 

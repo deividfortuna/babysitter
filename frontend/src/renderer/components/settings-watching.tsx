@@ -1,12 +1,16 @@
 import { useState } from "react";
 import { CircleAlertIcon } from "lucide-react";
+import { useProviders, type Provider } from "@/hooks/useProviders";
 import { useSaveSettings, useSettings, type Settings } from "@/hooks/useSettings";
+import { AgentLogo } from "@/components/agent-logo";
+import { OptionSelect } from "@/components/option-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { ApprovalModeSelect } from "@/components/approval-mode-select";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
@@ -63,6 +67,7 @@ export function WatchingPanel({ onSaved }: { onSaved: () => void }) {
 
 function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () => void }) {
   const save = useSaveSettings();
+  const providers = useProviders(true);
   const [draft, setDraft] = useState(() => toDraft(settings));
   const [edited, setEdited] = useState(false);
 
@@ -114,7 +119,23 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
       </FieldGroup>
 
       <FieldGroup>
-        <FieldTitle className="text-muted-foreground">Defaults of a new watch</FieldTitle>
+        <div className="flex flex-col gap-1">
+          <FieldTitle className="text-muted-foreground">Defaults of a new watch</FieldTitle>
+          <FieldDescription>A repository can set its own value, and a watch can set its own at start.</FieldDescription>
+        </div>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="agent">Agent</FieldLabel>
+            <FieldDescription>Prepares the fixes and the replies.</FieldDescription>
+          </FieldContent>
+          <AgentFields
+            catalog={providers.data ?? []}
+            provider={draft.provider}
+            model={draft.model}
+            onChange={(provider, model) => edit({ provider, model })}
+          />
+        </Field>
 
         <Field orientation="horizontal">
           <FieldContent>
@@ -216,6 +237,48 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
           Save
         </Button>
       </div>
+    </div>
+  );
+}
+
+type AgentFieldsProps = {
+  catalog: Provider[];
+  provider: Settings["provider"];
+  model: string;
+  onChange: (provider: Settings["provider"], model: string) => void;
+};
+
+function AgentFields({ catalog, provider, model, onChange }: AgentFieldsProps) {
+  const models = catalog.find((item) => item.id === provider)?.models ?? [];
+  return (
+    <div className="flex w-72 shrink-0 gap-2">
+      <Select
+        value={provider}
+        disabled={catalog.length === 0}
+        onValueChange={(next) => onChange(next as Settings["provider"], "")}
+      >
+        <SelectTrigger id="agent" className="w-32 shrink-0">
+          <SelectValue />
+        </SelectTrigger>
+        <SelectContent>
+          {catalog.map((item) => (
+            <SelectItem key={item.id} value={item.id} disabled={!item.available}>
+              <AgentLogo provider={item.id} />
+              {item.label}
+              {item.available ? "" : " (command not found)"}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+      <OptionSelect
+        label="Model"
+        size="default"
+        className="min-w-0 flex-1"
+        options={models.map((item) => ({ value: item.id, label: item.label }))}
+        value={model}
+        disabled={models.length === 0}
+        onChange={(next) => onChange(provider, next)}
+      />
     </div>
   );
 }

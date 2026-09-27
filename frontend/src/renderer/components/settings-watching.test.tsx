@@ -2,9 +2,9 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
 import { http, HttpResponse } from "msw";
-import { buildSettings } from "@test/fixtures";
+import { buildProviders, buildSettings } from "@test/fixtures";
 import { apiUrl, server, serveApi } from "@test/msw";
-import { renderWithProviders } from "@test/test-utils";
+import { chooseOption, renderWithProviders } from "@test/test-utils";
 import type { Settings } from "@/hooks/useSettings";
 import { SettingsDialog } from "./settings-dialog";
 
@@ -34,6 +34,37 @@ test("the Watching panel shows the settings of the daemon", async () => {
   expect(screen.getByRole("switch", { name: "Report my own comments" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Report the review items that already exist" })).not.toBeChecked();
   expect(within(screen.getByLabelText("Merge method")).getByText("Rebase")).toBeVisible();
+});
+
+test("the agent of a new watch takes a provider and one of its models", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings(), savedSettings });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openWatching();
+
+  await waitFor(() => expect(screen.getByLabelText("Agent")).toHaveTextContent("Claude"));
+  await chooseOption(user, screen.getByLabelText("Model"), "Sonnet");
+  await chooseOption(user, screen.getByLabelText("Agent"), /Copilot/);
+  expect(screen.getByLabelText("Model")).toHaveTextContent("Provider default");
+  await chooseOption(user, screen.getByLabelText("Model"), "GPT-5.3 Codex");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0]).toMatchObject({ provider: "copilot", model: "gpt-5.3-codex" });
+});
+
+test("the agent of a new watch does not offer a provider whose command the daemon did not find", async () => {
+  serveApi({ settings: buildSettings(), providers: buildProviders([{}, { available: false }]) });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openWatching();
+
+  await waitFor(() => expect(screen.getByLabelText("Agent")).toBeEnabled());
+  await user.click(screen.getByLabelText("Agent"));
+  const copilot = await screen.findByRole("option", { name: /Copilot/ });
+  expect(copilot).toHaveAttribute("aria-disabled", "true");
+  expect(copilot).toHaveTextContent("command not found");
 });
 
 test("a change to an interval is saved to the daemon", async () => {

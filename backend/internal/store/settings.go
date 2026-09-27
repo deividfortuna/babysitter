@@ -26,6 +26,8 @@ type Settings struct {
 	MutedNotificationKinds []NotificationKind
 	ApprovalMode           ApprovalMode
 	AutoApproveRebase      bool
+	Provider               string
+	Model                  string
 }
 
 type ApprovalMode string
@@ -46,6 +48,8 @@ const (
 
 var ErrInvalidSettings = errors.New("invalid settings")
 
+var SettingsProviders = []string{"claude", "copilot"}
+
 func DefaultSettings() Settings {
 	return Settings{
 		PollInterval:         time.Minute,
@@ -53,6 +57,7 @@ func DefaultSettings() Settings {
 		NotificationsEnabled: true,
 		NotificationSound:    true,
 		ApprovalMode:         ApprovalManual,
+		Provider:             "claude",
 	}
 }
 
@@ -65,6 +70,9 @@ func (s Settings) Validate() error {
 	}
 	if s.MergeMethod != "" && !slices.Contains(ghclient.MergeMethodsKnown, s.MergeMethod) {
 		return fmt.Errorf("%w: unknown merge method %q: use %s", ErrInvalidSettings, s.MergeMethod, strings.Join(ghclient.MergeMethodsKnown, ", "))
+	}
+	if !slices.Contains(SettingsProviders, s.Provider) {
+		return fmt.Errorf("%w: unknown provider %q: use %s", ErrInvalidSettings, s.Provider, strings.Join(SettingsProviders, " or "))
 	}
 	if !s.ApprovalMode.Valid() {
 		return fmt.Errorf("%w: unknown approval mode %q: use auto or manual", ErrInvalidSettings, s.ApprovalMode)
@@ -119,7 +127,7 @@ func parseMutedKinds(value string) []NotificationKind {
 	return out
 }
 
-const settingsColumns = "poll_interval_ms, watch_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notification_sound, muted_notification_kinds, approval_mode, auto_approve_rebase"
+const settingsColumns = "poll_interval_ms, watch_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notification_sound, muted_notification_kinds, approval_mode, auto_approve_rebase, provider, model"
 
 func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	var (
@@ -131,7 +139,8 @@ func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	)
 	err := s.db.QueryRowContext(ctx, "SELECT "+settingsColumns+" FROM settings WHERE id = 1").
 		Scan(&pollMS, &watchMS, &approvals, &out.MergeMethod, &out.IncludeExisting, &out.IncludeOwn, &out.KeepWorktree,
-			&out.NotificationsEnabled, &out.NotificationSound, &muted, &out.ApprovalMode, &out.AutoApproveRebase)
+			&out.NotificationsEnabled, &out.NotificationSound, &muted, &out.ApprovalMode, &out.AutoApproveRebase,
+			&out.Provider, &out.Model)
 	if err != nil {
 		return Settings{}, fmt.Errorf("read settings: %w", err)
 	}
@@ -178,11 +187,14 @@ UPDATE settings SET
     notification_sound    = ?,
     muted_notification_kinds = ?,
     approval_mode       = ?,
-    auto_approve_rebase = ?
+    auto_approve_rebase = ?,
+    provider            = ?,
+    model               = ?
 WHERE id = 1`,
 		next.PollInterval.Milliseconds(), next.WatchInterval.Milliseconds(), approvals,
 		next.MergeMethod, next.IncludeExisting, next.IncludeOwn, next.KeepWorktree,
-		next.NotificationsEnabled, next.NotificationSound, muted, next.ApprovalMode, next.AutoApproveRebase)
+		next.NotificationsEnabled, next.NotificationSound, muted, next.ApprovalMode, next.AutoApproveRebase,
+		next.Provider, next.Model)
 	if err != nil {
 		return Settings{}, fmt.Errorf("save settings: %w", err)
 	}

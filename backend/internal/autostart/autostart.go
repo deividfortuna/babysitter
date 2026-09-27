@@ -209,21 +209,10 @@ func (s *Starter) startOne(ctx context.Context, repo store.Repo, cfg store.RepoC
 }
 
 func request(repo store.Repo, cfg store.RepoConfig, c candidate) prwatch.StartRequest {
-	o := cfg.Overrides
 	req := prwatch.StartRequest{
-		Target:            snapshot.Target{Owner: repo.Owner, Name: repo.Name, Number: c.pr.Number},
-		Provider:          o.Provider,
-		Model:             o.Model,
-		SourceDir:         cfg.CheckoutDir,
-		IncludeExisting:   o.IncludeExisting,
-		ApprovalsRequired: prwatch.Approvals{Set: o.ApprovalsSet, Count: o.Approvals},
-		AutoReason:        c.reason,
-	}
-	if o.MergeMethod != "" {
-		req.MergeMethod = &o.MergeMethod
-	}
-	if o.ApprovalMode != "" {
-		req.ApprovalMode = &o.ApprovalMode
+		Target:     snapshot.Target{Owner: repo.Owner, Name: repo.Name, Number: c.pr.Number},
+		SourceDir:  cfg.CheckoutDir,
+		AutoReason: c.reason,
 	}
 	if c.reason == store.AutoDependabot {
 		inScope := dependabot.Within(c.pr.UpdateType, cfg.DependabotScope)

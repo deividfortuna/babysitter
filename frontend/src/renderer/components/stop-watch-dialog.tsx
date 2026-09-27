@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { CircleAlertIcon, TriangleAlertIcon } from "lucide-react";
 import { useProposal } from "@/hooks/useProposals";
-import { useSettings } from "@/hooks/useSettings";
 import { useStopWatch, type Watch } from "@/hooks/useWatches";
 import { count, joinAnd } from "@/components/proposal-dialogs";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -47,8 +46,7 @@ function DeclinedAlert({ watch, number }: { watch: Watch; number: number }) {
   );
 }
 
-function worktreeLine(dir: string, keep: boolean | undefined): string {
-  if (keep === undefined) return `The setting of your daemon decides what becomes of the worktree at ${dir}.`;
+function worktreeLine(dir: string, keep: boolean): string {
   if (keep) return `The worktree stays at ${dir}. Delete it yourself when you are done with it.`;
   return `The worktree at ${dir} and its babysitter branch are deleted. Your own checkout is untouched.`;
 }
@@ -71,9 +69,8 @@ export function StopWatchDialog({ open, onOpenChange, watch, onStopped }: Props)
 
 function StopWatchForm({ watch, onStopped }: { watch: Watch; onStopped: (watch: Watch) => void }) {
   const [keepWorktree, setKeepWorktree] = useState<boolean | undefined>();
-  const settings = useSettings();
   const stop = useStopWatch();
-  const chosen = keepWorktree ?? settings.data?.keepWorktree;
+  const chosen = keepWorktree ?? watch.keepWorktree;
 
   const submit = () => {
     stop.mutate({ id: watch.id, keepWorktree }, { onSuccess: onStopped });
@@ -93,11 +90,7 @@ function StopWatchForm({ watch, onStopped }: { watch: Watch; onStopped: (watch: 
       {isSelfWatch(watch) ? null : (
         <>
           <Field orientation="horizontal">
-            <Checkbox
-              id="keep-worktree"
-              checked={chosen ?? false}
-              onCheckedChange={(v) => setKeepWorktree(v === true)}
-            />
+            <Checkbox id="keep-worktree" checked={chosen} onCheckedChange={(v) => setKeepWorktree(v === true)} />
             <FieldLabel htmlFor="keep-worktree" className="font-normal">
               Keep the worktree on disk
             </FieldLabel>
@@ -114,7 +107,7 @@ function StopWatchForm({ watch, onStopped }: { watch: Watch; onStopped: (watch: 
       ) : null}
 
       <DialogFooter className="sm:justify-start">
-        <Button type="button" onClick={submit} disabled={stop.isPending || settings.isPending}>
+        <Button type="button" onClick={submit} disabled={stop.isPending}>
           {stop.isPending ? <Spinner data-icon="inline-start" /> : null}
           Stop watching
         </Button>

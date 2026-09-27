@@ -4,8 +4,10 @@ import { usePulls, type PullRequest } from "@/hooks/usePulls";
 import { useProviders, type Provider } from "@/hooks/useProviders";
 import type { ApprovalMode } from "@/hooks/useProposals";
 import { useSettings } from "@/hooks/useSettings";
+import { useRepoConfig, useRepos } from "@/hooks/useRepos";
 import { useStartWatch, useWatches, type MergeMethod, type Watch } from "@/hooks/useWatches";
 import { AgentLogo } from "@/components/agent-logo";
+import { OptionSelect, type Option } from "@/components/option-select";
 import { SettingRow } from "@/components/setting-row";
 import { Meta } from "@/components/status-badges";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -26,12 +28,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { MergeMethodSelect } from "@/components/merge-method-select";
-import { ApprovalModeSelect } from "@/components/approval-mode-select";
+import { mergeMethodLabel } from "@/components/merge-method-select";
 import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/approvals";
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
+import { defaultLabel, mergeMethodDefaultLabel, modelLabel, repositoryDefaults } from "@/lib/watch-defaults";
 
 const DIR_KEY_PREFIX = "checkout_dir:";
 const DIR_KEY_LAST = "checkout_dir";
@@ -40,6 +42,8 @@ const TARGET_RE = /^(https?:\/\/\S+|[\w.-]+\/[\w.-]+#\d+)$/;
 
 const ROW = "gap-4 border-t py-3";
 const CONTROL = "flex w-55 shrink-0 justify-end";
+
+const DEFAULT_SOURCE = "Default takes the repository, then the daemon";
 
 function readDir(repo: string | null): string {
   try {
@@ -57,8 +61,8 @@ function storeDir(repo: string, dir: string): void {
 }
 
 type StartChoices = {
-  provider: Provider["id"];
-  model: string;
+  provider: Provider["id"] | null;
+  model: string | null;
   approvalMode: ApprovalMode | null;
   autoRebase: boolean | null;
   mergeWhenReady: boolean;
@@ -66,13 +70,20 @@ type StartChoices = {
 
 function startCommand(target: string, choices: StartChoices): string {
   const words = ["babysitter watch start", target];
-  if (choices.provider !== "claude") words.push(`--provider ${choices.provider}`);
+  if (choices.provider) words.push(`--provider ${choices.provider}`);
   if (choices.model) words.push(`--model ${choices.model}`);
   if (choices.approvalMode) words.push(`--approval-mode ${choices.approvalMode}`);
   if (choices.autoRebase !== null)
     words.push(choices.autoRebase ? "--auto-approve-rebase" : "--auto-approve-rebase=false");
   if (choices.mergeWhenReady) words.push("--merge-when-ready");
   return words.join(" ");
+}
+
+const REPO_OF_URL = /github\.com\/([\w.-]+\/[\w.-]+)\/pull\/\d+/;
+const REPO_OF_REFERENCE = /^([\w.-]+\/[\w.-]+)#\d+$/;
+
+function repoOfTarget(target: string): string | null {
+  return REPO_OF_URL.exec(target)?.[1] ?? REPO_OF_REFERENCE.exec(target)?.[1] ?? null;
 }
 
 type Props = {
@@ -112,11 +123,18 @@ type FormProps = {
   onStarted: (watch: Watch) => void;
 };
 
+type MergeChoice = "" | "first" | "squash" | "merge" | "rebase";
+
+function mergeMethodOf(choice: MergeChoice): MergeMethod {
+  return choice === "first" ? "" : choice;
+}
+
 function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const pulls = usePulls(enabled);
   const watches = useWatches(enabled);
   const providers = useProviders(enabled);
   const settings = useSettings(enabled);
+  const repos = useRepos(enabled);
   const start = useStartWatch();
 
   const [query, setQuery] = useState("");
@@ -124,30 +142,52 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const [sourceDir, setSourceDir] = useState(() => (initial ? readDir(initial.repo) : "") || readDir(null));
   const [rememberedFor, setRememberedFor] = useState(() => (initial && readDir(initial.repo) ? initial.repo : null));
   const [moreOpen, setMoreOpen] = useState(false);
-  const [chosenProvider, setProvider] = useState<Provider["id"]>("claude");
-  const [chosenModel, setModel] = useState("");
+  const [chosenProvider, setProvider] = useState<Provider["id"] | null>(null);
+  const [chosenModel, setModel] = useState<string | null>(null);
   const [includeExisting, setIncludeExisting] = useState<boolean | null>(null);
   const [includeOwn, setIncludeOwn] = useState<boolean | null>(null);
+  const [keepWorktree, setKeepWorktree] = useState<boolean | null>(null);
   const [approvals, setApprovals] = useState<string | null>(null);
-  const [mergeMethod, setMergeMethod] = useState<MergeMethod | null>(null);
-  const [approvalMode, setApprovalMode] = useState<ApprovalMode | null>(null);
+  const [mergeMethod, setMergeMethod] = useState<MergeChoice>("");
+  const [approvalMode, setApprovalMode] = useState<ApprovalMode | "">("");
   const [autoRebase, setAutoRebase] = useState<boolean | null>(null);
   const [mergeWhenReady, setMergeWhenReady] = useState<boolean | null>(null);
 
-  const defaults = settings.data;
-  const includeExistingValue = includeExisting ?? defaults?.includeExisting ?? false;
-  const includeOwnValue = includeOwn ?? defaults?.includeOwn ?? false;
-  const mergeMethodValue = mergeMethod ?? defaults?.mergeMethod ?? "";
-  const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
-  const approvalModeValue = approvalMode ?? defaults?.approvalMode ?? "manual";
-  const autoRebaseValue = autoRebase ?? defaults?.autoApproveRebase ?? false;
-  const asks = approvalModeValue === "manual";
-  const rebaseChosen = asks && autoRebase !== null;
+  const typed = query.trim();
+  const byReference = !picked && TARGET_RE.test(typed);
+  const target = picked ? `${picked.repo}#${picked.number}` : typed;
+  const targetRepo = picked?.repo ?? repoOfTarget(typed);
+  const repoId = repos.data?.find((repo) => repo.fullName.toLowerCase() === targetRepo?.toLowerCase())?.id ?? null;
+  const repoConfig = useRepoConfig(repoId);
+  const defaults = settings.data ? repositoryDefaults(settings.data, repoConfig.data?.overrides) : undefined;
+  const repoSettingsLanded = repos.isSuccess && (repoId === null || repoConfig.isSuccess);
+  const repoSettingsFailed = repos.isError || repoConfig.isError;
+  const defaultsLanded = settings.isSuccess && repoSettingsLanded;
 
   const catalog = useMemo(() => providers.data ?? [], [providers.data]);
-  const provider = installedProvider(catalog, chosenProvider);
-  const model = provider === chosenProvider ? chosenModel : "";
-  const models = useMemo(() => catalog.find((item) => item.id === provider)?.models ?? [], [catalog, provider]);
+  const inheritedProvider = defaults?.provider ?? "claude";
+  const installedFallback = installedProvider(catalog, inheritedProvider);
+  const providerChoice = chosenProvider ?? (installedFallback === inheritedProvider ? null : installedFallback);
+  const provider = providerChoice ?? inheritedProvider;
+  const model = chosenModel ?? (providerChoice ? "" : (defaults?.model ?? ""));
+  const models = catalog.find((item) => item.id === provider)?.models ?? [];
+  const modelOptions: Option<string>[] = providerChoice
+    ? models.map((item) => ({ value: item.id, label: item.label }))
+    : [
+        { value: "", label: defaultLabel(defaults && modelLabel(catalog, defaults.provider, defaults.model)) },
+        ...models.filter((item) => item.id !== "").map((item) => ({ value: item.id, label: item.label })),
+      ];
+
+  const approvalModeValue = approvalMode || defaults?.approvalMode || "manual";
+  const asks = approvalModeValue === "manual";
+  const rebaseChosen = asks && autoRebase !== null;
+  const autoRebaseValue = autoRebase ?? defaults?.autoApproveRebase ?? false;
+  const includeExistingValue = includeExisting ?? defaults?.includeExisting ?? false;
+  const includeOwnValue = includeOwn ?? defaults?.includeOwn ?? false;
+  const keepWorktreeValue = keepWorktree ?? defaults?.keepWorktree ?? false;
+  const mergeMethodValue = mergeMethod ? mergeMethodOf(mergeMethod) : (defaults?.mergeMethod ?? "");
+  const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
+  const badApprovals = approvalsInvalid(approvalsValue);
 
   const watched = useMemo(() => new Set((watches.data ?? []).map((w) => `${w.repo}#${w.number}`)), [watches.data]);
   const openPulls = useMemo(
@@ -155,18 +195,12 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
     [pulls.data],
   );
 
-  const typed = query.trim();
-  const byReference = !picked && TARGET_RE.test(typed);
-  const target = picked ? `${picked.repo}#${picked.number}` : typed;
-  const badApprovals = approvalsInvalid(approvalsValue);
   const canStart =
-    Boolean((picked || byReference) && sourceDir.trim()) && !badApprovals && !start.isPending && settings.isSuccess;
+    Boolean((picked || byReference) && sourceDir.trim()) && !badApprovals && !start.isPending && defaultsLanded;
 
-  const agentLabel = catalog.find((item) => item.id === provider)?.label ?? provider;
-  const modelLabel = model ? (models.find((item) => item.id === model)?.label ?? model) : "";
   const summary = settingsSummary({
-    agent: agentLabel,
-    model: modelLabel,
+    agent: catalog.find((item) => item.id === provider)?.label ?? provider,
+    model: model ? (models.find((item) => item.id === model)?.label ?? model) : "",
     approvalMode: approvalModeValue,
     approvals: approvalsValue,
     mergeMethod: mergeMethodValue,
@@ -201,14 +235,15 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
       {
         target,
         repo: "",
-        provider,
-        model,
         sourceDir: sourceDir.trim(),
+        ...(providerChoice ? { provider: providerChoice } : {}),
+        ...(chosenModel ? { model: chosenModel } : {}),
         ...(includeExisting === null ? {} : { includeExisting }),
         ...(includeOwn === null ? {} : { includeOwn }),
+        ...(keepWorktree === null ? {} : { keepWorktree }),
         ...(approvals === null ? {} : { approvalsRequired: approvalsRequired(approvals) ?? null }),
-        ...(mergeMethod === null ? {} : { mergeMethod }),
-        ...(approvalMode === null ? {} : { approvalMode }),
+        ...(mergeMethod ? { mergeMethod: mergeMethodOf(mergeMethod) } : {}),
+        ...(approvalMode ? { approvalMode } : {}),
         ...(rebaseChosen ? { autoApproveRebase: autoRebase } : {}),
         ...(mergeWhenReady === null ? {} : { mergeWhenReady }),
       },
@@ -220,6 +255,9 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
       },
     );
   }
+
+  const inheritedMergeMethod = defaults && mergeMethodDefaultLabel(defaults.mergeMethod);
+  const inheritedProviderLabel = catalog.find((item) => item.id === inheritedProvider)?.label ?? inheritedProvider;
 
   return (
     <>
@@ -321,7 +359,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               Additional settings
               <span className="ml-auto flex min-w-0 items-center gap-1.5">
                 {moreOpen ? null : <AgentLogo provider={provider} className="size-3" />}
-                <Meta className="truncate">{moreOpen ? "from your defaults" : summary}</Meta>
+                <Meta className="truncate">{moreOpen ? DEFAULT_SOURCE : summary}</Meta>
               </span>
             </Button>
           </CollapsibleTrigger>
@@ -332,19 +370,23 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               description="Prepares the fixes and the replies."
               className={ROW}
             >
-              <div className="flex w-80 shrink-0 gap-2">
+              <div className="flex w-96 shrink-0 gap-2">
                 <Select
-                  value={provider}
+                  value={toSelectValue(providerChoice ?? "")}
                   disabled={catalog.length === 0}
                   onValueChange={(next) => {
-                    setProvider(next as Provider["id"]);
-                    setModel("");
+                    setProvider((fromSelectValue(next) || null) as Provider["id"] | null);
+                    setModel(null);
                   }}
                 >
-                  <SelectTrigger id="provider" className="w-32 shrink-0">
+                  <SelectTrigger id="provider" className="min-w-0 flex-1">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value={toSelectValue("")}>
+                      <AgentLogo provider={inheritedProvider} />
+                      {defaultLabel(inheritedProviderLabel)}
+                    </SelectItem>
                     {catalog.map((item) => (
                       <SelectItem key={item.id} value={item.id} disabled={!item.available}>
                         <AgentLogo provider={item.id} />
@@ -354,22 +396,15 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
                     ))}
                   </SelectContent>
                 </Select>
-                <Select
-                  value={toSelectValue(model)}
-                  disabled={models.length === 0}
-                  onValueChange={(next) => setModel(fromSelectValue(next))}
-                >
-                  <SelectTrigger aria-label="Model" className="min-w-0 flex-1">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {models.map((item) => (
-                      <SelectItem key={item.id} value={toSelectValue(item.id)}>
-                        {item.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <OptionSelect
+                  label="Model"
+                  size="default"
+                  className="min-w-0 flex-1"
+                  options={modelOptions}
+                  value={chosenModel ?? ""}
+                  disabled={modelOptions.length <= 1}
+                  onChange={(next) => setModel(providerChoice || next ? next : null)}
+                />
               </div>
             </SettingRow>
 
@@ -384,30 +419,29 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               className={ROW}
             >
               <div className={CONTROL}>
-                <ApprovalModeSelect
+                <OptionSelect
                   id="approval-mode"
+                  size="default"
                   className="w-full"
-                  value={approvalModeValue}
+                  options={[
+                    { value: "", label: defaultLabel(defaults?.approvalMode) },
+                    { value: "manual", label: "manual" },
+                    { value: "auto", label: "auto" },
+                  ]}
+                  value={approvalMode}
                   onChange={setApprovalMode}
                 />
               </div>
             </SettingRow>
 
-            <SettingRow
+            <SwitchRow
+              id="auto-rebase"
               label="Approve a clean rebase on its own"
-              htmlFor="auto-rebase"
               description="Approved work does not ask again because the branch moved."
-              className={ROW}
-            >
-              <div className={CONTROL}>
-                <Switch
-                  id="auto-rebase"
-                  checked={asks && autoRebaseValue}
-                  disabled={!asks}
-                  onCheckedChange={setAutoRebase}
-                />
-              </div>
-            </SettingRow>
+              checked={asks && autoRebaseValue}
+              disabled={!asks}
+              onChange={setAutoRebase}
+            />
 
             <SettingRow
               label="Approvals before ready to merge"
@@ -442,10 +476,19 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               className={ROW}
             >
               <div className={CONTROL}>
-                <MergeMethodSelect
+                <OptionSelect
                   id="merge-method"
+                  size="default"
                   className="w-full"
-                  value={mergeMethodValue}
+                  options={[
+                    { value: "", label: defaultLabel(inheritedMergeMethod) },
+                    { value: "first", label: mergeMethodLabel("") },
+                    ...(["squash", "merge", "rebase"] as const).map((value) => ({
+                      value,
+                      label: mergeMethodLabel(value),
+                    })),
+                  ]}
+                  value={mergeMethod}
                   onChange={setMergeMethod}
                 />
               </div>
@@ -462,27 +505,29 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               </div>
             </SettingRow>
 
-            <SettingRow
+            <SwitchRow
+              id="include-existing"
               label="Report existing review items"
-              htmlFor="include-existing"
               description="Items that were there before the watch started."
-              className={ROW}
-            >
-              <div className={CONTROL}>
-                <Switch id="include-existing" checked={includeExistingValue} onCheckedChange={setIncludeExisting} />
-              </div>
-            </SettingRow>
+              checked={includeExistingValue}
+              onChange={setIncludeExisting}
+            />
 
-            <SettingRow
+            <SwitchRow
+              id="include-own"
               label="Include my own comments"
-              htmlFor="include-own"
               description="Treat your comments like a reviewer's."
-              className={ROW}
-            >
-              <div className={CONTROL}>
-                <Switch id="include-own" checked={includeOwnValue} onCheckedChange={setIncludeOwn} />
-              </div>
-            </SettingRow>
+              checked={includeOwnValue}
+              onChange={setIncludeOwn}
+            />
+
+            <SwitchRow
+              id="keep-worktree"
+              label="Keep the worktree when the watch stops"
+              description="The stop dialog can still say otherwise."
+              checked={keepWorktreeValue}
+              onChange={setKeepWorktree}
+            />
           </CollapsibleContent>
         </Collapsible>
 
@@ -491,6 +536,15 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             <CircleAlertIcon />
             <AlertTitle>
               The settings of the daemon could not be read, so this dialog cannot say what a watch would take.
+            </AlertTitle>
+          </Alert>
+        ) : null}
+
+        {repoSettingsFailed ? (
+          <Alert variant="destructive">
+            <CircleAlertIcon />
+            <AlertTitle>
+              The settings of the repository could not be read, so this dialog cannot say what a watch would take.
             </AlertTitle>
           </Alert>
         ) : null}
@@ -516,9 +570,9 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         {target ? (
           <Meta className="self-center sm:ml-auto">
             {startCommand(target, {
-              provider,
-              model,
-              approvalMode,
+              provider: providerChoice,
+              model: chosenModel,
+              approvalMode: approvalMode || null,
               autoRebase: rebaseChosen ? autoRebaseValue : null,
               mergeWhenReady: mergeWhenReady ?? false,
             })}
@@ -526,5 +580,24 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         ) : null}
       </DialogFooter>
     </>
+  );
+}
+
+type SwitchRowProps = {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean;
+  disabled?: boolean;
+  onChange: (value: boolean) => void;
+};
+
+function SwitchRow({ id, label, description, checked, disabled, onChange }: SwitchRowProps) {
+  return (
+    <SettingRow label={label} htmlFor={id} description={description} className={ROW}>
+      <div className={CONTROL}>
+        <Switch id={id} checked={checked} disabled={disabled} onCheckedChange={onChange} />
+      </div>
+    </SettingRow>
   );
 }

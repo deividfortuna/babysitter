@@ -26,12 +26,13 @@ func TestTheRepositoryConfigurationKeepsEachField(t *testing.T) {
 	s, _ := openTemp(t)
 	ctx := context.Background()
 	since := time.Date(2026, 9, 24, 10, 0, 0, 0, time.UTC)
-	two, yes := 2, true
+	two, yes, no := 2, true, false
 	want := RepoConfig{
 		RepoID: repoID(t, s), CheckoutDir: "/code/hello", OwnSince: &since, IncludeDrafts: true, DependabotSince: &since,
 		Overrides: WatchOverrides{
 			Provider: "copilot", Model: "gpt-5", ApprovalMode: ApprovalAuto, MergeMethod: "squash",
 			ApprovalsSet: true, Approvals: &two, IncludeExisting: &yes,
+			AutoApproveRebase: &yes, IncludeOwn: &no, KeepWorktree: &yes,
 		},
 		DependabotScope: dependabot.Minor, DependabotApproval: ApproveGreen, DependabotLimit: 3,
 	}
@@ -46,8 +47,23 @@ func TestTheRepositoryConfigurationKeepsEachField(t *testing.T) {
 		!got.IncludeDrafts || got.Overrides.Provider != "copilot" || got.Overrides.Model != "gpt-5" ||
 		got.Overrides.ApprovalMode != ApprovalAuto || got.Overrides.MergeMethod != "squash" || !got.Overrides.ApprovalsSet ||
 		*got.Overrides.Approvals != 2 || !*got.Overrides.IncludeExisting ||
+		!*got.Overrides.AutoApproveRebase || *got.Overrides.IncludeOwn || !*got.Overrides.KeepWorktree ||
 		got.DependabotScope != dependabot.Minor || got.DependabotApproval != ApproveGreen || got.DependabotLimit != 3 {
 		t.Fatalf("GetRepoConfig() = %+v, want %+v", got, want)
+	}
+}
+
+func TestAnEmptyOverrideStaysUnset(t *testing.T) {
+	t.Parallel()
+	s, _ := openTemp(t)
+	ctx := context.Background()
+	c, err := s.SaveRepoConfig(ctx, DefaultRepoConfig(repoID(t, s)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	o := c.Overrides
+	if o.IncludeExisting != nil || o.AutoApproveRebase != nil || o.IncludeOwn != nil || o.KeepWorktree != nil {
+		t.Fatalf("Overrides = %+v, want each switch unset so the daemon decides", o)
 	}
 }
 
@@ -163,12 +179,12 @@ func TestAWatchKeepsItsAutoFieldsAndMergeWhenReady(t *testing.T) {
 	ctx := context.Background()
 	w, err := s.CreateWatch(ctx, Watch{
 		Owner: "octo", Name: "hello", Number: 5, StartedAt: time.Now(),
-		AutoReason: AutoDependabot, UpdateType: dependabot.Patch, MergeWhenReady: true,
+		AutoReason: AutoDependabot, UpdateType: dependabot.Patch, MergeWhenReady: true, KeepWorktree: true,
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
-	if w.AutoReason != AutoDependabot || w.UpdateType != dependabot.Patch || !w.MergeWhenReady {
+	if w.AutoReason != AutoDependabot || w.UpdateType != dependabot.Patch || !w.MergeWhenReady || !w.KeepWorktree {
 		t.Fatalf("CreateWatch() = %+v", w)
 	}
 	w, err = s.SetWatchMergeRules(ctx, w.ID, MergeRules{MergeMethod: "squash"})

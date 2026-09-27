@@ -170,6 +170,7 @@ watch** are what a watch starts with:
 | --- | --- |
 | Repository poll interval | Seconds between passes over the repositories you watch, 60 by default |
 | Watch poll interval | Seconds between polls of a pull request under watch, 180 by default |
+| Agent | The provider and the model of a new watch, Claude and its default model by default |
 | Approval mode | Who releases the work of each turn of the agent of a new watch: `manual` holds it until you approve it, `auto` pushes and posts as soon as the turn ends. A new install asks, `manual`; an install that upgrades keeps `auto`. A `--provider self` watch always runs in auto |
 | Approve a clean rebase on its own | Work you approved does not ask again because the branch moved under it. A rebase that conflicts always asks. No effect in auto |
 | Approvals before ready to merge | What a new watch wants before it calls a pull request ready; empty takes the rule of the base branch |
@@ -178,12 +179,30 @@ watch** are what a watch starts with:
 | Report my own comments | A new watch reports the comments of your own user, for a repository you review yourself |
 | Keep the worktree when a watch stops | The worktree of the agent stays on disk, however the watch ends |
 
-A watch copies the approval mode, the clean rebase switch, the approvals,
-the merge method and the two report switches at its start. The
+Each of these values comes from the first layer that sets it, from left
+to right:
+
+```
+watch -> repository -> daemon
+```
+
+A value you give at `watch start`, or in the **Watch a pull request**
+dialog, wins. A field you do not give takes the override of the
+repository (see [Auto watch](#auto-watch)), and a field the repository
+does not set takes the setting of the daemon. In the dialog and in the
+**Repository settings** panel, a list that is not set shows
+`Default (x)`, where `x` is the value the watch will take. A switch or a
+number field shows that value itself. In the panel, a switch or a number
+equal to the setting of the daemon stores no override, so it follows the
+daemon. The daemon has no Default: it is the last layer.
+
+A watch copies the values at its start, and a later change to the
+repository or to the daemon does not reach a running watch. The
 **Watch settings** panel of the watch, or `watch mode` and
 `watch merge-rules`, change the approval mode, the clean rebase switch,
 the approvals and the merge method of one running watch and leave the
-defaults alone. The worktree switch applies when a watch stops.
+defaults alone. The worktree switch applies when the watch stops, and
+the stop dialog or `watch stop --keep-worktree` can still say otherwise.
 
 The **Notifications** pane holds three more:
 
@@ -194,8 +213,8 @@ The **Notifications** pane holds three more:
 | What to tell you about | One switch per kind: Agent requests, Review comments, Checks, Watches and Merges. A kind you turn off stays in the history and only leaves the screen |
 
 The daemon stores them in the database, so the CLI takes the same
-defaults: a flag of `watch start` or `watch stop` that you do not type is
-left out of the request and the setting decides. An interval takes effect
+defaults: a flag of `watch start` that you do not type is left out of the
+request, and the repository, then the daemon, decides. An interval takes effect
 at once, with no restart. Both intervals accept 10 seconds to 24 hours.
 
 Read and write them from the terminal too:
@@ -210,6 +229,7 @@ babysitter settings set --merge-method rebase --keep-worktree
 babysitter settings set --approval-mode auto       # push and post as soon as each turn ends
 babysitter settings set --auto-approve-rebase      # approved work goes out again after a clean rebase
 babysitter settings set --include-existing --include-own
+babysitter settings set --provider copilot --model auto   # the agent of a new watch; a new provider alone takes its default model
 ```
 
 The notification flags of `settings set` are in
@@ -295,15 +315,16 @@ babysitter notifications read 12 13               # mark only these rows
 babysitter watch start                            # watch the pull request of the current branch, from its checkout
 babysitter watch start owner/name#42              # watch by number, still from the checkout of its branch
 babysitter watch start 42 --repo owner/name       # same
-babysitter watch start --provider copilot         # choose the AI provider for this watch
-babysitter watch start --model sonnet             # choose the model of that provider
+babysitter watch start --provider copilot         # choose the AI provider for this watch; without the flag the repository, then the daemon, decides
+babysitter watch start --model sonnet             # choose the model of that provider; alone it runs on the provider the repository or the daemon gives
 babysitter watch start --provider self            # no agent session in the daemon: your own coding agent session takes the messages
-babysitter watch start --approvals 2              # approvals the pull request needs before it is ready to merge; without the flag the settings of the daemon decide, and 0 asks for none
+babysitter watch start --approvals 2              # approvals the pull request needs before it is ready to merge; without the flag the repository, then the daemon, decides, and 0 asks for none
 babysitter watch start --approvals branch         # the rule of the base branch, whatever the settings hold
-babysitter watch start --merge-method rebase      # merge method of the watch; without the flag the settings of the daemon decide, and an empty value, or settings that hold none, take the first method the repository allows
+babysitter watch start --merge-method rebase      # merge method of the watch; without the flag the repository, then the daemon, decides, and an empty value, or settings that hold none, take the first method the repository allows
 babysitter watch start --include-existing        # also hand the agent the review items already on the pull request
 babysitter watch start --include-own             # also report the comments of your own user
 babysitter watch start --merge-when-ready        # the daemon merges with the method of the watch as soon as the watch is ready
+babysitter watch start --keep-worktree           # a stop leaves the worktree on disk; without the flag the repository, then the daemon, decides
 babysitter watch list                             # the watched pull requests
 babysitter watch list --all                       # stopped watches too
 babysitter watch status 1                         # state, checks, the agent, and what blocks the merge
@@ -331,7 +352,7 @@ babysitter watch merge-rules 1 --merge-when-ready # let the daemon merge watch 1
 babysitter watch start --approval-mode auto       # the approval mode of this watch; without the flag the settings decide
 babysitter watch start --auto-approve-rebase      # approved work goes out again after a clean rebase, without asking
 babysitter watch stop 1                           # stop with a summary, and delete the worktree unless the settings keep it
-babysitter watch stop 1 --keep-worktree           # stop but leave the worktree on disk; without the flag the settings of the daemon decide
+babysitter watch stop 1 --keep-worktree           # stop but leave the worktree on disk; without the flag the rule the watch started with decides
 babysitter watch merge 1                          # merge the pull request once the watch says it is ready, and stop
 babysitter watch merge 1 --method squash          # with a merge method for this merge
 babysitter watch merge 1 --approve                 # a Dependabot update in scope: approve in your name, then merge
@@ -789,7 +810,8 @@ babysitter repo config acme/billing --auto-watch-dependabot     # a watch on eac
 babysitter repo config acme/billing --dependabot-scope minor    # patch (default), minor or major: the highest update that merges on its own
 babysitter repo config acme/billing --dependabot-approval ask   # never (default), ask or green
 babysitter repo config acme/billing --dependabot-limit 2        # Dependabot watches at the same time, 1 by default
-babysitter repo config acme/billing --merge-method squash --approval-mode manual   # the overrides of the watches it starts
+babysitter repo config acme/billing --merge-method squash --approval-mode manual   # the overrides of each watch on the repository
+babysitter repo config acme/billing --keep-worktree --include-own=false            # a switch takes an override too
 babysitter repo config acme/billing --approvals default --reset-overrides           # back to the settings of the daemon
 babysitter repo config acme/billing --auto-start-mine=false     # turn a toggle off; the watches that run go on
 babysitter repo queue acme/billing                              # the Dependabot pull requests that wait
@@ -813,8 +835,15 @@ The rules:
 - Auto start takes a pull request only once. A pull request that has or
   had a watch, also one you stopped or one that stopped with an error,
   does not start again on its own. Start it by hand.
-- A watch that auto start began is the same as `watch start` with the
-  overrides of the repository. It records an `auto_started` row, and the
+- The overrides apply to each watch on the repository, one you start by
+  hand and one that auto start begins: a field the watch start does not
+  give takes the override, and a field without an override takes the
+  setting of the daemon. The panel calls this group **Watch defaults**.
+  A list without an override shows `Default (x)`; a switch or a number
+  shows the value a watch takes, and stores an override only while it
+  differs from the daemon.
+- A watch that auto start began is the same as `watch start` with no
+  flag. It records an `auto_started` row, and the
   notification kind `auto` says why it started. The watch shows an
   **auto** badge in the app and an `Auto:` line in `watch status`.
 - Auto start runs in the daemon, after each pass of the repository
