@@ -117,6 +117,11 @@ refetches TanStack Query caches on each SSE frame
 (`src/renderer/lib/event-transport.ts`). `src/api/schema.ts` is generated;
 never edit it by hand. `scripts/build-daemon.mjs` compiles the Go binary
 into `frontend/daemon/` before `start`, `package` and `make`.
+The agent terminal is read only. `src/renderer/lib/ghostty/` parses the
+output with libghostty-vt compiled to WebAssembly and draws it on a canvas.
+The WASM is inlined in a lazy chunk, because the packaged app loads from
+`file://`, where `fetch` fails; the CSP allows it with `'wasm-unsafe-eval'`.
+`npm run build:ghostty-wasm` rebuilds it at the revision in `vendor/VERSION`.
 
 **Tests.** Go tests sit next to the code and share two helper packages.
 `internal/testutil` waits (`Eventually`, `Within`, `Settle`) and gives the

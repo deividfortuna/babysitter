@@ -1,0 +1,39 @@
+import { expect, test } from "vite-plus/test";
+import { GhosttySurface, scrollbarThumb, wheelRows } from "./surface";
+
+const theme = {
+  foreground: { r: 0, g: 0, b: 0 },
+  background: { r: 255, g: 255, b: 255 },
+  cursor: { r: 0, g: 0, b: 0 },
+  ansi: [],
+  selectionBackground: "#54aeff66",
+};
+
+test("has no thumb while everything fits on the screen", () => {
+  expect(scrollbarThumb({ total: 30, offset: 0, len: 30 }, 300)).toBeNull();
+});
+
+test("sizes the thumb to the share of the scrollback on screen", () => {
+  expect(scrollbarThumb({ total: 120, offset: 90, len: 30 }, 300)).toEqual({ height: 75, top: 225 });
+  expect(scrollbarThumb({ total: 120, offset: 0, len: 30 }, 300)).toEqual({ height: 75, top: 0 });
+});
+
+test("keeps a thumb large enough to see on a long scrollback", () => {
+  expect(scrollbarThumb({ total: 5000, offset: 0, len: 30 }, 300)?.height).toBe(18);
+});
+
+test("turns wheel pixels, lines and pages into rows", () => {
+  expect(wheelRows({ deltaY: 40, deltaMode: 0 }, 20, 30)).toBe(2);
+  expect(wheelRows({ deltaY: 3, deltaMode: 1 }, 20, 30)).toBe(3);
+  expect(wheelRows({ deltaY: -1, deltaMode: 2 }, 20, 30)).toBe(-30);
+});
+
+test("does not start without a canvas", async () => {
+  const frame = document.createElement("div");
+  const scroller = document.createElement("div");
+
+  const surface = await GhosttySurface.create({ frame, scroller }, { cols: 10, rows: 2, theme });
+
+  expect(surface).toBeNull();
+  expect(scroller.childElementCount).toBe(0);
+});

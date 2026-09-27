@@ -7,6 +7,7 @@
   "private": true,
   "scripts": {
     "build:daemon": "node ./scripts/build-daemon.mjs",
+    "build:ghostty-wasm": "bash ./scripts/build-libghostty-wasm.sh",
     "prestart": "npm run build:daemon",
     "start": "electron-forge start",
     "prepackage": "npm run build:daemon",
@@ -65,7 +66,6 @@
     "@fontsource-variable/mona-sans": "^5.3.0",
     "@pierre/diffs": "^1.5.1",
     "@tanstack/react-query": "^5.103.1",
-    "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "cmdk": "^1.1.1",
     "cn": "^0.3.0",
