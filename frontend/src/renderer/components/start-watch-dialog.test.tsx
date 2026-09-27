@@ -291,6 +291,46 @@ test("the override of the repository beats the daemon", async () => {
   }
 });
 
+test("holds the start until the list of repositories has landed", async () => {
+  serveApi({ repos: [buildRepo()] });
+  let answer: (() => void) | undefined;
+  const landed = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  server.use(
+    http.get(apiUrl("/api/v1/repos"), async () => {
+      await landed;
+      return HttpResponse.json({ repos: [buildRepo()] });
+    }),
+  );
+  renderDialog();
+  const user = userEvent.setup();
+
+  await fillTarget(user);
+  await openAdditional(user);
+  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
+  expect(screen.getByRole("button", { name: "Start watching" })).toBeDisabled();
+
+  answer?.();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start watching" })).toBeEnabled());
+});
+
+test("holds the start and says so when the settings of the repository cannot be read", async () => {
+  serveApi({ repos: [buildRepo()] });
+  server.use(
+    http.get(apiUrl("/api/v1/repos/:id/config"), () =>
+      HttpResponse.json({ error: { code: "store_failed", message: "disk full" } }, { status: 500 }),
+    ),
+  );
+  renderDialog();
+  const user = userEvent.setup();
+
+  await fillTarget(user);
+
+  expect(await screen.findByText(/settings of the repository could not be read/)).toBeVisible();
+  expect(screen.getByRole("button", { name: "Start watching" })).toBeDisabled();
+});
+
 test("holds the start until the settings of the repository have landed", async () => {
   serveApi({ repos: [buildRepo()] });
   let answer: (() => void) | undefined;

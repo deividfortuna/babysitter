@@ -402,7 +402,7 @@ func newWatchStopCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "stop <watch>",
 		Short: "Stop watching a pull request and print the summary",
-		Long:  "The stop deletes the worktree of the watch, unless the settings of the daemon say to keep it. Use --keep-worktree to leave it on disk, or --keep-worktree=false to delete it.",
+		Long:  "The stop deletes the worktree of the watch, unless the rule the watch started with says to keep it. Use --keep-worktree to leave it on disk, or --keep-worktree=false to delete it.",
 		Args:  cobra.ExactArgs(1),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, _ []string) error {
 			body := httpd.StopWatchRequest{KeepWorktree: typed(cmd, "keep-worktree", &keepWorktree)}
@@ -413,7 +413,7 @@ func newWatchStopCmd(opts *options, dataDirFlag *string) *cobra.Command {
 			return opts.print(cmd.OutOrStdout(), watchOutput(stopped))
 		}),
 	}
-	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "leave the worktree of the watch on disk; without the flag the repository, then the daemon, decides")
+	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "leave the worktree of the watch on disk; without the flag the rule the watch started with decides")
 	return cmd
 }
 

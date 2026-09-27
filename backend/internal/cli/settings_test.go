@@ -107,6 +107,19 @@ func TestWatchStartLeavesTheAgentAndTheWorktreeToTheChainWhenNobodyTypedThem(t *
 	}
 }
 
+func TestWatchStopHelpNamesTheWorktreeRuleOfTheWatch(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	out, err := runWatch(t, d, "stop", "--help")
+	if err != nil {
+		t.Fatalf("watch stop --help error = %v", err)
+	}
+	if !strings.Contains(out, "the rule the watch started with") || strings.Contains(out, "daemon") {
+		t.Fatalf("help = %q, want the rule the watch started with, not the daemon", out)
+	}
+}
+
 func TestWatchStartSendsTheWorktreeRuleThatWasTyped(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()

@@ -160,7 +160,9 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const repoId = repos.data?.find((repo) => repo.fullName.toLowerCase() === targetRepo?.toLowerCase())?.id ?? null;
   const repoConfig = useRepoConfig(repoId);
   const defaults = settings.data ? repositoryDefaults(settings.data, repoConfig.data?.overrides) : undefined;
-  const defaultsLanded = settings.isSuccess && (repoId === null || !repoConfig.isPending);
+  const repoSettingsLanded = repos.isSuccess && (repoId === null || repoConfig.isSuccess);
+  const repoSettingsFailed = repos.isError || repoConfig.isError;
+  const defaultsLanded = settings.isSuccess && repoSettingsLanded;
 
   const catalog = useMemo(() => providers.data ?? [], [providers.data]);
   const inheritedProvider = defaults?.provider ?? "claude";
@@ -534,6 +536,15 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             <CircleAlertIcon />
             <AlertTitle>
               The settings of the daemon could not be read, so this dialog cannot say what a watch would take.
+            </AlertTitle>
+          </Alert>
+        ) : null}
+
+        {repoSettingsFailed ? (
+          <Alert variant="destructive">
+            <CircleAlertIcon />
+            <AlertTitle>
+              The settings of the repository could not be read, so this dialog cannot say what a watch would take.
             </AlertTitle>
           </Alert>
         ) : null}
