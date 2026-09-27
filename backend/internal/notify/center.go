@@ -22,6 +22,7 @@ type Item struct {
 	WatchID int64
 	Repo    string
 	Number  int
+	Action  store.NotificationAction
 	Notification
 }
 
@@ -104,6 +105,7 @@ func (c *Center) Post(ctx context.Context, item Item) (store.Notification, error
 		Body:    body(item),
 		URL:     item.URL,
 		Silent:  item.Silent,
+		Action:  item.Action,
 	}
 	if err := row.Validate(); err != nil {
 		return store.Notification{}, err

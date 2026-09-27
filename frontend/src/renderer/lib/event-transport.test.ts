@@ -6,6 +6,8 @@ import {
   notificationsQueryKey,
   providersQueryKey,
   rateLimitQueryKey,
+  repoConfigQueryKey,
+  reposQueryKey,
   viewerQueryKey,
   watchesQueryKey,
 } from "./query-keys";
@@ -160,6 +162,25 @@ describe("connectEventTransport", () => {
     vi.runAllTimers();
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: watchesQueryKey });
+
+    dispose();
+    vi.useRealTimers();
+  });
+
+  it("refetches the configuration of a repository on repo_changed", () => {
+    vi.useFakeTimers();
+    vi.stubGlobal("EventSource", FakeEventSource);
+    setApiBaseUrl("http://localhost:1234");
+    const queryClient = new QueryClient({ defaultOptions: { queries: { gcTime: Infinity } } });
+    queryClient.setQueryData(repoConfigQueryKey(3), { checkoutDir: "" });
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+
+    const dispose = connectEventTransport(queryClient);
+    FakeEventSource.instances.at(-1)!.dispatch("repo_changed");
+    vi.runAllTimers();
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: reposQueryKey });
+    expect(queryClient.getQueryState(repoConfigQueryKey(3))?.isInvalidated).toBe(true);
 
     dispose();
     vi.useRealTimers();

@@ -1,6 +1,7 @@
 import type { Watch } from "@/hooks/useWatches";
 import {
   AttentionBadge,
+  AutoBadges,
   ChecksBadge,
   MergeableBadge,
   MergeBadge,
@@ -58,6 +59,7 @@ export function WatchRow({ watch: w, onOpen }: Props) {
         <MergeBadge watch={w} />
         {isTakenOver(w) ? <ToneBadge tone="neutral">with you</ToneBadge> : null}
         {w.session.state !== "none" && !attention && !isTakenOver(w) ? <SessionBadge state={w.session.state} /> : null}
+        <AutoBadges watch={w} />
         <Meta>{w.lastPollAt ? `checked ${relativeTime(w.lastPollAt)}` : "not checked yet"}</Meta>
         {w.lastError ? (
           <Badge variant="destructive" title={w.lastError}>

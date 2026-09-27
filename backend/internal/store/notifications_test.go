@@ -83,7 +83,7 @@ func TestAddNotificationRejectsAnUnknownKind(t *testing.T) {
 func TestJoinKindsNamesEveryKindInOrder(t *testing.T) {
 	t.Parallel()
 
-	if got := JoinKinds(); got != "agent, review, checks, watch, merge" {
+	if got := JoinKinds(); got != "agent, review, checks, watch, merge, auto" {
 		t.Errorf("JoinKinds() = %q, want every kind in the order of the schema", got)
 	}
 }

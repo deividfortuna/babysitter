@@ -97,5 +97,12 @@ func readySummary(w store.Watch, snap *snapshot.Snapshot) string {
 	if passed := checks.CountPassed(w.CheckStates); passed > 0 {
 		parts = append(parts, textx.Plural(passed, "check")+" green")
 	}
-	return fmt.Sprintf("ready to merge: %s; merge from the app or `babysitter watch merge %d`", strings.Join(parts, ", "), w.ID)
+	return fmt.Sprintf("ready to merge: %s; %s", strings.Join(parts, ", "), mergeHint(w))
+}
+
+func mergeHint(w store.Watch) string {
+	if w.MergeWhenReady {
+		return "merge when ready merges it now"
+	}
+	return fmt.Sprintf("merge from the app or `babysitter watch merge %d`", w.ID)
 }

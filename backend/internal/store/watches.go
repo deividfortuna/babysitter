@@ -12,6 +12,7 @@ import (
 	"github.com/mattn/go-sqlite3"
 
 	"github.com/deividfortuna/babysitter/internal/checks"
+	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/events"
 )
 
@@ -60,6 +61,28 @@ func (r StopReason) Word() string {
 	}
 }
 
+type AutoReason string
+
+const (
+	AutoNone       AutoReason = ""
+	AutoMine       AutoReason = "mine"
+	AutoAssigned   AutoReason = "assigned"
+	AutoDependabot AutoReason = "dependabot"
+)
+
+func (r AutoReason) Word() string {
+	switch r {
+	case AutoMine:
+		return "you opened it"
+	case AutoAssigned:
+		return "it is assigned to you"
+	case AutoDependabot:
+		return "Dependabot opened it"
+	default:
+		return ""
+	}
+}
+
 type Watch struct {
 	ID                int64
 	Owner             string
@@ -104,6 +127,9 @@ type Watch struct {
 	TakenOverAt       *time.Time
 	TakenOverPID      int
 	HandbackStart     string
+	AutoReason        AutoReason
+	MergeWhenReady    bool
+	UpdateType        dependabot.Level
 }
 
 func (w Watch) Asks() bool { return w.ApprovalMode == ApprovalManual }
@@ -136,7 +162,7 @@ const watchColumns = `id, owner, name, number, url, title, author, bot_login, he
 	include_existing, started_at, stopped_at, last_poll_at, last_heartbeat_at, last_error,
 	consecutive_errors, head_sha, pr_state, mergeable_state, check_states, green_sha, summary, include_own, agent_session,
 	approvals_required, merge_method, ready_since, ready_blockers, approval_mode, auto_approve_rebase,
-	taken_over_at, taken_over_pid, handback_start`
+	taken_over_at, taken_over_pid, handback_start, auto_reason, merge_when_ready, update_type`
 
 func (s *Store) CreateWatch(ctx context.Context, w Watch) (Watch, error) {
 	if w.CheckStates == nil {
@@ -160,12 +186,12 @@ func (s *Store) CreateWatch(ctx context.Context, w Watch) (Watch, error) {
 INSERT INTO watches (owner, name, number, url, title, author, bot_login, head_ref, base_ref,
 	source_dir, worktree_dir, work_branch, git_user_name, git_user_email, provider, model, status, stop_reason,
 	include_existing, started_at, head_sha, pr_state, mergeable_state, check_states, green_sha, summary, include_own, agent_session,
-	approvals_required, merge_method, approval_mode, auto_approve_rebase)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	approvals_required, merge_method, approval_mode, auto_approve_rebase, auto_reason, merge_when_ready, update_type)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		w.Owner, w.Name, w.Number, w.URL, w.Title, w.Author, w.BotLogin, w.HeadRef, w.BaseRef,
 		w.SourceDir, w.WorktreeDir, w.WorkBranch, w.GitUserName, w.GitUserEmail, w.Provider, w.Model, w.Status, w.StopReason,
 		w.IncludeExisting, timeToDB(w.StartedAt), w.HeadSHA, w.PRState, w.MergeableState, string(checkStates), w.GreenSHA, string(w.Summary), w.IncludeOwn, w.AgentSession,
-		w.ApprovalsRequired, w.MergeMethod, w.ApprovalMode, w.AutoApproveRebase)
+		w.ApprovalsRequired, w.MergeMethod, w.ApprovalMode, w.AutoApproveRebase, w.AutoReason, w.MergeWhenReady, w.UpdateType)
 	if err != nil {
 		var sqliteErr sqlite3.Error
 		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -205,6 +231,17 @@ func (s *Store) FindActiveWatch(ctx context.Context, key WatchKey) (Watch, error
 		return Watch{}, fmt.Errorf("find watch: %w", err)
 	}
 	return w, nil
+}
+
+func (s *Store) HadWatch(ctx context.Context, key WatchKey) (bool, error) {
+	var had bool
+	err := s.db.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM watches WHERE owner = ? AND name = ? AND number = ?)",
+		key.Owner, key.Name, key.Number).Scan(&had)
+	if err != nil {
+		return false, fmt.Errorf("had watch: %w", err)
+	}
+	return had, nil
 }
 
 func (s *Store) ListWatches(ctx context.Context, o ListWatchesOptions) ([]Watch, error) {
@@ -314,7 +351,7 @@ func scanWatch(row scanner) (Watch, error) {
 		&includeExisting, &startedAt, &stoppedAt, &lastPollAt, &lastHeartbeatAt, &w.LastError,
 		&w.ConsecutiveErrors, &w.HeadSHA, &w.PRState, &w.MergeableState, &checkStates, &w.GreenSHA, &summary, &includeOwn, &w.AgentSession,
 		&w.ApprovalsRequired, &w.MergeMethod, &readySince, &blockers, &w.ApprovalMode, &w.AutoApproveRebase,
-		&takenOverAt, &w.TakenOverPID, &w.HandbackStart)
+		&takenOverAt, &w.TakenOverPID, &w.HandbackStart, &w.AutoReason, &w.MergeWhenReady, &w.UpdateType)
 	if err != nil {
 		return Watch{}, err
 	}
@@ -378,10 +415,23 @@ func (s *Store) SetWatchApproval(ctx context.Context, id int64, mode ApprovalMod
 		mode, autoRebase, id, mode, autoRebase)
 }
 
-func (s *Store) SetWatchMergeRules(ctx context.Context, id int64, approvals int, method string) (Watch, error) {
+type MergeRules struct {
+	ApprovalsRequired int
+	MergeMethod       string
+	MergeWhenReady    bool
+}
+
+func (s *Store) SetWatchMergeRules(ctx context.Context, id int64, r MergeRules) (Watch, error) {
 	return s.updateWatch(ctx, id, "set watch merge rules",
-		"UPDATE watches SET approvals_required = ?, merge_method = ? WHERE id = ? AND (approvals_required != ? OR merge_method != ?)",
-		approvals, method, id, approvals, method)
+		`UPDATE watches SET approvals_required = ?, merge_method = ?, merge_when_ready = ?
+WHERE id = ? AND (approvals_required != ? OR merge_method != ? OR merge_when_ready != ?)`,
+		r.ApprovalsRequired, r.MergeMethod, r.MergeWhenReady, id, r.ApprovalsRequired, r.MergeMethod, r.MergeWhenReady)
+}
+
+func (s *Store) SetWatchUpdateType(ctx context.Context, id int64, level dependabot.Level, mergeWhenReady bool) (Watch, error) {
+	return s.updateWatch(ctx, id, "set watch update type",
+		"UPDATE watches SET update_type = ?, merge_when_ready = ? WHERE id = ? AND (update_type != ? OR merge_when_ready != ?)",
+		level, mergeWhenReady, id, level, mergeWhenReady)
 }
 
 func (s *Store) SetWatchTakeover(ctx context.Context, id int64, at *time.Time, pid int) (Watch, error) {

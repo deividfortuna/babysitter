@@ -101,6 +101,7 @@ func (a *api) handleStartWatch(w http.ResponseWriter, r *http.Request) {
 		ApprovalsRequired: approvalsIn(req.ApprovalsRequired),
 		MergeMethod:       req.MergeMethod,
 		ApprovalMode:      mode, AutoApproveRebase: req.AutoApproveRebase,
+		MergeWhenReady: req.MergeWhenReady,
 	})
 	if errors.Is(err, store.ErrWatchExists) {
 		writeError(w, http.StatusConflict, "watch_exists", "the pull request is already watched as watch "+strconv.FormatInt(wt.ID, 10))
@@ -164,10 +165,10 @@ func (a *api) handleMergeWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	var req MergeWatchRequest
 	if err := readOptionalJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with an optional method field: squash, merge or rebase")
+		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with an optional method field, squash, merge or rebase, and an optional approve field")
 		return
 	}
-	wt, err := a.watches.Merge(r.Context(), id, prwatch.MergeOptions{Method: req.Method})
+	wt, err := a.watches.Merge(r.Context(), id, prwatch.MergeOptions{Method: req.Method, Approve: req.Approve})
 	if mergeWatchErrors.write(w, err) {
 		return
 	}

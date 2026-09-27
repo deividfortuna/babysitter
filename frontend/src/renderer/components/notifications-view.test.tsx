@@ -1,9 +1,9 @@
 import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vitest";
-import { buildNotification } from "@test/fixtures";
+import { buildNotification, buildWatch } from "@test/fixtures";
 import { http, HttpResponse } from "msw";
-import { apiUrl, server, serveApi } from "@test/msw";
+import { apiUrl, server, serveApi, type Decision } from "@test/msw";
 import { expectViewTitle, renderWithProviders } from "@test/test-utils";
 import { NotificationsView } from "./notifications-view";
 
@@ -90,4 +90,75 @@ test("keeps the title in the view header while notifications load, fail or are n
 
   expect(await screen.findByText("daemon gone")).toBeVisible();
   expectViewTitle("Notifications");
+});
+
+test("a Dependabot update that waits on a review offers Approve and merge", async () => {
+  const decisions: Decision[] = [];
+  const readNotifications: { ids?: number[] }[] = [];
+  const onNavigate = vi.fn();
+  serveApi({
+    watches: [buildWatch({ id: 42 })],
+    notifications: [
+      buildNotification({
+        id: 9,
+        kind: "auto",
+        watchId: 42,
+        action: "approve_merge",
+        title: "Bump x/net waits on your review",
+        body: "Minor update, build green. Only a review is missing.",
+      }),
+    ],
+    decisions,
+    readNotifications,
+  });
+  const user = userEvent.setup();
+
+  renderWithProviders(<NotificationsView enabled onNavigate={onNavigate} />);
+  await user.click(await screen.findByRole("button", { name: "Approve and merge" }));
+
+  await waitFor(() => expect(decisions).toEqual([{ route: "merge", watch: 42, body: { method: "", approve: true } }]));
+  await waitFor(() => expect(readNotifications).toEqual([{ ids: [9] }]));
+  expect(onNavigate).not.toHaveBeenCalled();
+
+  await user.click(screen.getByRole("button", { name: "Open the watch" }));
+  expect(onNavigate).toHaveBeenCalledWith({ kind: "watch", id: 42 });
+});
+
+test("Approve and merge shows why the daemon refused it", async () => {
+  serveApi({
+    watches: [buildWatch({ id: 42 })],
+    notifications: [buildNotification({ id: 9, kind: "auto", watchId: 42, action: "approve_merge" })],
+  });
+  server.use(
+    http.post(apiUrl("/api/v1/watches/:id/merge"), () =>
+      HttpResponse.json(
+        { error: { code: "approve_refused", message: "the update is outside the merge scope of the repository" } },
+        { status: 422 },
+      ),
+    ),
+  );
+  const user = userEvent.setup();
+
+  renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
+  await user.click(await screen.findByRole("button", { name: "Approve and merge" }));
+
+  expect(await screen.findByText("the update is outside the merge scope of the repository")).toBeVisible();
+});
+
+test("a notification whose watch stopped offers no Approve and merge", async () => {
+  serveApi({
+    watches: [buildWatch({ id: 43 })],
+    notifications: [
+      buildNotification({ id: 9, kind: "auto", watchId: 42, action: "approve_merge", body: "stopped since" }),
+      buildNotification({ id: 10, kind: "auto", watchId: 43, action: "approve_merge", body: "still watched" }),
+    ],
+  });
+
+  renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
+
+  expect(await screen.findByRole("button", { name: "Approve and merge" })).toBeVisible();
+  expect(screen.getAllByRole("button", { name: "Approve and merge" })).toHaveLength(1);
+  expect(screen.getByText("still watched").closest(".border-b")).toContainElement(
+    screen.getByRole("button", { name: "Approve and merge" }),
+  );
 });

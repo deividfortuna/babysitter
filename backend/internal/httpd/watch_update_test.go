@@ -43,7 +43,11 @@ func (f *fakeWatches) SetMergeRules(ctx context.Context, id int64, c prwatch.Mer
 	if c.MergeMethod != nil {
 		method = *c.MergeMethod
 	}
-	return f.st.SetWatchMergeRules(ctx, id, approvals, method)
+	mergeWhenReady := w.MergeWhenReady
+	if c.MergeWhenReady != nil {
+		mergeWhenReady = *c.MergeWhenReady
+	}
+	return f.st.SetWatchMergeRules(ctx, id, store.MergeRules{ApprovalsRequired: approvals, MergeMethod: method, MergeWhenReady: mergeWhenReady})
 }
 
 func TestAPatchChangesTheMergeRulesOfAWatch(t *testing.T) {
@@ -125,7 +129,7 @@ func TestAPatchRefusesAFieldOfAWatchThatCannotChange(t *testing.T) {
 	} {
 		rec := call(t, h, http.MethodPatch, "/watches/1", body, nil)
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"field_not_changeable"`) ||
-			!strings.Contains(rec.Body.String(), "only approvalsRequired and mergeMethod can") {
+			!strings.Contains(rec.Body.String(), "only approvalsRequired, mergeMethod, mergeWhenReady can") {
 			t.Fatalf("PATCH %s = %d %s", body, rec.Code, rec.Body)
 		}
 	}

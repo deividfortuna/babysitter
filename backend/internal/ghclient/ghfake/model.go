@@ -61,7 +61,10 @@ type PR struct {
 	HeadSHA        string
 	// HeadRepo is the full name of the repository of the head branch, which
 	// differs from the repository of the pull request for a fork.
-	HeadRepo  string
+	HeadRepo string
+	// Assignees are the logins the pull request is assigned to.
+	Assignees []string
+	Body      string
 	BaseRef   string
 	BaseSHA   string
 	Labels    []string

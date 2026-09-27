@@ -1,6 +1,6 @@
 ---
 name: babysit-pr
-description: Babysit a GitHub pull request with the babysitter daemon. The daemon polls the pull request and hands over each new review comment, review, failed check with its log, and branch that fell behind or conflicts; you fix, push and reply until the pull request can merge. Use this skill whenever the user asks to watch, monitor, babysit or keep moving a pull request, to see what happened on one, to read or message the agent of a watch that the desktop app started, to take its session over or give it back, or to merge a watched pull request.
+description: Babysit a GitHub pull request with the babysitter daemon. The daemon polls the pull request and hands over each new review comment, review, failed check with its log, and branch that fell behind or conflicts; you fix, push and reply until the pull request can merge. Use this skill whenever the user asks to watch, monitor, babysit or keep moving a pull request, to see what happened on one, to read or message the agent of a watch that the desktop app started, to take its session over or give it back, to merge a watched pull request, or to set up auto watch on a repository: auto start of the pull requests of the user, Dependabot watches and their queue, and merge when ready.
 ---
 
 # Babysit a pull request
@@ -44,13 +44,16 @@ Flags that change what you get:
   repositories.
 - `--approvals <n>`: approvals before the pull request counts as ready.
 - `--merge-method squash|merge|rebase`.
+- `--merge-when-ready`: the daemon merges as soon as the pull request is
+  ready. Use it only when the user asks for it.
 
-To change the approvals or the merge method of a watch that runs, when
-the user asks for it:
+To change the approvals, the merge method or merge when ready of a watch
+that runs, when the user asks for it:
 
 ```bash
 babysitter watch merge-rules <watch> --approvals 0              # a number, or branch for the rule of the base branch
 babysitter watch merge-rules <watch> --merge-method rebase      # empty for the first method the repository allows
+babysitter watch merge-rules <watch> --merge-when-ready         # the daemon merges when ready; =false turns it off
 ```
 
 The start refuses when the pull request is not open, when the token
@@ -83,6 +86,8 @@ The answer has one of these:
   user stopped the watch. Report `watch.summary` and end the loop.
 - `watch.readySince`: the pull request can merge. Tell the user, with the
   merge command, and end the loop. Merging is the decision of the user.
+  When `watch.mergeWhenReady` is true, the user already decided: the
+  daemon merges on its own, so call `next` again and report the merge.
 - none of these: the wait ran out. Call `next` again.
 
 Run one `next` at a time. The daemon counts a second caller as proof
@@ -156,7 +161,13 @@ information for the user, not a request to merge.
 ```bash
 babysitter watch merge <watch>
 babysitter watch merge <watch> --method squash|merge|rebase
+babysitter watch merge <watch> --approve                      # a Dependabot update: approve in the name of the user, then merge
 ```
+
+`--approve` submits an approving review in the name of the user. Use it
+only when the user asks for that, and only on a pull request of
+Dependabot. The daemon refuses any other pull request and an update
+outside the merge scope of the repository.
 
 Ask for the next message before you merge. You are a blocker while you
 work on a message, and the call also shows what arrived while you
@@ -189,6 +200,46 @@ babysitter watch stop <watch>
 
 The daemon also stops on its own when the pull request merges or closes,
 or when the token loses access.
+
+## Repository configuration
+
+A repository can start watches on its own. The configuration belongs to
+the repository. Read it before you change it, and change it only when
+the user asks.
+
+```bash
+babysitter repo config <owner/name>                                   # show it
+babysitter repo config <owner/name> --checkout ~/code/project         # the checkout each worktree comes from; needed before a toggle
+babysitter repo config <owner/name> --auto-start-mine                 # a watch on each new pull request the user opened or is assigned
+babysitter repo config <owner/name> --include-drafts                  # also the drafts of the user
+babysitter repo config <owner/name> --auto-watch-dependabot           # a watch on each new pull request of Dependabot
+babysitter repo config <owner/name> --dependabot-scope patch          # patch, minor or major: the highest update that merges on its own
+babysitter repo config <owner/name> --dependabot-approval never       # never, ask, or green (approves in the name of the user)
+babysitter repo config <owner/name> --dependabot-limit 1              # Dependabot watches at the same time
+babysitter repo queue <owner/name>                                    # the Dependabot pull requests that wait, oldest first
+```
+
+The flags of `watch start` (`--provider`, `--model`, `--approval-mode`,
+`--merge-method`, `--approvals`, `--include-existing`) set the overrides
+of the watches that auto start begins. `--approvals default` and
+`--reset-overrides` give them back to the settings of the daemon. Turn a
+toggle off with `=false`, for example `--auto-start-mine=false`.
+
+What to tell the user:
+
+- A toggle takes only the pull requests created after it went on. A
+  pull request that had a watch, also one that the user stopped or that
+  stopped with an error, never starts again on its own: start it by hand.
+- Auto start skips a pull request from a fork, because the agent cannot
+  push to it.
+- `--dependabot-approval green` makes the daemon approve in the name of
+  the user. Say this before you set it.
+- Auto start runs in `babysitter daemon start` and in the app, not in
+  `babysitter serve`.
+
+A watch that auto start began has `autoReason` in its JSON and an
+`auto_started` activity row. The app runs its agent: read
+`references/app-watches.md` to relay it.
 
 ## More
 

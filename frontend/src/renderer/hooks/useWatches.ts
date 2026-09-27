@@ -54,10 +54,10 @@ export function useStopWatch() {
 export function useMergeWatch() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: async ({ id, method = "" }: { id: number; method?: MergeMethod }) => {
+    mutationFn: async ({ id, method = "", approve }: { id: number; method?: MergeMethod; approve?: boolean }) => {
       const { data, error } = await api().POST("/api/v1/watches/{id}/merge", {
         params: { path: { id } },
-        body: { method },
+        body: approve ? { method, approve } : { method },
       });
       if (error) throw new Error(apiErrorMessage(error, "Could not merge the pull request."));
       return data;

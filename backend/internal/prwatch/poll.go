@@ -70,6 +70,9 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		return err
 	}
 	w = p.watch
+	if w, err = s.followUpdateType(ctx, w, snap); err != nil {
+		return err
+	}
 	if len(p.inserted) > 0 {
 		if err := s.store.SetWatchHeartbeat(ctx, w.ID, now); err != nil {
 			return err
@@ -96,7 +99,13 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 	if err := s.rereview(ctx, client, w, snap, state); err != nil {
 		return err
 	}
+	if err := s.dependabotPolicy(ctx, client, w, snap, state); err != nil {
+		s.log.Error("apply the Dependabot policy", "watch", w.ID, "pr", prLabel(w), "err", err)
+	}
 	if err := s.assess(ctx, w, snap, state, p.newHead()); err != nil {
+		return err
+	}
+	if merged, err := s.mergeWhenReady(ctx, client, w, snap, p.next, state); err != nil || merged {
 		return err
 	}
 	if len(p.inserted) == 0 {

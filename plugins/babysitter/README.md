@@ -36,7 +36,8 @@ Ask to watch, babysit or keep moving a pull request, or call the skill:
 The skill starts the watch with `--provider self`, so the work stays in
 your session and in your checkout, which has to be on the head branch of
 the pull request. It also reads and relays a watch that the desktop app
-started, and merges a watched pull request when you ask.
+started, merges a watched pull request when you ask, and reads and changes
+the auto watch configuration of a repository and its Dependabot queue.
 
 ## Contents
 

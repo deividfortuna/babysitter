@@ -51,3 +51,10 @@ author pushes. Never push to it and never rebase it. Comment
 
 Push a fix only when the pull request cannot merge without it, and never
 change the version in the manifest or in the lockfile.
+
+When the repository watches Dependabot on its own, the watch may have
+merge when ready on: the update is within the merge scope of the
+repository, and the daemon merges when the build is green. The other
+updates wait in the queue (`babysitter repo queue <owner/name>`) and
+start one at a time. After a merge the next one is often behind its
+base: comment `@dependabot rebase` and wait for the new build.

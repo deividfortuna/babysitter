@@ -2,11 +2,13 @@ import { expect, test } from "vitest";
 import { buildStoppedWatch, buildWatch } from "@test/fixtures";
 import type { Watch } from "@/hooks/useWatches";
 import {
+  autoReasonText,
   checksWord,
   mergeMethodText,
   mergeWord,
   needsAttention,
   plainOutput,
+  queuePlace,
   sessionWord,
   stopWord,
   worktreeText,
@@ -81,4 +83,20 @@ test("counts the failing checks in the singular and the plural, without their na
     label: "2 failing checks",
     tone: "bad",
   });
+});
+
+test("names the place of a pull request in the queue", () => {
+  expect(queuePlace(1)).toBe("next in queue");
+  expect(queuePlace(2)).toBe("2nd in queue");
+  expect(queuePlace(3)).toBe("3rd in queue");
+  expect(queuePlace(4)).toBe("4th in queue");
+  expect(queuePlace(11)).toBe("11th in queue");
+  expect(queuePlace(21)).toBe("21st in queue");
+});
+
+test("says why auto start began a watch", () => {
+  expect(autoReasonText("mine")).toBe("Auto start began it because you opened the pull request.");
+  expect(autoReasonText("assigned")).toBe("Auto start began it because the pull request is assigned to you.");
+  expect(autoReasonText("dependabot")).toBe("Auto start began it because Dependabot opened the pull request.");
+  expect(autoReasonText("")).toBe("");
 });

@@ -1,14 +1,22 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { setApiBaseUrl } from "@/lib/api-client";
-import { buildActivity, buildProviders, buildRepo, buildSettings, buildViewer, buildWatch } from "./fixtures";
+import {
+  buildActivity,
+  buildProviders,
+  buildRepo,
+  buildRepoConfig,
+  buildSettings,
+  buildViewer,
+  buildWatch,
+} from "./fixtures";
 import type { Activity } from "@/hooks/useWatchActivity";
 import type { Notification } from "@/hooks/useNotifications";
 import type { Proposal, ProposalDetail } from "@/hooks/useProposals";
 import type { PullRequest } from "@/hooks/usePulls";
 import type { Provider } from "@/hooks/useProviders";
 import type { RateLimit } from "@/hooks/useRateLimit";
-import type { Repo } from "@/hooks/useRepos";
+import type { QueuedPullRequest, Repo, RepoConfig, RepoConfigUpdate } from "@/hooks/useRepos";
 import type { Settings } from "@/hooks/useSettings";
 import type { Viewer } from "@/hooks/useViewer";
 import type { Watch } from "@/hooks/useWatches";
@@ -42,6 +50,10 @@ type ApiFixtures = {
   proposals?: Record<number, Proposal[]>;
   proposalDetail?: Record<string, ProposalDetail>;
   decisions?: Decision[];
+  repoConfig?: RepoConfig;
+  repoConfigBodies?: RepoConfigUpdate[];
+  repoConfigRefusal?: { code: string; message: string };
+  queue?: QueuedPullRequest[];
 };
 
 export type Decision = { route: string; watch: number; number?: number; body: Record<string, unknown> };
@@ -51,6 +63,30 @@ export const branchRuleApprovals = 2;
 export type StopBody = { keepWorktree?: boolean };
 
 export const server = setupServer();
+
+export const toggledOnAt = "2026-09-24T09:00:00Z";
+
+function sinceOf(on: boolean | null | undefined, before: string | null | undefined): string | null {
+  if (on === undefined || on === null) return before ?? null;
+  if (!on) return null;
+  return before ?? toggledOnAt;
+}
+
+function appliedConfig(current: RepoConfig, body: RepoConfigUpdate): RepoConfig {
+  return {
+    ...current,
+    checkoutDir: body.checkoutDir ?? current.checkoutDir,
+    autoStartMine: body.autoStartMine ?? current.autoStartMine,
+    autoStartMineSince: sinceOf(body.autoStartMine, current.autoStartMineSince),
+    includeDrafts: body.includeDrafts ?? current.includeDrafts,
+    autoWatchDependabot: body.autoWatchDependabot ?? current.autoWatchDependabot,
+    autoWatchDependabotSince: sinceOf(body.autoWatchDependabot, current.autoWatchDependabotSince),
+    dependabotScope: body.dependabotScope ?? current.dependabotScope,
+    dependabotApproval: body.dependabotApproval ?? current.dependabotApproval,
+    dependabotLimit: body.dependabotLimit ?? current.dependabotLimit,
+    overrides: body.overrides ?? current.overrides,
+  };
+}
 
 export function serveApi(fixtures: ApiFixtures = {}) {
   setApiBaseUrl(testApiBaseUrl);
@@ -162,19 +198,50 @@ export function serveApi(fixtures: ApiFixtures = {}) {
       });
     }),
     http.patch(apiUrl("/api/v1/watches/:id"), async ({ params, request }) => {
-      const body = (await request.json()) as { approvalsRequired?: number | null; mergeMethod?: string };
+      const body = (await request.json()) as {
+        approvalsRequired?: number | null;
+        mergeMethod?: string;
+        mergeWhenReady?: boolean;
+      };
       const watch = Number(params.id);
       fixtures.decisions?.push({ route: "update", watch, body });
       const current = watchOf(watch);
       const approvalsRequired =
         body.approvalsRequired === null ? branchRuleApprovals : (body.approvalsRequired ?? current.approvalsRequired);
-      return HttpResponse.json({ ...current, approvalsRequired, mergeMethod: body.mergeMethod ?? current.mergeMethod });
+      return HttpResponse.json({
+        ...current,
+        approvalsRequired,
+        mergeMethod: body.mergeMethod ?? current.mergeMethod,
+        mergeWhenReady: body.mergeWhenReady ?? current.mergeWhenReady,
+      });
+    }),
+    http.post(apiUrl("/api/v1/watches/:id/merge"), async ({ params, request }) => {
+      const body = (await request.json()) as Record<string, unknown>;
+      const watch = Number(params.id);
+      fixtures.decisions?.push({ route: "merge", watch, body });
+      return HttpResponse.json({ ...watchOf(watch), status: "stopped", stopReason: "merged" });
     }),
     http.post(apiUrl("/api/v1/repos"), async ({ request }) => {
       const body = (await request.json()) as { fullName?: string };
       return HttpResponse.json(fixtures.addedRepo ?? buildRepo({ fullName: body.fullName ?? buildRepo().fullName }));
     }),
     http.delete(apiUrl("/api/v1/repos/:id"), () => new HttpResponse(null, { status: 204 })),
+    http.get(apiUrl("/api/v1/repos/:id/config"), ({ params }) =>
+      HttpResponse.json(fixtures.repoConfig ?? buildRepoConfig({ repoId: Number(params.id) })),
+    ),
+    http.patch(apiUrl("/api/v1/repos/:id/config"), async ({ params, request }) => {
+      const body = (await request.json()) as RepoConfigUpdate;
+      fixtures.repoConfigBodies?.push(body);
+      if (fixtures.repoConfigRefusal) {
+        return HttpResponse.json({ error: fixtures.repoConfigRefusal }, { status: 400 });
+      }
+      const current = fixtures.repoConfig ?? buildRepoConfig({ repoId: Number(params.id) });
+      fixtures.repoConfig = appliedConfig(current, body);
+      return HttpResponse.json(fixtures.repoConfig);
+    }),
+    http.get(apiUrl("/api/v1/repos/:id/queue"), () =>
+      HttpResponse.json({ repo: buildRepo().fullName, pullRequests: fixtures.queue ?? [] }),
+    ),
     http.post(apiUrl("/api/v1/sync"), () => HttpResponse.json({ accepted: true }, { status: 202 })),
     http.get(apiUrl("/api/v1/notifications"), ({ request }) => {
       const unreadOnly = new URL(request.url).searchParams.get("status") === "unread";

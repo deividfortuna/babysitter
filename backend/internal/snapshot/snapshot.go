@@ -14,6 +14,7 @@ import (
 	"golang.org/x/sync/errgroup"
 
 	"github.com/deividfortuna/babysitter/internal/checks"
+	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/gitrepo"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -99,6 +100,7 @@ type PR struct {
 	RequestedReviewers  []string             `json:"requested_reviewers"`
 	Approvals           int                  `json:"approvals"`
 	ChangesRequested    int                  `json:"changes_requested"`
+	UpdateType          dependabot.Level     `json:"update_type,omitempty"`
 }
 
 type Threads struct {
@@ -381,6 +383,7 @@ func toPR(t Target, pr *github.PullRequest) PR {
 		BaseBranch:     pr.GetBase().GetRef(),
 		Mergeable:      pr.Mergeable,
 		MergeableState: store.MergeableState(pr.GetMergeableState()),
+		UpdateType:     watcher.UpdateTypeOf(pr),
 	}
 	for _, u := range pr.RequestedReviewers {
 		if login := u.GetLogin(); login != "" {

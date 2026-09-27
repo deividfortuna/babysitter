@@ -265,6 +265,9 @@ babysitter repos --limit 0                        # list all of them
 babysitter repo add owner/name                    # start to watch a repository
 babysitter repo list                              # list the watched repositories, or repo ls
 babysitter repo remove owner/name                 # stop to watch a repository, or repo rm
+babysitter repo config owner/name                 # what the repository does with new pull requests, see Auto watch
+babysitter repo config owner/name --checkout ~/code/name --auto-start-mine   # a watch on each new pull request of yours
+babysitter repo queue owner/name                  # the Dependabot pull requests that wait for a place, oldest first
 
 babysitter sync                                   # poll every watched repository once
 babysitter serve --interval 60s                   # poll in a loop until Ctrl-C
@@ -300,6 +303,7 @@ babysitter watch start --approvals branch         # the rule of the base branch,
 babysitter watch start --merge-method rebase      # merge method of the watch; without the flag the settings of the daemon decide, and an empty value, or settings that hold none, take the first method the repository allows
 babysitter watch start --include-existing        # also hand the agent the review items already on the pull request
 babysitter watch start --include-own             # also report the comments of your own user
+babysitter watch start --merge-when-ready        # the daemon merges with the method of the watch as soon as the watch is ready
 babysitter watch list                             # the watched pull requests
 babysitter watch list --all                       # stopped watches too
 babysitter watch status 1                         # state, checks, the agent, and what blocks the merge
@@ -323,12 +327,14 @@ babysitter watch mode 1 auto --release            # switch a running watch to au
 babysitter watch mode 1 manual --auto-approve-rebase # back to manual, and let a clean rebase of approved work go out on its own
 babysitter watch merge-rules 1 --approvals 0      # change the approvals of a running watch; branch reads the rule of the base branch again
 babysitter watch merge-rules 1 --merge-method rebase # change the merge method of a running watch; empty takes the first method the repository allows
+babysitter watch merge-rules 1 --merge-when-ready # let the daemon merge watch 1 when it is ready; =false turns it off
 babysitter watch start --approval-mode auto       # the approval mode of this watch; without the flag the settings decide
 babysitter watch start --auto-approve-rebase      # approved work goes out again after a clean rebase, without asking
 babysitter watch stop 1                           # stop with a summary, and delete the worktree unless the settings keep it
 babysitter watch stop 1 --keep-worktree           # stop but leave the worktree on disk; without the flag the settings of the daemon decide
 babysitter watch merge 1                          # merge the pull request once the watch says it is ready, and stop
 babysitter watch merge 1 --method squash          # with a merge method for this merge
+babysitter watch merge 1 --approve                 # a Dependabot update in scope: approve in your name, then merge
 babysitter watch takeover 1                       # continue the agent session in this terminal, with no rules
 babysitter watch takeover 1 --shell               # a shell in the worktree instead of the agent
 babysitter watch handback 1                       # give the session back; it asks first when you left work that is not pushed
@@ -370,6 +376,9 @@ Each pull request row has these fields:
 - number, GitHub id, title, author, URL, base and head branch, head commit
 - state: `open`, `merged` or `closed`
 - draft flag, labels, requested reviewers, additions and deletions
+- assignees, the fork flag (the head branch lives in another
+  repository), and for Dependabot the update type: `patch`, `minor` or
+  `major`, read from the title and the body
 - `review_decision`: `approved`, `changes_requested`, `review_required` or
   `none`. Only the latest approval or change request of each reviewer
   counts: a later review that only comments leaves it standing. The author
@@ -386,6 +395,11 @@ A pull request that is merged or closed is fetched one last time. After
 that, babysitter does not poll it again.
 
 The rows hang off `repos`, the watched repositories.
+`repo_config` holds the auto watch configuration of each repository, and
+`auto_start_claims` the pull requests that auto start took, one row each,
+so that a pull request starts on its own only once. A claim older than
+10 minutes with no watch is left by a daemon that stopped during the
+start, and the next pass takes it over. Both go with the repository.
 
 The `pr` command keeps three more tables: `pr_watch` records each pull
 request it took a snapshot of, `pr_watch_seen` records the review items
@@ -434,8 +448,9 @@ The snapshot holds:
   commit, `mergeable` (`null`
   while GitHub computes it), `mergeable_state`, `review_decision`, the
   counts of `approvals` and `changes_requested`, the
-  `requested_reviewers` still pending, and the `reviewers_behind_head`
-  who reviewed an earlier commit
+  `requested_reviewers` still pending, the `reviewers_behind_head`
+  who reviewed an earlier commit, and for a pull request of Dependabot
+  its `update_type`: `patch`, `minor` or `major`
 - `checks`: the overall status and the counts of passed, failed, pending
   and skipped checks, `all_terminal`, and one item per check run or
   commit status of the head commit
@@ -567,7 +582,9 @@ babysitter settings set --mute-notifications ""             # every kind again
 ```
 
 `--mute-notifications` takes the kinds of the history: `agent`,
-`review`, `checks`, `watch` and `merge`. A kind you mute stays in the
+`review`, `checks`, `watch`, `merge` and `auto`. `auto` says that a
+watch started on its own, or that a Dependabot update waits on your
+approval; in the app that row has an **Approve and merge** button. A kind you mute stays in the
 history and only leaves the screen.
 
 Read the history from the terminal:
@@ -753,6 +770,89 @@ again when somebody else pushes to it. The agent comments
 rebases that branch. A commit the agent makes there stays in the
 worktree until the next message: before it, the worktree moves to what
 the bot pushed.
+
+### Auto watch
+
+A repository can start watches on its own. Its configuration says what
+babysitter does with each new pull request. An empty configuration starts
+nothing, and the configuration goes when you remove the repository.
+
+```sh
+babysitter repo config acme/billing --checkout ~/code/billing   # the checkout each worktree comes from
+babysitter repo config acme/billing --auto-start-mine           # a watch on each new pull request you opened or that is assigned to you
+babysitter repo config acme/billing --include-drafts            # also your drafts
+babysitter repo config acme/billing --auto-watch-dependabot     # a watch on each new pull request of Dependabot
+babysitter repo config acme/billing --dependabot-scope minor    # patch (default), minor or major: the highest update that merges on its own
+babysitter repo config acme/billing --dependabot-approval ask   # never (default), ask or green
+babysitter repo config acme/billing --dependabot-limit 2        # Dependabot watches at the same time, 1 by default
+babysitter repo config acme/billing --merge-method squash --approval-mode manual   # the overrides of the watches it starts
+babysitter repo config acme/billing --approvals default --reset-overrides           # back to the settings of the daemon
+babysitter repo config acme/billing --auto-start-mine=false     # turn a toggle off; the watches that run go on
+babysitter repo queue acme/billing                              # the Dependabot pull requests that wait
+babysitter repo list                                            # the AUTO START column shows the toggles that are on
+```
+
+The app has the same settings in the **Repository settings** panel of a
+repository, which the panel icon in its header opens.
+
+The rules:
+
+- The checkout must be a git checkout whose `origin` is the repository.
+  A toggle cannot go on without it.
+- A toggle records when it went on. It takes only the pull requests that
+  GitHub created from then on, also one that opened while the daemon was
+  down. It starts no watch on the pull requests that were open before.
+- A pull request is yours when you wrote it or it is assigned to you, as
+  `GET /user` of the token says. A draft waits until it is ready for
+  review, unless drafts are included. A pull request from a fork never
+  starts: the agent cannot push to it, and the log names it once.
+- Auto start takes a pull request only once. A pull request that has or
+  had a watch, also one you stopped or one that stopped with an error,
+  does not start again on its own. Start it by hand.
+- A watch that auto start began is the same as `watch start` with the
+  overrides of the repository. It records an `auto_started` row, and the
+  notification kind `auto` says why it started. The watch shows an
+  **auto** badge in the app and an `Auto:` line in `watch status`.
+- Auto start runs in the daemon, after each pass of the repository
+  watcher. `babysitter serve` runs the watcher and starts no watch. When
+  two daemons share one database, only one of them starts a pull
+  request; the other writes a debug line.
+
+**The Dependabot queue.** At most `--dependabot-limit` Dependabot watches
+run on the repository at the same time, also the ones you started by
+hand. A new update beyond that waits in the queue, which the store keeps
+and `repo queue` and the app show. When a place is free, the oldest one
+starts on the next pass. A pull request leaves the queue when it closes,
+merges, or when you start a watch on it by hand. The queue is empty
+while the toggle is off. Each merge moves the base, so the next update
+is often behind and waits for `@dependabot rebase` and a new build.
+
+**Merge when ready.** Each watch has this option, off by default. Set it
+with `watch start --merge-when-ready` or `watch merge-rules
+--merge-when-ready`, or with the switch of the start dialog and of the
+**Watch settings** panel. When the watch records `merge_ready`, the
+daemon merges with the method of the watch, through the same path as
+`watch merge`. Everything that keeps a watch from ready also keeps it
+from this merge. A merge that fails records `merge_failed` and notifies;
+the daemon tries once for each head, and a new head tries again. On a
+Dependabot watch that auto start began, the option is on when the update
+is within the scope, and off when it is not: a major update in a `minor`
+scope stops at ready to merge and waits for you. The daemon reads the
+update type from the title and the body of the pull request, a grouped
+pull request takes its highest update, and a type it cannot read counts
+as `major`.
+
+**Dependabot approval.** With `never`, the daemon submits no review; when
+the base branch needs one, the watch shows the blocker and waits. With
+`ask`, a green update in scope whose only blocker is a missing review
+records `approval_asked` and notifies you. The notification row in the
+app has **Approve and merge**; from the terminal it is
+`babysitter watch merge <watch> --approve`. With `green`, the daemon
+submits an approving review in your name when the build is green and the
+update is in scope, once for each head, with a body that names the
+Dependabot policy of babysitter, and records an `approved` row. The
+daemon never approves an update outside the scope, and never a pull
+request that is not of Dependabot.
 
 ### The daemon pushes and posts
 

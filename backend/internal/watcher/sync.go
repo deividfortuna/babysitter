@@ -2,11 +2,14 @@ package watcher
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/checks"
+	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
@@ -182,6 +185,9 @@ func toStorePR(repo store.Repo, pr *github.PullRequest, old store.PullRequest, n
 		Deletions:          old.Deletions,
 		CIStatus:           old.CIStatus,
 		SyncedAt:           now,
+		Assignees:          make([]string, 0, len(pr.Assignees)),
+		Fork:               isFork(pr),
+		UpdateType:         UpdateTypeOf(pr),
 	}
 	if t := pr.GetMergedAt(); !t.IsZero() {
 		cur.MergedAt = &t.Time
@@ -199,7 +205,24 @@ func toStorePR(repo store.Repo, pr *github.PullRequest, old store.PullRequest, n
 			cur.Labels = append(cur.Labels, name)
 		}
 	}
+	for _, u := range pr.Assignees {
+		if login := u.GetLogin(); login != "" {
+			cur.Assignees = append(cur.Assignees, login)
+		}
+	}
 	return cur
+}
+
+func isFork(pr *github.PullRequest) bool {
+	head := pr.GetHead().GetRepo().GetFullName()
+	return head == "" || !strings.EqualFold(head, pr.GetBase().GetRepo().GetFullName())
+}
+
+func UpdateTypeOf(pr *github.PullRequest) dependabot.Level {
+	if !agent.IsDependabot(pr.GetUser().GetLogin()) {
+		return ""
+	}
+	return dependabot.UpdateType(pr.GetTitle(), pr.GetBody())
 }
 
 func (w *Watcher) afterCall(ctx context.Context, resp *github.Response, err error) error {

@@ -43,6 +43,9 @@ func (w watchOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(out, "Checks:    %s\n", checks.Summarize(w.CheckStates, w.HeadSHA, w.GreenSHA))
 	fmt.Fprintf(out, "Mergeable: %s\n", orDash(string(w.MergeableState)))
 	fmt.Fprintf(out, "Merge:     %s\n", mergeLine(httpd.Watch(w)))
+	if line := autoLine(httpd.Watch(w)); line != "" {
+		fmt.Fprintf(out, "Auto:      %s\n", line)
+	}
 	if w.Status == store.WatchActive {
 		fmt.Fprintf(out, "Approval:  %s\n", approvalLine(httpd.Watch(w)))
 	}
@@ -62,6 +65,20 @@ func (w watchOutput) writeText(out io.Writer) error {
 		fmt.Fprintf(out, "           %s\n", worktreeLine(httpd.Watch(w)))
 	}
 	return nil
+}
+
+func autoLine(w httpd.Watch) string {
+	var parts []string
+	if w.AutoReason != store.AutoNone {
+		parts = append(parts, "started on its own: "+w.AutoReason.Word())
+	}
+	if w.UpdateType != "" {
+		parts = append(parts, string(w.UpdateType)+" update")
+	}
+	if w.MergeWhenReady {
+		parts = append(parts, "merges when ready")
+	}
+	return strings.Join(parts, "; ")
 }
 
 func mergeLine(w httpd.Watch) string {
@@ -240,6 +257,7 @@ func newWatchStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		mergeMethod     string
 		approvalMode    string
 		autoRebase      bool
+		mergeWhenReady  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "start [target]",
@@ -260,8 +278,8 @@ the approvals --approvals asks for, or the setting of the daemon, or the
 rule of the base branch, nobody requesting changes, every review thread
 resolved, nothing
 pending from the agent. You merge it with
-'babysitter watch merge' when it suits you; the daemon never merges on
-its own.`,
+'babysitter watch merge' when it suits you. With --merge-when-ready the
+daemon merges it with the method of the watch as soon as it is ready.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := ""
@@ -287,6 +305,7 @@ its own.`,
 				IncludeOwn:        typed(cmd, "include-own", &includeOwn),
 				ApprovalMode:      typed(cmd, "approval-mode", &approvalMode),
 				AutoApproveRebase: typed(cmd, "auto-approve-rebase", &autoRebase),
+				MergeWhenReady:    typed(cmd, "merge-when-ready", &mergeWhenReady),
 			}
 			if req.ApprovalsRequired, err = typedApprovals(cmd, approvals); err != nil {
 				return err
@@ -319,6 +338,7 @@ its own.`,
 	cmd.Flags().StringVar(&mergeMethod, "merge-method", "", "merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; without the flag the setting of the daemon decides")
 	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "manual holds the work of each turn of the agent until you approve it, auto pushes and posts when the turn ends; without the flag the setting of the daemon decides")
 	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again; without the flag the setting of the daemon decides")
+	cmd.Flags().BoolVar(&mergeWhenReady, "merge-when-ready", false, "the daemon merges with the method of the watch as soon as the watch is ready to merge; off without the flag")
 	return cmd
 }
 
@@ -391,17 +411,24 @@ func newWatchStopCmd(opts *options, dataDirFlag *string) *cobra.Command {
 }
 
 func newWatchMergeCmd(opts *options, dataDirFlag *string) *cobra.Command {
-	var method string
+	var (
+		method  string
+		approve bool
+	)
 	cmd := &cobra.Command{
 		Use:   "merge <watch>",
 		Short: "Merge the pull request of a watch and stop the watch",
 		Long: `The daemon takes a fresh look at the pull request first and refuses
 while something blocks the merge; the reasons are printed. The merge
 uses --method, else the method of the watch, else the first method the
-repository allows. A merge stops the watch and prints its summary.`,
+repository allows. A merge stops the watch and prints its summary.
+
+--approve first submits an approving review in your name. The daemon
+does this only for a pull request of Dependabot whose update is within
+the merge scope of the repository (see 'babysitter repo config').`,
 		Args: cobra.ExactArgs(1),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, _ []string) error {
-			body := httpd.MergeWatchRequest{Method: method}
+			body := httpd.MergeWatchRequest{Method: method, Approve: approve}
 			var merged httpd.Watch
 			if err := c.post(cmd.Context(), fmt.Sprintf("/watches/%d/merge", w.ID), body, &merged); err != nil {
 				return mergeError(err)
@@ -410,6 +437,7 @@ repository allows. A merge stops the watch and prints its summary.`,
 		}),
 	}
 	cmd.Flags().StringVar(&method, "method", "", "merge method for this merge: squash, merge or rebase")
+	cmd.Flags().BoolVar(&approve, "approve", false, "approve the Dependabot update in your name before the merge")
 	return cmd
 }
 

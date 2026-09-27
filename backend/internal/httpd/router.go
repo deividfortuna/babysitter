@@ -10,6 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 
+	"github.com/deividfortuna/babysitter/internal/autostart"
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/httpd/apispec"
 	"github.com/deividfortuna/babysitter/internal/notify"
@@ -34,6 +35,9 @@ type Store interface {
 	Settings(ctx context.Context) (store.Settings, error)
 	SaveSettings(ctx context.Context, next store.Settings) (store.Settings, error)
 	PendingProposals(ctx context.Context) (map[int64]int, error)
+	GetRepoByID(ctx context.Context, id int64) (store.Repo, error)
+	SaveRepoConfig(ctx context.Context, c store.RepoConfig) (store.RepoConfig, error)
+	autostart.QueueStore
 }
 
 type Syncer interface {
@@ -123,6 +127,9 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/repos", a.handleListRepos)
 		r.Post("/repos", a.handleAddRepo)
 		r.Delete("/repos/{id}", a.handleRemoveRepo)
+		r.Get("/repos/{id}/config", a.handleGetRepoConfig)
+		r.Patch("/repos/{id}/config", a.handleUpdateRepoConfig)
+		r.Get("/repos/{id}/queue", a.handleRepoQueue)
 		r.Get("/notifications", a.handleListNotifications)
 		r.Post("/notifications", a.handleAddNotification)
 		r.Post("/notifications/read", a.handleReadNotifications)

@@ -19,7 +19,8 @@ babysitter watch poll <watch>          # ask the daemon to look now, for example
 `merged`, `closed`, `heartbeat`, `watch_started`, `watch_stopped`,
 `session_started`, `session_exited`, `nudged`, `replied`,
 `agent_failed`, `merge_ready`, `merge_failed`, `review_requested`,
-`proposal`, `taken_over`, `handed_back`.
+`proposal`, `taken_over`, `handed_back`, `auto_started`, `approved`,
+`approval_asked`.
 
 `taken_over` and `handed_back` say that the user moved the session of a
 watch of the app to their terminal and gave it back. Read
@@ -44,6 +45,17 @@ Six of them are easy to read wrong:
   changes, every review thread resolved, and nothing pending from the
   agent.
 
+Three come from auto watch (`babysitter repo config`):
+
+- `auto_started`: the repository started the watch on its own. The
+  payload says why: `mine`, `assigned` or `dependabot`.
+- `approved`: the daemon submitted an approving review in the name of
+  the user, by the Dependabot policy of the repository or by
+  `watch merge --approve`.
+- `approval_asked`: a Dependabot update in scope is green and only a
+  review is missing. The user answers with
+  `babysitter watch merge <watch> --approve` or the button of the app.
+
 ## Stop a watch of the app
 
 ```bash
@@ -53,8 +65,10 @@ babysitter watch stop <watch> --keep-worktree   # leave the worktree of its agen
 ## Notifications
 
 The daemon notifies the user of the events of a watch: the start, a
-failed check, all checks green, ready to merge, a failed merge, and the
-stop. Each one is a row of the history, which the desktop app shows and
+failed check, all checks green, ready to merge, a merge by merge when
+ready, a failed merge, and the stop. The kind `auto` says that a watch
+started on its own, or that a Dependabot update waits on the approval
+of the user. Each one is a row of the history, which the desktop app shows and
 `babysitter notifications list` prints. You do not need
 `babysitter notify` for a watched pull request. Use it for a different
 thing that you stop on while the user is away:

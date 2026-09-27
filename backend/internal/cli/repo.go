@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -18,21 +19,33 @@ type watchedRepoOutput struct {
 	AddedAt      time.Time  `json:"added_at"`
 	LastSyncedAt *time.Time `json:"last_synced_at"`
 	LastError    string     `json:"last_error,omitempty"`
+	AutoStart    []string   `json:"auto_start"`
 }
 
 type watchedRepoList []watchedRepoOutput
 
 func (l watchedRepoList) writeText(w io.Writer) error {
 	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	fmt.Fprintln(tw, "REPOSITORY\tADDED\tLAST SYNC\tERROR")
+	fmt.Fprintln(tw, "REPOSITORY\tADDED\tLAST SYNC\tAUTO START\tERROR")
 	for _, r := range l {
 		synced := "never"
 		if r.LastSyncedAt != nil {
 			synced = r.LastSyncedAt.Local().Format("2006-01-02 15:04:05")
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", r.FullName, r.AddedAt.Local().Format("2006-01-02"), synced, r.LastError)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\t%s\n", r.FullName, r.AddedAt.Local().Format("2006-01-02"), synced, orDash(strings.Join(r.AutoStart, ", ")), r.LastError)
 	}
 	return tw.Flush()
+}
+
+func togglesOn(c store.RepoConfig) []string {
+	on := []string{}
+	if c.OwnOn() {
+		on = append(on, "mine")
+	}
+	if c.DependabotOn() {
+		on = append(on, "dependabot")
+	}
+	return on
 }
 
 func newRepoCmd(opts *options) *cobra.Command {
@@ -40,7 +53,7 @@ func newRepoCmd(opts *options) *cobra.Command {
 		Use:   "repo",
 		Short: "Manage the watched repositories",
 	}
-	cmd.AddCommand(newRepoAddCmd(opts), newRepoRemoveCmd(opts), newRepoListCmd(opts))
+	cmd.AddCommand(newRepoAddCmd(opts), newRepoRemoveCmd(opts), newRepoListCmd(opts), newRepoConfigCmd(opts), newRepoQueueCmd(opts))
 	return cmd
 }
 
@@ -130,11 +143,16 @@ func newRepoListCmd(opts *options) *cobra.Command {
 			}
 			items := make(watchedRepoList, 0, len(repos))
 			for _, r := range repos {
+				cfg, err := st.GetRepoConfig(cmd.Context(), r.ID)
+				if err != nil {
+					return err
+				}
 				items = append(items, watchedRepoOutput{
 					FullName:     r.FullName(),
 					AddedAt:      r.AddedAt,
 					LastSyncedAt: r.LastSyncedAt,
 					LastError:    r.LastError,
+					AutoStart:    togglesOn(cfg),
 				})
 			}
 			return opts.print(cmd.OutOrStdout(), items)

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/google/go-github/v91/github"
 
@@ -23,7 +24,8 @@ var ErrMergeRefused = errors.New("GitHub refused the merge")
 var ErrBadMergeMethod = errors.New("invalid merge method")
 
 type MergeOptions struct {
-	Method string
+	Method  string
+	Approve bool
 }
 
 func normalizeMergeMethod(m string) (string, bool) {
@@ -32,6 +34,10 @@ func normalizeMergeMethod(m string) (string, bool) {
 		return "", true
 	}
 	return m, slices.Contains(ghclient.MergeMethodsKnown, m)
+}
+
+func refusesMerge(since *time.Time, blockers []string, justApproved bool) bool {
+	return len(blockers) > 0 || since == nil && !justApproved
 }
 
 func mergeRefusal(blockers []string) error {
@@ -60,6 +66,11 @@ func (s *Service) Merge(ctx context.Context, id int64, o MergeOptions) (store.Wa
 	if err != nil {
 		return store.Watch{}, err
 	}
+	if o.Approve {
+		if err := s.approveByHand(ctx, client, w); err != nil {
+			return store.Watch{}, err
+		}
+	}
 	snap, err := snapshot.Collect(ctx, client, s.store, target(w), s.watchOptions(w))
 	if err != nil {
 		return store.Watch{}, err
@@ -87,19 +98,49 @@ func (s *Service) Merge(ctx context.Context, id int64, o MergeOptions) (store.Wa
 	if err != nil {
 		return store.Watch{}, err
 	}
-	if since, blockers := s.Readiness(stored, state.session.State); since == nil {
+	if since, blockers := s.Readiness(stored, state.session.State); refusesMerge(since, blockers, o.Approve) {
 		return store.Watch{}, mergeRefusal(blockers)
 	}
-	if method, err = s.mergeMethod(ctx, client, w, cmp.Or(method, w.MergeMethod)); err != nil {
+	return s.mergeNow(ctx, client, w, snap, next, mergeByHand(cmp.Or(method, w.MergeMethod), snap, s.now()))
+}
+
+type mergeAttempt struct {
+	method    string
+	mergedRef string
+	failedRef string
+	summary   string
+}
+
+func mergeByHand(method string, snap *snapshot.Snapshot, now time.Time) mergeAttempt {
+	return mergeAttempt{
+		method: method, mergedRef: "merged", failedRef: fmt.Sprintf("merge@%s@%d", snap.PR.HeadSHA, now.Unix()),
+		summary: "merged by babysitter (%s)",
+	}
+}
+
+func mergeWhenReady(w store.Watch, snap *snapshot.Snapshot) mergeAttempt {
+	return mergeAttempt{
+		method: w.MergeMethod, mergedRef: autoMergedRef, failedRef: autoMergeRef(snap.PR.HeadSHA),
+		summary: "merged with %s, as merge when ready asks",
+	}
+}
+
+const autoMergedRef = "merged-when-ready"
+
+func autoMergeRef(sha string) string { return "auto-merge@" + sha }
+
+func (s *Service) mergeNow(ctx context.Context, client *github.Client, w store.Watch, snap *snapshot.Snapshot, next State, m mergeAttempt) (store.Watch, error) {
+	method, err := s.mergeMethod(ctx, client, w, m.method)
+	if err != nil {
 		return store.Watch{}, err
 	}
 	_, resp, err := ghclient.MergePull(ctx, client, w.Owner, w.Name, w.Number, method, snap.PR.HeadSHA)
 	if err := s.afterWrite(ctx, resp, err); err != nil {
-		return store.Watch{}, s.mergeFailed(ctx, w, snap, err)
+		return store.Watch{}, s.mergeFailed(ctx, w, snap, m.failedRef, err)
 	}
 	if _, err := s.record(ctx, w, store.Activity{
-		Kind: store.ActivityMerged, Ref: "merged", Actor: w.BotLogin,
-		Summary: "merged by babysitter (" + method + ")", URL: snap.PR.URL,
+		Kind: store.ActivityMerged, Ref: m.mergedRef, Actor: w.BotLogin,
+		Summary: fmt.Sprintf(m.summary, method), URL: snap.PR.URL,
 		Payload: mustJSON(map[string]any{"sha": snap.PR.HeadSHA, "method": method}),
 	}); err != nil {
 		return store.Watch{}, err
@@ -131,13 +172,13 @@ func (s *Service) mergeMethod(ctx context.Context, client *github.Client, w stor
 	return method, nil
 }
 
-func (s *Service) mergeFailed(ctx context.Context, w store.Watch, snap *snapshot.Snapshot, err error) error {
+func (s *Service) mergeFailed(ctx context.Context, w store.Watch, snap *snapshot.Snapshot, ref string, err error) error {
 	if !ghclient.IsRefused(err) {
 		return err
 	}
 	clean := redact.Err(err)
 	if _, rerr := s.record(ctx, w, store.Activity{
-		Kind: store.ActivityMergeFailed, Ref: fmt.Sprintf("merge@%s@%d", snap.PR.HeadSHA, s.now().Unix()),
+		Kind: store.ActivityMergeFailed, Ref: ref,
 		Summary: "GitHub refused the merge: " + clean.Error(), URL: snap.PR.URL,
 		Payload: mustJSON(map[string]any{"sha": snap.PR.HeadSHA, "error": clean.Error()}),
 	}); rerr != nil {

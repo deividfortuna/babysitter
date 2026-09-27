@@ -331,6 +331,125 @@ paths:
                 $ref: '#/components/schemas/HttpdAPIError'
           description: Internal Server Error
       summary: Stop watching a repository
+  /api/v1/repos/{id}/config:
+    get:
+      operationId: getRepoConfig
+      parameters:
+      - description: Repository id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Repository id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdRepoConfig'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: What babysitter does with the new pull requests of a repository
+    patch:
+      operationId: updateRepoConfig
+      parameters:
+      - description: Repository id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Repository id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RepoConfigParams'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdRepoConfig'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Change the configuration of a repository. A toggle that goes on records
+        the time; only pull requests created from then on start.
+  /api/v1/repos/{id}/queue:
+    get:
+      operationId: getRepoQueue
+      parameters:
+      - description: Repository id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Repository id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdRepoQueue'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: The Dependabot pull requests that wait for a place, oldest first
   /api/v1/settings:
     get:
       operationId: getSettings
@@ -578,8 +697,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/HttpdAPIError'
           description: Service Unavailable
-      summary: Change the approvals and the merge method of a watch while it runs.
-        The other fields of a watch cannot change.
+      summary: Change the approvals, the merge method and merge when ready of a watch
+        while it runs. The other fields of a watch cannot change.
   /api/v1/watches/{id}/activity:
     get:
       operationId: listWatchActivity
@@ -1606,6 +1725,9 @@ components:
           - proposal
           - taken_over
           - handed_back
+          - auto_started
+          - approved
+          - approval_asked
           type: string
         nudgedAt:
           description: When the row reached the agent
@@ -1718,6 +1840,7 @@ components:
           - checks
           - watch
           - merge
+          - auto
           type: string
         number:
           type: integer
@@ -1751,6 +1874,13 @@ components:
       type: object
     HttpdNotification:
       properties:
+        action:
+          description: 'What the app offers to do from the notification. approve_merge:
+            approve the Dependabot update in your name and merge it'
+          enum:
+          - ""
+          - approve_merge
+          type: string
         body:
           type: string
         createdAt:
@@ -1763,13 +1893,15 @@ components:
           description: 'agent: the agent asks you for something; review: a review
             item nobody takes; checks: the checks of the pull request; watch: the
             life of a watch and of its session; merge: the pull request can merge,
-            or failed to'
+            merged, or failed to; auto: a watch started on its own, or a Dependabot
+            update waits on your approval'
           enum:
           - agent
           - review
           - checks
           - watch
           - merge
+          - auto
           type: string
         number:
           type: integer
@@ -2137,6 +2269,11 @@ components:
           type: integer
         approvals:
           type: integer
+        assignees:
+          items:
+            type: string
+          nullable: true
+          type: array
         author:
           type: string
         baseRef:
@@ -2160,6 +2297,10 @@ components:
         deletions:
           type: integer
         draft:
+          type: boolean
+        fork:
+          description: The head branch lives in another repository, so auto start
+            skips the pull request
           type: boolean
         headRef:
           type: string
@@ -2205,6 +2346,14 @@ components:
           type: string
         title:
           type: string
+        updateType:
+          description: The highest update of a Dependabot pull request
+          enum:
+          - ""
+          - patch
+          - minor
+          - major
+          type: string
         updatedAt:
           format: date-time
           type: string
@@ -2231,6 +2380,8 @@ components:
       - deletions
       - ciStatus
       - syncedAt
+      - assignees
+      - fork
       type: object
     HttpdPullRequestList:
       properties:
@@ -2241,6 +2392,34 @@ components:
           type: array
       required:
       - pullRequests
+      type: object
+    HttpdQueuedPullRequest:
+      properties:
+        createdAt:
+          format: date-time
+          type: string
+        number:
+          type: integer
+        position:
+          description: 1 starts next
+          type: integer
+        title:
+          type: string
+        updateType:
+          enum:
+          - patch
+          - minor
+          - major
+          type: string
+        url:
+          type: string
+      required:
+      - number
+      - title
+      - url
+      - updateType
+      - createdAt
+      - position
       type: object
     HttpdRateLimit:
       properties:
@@ -2334,6 +2513,74 @@ components:
       - addedAt
       - lastError
       type: object
+    HttpdRepoConfig:
+      properties:
+        autoStartMine:
+          description: Start a watch on each new pull request that the author opened
+            or that is assigned to the author
+          type: boolean
+        autoStartMineSince:
+          description: When the toggle went on; only pull requests created from then
+            on start
+          format: date-time
+          nullable: true
+          type: string
+        autoWatchDependabot:
+          description: Start a watch on each new pull request of Dependabot
+          type: boolean
+        autoWatchDependabotSince:
+          description: When the toggle went on; only pull requests created from then
+            on start
+          format: date-time
+          nullable: true
+          type: string
+        checkoutDir:
+          description: The checkout auto start makes each worktree from; the toggles
+            stay off without it
+          type: string
+        dependabotApproval:
+          description: 'never: the daemon submits no review; ask: a notification asks
+            you to approve a green update in scope; green: the daemon approves a green
+            update in scope in your name'
+          enum:
+          - never
+          - ask
+          - green
+          type: string
+        dependabotLimit:
+          description: How many Dependabot watches run at the same time; the rest
+            wait in the queue
+          minimum: 1
+          type: integer
+        dependabotScope:
+          description: The highest Dependabot update that merges on its own
+          enum:
+          - patch
+          - minor
+          - major
+          type: string
+        includeDrafts:
+          description: Auto start also takes a draft of the author
+          type: boolean
+        overrides:
+          $ref: '#/components/schemas/HttpdWatchOverrides'
+        repo:
+          type: string
+        repoId:
+          format: int64
+          type: integer
+      required:
+      - repoId
+      - repo
+      - checkoutDir
+      - autoStartMine
+      - includeDrafts
+      - autoWatchDependabot
+      - overrides
+      - dependabotScope
+      - dependabotApproval
+      - dependabotLimit
+      type: object
     HttpdRepoList:
       properties:
         repos:
@@ -2343,6 +2590,21 @@ components:
           type: array
       required:
       - repos
+      type: object
+    HttpdRepoQueue:
+      properties:
+        pullRequests:
+          description: The Dependabot pull requests that wait for a place, oldest
+            first
+          items:
+            $ref: '#/components/schemas/HttpdQueuedPullRequest'
+          nullable: true
+          type: array
+        repo:
+          type: string
+      required:
+      - repo
+      - pullRequests
       type: object
     HttpdSession:
       properties:
@@ -2433,6 +2695,7 @@ components:
             - checks
             - watch
             - merge
+            - auto
             type: string
           nullable: true
           type: array
@@ -2511,6 +2774,11 @@ components:
           - rebase
           nullable: true
           type: string
+        mergeWhenReady:
+          description: The daemon merges with the method of the watch as soon as the
+            watch is ready to merge; absent means off
+          nullable: true
+          type: boolean
         model:
           type: string
         provider:
@@ -2613,6 +2881,16 @@ components:
           description: Approved work goes out after a clean rebase without asking
             again
           type: boolean
+        autoReason:
+          description: 'Why auto start began the watch: the author opened the pull
+            request, it is assigned to the author, or Dependabot opened it; absent
+            for a watch started by hand'
+          enum:
+          - ""
+          - mine
+          - assigned
+          - dependabot
+          type: string
         baseRef:
           type: string
         checkStates:
@@ -2656,6 +2934,10 @@ components:
           - merge
           - rebase
           type: string
+        mergeWhenReady:
+          description: The daemon merges with the method of the watch as soon as the
+            watch is ready to merge
+          type: boolean
         mergeableState:
           type: string
         model:
@@ -2726,6 +3008,15 @@ components:
           type: string
         title:
           type: string
+        updateType:
+          description: The highest update of a Dependabot pull request; a type the
+            daemon cannot read counts as major
+          enum:
+          - ""
+          - patch
+          - minor
+          - major
+          type: string
         url:
           type: string
         workBranch:
@@ -2765,6 +3056,7 @@ components:
       - readyBlockers
       - approvalMode
       - autoApproveRebase
+      - mergeWhenReady
       - session
       type: object
     HttpdWatchList:
@@ -2776,6 +3068,54 @@ components:
           type: array
       required:
       - watches
+      type: object
+    HttpdWatchOverrides:
+      properties:
+        approvalMode:
+          description: Who releases the work of a turn of the agent; empty takes the
+            setting of the daemon
+          enum:
+          - ""
+          - auto
+          - manual
+          type: string
+        approvalsRequired:
+          description: How many approvals the pull request needs; absent takes the
+            setting of the daemon, 0 asks for none, and null asks for the rule of
+            the base branch
+          minimum: 0
+          nullable: true
+          type: integer
+        includeExisting:
+          description: Report the review items the pull request has already; absent
+            takes the setting of the daemon
+          nullable: true
+          type: boolean
+        mergeMethod:
+          description: The merge method of the watches; empty takes the setting of
+            the daemon
+          enum:
+          - ""
+          - squash
+          - merge
+          - rebase
+          type: string
+        model:
+          description: The model of the agent; empty takes the model of the provider
+          type: string
+        provider:
+          description: The AI provider of the watches auto start begins; empty takes
+            the provider of watch start
+          enum:
+          - ""
+          - claude
+          - copilot
+          type: string
+      required:
+      - provider
+      - model
+      - approvalMode
+      - mergeMethod
       type: object
     HttpdWatchSummary:
       properties:
@@ -2828,6 +3168,11 @@ components:
       type: object
     MergeWatchParams:
       properties:
+        approve:
+          description: Approve the Dependabot update in the name of the author before
+            the merge. The daemon refuses a pull request that is not of Dependabot
+            or an update outside the merge scope of the repository
+          type: boolean
         method:
           description: The merge method for this merge; empty takes the method of
             the watch
@@ -2860,6 +3205,43 @@ components:
           type: integer
       required:
       - body
+      type: object
+    RepoConfigParams:
+      properties:
+        autoStartMine:
+          nullable: true
+          type: boolean
+        autoWatchDependabot:
+          nullable: true
+          type: boolean
+        checkoutDir:
+          description: A git checkout whose origin is the repository; empty clears
+            it
+          nullable: true
+          type: string
+        dependabotApproval:
+          enum:
+          - never
+          - ask
+          - green
+          nullable: true
+          type: string
+        dependabotLimit:
+          minimum: 1
+          nullable: true
+          type: integer
+        dependabotScope:
+          enum:
+          - patch
+          - minor
+          - major
+          nullable: true
+          type: string
+        includeDrafts:
+          nullable: true
+          type: boolean
+        overrides:
+          $ref: '#/components/schemas/HttpdWatchOverrides'
       type: object
     SendParams:
       properties:
@@ -2909,4 +3291,9 @@ components:
           - rebase
           nullable: true
           type: string
+        mergeWhenReady:
+          description: The daemon merges as soon as the watch is ready to merge; absent
+            keeps what the watch has
+          nullable: true
+          type: boolean
       type: object

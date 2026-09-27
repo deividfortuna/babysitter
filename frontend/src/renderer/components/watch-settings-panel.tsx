@@ -21,7 +21,8 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
   const setApproval = useSetApproval();
   const approvalsRules = useUpdateWatch();
   const methodRules = useUpdateWatch();
-  const failure = setApproval.error ?? approvalsRules.error ?? methodRules.error;
+  const readyRules = useUpdateWatch();
+  const failure = setApproval.error ?? approvalsRules.error ?? methodRules.error ?? readyRules.error;
 
   return (
     <aside
@@ -78,6 +79,15 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
         />
       </SettingRow>
 
+      <SettingRow label="Merge when ready" htmlFor="watch-merge-when-ready" description={mergeWhenReadyText(watch)}>
+        <Switch
+          id="watch-merge-when-ready"
+          checked={watch.mergeWhenReady}
+          disabled={readyRules.isPending}
+          onCheckedChange={(mergeWhenReady) => readyRules.mutate({ id: watch.id, mergeWhenReady })}
+        />
+      </SettingRow>
+
       {failure ? (
         <Alert variant="destructive">
           <CircleAlertIcon />
@@ -86,6 +96,13 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       ) : null}
     </aside>
   );
+}
+
+function mergeWhenReadyText(watch: Watch): string {
+  const always = "The daemon merges as soon as the watch is ready to merge.";
+  const onByScope = watch.autoReason === "dependabot" && watch.mergeWhenReady && Boolean(watch.updateType);
+  if (!onByScope) return always;
+  return `${always} On because ${watch.updateType} is within the scope of the repository.`;
 }
 
 function ApprovalRows({ watch, setApproval }: { watch: Watch; setApproval: ReturnType<typeof useSetApproval> }) {

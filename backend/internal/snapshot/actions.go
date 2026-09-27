@@ -34,6 +34,10 @@ func Blockers(s *Snapshot, approvals int) []string {
 	return out
 }
 
+func BuildGreen(s *Snapshot) bool {
+	return endedBlockers(s.PR) == nil && len(checkBlockers(s)) == 0
+}
+
 func WaitsOnlyForReview(s *Snapshot, approvals int) bool {
 	if endedBlockers(s.PR) != nil {
 		return false

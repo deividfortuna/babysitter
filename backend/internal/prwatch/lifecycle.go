@@ -14,6 +14,7 @@ import (
 	"github.com/google/go-github/v91/github"
 
 	"github.com/deividfortuna/babysitter/internal/checks"
+	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/gitrepo"
 	"github.com/deividfortuna/babysitter/internal/redact"
@@ -34,6 +35,9 @@ type StartRequest struct {
 	MergeMethod       *string
 	ApprovalMode      *store.ApprovalMode
 	AutoApproveRebase *bool
+	MergeWhenReady    *bool
+	AutoReason        store.AutoReason
+	UpdateType        dependabot.Level
 }
 
 func (r StartRequest) approvalMode(provider string) store.ApprovalMode {
@@ -242,6 +246,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 		IncludeExisting: *req.IncludeExisting, IncludeOwn: *req.IncludeOwn, StartedAt: now,
 		ApprovalsRequired: approvals, MergeMethod: co.method,
 		ApprovalMode: req.approvalMode(co.provider), AutoApproveRebase: *req.AutoApproveRebase,
+		MergeWhenReady: req.MergeWhenReady != nil && *req.MergeWhenReady, AutoReason: req.AutoReason, UpdateType: cmp.Or(req.UpdateType, snap.PR.UpdateType),
 		HeadSHA: base.HeadSHA, PRState: base.PRState, MergeableState: base.MergeableState, CheckStates: base.Checks, GreenSHA: base.GreenSHA,
 	})
 	if err != nil {
@@ -333,6 +338,9 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 	}); err != nil {
 		return err
 	}
+	if err := s.recordAutoStart(ctx, w); err != nil {
+		return err
+	}
 	for _, a := range baseline {
 		if !workAtStart(a.Kind) {
 			continue
@@ -351,6 +359,18 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 		return nil
 	}
 	_, err := s.tell(ctx, client, w)
+	return err
+}
+
+func (s *Service) recordAutoStart(ctx context.Context, w store.Watch) error {
+	if w.AutoReason == store.AutoNone {
+		return nil
+	}
+	_, err := s.record(ctx, w, store.Activity{
+		Kind: store.ActivityAutoStarted, Ref: "auto", At: w.StartedAt,
+		Summary: "started on its own: " + w.AutoReason.Word(),
+		Payload: mustJSON(map[string]any{"reason": w.AutoReason, "update_type": w.UpdateType}),
+	})
 	return err
 }
 

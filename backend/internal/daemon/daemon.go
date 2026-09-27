@@ -10,6 +10,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/deividfortuna/babysitter/internal/autostart"
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/gitrelease"
@@ -93,7 +94,9 @@ func Run(ctx context.Context, cfg Config) error {
 		Desktop: cfg.Notifier,
 		Log:     log.With("component", "notify"),
 	})
-	w := watcher.New(st, cfg.NewClient, watcher.WithInterval(settings.PollInterval), watcher.WithLogger(log))
+	var autoStart func(ctx context.Context)
+	w := watcher.New(st, cfg.NewClient, watcher.WithInterval(settings.PollInterval), watcher.WithLogger(log),
+		watcher.WithAfterPass(func(ctx context.Context) { autoStart(ctx) }))
 	watchOpts := []prwatch.Option{prwatch.WithInterval(settings.WatchInterval)}
 	exe, err := os.Executable()
 	if err != nil {
@@ -114,6 +117,26 @@ func Run(ctx context.Context, cfg Config) error {
 		Guard:         w.Guard(),
 		Bus:           bus,
 	}, watchOpts...)
+	viewer := func(ctx context.Context) (httpd.Viewer, error) {
+		c, err := cfg.NewClient(ctx)
+		if err != nil {
+			return httpd.Viewer{}, err
+		}
+		u, err := ghclient.CurrentUser(ctx, c)
+		if err != nil {
+			return httpd.Viewer{}, err
+		}
+		return httpd.Viewer{Login: u.GetLogin(), Name: u.GetName(), AvatarURL: u.GetAvatarURL()}, nil
+	}
+	autoStart = autostart.New(autostart.Deps{
+		Store: st,
+		Start: watches.Start,
+		Login: func(ctx context.Context) (string, error) {
+			v, err := viewer(ctx)
+			return v.Login, err
+		},
+		Log: log.With("component", "autostart"),
+	}).Run
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -133,17 +156,7 @@ func Run(ctx context.Context, cfg Config) error {
 		Log:      log,
 		Version:  cfg.Version,
 		Shutdown: func() { srv.RequestShutdown() },
-		Viewer: func(ctx context.Context) (httpd.Viewer, error) {
-			c, err := cfg.NewClient(ctx)
-			if err != nil {
-				return httpd.Viewer{}, err
-			}
-			u, err := ghclient.CurrentUser(ctx, c)
-			if err != nil {
-				return httpd.Viewer{}, err
-			}
-			return httpd.Viewer{Login: u.GetLogin(), Name: u.GetName(), AvatarURL: u.GetAvatarURL()}, nil
-		},
+		Viewer:   viewer,
 		RateLimit: func() httpd.RateLimit {
 			return rateLimit(ghclient.SharedRates().Status(w.Guard().Floor))
 		},

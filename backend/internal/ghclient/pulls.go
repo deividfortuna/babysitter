@@ -177,6 +177,16 @@ func IsNoReplyTarget(err error) bool {
 	return false
 }
 
+func ApprovePull(ctx context.Context, c *github.Client, owner, repo string, number int, headSHA, body string) (*github.PullRequestReview, *github.Response, error) {
+	review, resp, err := c.PullRequests.CreateReview(ctx, owner, repo, number, &github.PullRequestReviewRequest{
+		CommitID: &headSHA, Body: &body, Event: new("APPROVE"),
+	})
+	if err != nil {
+		return nil, resp, fmt.Errorf("approve pull request %s/%s#%d: %w", owner, repo, number, err)
+	}
+	return review, resp, nil
+}
+
 func RequestReviewers(ctx context.Context, c *github.Client, owner, repo string, number int, logins []string) (*github.Response, error) {
 	_, resp, err := c.PullRequests.RequestReviewers(ctx, owner, repo, number, github.ReviewersRequest{Reviewers: logins})
 	if err != nil {

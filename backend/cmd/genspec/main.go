@@ -113,6 +113,11 @@ type handbackParams struct {
 	httpd.HandbackRequest
 }
 
+type repoConfigParams struct {
+	idParam
+	httpd.UpdateRepoConfigRequest
+}
+
 type operation struct {
 	method, path, id, summary string
 	req                       any
@@ -165,6 +170,9 @@ func build() ([]byte, error) {
 		{method: http.MethodGet, path: "/repos", id: "listRepos", summary: "List the watched repositories", resp: httpd.RepoList{}, status: http.StatusOK},
 		{method: http.MethodPost, path: "/repos", id: "addRepo", summary: "Watch a repository", req: httpd.AddRepoRequest{}, resp: httpd.Repo{}, status: http.StatusCreated, errors: []int{http.StatusBadRequest, http.StatusConflict}},
 		{method: http.MethodDelete, path: "/repos/{id}", id: "removeRepo", summary: "Stop watching a repository", req: idParam{}, status: http.StatusNoContent, errors: []int{http.StatusNotFound}},
+		{method: http.MethodGet, path: "/repos/{id}/config", id: "getRepoConfig", summary: "What babysitter does with the new pull requests of a repository", req: idParam{}, resp: httpd.RepoConfig{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound}},
+		{method: http.MethodPatch, path: "/repos/{id}/config", id: "updateRepoConfig", summary: "Change the configuration of a repository. A toggle that goes on records the time; only pull requests created from then on start.", req: repoConfigParams{}, resp: httpd.RepoConfig{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound}},
+		{method: http.MethodGet, path: "/repos/{id}/queue", id: "getRepoQueue", summary: "The Dependabot pull requests that wait for a place, oldest first", req: idParam{}, resp: httpd.RepoQueue{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound}},
 		{method: http.MethodGet, path: "/prs", id: "listPullRequests", summary: "List the stored pull requests", req: httpd.PullRequestQuery{}, resp: httpd.PullRequestList{}, status: http.StatusOK, errors: []int{http.StatusBadRequest}},
 		{method: http.MethodGet, path: "/notifications", id: "listNotifications", summary: "The notifications the daemon recorded, newest first", req: httpd.NotificationQuery{}, resp: httpd.NotificationList{}, status: http.StatusOK, errors: []int{http.StatusBadRequest}},
 		{method: http.MethodPost, path: "/notifications", id: "addNotification", summary: "Record one notification and show it", req: httpd.NewNotificationRequest{}, resp: httpd.Notification{}, status: http.StatusCreated, errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable}},
@@ -176,7 +184,7 @@ func build() ([]byte, error) {
 		{method: http.MethodGet, path: "/watches", id: "listWatches", summary: "List the watched pull requests", req: httpd.WatchQuery{}, resp: httpd.WatchList{}, status: http.StatusOK, errors: []int{http.StatusBadRequest}},
 		{method: http.MethodPost, path: "/watches", id: "startWatch", summary: "Watch a pull request", req: httpd.StartWatchRequest{}, resp: httpd.Watch{}, status: http.StatusCreated, errors: []int{http.StatusBadRequest, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodGet, path: "/watches/{id}", id: "getWatch", summary: "One watched pull request", req: watchIDParam{}, resp: httpd.Watch{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound}},
-		{method: http.MethodPatch, path: "/watches/{id}", id: "updateWatch", summary: "Change the approvals and the merge method of a watch while it runs. The other fields of a watch cannot change.", req: updateWatchParams{}, resp: httpd.Watch{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
+		{method: http.MethodPatch, path: "/watches/{id}", id: "updateWatch", summary: "Change the approvals, the merge method and merge when ready of a watch while it runs. The other fields of a watch cannot change.", req: updateWatchParams{}, resp: httpd.Watch{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/stop", id: "stopWatch", summary: "Stop watching a pull request", req: stopWatchParams{}, resp: httpd.Watch{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/merge", id: "mergeWatch", summary: "Merge the pull request of a watch and stop the watch", req: mergeWatchParams{}, resp: httpd.Watch{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/poll", id: "pollWatch", summary: "Poll a watched pull request now", req: watchIDParam{}, resp: httpd.SyncAccepted{}, status: http.StatusAccepted, errors: []int{http.StatusBadRequest, http.StatusNotFound}},

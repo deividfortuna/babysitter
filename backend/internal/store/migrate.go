@@ -556,6 +556,92 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE watch_activity_new RENAME TO watch_activity;
 	CREATE INDEX watch_activity_watch_idx ON watch_activity (watch_id, id);
 	`,
+	`
+	CREATE TABLE repo_config (
+	    repo_id               INTEGER PRIMARY KEY REFERENCES repos(id) ON DELETE CASCADE,
+	    checkout_dir          TEXT NOT NULL DEFAULT '',
+	    own_since             TEXT,
+	    include_drafts        INTEGER NOT NULL DEFAULT 0,
+	    dependabot_since      TEXT,
+	    provider              TEXT NOT NULL DEFAULT '',
+	    model                 TEXT NOT NULL DEFAULT '',
+	    approval_mode         TEXT NOT NULL DEFAULT '' CHECK (approval_mode IN ('', 'auto', 'manual')),
+	    merge_method          TEXT NOT NULL DEFAULT '' CHECK (merge_method IN ('', 'squash', 'merge', 'rebase')),
+	    approvals_set         INTEGER NOT NULL DEFAULT 0,
+	    approvals_count       INTEGER,
+	    include_existing      INTEGER,
+	    dependabot_scope      TEXT NOT NULL DEFAULT 'patch' CHECK (dependabot_scope IN ('patch', 'minor', 'major')),
+	    dependabot_approval   TEXT NOT NULL DEFAULT 'never' CHECK (dependabot_approval IN ('never', 'ask', 'green')),
+	    dependabot_limit      INTEGER NOT NULL DEFAULT 1 CHECK (dependabot_limit >= 1)
+	);
+
+	CREATE TABLE auto_start_claims (
+	    repo_id    INTEGER NOT NULL REFERENCES repos(id) ON DELETE CASCADE,
+	    number     INTEGER NOT NULL,
+	    claimed_at TEXT NOT NULL,
+	    PRIMARY KEY (repo_id, number)
+	);
+
+	ALTER TABLE pull_requests ADD COLUMN assignees TEXT NOT NULL DEFAULT '[]';
+	ALTER TABLE pull_requests ADD COLUMN fork INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE pull_requests ADD COLUMN update_type TEXT NOT NULL DEFAULT '';
+
+	ALTER TABLE watches ADD COLUMN auto_reason TEXT NOT NULL DEFAULT '' CHECK (auto_reason IN ('', 'mine', 'assigned', 'dependabot'));
+	ALTER TABLE watches ADD COLUMN merge_when_ready INTEGER NOT NULL DEFAULT 0;
+	ALTER TABLE watches ADD COLUMN update_type TEXT NOT NULL DEFAULT '';
+
+	CREATE TABLE watch_activity_new (
+	    id          INTEGER PRIMARY KEY,
+	    watch_id    INTEGER NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
+	    kind        TEXT NOT NULL CHECK (kind IN (
+	                    'comment', 'review_comment', 'review',
+	                    'check_failed', 'check_recovered', 'checks_green',
+	                    'commit', 'behind', 'conflict', 'merged', 'closed',
+	                    'heartbeat', 'watch_started', 'watch_stopped',
+	                    'session_started', 'session_exited', 'nudged', 'agent_failed',
+	                    'merge_ready', 'merge_failed', 'replied', 'review_requested', 'proposal',
+	                    'taken_over', 'handed_back', 'auto_started', 'approved', 'approval_asked')),
+	    ref         TEXT NOT NULL,
+	    at          TEXT NOT NULL,
+	    actor       TEXT NOT NULL DEFAULT '',
+	    summary     TEXT NOT NULL DEFAULT '',
+	    url         TEXT NOT NULL DEFAULT '',
+	    payload     TEXT NOT NULL DEFAULT '{}',
+	    reported    INTEGER NOT NULL DEFAULT 0,
+	    reported_at TEXT,
+	    nudged_at   TEXT,
+	    UNIQUE (watch_id, kind, ref)
+	);
+
+	INSERT INTO watch_activity_new (id, watch_id, kind, ref, at, actor, summary, url, payload, reported, reported_at, nudged_at)
+	SELECT id, watch_id, kind, ref, at, actor, summary, url, payload, reported, reported_at, nudged_at FROM watch_activity;
+
+	DROP TABLE watch_activity;
+	ALTER TABLE watch_activity_new RENAME TO watch_activity;
+	CREATE INDEX watch_activity_watch_idx ON watch_activity (watch_id, id);
+
+	CREATE TABLE notifications_new (
+	    id         INTEGER PRIMARY KEY,
+	    watch_id   INTEGER REFERENCES watches(id) ON DELETE CASCADE,
+	    kind       TEXT NOT NULL CHECK (kind IN ('agent', 'review', 'checks', 'watch', 'merge', 'auto')),
+	    repo       TEXT NOT NULL DEFAULT '',
+	    number     INTEGER NOT NULL DEFAULT 0,
+	    title      TEXT NOT NULL,
+	    body       TEXT NOT NULL,
+	    url        TEXT NOT NULL DEFAULT '',
+	    created_at TEXT NOT NULL,
+	    read_at    TEXT,
+	    silent     INTEGER NOT NULL DEFAULT 0,
+	    action     TEXT NOT NULL DEFAULT '' CHECK (action IN ('', 'approve_merge'))
+	);
+
+	INSERT INTO notifications_new (id, watch_id, kind, repo, number, title, body, url, created_at, read_at, silent)
+	SELECT id, watch_id, kind, repo, number, title, body, url, created_at, read_at, silent FROM notifications;
+
+	DROP TABLE notifications;
+	ALTER TABLE notifications_new RENAME TO notifications;
+	CREATE INDEX notifications_unread_idx ON notifications (read_at, id);
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

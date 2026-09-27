@@ -27,13 +27,25 @@ const (
 	NotificationChecks NotificationKind = "checks"
 	NotificationWatch  NotificationKind = "watch"
 	NotificationMerge  NotificationKind = "merge"
+	NotificationAuto   NotificationKind = "auto"
 )
 
 var NotificationKinds = []NotificationKind{
-	NotificationAgent, NotificationReview, NotificationChecks, NotificationWatch, NotificationMerge,
+	NotificationAgent, NotificationReview, NotificationChecks, NotificationWatch, NotificationMerge, NotificationAuto,
 }
 
 func (k NotificationKind) Valid() bool { return slices.Contains(NotificationKinds, k) }
+
+type NotificationAction string
+
+const (
+	ActionNone         NotificationAction = ""
+	ActionApproveMerge NotificationAction = "approve_merge"
+)
+
+var NotificationActions = []NotificationAction{ActionNone, ActionApproveMerge}
+
+func (a NotificationAction) Valid() bool { return slices.Contains(NotificationActions, a) }
 
 var ErrInvalidNotification = errors.New("invalid notification")
 
@@ -49,11 +61,15 @@ type Notification struct {
 	CreatedAt time.Time
 	ReadAt    *time.Time
 	Silent    bool
+	Action    NotificationAction
 }
 
 func (n Notification) Validate() error {
 	if !n.Kind.Valid() {
 		return fmt.Errorf("%w: unknown kind %q: use %s", ErrInvalidNotification, n.Kind, JoinKinds())
+	}
+	if !n.Action.Valid() {
+		return fmt.Errorf("%w: unknown action %q", ErrInvalidNotification, n.Action)
 	}
 	if strings.TrimSpace(n.Title) == "" {
 		return fmt.Errorf("%w: the title is empty", ErrInvalidNotification)
@@ -77,7 +93,7 @@ type ListNotificationsOptions struct {
 	Limit      int
 }
 
-const notificationColumns = "id, watch_id, kind, repo, number, title, body, url, silent, created_at, read_at"
+const notificationColumns = "id, watch_id, kind, repo, number, title, body, url, silent, created_at, read_at, action"
 
 const DefaultNotificationCap = 5000
 
@@ -93,10 +109,10 @@ func (s *Store) AddNotification(ctx context.Context, n Notification) (Notificati
 		watchID = n.WatchID
 	}
 	err := s.db.QueryRowContext(ctx, `
-INSERT INTO notifications (watch_id, kind, repo, number, title, body, url, silent, created_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+INSERT INTO notifications (watch_id, kind, repo, number, title, body, url, silent, created_at, action)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 RETURNING id`,
-		watchID, n.Kind, n.Repo, n.Number, n.Title, n.Body, n.URL, n.Silent, timeToDB(n.CreatedAt)).Scan(&n.ID)
+		watchID, n.Kind, n.Repo, n.Number, n.Title, n.Body, n.URL, n.Silent, timeToDB(n.CreatedAt), n.Action).Scan(&n.ID)
 	if isForeignKeyFailure(err) {
 		return Notification{}, fmt.Errorf("add notification: %w: %d", ErrWatchNotFound, n.WatchID)
 	}
@@ -183,7 +199,7 @@ func scanNotification(row scanner) (Notification, error) {
 		createdAt string
 		readAt    sql.NullString
 	)
-	if err := row.Scan(&n.ID, &watchID, &n.Kind, &n.Repo, &n.Number, &n.Title, &n.Body, &n.URL, &n.Silent, &createdAt, &readAt); err != nil {
+	if err := row.Scan(&n.ID, &watchID, &n.Kind, &n.Repo, &n.Number, &n.Title, &n.Body, &n.URL, &n.Silent, &createdAt, &readAt, &n.Action); err != nil {
 		return Notification{}, err
 	}
 	var err error

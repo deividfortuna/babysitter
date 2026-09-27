@@ -1,6 +1,7 @@
 package prwatch
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -13,6 +14,7 @@ var ErrBadApprovals = errors.New("invalid approvals: use 0 or more, or the rule 
 type MergeRulesChange struct {
 	ApprovalsRequired Approvals
 	MergeMethod       *string
+	MergeWhenReady    *bool
 }
 
 func (s *Service) SetMergeRules(ctx context.Context, id int64, c MergeRulesChange) (store.Watch, error) {
@@ -36,12 +38,15 @@ func (s *Service) SetMergeRules(ctx context.Context, id int64, c MergeRulesChang
 	if err != nil {
 		return store.Watch{}, err
 	}
-	approvalsChanged := approvals != w.ApprovalsRequired
-	w, err = s.store.SetWatchMergeRules(ctx, w.ID, approvals, method)
+	mergeWhenReady := *cmp.Or(c.MergeWhenReady, &w.MergeWhenReady)
+	needsPoll := approvals != w.ApprovalsRequired || mergeWhenReady && !w.MergeWhenReady
+	w, err = s.store.SetWatchMergeRules(ctx, w.ID, store.MergeRules{
+		ApprovalsRequired: approvals, MergeMethod: method, MergeWhenReady: mergeWhenReady,
+	})
 	if err != nil {
 		return store.Watch{}, err
 	}
-	if approvalsChanged {
+	if needsPoll {
 		s.Kick()
 	}
 	return w, nil

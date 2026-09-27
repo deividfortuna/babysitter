@@ -144,3 +144,33 @@ test("a stopped watch has no settings to change", async () => {
   await screen.findByText(/Here is what happened while you were away/);
   expect(screen.queryByRole("button", { name: "Watch settings" })).toBeNull();
 });
+
+test("merge when ready is saved on the watch", async () => {
+  const { decisions, user } = renderDetail({ mergeWhenReady: false });
+
+  const panel = await openSettings(user);
+  const mergeWhenReady = within(panel).getByRole("switch", { name: "Merge when ready" });
+  expect(mergeWhenReady).not.toBeChecked();
+  expect(within(panel).getByText("The daemon merges as soon as the watch is ready to merge.")).toBeVisible();
+  await user.click(mergeWhenReady);
+
+  await waitFor(() => expect(decisions).toHaveLength(1));
+  expect(decisions[0]).toEqual({ route: "update", watch: 42, body: { mergeWhenReady: true } });
+});
+
+test("a Dependabot watch says the scope of the repository turned merge when ready on", async () => {
+  const { user } = renderDetail({
+    dependabot: true,
+    autoReason: "dependabot",
+    updateType: "patch",
+    mergeWhenReady: true,
+  });
+
+  const panel = await openSettings(user);
+  expect(within(panel).getByRole("switch", { name: "Merge when ready" })).toBeChecked();
+  expect(
+    within(panel).getByText(
+      "The daemon merges as soon as the watch is ready to merge. On because patch is within the scope of the repository.",
+    ),
+  ).toBeVisible();
+});
