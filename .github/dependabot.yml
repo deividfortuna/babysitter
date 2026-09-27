@@ -4,10 +4,9 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       actions:
         patterns:
@@ -16,10 +15,9 @@ updates:
   - package-ecosystem: gomod
     directory: /backend
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
     cooldown:
-      default-days: 7
+      default-days: 3
     groups:
       go-minor-and-patch:
         update-types:
@@ -29,10 +27,9 @@ updates:
   - package-ecosystem: npm
     directory: /frontend
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
     cooldown:
-      default-days: 7
+      default-days: 3
     versioning-strategy: increase
     open-pull-requests-limit: 10
     groups:
@@ -70,10 +67,9 @@ updates:
   - package-ecosystem: npm
     directory: /codegen
     schedule:
-      interval: weekly
-      day: monday
+      interval: daily
     cooldown:
-      default-days: 7
+      default-days: 3
     versioning-strategy: increase
     ignore:
       - dependency-name: typescript
