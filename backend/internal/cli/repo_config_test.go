@@ -171,7 +171,7 @@ func TestServeStartsNoWatch(t *testing.T) {
 		t.Fatalf("watches = %d, %v, want none", len(watches), err)
 	}
 	repo, _ := st.GetRepo(context.Background(), "acme", "billing")
-	if claimed, err := st.AutoStartClaimed(context.Background(), repo.ID, 4); err != nil || claimed {
+	if claimed, err := st.AutoStartClaimed(context.Background(), repo.ID, 4, time.Time{}); err != nil || claimed {
 		t.Fatalf("claimed = %v, %v, want no claim", claimed, err)
 	}
 }

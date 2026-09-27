@@ -397,8 +397,9 @@ that, babysitter does not poll it again.
 The rows hang off `repos`, the watched repositories.
 `repo_config` holds the auto watch configuration of each repository, and
 `auto_start_claims` the pull requests that auto start took, one row each,
-so that a pull request starts on its own only once. Both go with the
-repository.
+so that a pull request starts on its own only once. A claim older than
+10 minutes with no watch is left by a daemon that stopped during the
+start, and the next pass takes it over. Both go with the repository.
 
 The `pr` command keeps three more tables: `pr_watch` records each pull
 request it took a snapshot of, `pr_watch_seen` records the review items

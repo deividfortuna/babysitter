@@ -81,7 +81,7 @@ func TestRemovingTheRepositoryRemovesItsConfigurationAndClaims(t *testing.T) {
 	if _, err := s.SaveRepoConfig(ctx, c); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ClaimAutoStart(ctx, id, 7, time.Now()); err != nil {
+	if err := s.ClaimAutoStart(ctx, id, 7, time.Now(), time.Now().Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
 	if err := s.RemoveRepo(ctx, "octo", "hello"); err != nil {
@@ -101,16 +101,16 @@ func TestAPullRequestIsClaimedForAutoStartOnce(t *testing.T) {
 	s, _ := openTemp(t)
 	ctx := context.Background()
 	id := repoID(t, s)
-	if err := s.ClaimAutoStart(ctx, id, 7, time.Now()); err != nil {
+	if err := s.ClaimAutoStart(ctx, id, 7, time.Now(), time.Now().Add(-time.Hour)); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ClaimAutoStart(ctx, id, 7, time.Now()); !errors.Is(err, ErrAlreadyClaimed) {
+	if err := s.ClaimAutoStart(ctx, id, 7, time.Now(), time.Now().Add(-time.Hour)); !errors.Is(err, ErrAlreadyClaimed) {
 		t.Fatalf("second ClaimAutoStart() = %v, want ErrAlreadyClaimed", err)
 	}
 	if err := s.ReleaseAutoStart(ctx, id, 7); err != nil {
 		t.Fatal(err)
 	}
-	if err := s.ClaimAutoStart(ctx, id, 7, time.Now()); err != nil {
+	if err := s.ClaimAutoStart(ctx, id, 7, time.Now(), time.Now().Add(-time.Hour)); err != nil {
 		t.Fatalf("ClaimAutoStart() after a release = %v", err)
 	}
 }
@@ -190,5 +190,30 @@ func TestANotificationKeepsItsAction(t *testing.T) {
 	}
 	if _, err := s.AddNotification(ctx, Notification{Kind: NotificationAuto, Title: "t", Body: "b", Action: "explode"}); !errors.Is(err, ErrInvalidNotification) {
 		t.Fatalf("AddNotification() with an unknown action = %v, want ErrInvalidNotification", err)
+	}
+}
+
+func TestAStaleClaimCanBeTakenOverAndAFreshOneCannot(t *testing.T) {
+	t.Parallel()
+	s, _ := openTemp(t)
+	ctx := context.Background()
+	id := repoID(t, s)
+	first := time.Date(2026, 9, 27, 10, 0, 0, 0, time.UTC)
+	if err := s.ClaimAutoStart(ctx, id, 7, first, first.Add(-10*time.Minute)); err != nil {
+		t.Fatal(err)
+	}
+	soon := first.Add(time.Minute)
+	if err := s.ClaimAutoStart(ctx, id, 7, soon, soon.Add(-10*time.Minute)); !errors.Is(err, ErrAlreadyClaimed) {
+		t.Fatalf("ClaimAutoStart() of a fresh claim = %v, want ErrAlreadyClaimed", err)
+	}
+	if claimed, err := s.AutoStartClaimed(ctx, id, 7, soon.Add(-10*time.Minute)); err != nil || !claimed {
+		t.Fatalf("AutoStartClaimed() of a fresh claim = %v, %v, want true", claimed, err)
+	}
+	late := first.Add(time.Hour)
+	if claimed, err := s.AutoStartClaimed(ctx, id, 7, late.Add(-10*time.Minute)); err != nil || claimed {
+		t.Fatalf("AutoStartClaimed() of a stale claim = %v, %v, want false", claimed, err)
+	}
+	if err := s.ClaimAutoStart(ctx, id, 7, late, late.Add(-10*time.Minute)); err != nil {
+		t.Fatalf("ClaimAutoStart() of a stale claim = %v, want the claim", err)
 	}
 }

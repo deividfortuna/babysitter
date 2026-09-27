@@ -9,8 +9,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mattn/go-sqlite3"
-
 	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
@@ -173,16 +171,17 @@ func scanRepoConfig(sc scanner) (RepoConfig, error) {
 	return c, nil
 }
 
-func (s *Store) ClaimAutoStart(ctx context.Context, repoID int64, number int, now time.Time) error {
-	_, err := s.db.ExecContext(ctx,
-		"INSERT INTO auto_start_claims (repo_id, number, claimed_at) VALUES (?, ?, ?)",
-		repoID, number, timeToDB(now))
-	var sqliteErr sqlite3.Error
-	if errors.As(err, &sqliteErr) && sqliteErr.Code == sqlite3.ErrConstraint {
-		return ErrAlreadyClaimed
-	}
+func (s *Store) ClaimAutoStart(ctx context.Context, repoID int64, number int, now, staleBefore time.Time) error {
+	res, err := s.db.ExecContext(ctx, `
+INSERT INTO auto_start_claims (repo_id, number, claimed_at) VALUES (?, ?, ?)
+ON CONFLICT (repo_id, number) DO UPDATE SET claimed_at = excluded.claimed_at
+WHERE auto_start_claims.claimed_at < ?`,
+		repoID, number, timeToDB(now), timeToDB(staleBefore))
 	if err != nil {
 		return fmt.Errorf("claim auto start: %w", err)
+	}
+	if n, err := res.RowsAffected(); err != nil || n == 0 {
+		return ErrAlreadyClaimed
 	}
 	return nil
 }
@@ -194,10 +193,11 @@ func (s *Store) ReleaseAutoStart(ctx context.Context, repoID int64, number int) 
 	return nil
 }
 
-func (s *Store) AutoStartClaimed(ctx context.Context, repoID int64, number int) (bool, error) {
+func (s *Store) AutoStartClaimed(ctx context.Context, repoID int64, number int, since time.Time) (bool, error) {
 	var claimed bool
 	err := s.db.QueryRowContext(ctx,
-		"SELECT EXISTS (SELECT 1 FROM auto_start_claims WHERE repo_id = ? AND number = ?)", repoID, number).Scan(&claimed)
+		"SELECT EXISTS (SELECT 1 FROM auto_start_claims WHERE repo_id = ? AND number = ? AND claimed_at >= ?)",
+		repoID, number, timeToDB(since)).Scan(&claimed)
 	if err != nil {
 		return false, fmt.Errorf("auto start claimed: %w", err)
 	}

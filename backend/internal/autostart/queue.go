@@ -7,6 +7,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/deividfortuna/babysitter/internal/gitrepo"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -38,7 +39,7 @@ func Queue(ctx context.Context, st QueueStore, repo store.Repo) ([]store.PullReq
 		if c.pr.Fork {
 			continue
 		}
-		taken, err := isTaken(ctx, st, repo, c.pr.Number)
+		taken, err := isTaken(ctx, st, repo, c.pr.Number, time.Now())
 		if err != nil {
 			return nil, err
 		}

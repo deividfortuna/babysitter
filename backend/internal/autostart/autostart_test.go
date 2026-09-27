@@ -405,7 +405,7 @@ func TestTwoDaemonsStartOneWatchAndTheOtherWritesADebugLine(t *testing.T) {
 	fx.pr(1, nil)
 	var logs bytes.Buffer
 	other := fx.starter(slog.New(slog.NewTextHandler(&logs, &slog.HandlerOptions{Level: slog.LevelDebug})))
-	if err := fx.st.ClaimAutoStart(context.Background(), fx.repo.ID, 1, fx.now); err != nil {
+	if err := fx.st.ClaimAutoStart(context.Background(), fx.repo.ID, 1, fx.now, fx.now.Add(-claimLease)); err != nil {
 		t.Fatal(err)
 	}
 	other.startOne(context.Background(), fx.repo, store.DefaultRepoConfig(fx.repo.ID), candidate{pr: store.PullRequest{Number: 1}, reason: store.AutoMine})
@@ -458,4 +458,19 @@ func TestTheLoginIsReadOnceForManyPasses(t *testing.T) {
 	if calls != 2 {
 		t.Fatalf("the login was read %d times, want 2", calls)
 	}
+}
+
+func TestAClaimLeftByADaemonThatDiedStartsAgain(t *testing.T) {
+	fx := newFixture(t)
+	fx.configure(mineOn)
+	fx.pr(1, nil)
+	fx.pr(2, nil)
+	if err := fx.st.ClaimAutoStart(context.Background(), fx.repo.ID, 1, fx.now.Add(-time.Hour), fx.now.Add(-time.Hour-claimLease)); err != nil {
+		t.Fatal(err)
+	}
+	if err := fx.st.ClaimAutoStart(context.Background(), fx.repo.ID, 2, fx.now.Add(-time.Minute), fx.now.Add(-time.Minute-claimLease)); err != nil {
+		t.Fatal(err)
+	}
+	fx.run()
+	fx.wantStarted(1)
 }

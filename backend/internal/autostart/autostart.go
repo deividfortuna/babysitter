@@ -21,18 +21,20 @@ import (
 
 const loginTTL = 30 * time.Minute
 
+const claimLease = 10 * time.Minute
+
 type QueueStore interface {
 	GetRepoConfig(ctx context.Context, repoID int64) (store.RepoConfig, error)
 	OpenPRs(ctx context.Context, repoID int64) ([]store.PullRequest, error)
 	HadWatch(ctx context.Context, key store.WatchKey) (bool, error)
-	AutoStartClaimed(ctx context.Context, repoID int64, number int) (bool, error)
+	AutoStartClaimed(ctx context.Context, repoID int64, number int, since time.Time) (bool, error)
 }
 
 type Store interface {
 	QueueStore
 	ListRepos(ctx context.Context) ([]store.Repo, error)
 	ListWatches(ctx context.Context, o store.ListWatchesOptions) ([]store.Watch, error)
-	ClaimAutoStart(ctx context.Context, repoID int64, number int, now time.Time) error
+	ClaimAutoStart(ctx context.Context, repoID int64, number int, now, staleBefore time.Time) error
 	ReleaseAutoStart(ctx context.Context, repoID int64, number int) error
 }
 
@@ -156,7 +158,7 @@ func (s *Starter) untaken(ctx context.Context, repo store.Repo, cs []candidate) 
 			s.skipFork(repo, c.pr)
 			continue
 		}
-		taken, err := isTaken(ctx, s.store, repo, c.pr.Number)
+		taken, err := isTaken(ctx, s.store, repo, c.pr.Number, s.now())
 		if err != nil {
 			return nil, err
 		}
@@ -181,7 +183,8 @@ func (s *Starter) skipFork(repo store.Repo, pr store.PullRequest) {
 
 func (s *Starter) startOne(ctx context.Context, repo store.Repo, cfg store.RepoConfig, c candidate) {
 	label := repo.FullName() + "#" + strconv.Itoa(c.pr.Number)
-	err := s.store.ClaimAutoStart(ctx, repo.ID, c.pr.Number, s.now())
+	now := s.now()
+	err := s.store.ClaimAutoStart(ctx, repo.ID, c.pr.Number, now, now.Add(-claimLease))
 	if errors.Is(err, store.ErrAlreadyClaimed) {
 		s.log.Debug("auto start: another daemon took the pull request", "pr", label)
 		return
@@ -271,8 +274,8 @@ func openedSince(pr store.PullRequest, since *time.Time) bool {
 	return since != nil && !pr.CreatedAt.Before(*since)
 }
 
-func isTaken(ctx context.Context, st QueueStore, repo store.Repo, number int) (bool, error) {
-	claimed, err := st.AutoStartClaimed(ctx, repo.ID, number)
+func isTaken(ctx context.Context, st QueueStore, repo store.Repo, number int, now time.Time) (bool, error) {
+	claimed, err := st.AutoStartClaimed(ctx, repo.ID, number, now.Add(-claimLease))
 	if err != nil || claimed {
 		return claimed, err
 	}
