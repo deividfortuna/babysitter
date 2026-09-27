@@ -89,6 +89,19 @@ func TestRepoConfigChangesAndShowsTheConfiguration(t *testing.T) {
 	}
 }
 
+func TestRepoConfigHelpNamesTheOverridesAsFlagsOfTheCommand(t *testing.T) {
+	t.Parallel()
+	db := filepath.Join(t.TempDir(), "babysitter.db")
+
+	out, err := runCLI(t, ghfake.New(), db, "repo", "config", "--help")
+	if err != nil {
+		t.Fatalf("repo config --help error = %v", err)
+	}
+	if strings.Contains(out, "watch start flags") || !strings.Contains(out, "The override flags") {
+		t.Fatalf("help = %q, want the overrides named as flags of repo config, not of watch start", out)
+	}
+}
+
 func TestRepoQueueListsTheWaitingUpdatesOldestFirst(t *testing.T) {
 	t.Parallel()
 	g := ghfake.New()

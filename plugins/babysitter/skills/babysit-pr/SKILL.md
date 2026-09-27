@@ -219,14 +219,15 @@ babysitter repo config <owner/name> --dependabot-limit 1              # Dependab
 babysitter repo queue <owner/name>                                    # the Dependabot pull requests that wait, oldest first
 ```
 
-The flags of `watch start` (`--provider`, `--model`, `--approval-mode`,
-`--merge-method`, `--approvals`, `--include-existing`,
+The override flags of `repo config` (`--provider`, `--model`,
+`--approval-mode`, `--merge-method`, `--approvals`, `--include-existing`,
 `--auto-approve-rebase`, `--include-own`, `--keep-worktree`) set the
-overrides of each watch on the repository, by hand or by auto start. A
-value comes from the first layer that sets it: watch, then repository,
-then daemon. `--approvals default` and `--reset-overrides` give the
-overrides back to the settings of the daemon. Turn a
-toggle off with `=false`, for example `--auto-start-mine=false`.
+overrides of each watch on the repository, by hand or by auto start. The
+same flags on `watch start` set only that watch. A value comes from the
+first layer that sets it: watch, then repository, then daemon.
+`--approvals default` and `--reset-overrides` give the overrides back to
+the settings of the daemon. Turn a toggle off with `=false`, for example
+`--auto-start-mine=false`.
 
 What to tell the user:
 

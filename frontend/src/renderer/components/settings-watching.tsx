@@ -262,9 +262,10 @@ function AgentFields({ catalog, provider, model, onChange }: AgentFieldsProps) {
         </SelectTrigger>
         <SelectContent>
           {catalog.map((item) => (
-            <SelectItem key={item.id} value={item.id}>
+            <SelectItem key={item.id} value={item.id} disabled={!item.available}>
               <AgentLogo provider={item.id} />
               {item.label}
+              {item.available ? "" : " (command not found)"}
             </SelectItem>
           ))}
         </SelectContent>

@@ -158,13 +158,13 @@ time; the rest wait in the queue ('babysitter repo queue'). A toggle
 takes only the pull requests created after it went on. Turn one off with
 --auto-start-mine=false. The watches that run go on.
 
-The watch start flags (--provider, --model, --approval-mode,
---merge-method, --approvals, --include-existing, --auto-approve-rebase,
---include-own, --keep-worktree) set the overrides of each watch that
-starts on the repository, by hand or by auto start. A field the watch
-start does not name takes the override, and a field without an override
-takes the setting of the daemon. --approvals default and
---reset-overrides give the field back to the settings of the daemon.
+The override flags (--provider, --model, --approval-mode, --merge-method,
+--approvals, --include-existing, --auto-approve-rebase, --include-own,
+--keep-worktree) set the overrides of each watch that starts on the
+repository, by hand or by auto start. A field that 'watch start' does
+not name takes the override, and a field without an override takes the
+setting of the daemon. --approvals default and --reset-overrides give
+the field back to the settings of the daemon.
 
 --dependabot-scope is the highest update that merges on its own: patch,
 minor or major. --dependabot-approval is never, ask (a notification asks

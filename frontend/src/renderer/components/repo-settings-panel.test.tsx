@@ -1,9 +1,10 @@
 import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
-import { buildRepo, buildRepoConfig, buildSettings } from "@test/fixtures";
+import { buildProviders, buildRepo, buildRepoConfig, buildSettings } from "@test/fixtures";
 import { chooseOption, renderWithProviders } from "@test/test-utils";
 import { serveApi } from "@test/msw";
+import type { Provider } from "@/hooks/useProviders";
 import type { RepoConfig, RepoConfigUpdate } from "@/hooks/useRepos";
 import { RepoSettingsPanel } from "./repo-settings-panel";
 
@@ -20,12 +21,16 @@ afterEach(() => {
 
 const withCheckout = { checkoutDir: "/home/me/code/babysitter" };
 
-function renderPanel(config: Partial<RepoConfig> = {}, more: { refusal?: { code: string; message: string } } = {}) {
+function renderPanel(
+  config: Partial<RepoConfig> = {},
+  more: { refusal?: { code: string; message: string }; providers?: Provider[] } = {},
+) {
   const repoConfigBodies: RepoConfigUpdate[] = [];
   serveApi({
     repoConfig: buildRepoConfig(config),
     repoConfigBodies,
     repoConfigRefusal: more.refusal,
+    providers: more.providers,
     settings: buildSettings({ approvalMode: "manual" }),
   });
   const onClose = vi.fn();
@@ -276,6 +281,17 @@ test("the agent of the watches takes a provider and one of its models", async ()
   await chooseOption(user, screen.getByLabelText("Model"), "GPT-5.3 Codex");
   await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
   expect(repoConfigBodies[1].overrides).toMatchObject({ provider: "copilot", model: "gpt-5.3-codex" });
+});
+
+test("the agent of the watches does not offer a provider whose command the daemon did not find", async () => {
+  const { user } = renderPanel(withCheckout, { providers: buildProviders([{}, { available: false }]) });
+
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+  await waitFor(() => expect(screen.getByLabelText("Agent")).toBeEnabled());
+  await user.click(screen.getByLabelText("Agent"));
+  const copilot = await screen.findByRole("option", { name: /Copilot/ });
+  expect(copilot).toHaveAttribute("aria-disabled", "true");
+  expect(copilot).toHaveTextContent("command not found");
 });
 
 test("the close button hands the panel back", async () => {
