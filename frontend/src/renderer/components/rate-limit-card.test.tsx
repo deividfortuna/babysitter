@@ -54,6 +54,14 @@ test("shows nothing while half of the budget or less is used", async () => {
   expect(screen.queryByRole("region", { name: "GitHub rate limit" })).not.toBeInTheDocument();
 });
 
+test("shows the budget when a little more than half is used", async () => {
+  renderCard(buildRateLimit({ state: "ok", remaining: 2498 }));
+
+  const card = await findCard();
+
+  expect(within(card).getByText("2,498 of 5,000 left")).toBeVisible();
+});
+
 test("shows the budget at any use when the developer setting always shows it", async () => {
   window.localStorage.setItem("always_show_rate_limit", "true");
   renderCard(buildRateLimit({ state: "ok", remaining: 4212 }));

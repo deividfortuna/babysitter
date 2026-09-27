@@ -60,7 +60,8 @@ function usedPercent(rate: RateLimit): number {
 }
 
 function isRelevant(rate: RateLimit): boolean {
-  return rate.state !== "ok" || usedPercent(rate) > RELEVANT_USED_PERCENT;
+  const used = rate.limit - rate.remaining;
+  return rate.state !== "ok" || used * 100 > rate.limit * RELEVANT_USED_PERCENT;
 }
 
 function episodeOf(rate: RateLimit): string {
