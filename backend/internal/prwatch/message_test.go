@@ -175,6 +175,31 @@ func TestOverlappingResizesLeaveTheSessionAtTheKeptSize(t *testing.T) {
 	}
 }
 
+func TestAResizeDuringASessionStartReachesTheNewSession(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+	size := TerminalSize{Rows: 48, Cols: 210}
+	fx.host.mu.Lock()
+	fx.host.onStart = func() {
+		if err := fx.svc.Resize(ctx, w.ID, size); err != nil {
+			t.Errorf("Resize() error = %v", err)
+		}
+	}
+	fx.host.mu.Unlock()
+
+	if _, err := fx.svc.Send(ctx, w.ID, "go on"); err != nil {
+		t.Fatalf("Send() error = %v", err)
+	}
+
+	if got := fx.host.last().terminalSize(); got != size {
+		t.Fatalf("new session at %+v, want %+v", got, size)
+	}
+}
+
 func TestANewSessionStartsAtTheLastSize(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

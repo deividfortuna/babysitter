@@ -699,16 +699,23 @@ type fakeHost struct {
 	mu       sync.Mutex
 	handles  []*fakeHandle
 	startErr error
+	onStart  func()
 }
 
 func (f *fakeHost) Start(_ context.Context, spec session.Spec) (session.Handle, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.startErr != nil {
+		f.mu.Unlock()
 		return nil, f.startErr
 	}
-	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles)}
+	size := TerminalSize{Rows: spec.Rows, Cols: spec.Cols}
+	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles), size: size}
 	f.handles = append(f.handles, h)
+	hook := f.onStart
+	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	return h, nil
 }
 
