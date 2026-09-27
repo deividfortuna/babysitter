@@ -8,6 +8,10 @@ export default defineConfig({
     alias: [
       { find: /^cn$/, replacement: fileURLToPath(new URL("./src/renderer/lib/utils.ts", import.meta.url)) },
       { find: "@", replacement: fileURLToPath(new URL("./src/renderer", import.meta.url)) },
+      {
+        find: /^@pierre\/diffs\/react$/,
+        replacement: fileURLToPath(new URL("./src/test/diffs-react.tsx", import.meta.url)),
+      },
       { find: "@test", replacement: fileURLToPath(new URL("./src/test", import.meta.url)) },
     ],
   },
