@@ -199,6 +199,7 @@ test("starts with the defaults while the additional settings stay folded", async
     "includeOwn",
     "approvalMode",
     "autoApproveRebase",
+    "mergeWhenReady",
   ]) {
     expect(startBodies[0]).not.toHaveProperty(field);
   }
@@ -373,6 +374,7 @@ test("opens on the defaults the settings of the daemon hold", async () => {
     "includeOwn",
     "approvalMode",
     "autoApproveRebase",
+    "mergeWhenReady",
   ]) {
     expect(startBodies[0]).not.toHaveProperty(field);
   }
@@ -532,4 +534,25 @@ test("the command beside the start button carries the choices of the author", as
   expect(
     screen.getByText("babysitter watch start octo/babysitter#12 --provider copilot --approval-mode auto"),
   ).toBeVisible();
+});
+
+test("merge when ready is off by default, and a switch on sends it and adds the flag to the command", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ startBodies });
+  renderDialog();
+  const user = userEvent.setup();
+  await waitForCatalog(user);
+
+  const mergeWhenReady = screen.getByRole("switch", { name: "Merge when ready" });
+  expect(mergeWhenReady).not.toBeChecked();
+  expect(screen.getByText("Merge with the method above as soon as the watch is ready to merge.")).toBeVisible();
+
+  await fillTarget(user);
+  await user.click(mergeWhenReady);
+  expect(screen.getByText("babysitter watch start octo/babysitter#12 --merge-when-ready")).toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).toMatchObject({ mergeWhenReady: true });
 });

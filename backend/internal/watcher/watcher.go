@@ -48,6 +48,8 @@ type Watcher struct {
 
 	checksMu sync.Mutex
 	checked  map[checkKey]time.Time
+
+	afterPass func(ctx context.Context)
 }
 
 type Option func(*Watcher)
@@ -62,6 +64,10 @@ func WithCheckTTL(d time.Duration) Option {
 
 func WithLogger(l *slog.Logger) Option {
 	return func(w *Watcher) { w.log = l }
+}
+
+func WithAfterPass(fn func(ctx context.Context)) Option {
+	return func(w *Watcher) { w.afterPass = fn }
 }
 
 func WithClock(now func() time.Time, sleep func(context.Context, time.Duration) error) Option {
@@ -125,6 +131,9 @@ func (w *Watcher) Kick() {
 func (w *Watcher) runPass(ctx context.Context) {
 	if err := w.SyncAll(ctx); err != nil && ctx.Err() == nil {
 		w.log.Error("sync pass finished with errors", "err", err)
+	}
+	if w.afterPass != nil && ctx.Err() == nil {
+		w.afterPass(ctx)
 	}
 }
 

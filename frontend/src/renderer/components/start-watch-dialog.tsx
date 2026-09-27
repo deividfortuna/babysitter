@@ -61,6 +61,7 @@ type StartChoices = {
   model: string;
   approvalMode: ApprovalMode | null;
   autoRebase: boolean | null;
+  mergeWhenReady: boolean;
 };
 
 function startCommand(target: string, choices: StartChoices): string {
@@ -70,6 +71,7 @@ function startCommand(target: string, choices: StartChoices): string {
   if (choices.approvalMode) words.push(`--approval-mode ${choices.approvalMode}`);
   if (choices.autoRebase !== null)
     words.push(choices.autoRebase ? "--auto-approve-rebase" : "--auto-approve-rebase=false");
+  if (choices.mergeWhenReady) words.push("--merge-when-ready");
   return words.join(" ");
 }
 
@@ -130,6 +132,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const [mergeMethod, setMergeMethod] = useState<MergeMethod | null>(null);
   const [approvalMode, setApprovalMode] = useState<ApprovalMode | null>(null);
   const [autoRebase, setAutoRebase] = useState<boolean | null>(null);
+  const [mergeWhenReady, setMergeWhenReady] = useState<boolean | null>(null);
 
   const defaults = settings.data;
   const includeExistingValue = includeExisting ?? defaults?.includeExisting ?? false;
@@ -207,6 +210,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         ...(mergeMethod === null ? {} : { mergeMethod }),
         ...(approvalMode === null ? {} : { approvalMode }),
         ...(rebaseChosen ? { autoApproveRebase: autoRebase } : {}),
+        ...(mergeWhenReady === null ? {} : { mergeWhenReady }),
       },
       {
         onSuccess: (watch) => {
@@ -448,6 +452,17 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             </SettingRow>
 
             <SettingRow
+              label="Merge when ready"
+              htmlFor="merge-when-ready"
+              description="Merge with the method above as soon as the watch is ready to merge."
+              className={ROW}
+            >
+              <div className={CONTROL}>
+                <Switch id="merge-when-ready" checked={mergeWhenReady ?? false} onCheckedChange={setMergeWhenReady} />
+              </div>
+            </SettingRow>
+
+            <SettingRow
               label="Report existing review items"
               htmlFor="include-existing"
               description="Items that were there before the watch started."
@@ -505,6 +520,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               model,
               approvalMode,
               autoRebase: rebaseChosen ? autoRebaseValue : null,
+              mergeWhenReady: mergeWhenReady ?? false,
             })}
           </Meta>
         ) : null}

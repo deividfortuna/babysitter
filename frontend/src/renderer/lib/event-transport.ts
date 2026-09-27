@@ -15,6 +15,7 @@ const EVENT_TYPES = [
   "repo_added",
   "repo_removed",
   "repo_synced",
+  "repo_changed",
   "pull_updated",
   "watch_started",
   "watch_stopped",

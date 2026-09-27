@@ -117,3 +117,33 @@ test("keeps the title in the view header while watches load, fail or are none", 
   expect(await screen.findByText("daemon gone")).toBeVisible();
   expectViewTitle("Watched pull requests");
 });
+
+test("a row names a watch that auto start began, its update type and merge when ready", async () => {
+  serveApi({
+    watches: [
+      buildWatch({
+        id: 1,
+        number: 30,
+        title: "Bump stripe-go",
+        dependabot: true,
+        autoReason: "dependabot",
+        updateType: "patch",
+        mergeWhenReady: true,
+      }),
+      buildWatch({ id: 2, number: 31, title: "Retry webhooks" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const auto = await screen.findByRole("button", { name: /Bump stripe-go/ });
+  expect(within(auto).getByText("auto")).toHaveAttribute(
+    "title",
+    "Auto start began it because Dependabot opened the pull request.",
+  );
+  expect(within(auto).getByText("patch")).toBeVisible();
+  expect(within(auto).getByText("merge when ready")).toBeVisible();
+  const manual = screen.getByRole("button", { name: /Retry webhooks/ });
+  expect(within(manual).queryByText("auto")).toBeNull();
+  expect(within(manual).queryByText("merge when ready")).toBeNull();
+});

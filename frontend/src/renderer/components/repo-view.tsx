@@ -1,16 +1,18 @@
-import { useMemo, type ReactNode } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import {
   CircleAlertIcon,
   EyeIcon,
   ExternalLinkIcon,
   FolderGitIcon,
   GitPullRequestIcon,
+  PanelRightIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { usePulls, type PullRequest } from "@/hooks/usePulls";
-import { useRepos, useRequestSync } from "@/hooks/useRepos";
+import { useRepoQueue, useRepos, useRequestSync, type QueuedPullRequest } from "@/hooks/useRepos";
 import { useWatches, type Watch } from "@/hooks/useWatches";
-import { Meta, ToneBadge } from "@/components/status-badges";
+import { RepoSettingsPanel } from "@/components/repo-settings-panel";
+import { Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
 import { ViewHeader } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -20,7 +22,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Navigate } from "@/lib/navigation";
 import { relativeTime } from "@/lib/time";
-import type { Tone } from "@/lib/watch-status";
+import { queuePlace, type Tone } from "@/lib/watch-status";
 
 function ciWord(status: PullRequest["ciStatus"]): { label: string; tone: Tone } | null {
   switch (status) {
@@ -56,7 +58,9 @@ function SectionLabel({ children }: { children: ReactNode }) {
   );
 }
 
-function PullRow({ pr, onWatch }: { pr: PullRequest; onWatch: () => void }) {
+type PullRowProps = { pr: PullRequest; queued?: QueuedPullRequest; onWatch: () => void };
+
+function PullRow({ pr, queued, onWatch }: PullRowProps) {
   const ci = ciWord(pr.ciStatus);
   const review = reviewWord(pr.reviewDecision);
   return (
@@ -80,6 +84,14 @@ function PullRow({ pr, onWatch }: { pr: PullRequest; onWatch: () => void }) {
           </Meta>
           {ci ? <ToneBadge tone={ci.tone}>{ci.label}</ToneBadge> : null}
           {review ? <ToneBadge tone={review.tone}>{review.label}</ToneBadge> : null}
+          {queued ? (
+            <>
+              <QueuedBadge />
+              <Meta>
+                {queuePlace(queued.position)} · {queued.updateType}
+              </Meta>
+            </>
+          ) : null}
           <Meta>updated {relativeTime(pr.updatedAt)}</Meta>
           <a
             href={pr.htmlUrl}
@@ -114,8 +126,11 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
   const watches = useWatches(enabled);
   const pulls = usePulls(enabled);
   const requestSync = useRequestSync();
+  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const repo = repos.data?.find((r) => r.fullName === name);
+  const queue = useRepoQueue(enabled && repo ? repo.id : null);
+  const queuedByNumber = useMemo(() => new Map((queue.data ?? []).map((item) => [item.number, item])), [queue.data]);
   const watched = useMemo<Watch[]>(
     () => (watches.data ?? []).filter((w) => w.repo === name).sort((a, b) => b.number - a.number),
     [watches.data, name],
@@ -184,60 +199,77 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
   const synced = repo.lastSyncedAt ? `synced ${relativeTime(repo.lastSyncedAt)}` : "not synced yet";
 
   return (
-    <div className="flex flex-col">
-      <ViewHeader>
-        {title}
-        <Meta className="shrink-0">
-          {watched.length} watched · {open.length} open · {synced}
-        </Meta>
-        <div className="ml-auto flex shrink-0 items-center gap-1.5">
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            title="Sync now"
-            disabled={requestSync.isPending}
-            onClick={() => requestSync.mutate()}
-          >
-            <RefreshCwIcon data-icon="inline-start" />
-            Sync
-          </Button>
-          <Button type="button" variant="outline" size="sm" onClick={onWatchPR}>
-            <GitPullRequestIcon data-icon="inline-start" />
-            Watch by URL
-          </Button>
-        </div>
-      </ViewHeader>
+    <div className="flex min-h-0 flex-1">
+      <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+        <ViewHeader>
+          {title}
+          <Meta className="shrink-0">
+            {watched.length} watched · {open.length} open · {synced}
+          </Meta>
+          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              title="Sync now"
+              disabled={requestSync.isPending}
+              onClick={() => requestSync.mutate()}
+            >
+              <RefreshCwIcon data-icon="inline-start" />
+              Sync
+            </Button>
+            <Button type="button" variant="outline" size="sm" onClick={onWatchPR}>
+              <GitPullRequestIcon data-icon="inline-start" />
+              Watch by URL
+            </Button>
+            {settingsOpen ? null : (
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Repository settings"
+                title="Repository settings"
+                className="size-7"
+                onClick={() => setSettingsOpen(true)}
+              >
+                <PanelRightIcon />
+              </Button>
+            )}
+          </div>
+        </ViewHeader>
 
-      {repo.lastError ? (
-        <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
-          <CircleAlertIcon />
-          <AlertTitle>The last sync failed</AlertTitle>
-          <AlertDescription>{repo.lastError}</AlertDescription>
-        </Alert>
-      ) : null}
+        {repo.lastError ? (
+          <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
+            <CircleAlertIcon />
+            <AlertTitle>The last sync failed</AlertTitle>
+            <AlertDescription>{repo.lastError}</AlertDescription>
+          </Alert>
+        ) : null}
 
-      <SectionLabel>watching · {watched.length}</SectionLabel>
-      {watched.length === 0 ? (
-        <p className="border-b px-5 py-4 text-sm text-muted-foreground">
-          No pull request of this repository is watched. Pick one from the open ones below.
-        </p>
-      ) : (
-        watched.map((w) => <WatchRow key={w.id} watch={w} onOpen={() => onNavigate({ kind: "watch", id: w.id })} />)
-      )}
+        <SectionLabel>watching · {watched.length}</SectionLabel>
+        {watched.length === 0 ? (
+          <p className="border-b px-5 py-4 text-sm text-muted-foreground">
+            No pull request of this repository is watched. Pick one from the open ones below.
+          </p>
+        ) : (
+          watched.map((w) => <WatchRow key={w.id} watch={w} onOpen={() => onNavigate({ kind: "watch", id: w.id })} />)
+        )}
 
-      <SectionLabel>open, not watched · {unwatched.length}</SectionLabel>
-      {unwatched.length === 0 ? (
-        <p className="border-b px-5 py-4 text-sm text-muted-foreground">
-          {open.length === 0
-            ? repo.lastSyncedAt
-              ? "No open pull request. The daemon syncs every few minutes."
-              : "The daemon has not synced this repository yet."
-            : "Every open pull request is watched."}
-        </p>
-      ) : (
-        unwatched.map((pr) => <PullRow key={pr.number} pr={pr} onWatch={() => onWatchPull(pr)} />)
-      )}
+        <SectionLabel>open, not watched · {unwatched.length}</SectionLabel>
+        {unwatched.length === 0 ? (
+          <p className="border-b px-5 py-4 text-sm text-muted-foreground">
+            {open.length === 0
+              ? repo.lastSyncedAt
+                ? "No open pull request. The daemon syncs every few minutes."
+                : "The daemon has not synced this repository yet."
+              : "Every open pull request is watched."}
+          </p>
+        ) : (
+          unwatched.map((pr) => (
+            <PullRow key={pr.number} pr={pr} queued={queuedByNumber.get(pr.number)} onWatch={() => onWatchPull(pr)} />
+          ))
+        )}
+      </div>
+      {settingsOpen ? <RepoSettingsPanel repo={repo} onClose={() => setSettingsOpen(false)} /> : null}
     </div>
   );
 }

@@ -71,6 +71,27 @@ export function mergeMethodText(method: Watch["mergeMethod"] | undefined): strin
   }
 }
 
+export function autoReasonText(reason: Watch["autoReason"]): string {
+  switch (reason) {
+    case "mine":
+      return "Auto start began it because you opened the pull request.";
+    case "assigned":
+      return "Auto start began it because the pull request is assigned to you.";
+    case "dependabot":
+      return "Auto start began it because Dependabot opened the pull request.";
+    default:
+      return "";
+  }
+}
+
+const ordinals = new Intl.PluralRules("en-US", { type: "ordinal" });
+const ordinalSuffix: Record<string, string> = { one: "st", two: "nd", few: "rd", other: "th" };
+
+export function queuePlace(position: number): string {
+  if (position <= 1) return "next in queue";
+  return `${position}${ordinalSuffix[ordinals.select(position)] ?? "th"} in queue`;
+}
+
 export function stopReasonText(reason: Watch["stopReason"]): string {
   switch (reason) {
     case "merged":

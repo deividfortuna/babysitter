@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 	"time"
+
+	"github.com/deividfortuna/babysitter/internal/dependabot"
 )
 
 func TestSchemaAcceptsEveryVocabularyValue(t *testing.T) {
@@ -47,6 +49,31 @@ func TestSchemaAcceptsEveryVocabularyValue(t *testing.T) {
 		n := Notification{WatchID: w.ID, Kind: kind, Title: string(kind), Body: "body", CreatedAt: now}
 		if _, err := s.AddNotification(ctx, n); err != nil {
 			t.Errorf("notification kind %q rejected: %v", kind, err)
+		}
+	}
+	for _, action := range NotificationActions {
+		n := Notification{WatchID: w.ID, Kind: NotificationAuto, Title: "t", Body: "body", CreatedAt: now, Action: action}
+		if _, err := s.AddNotification(ctx, n); err != nil {
+			t.Errorf("notification action %q rejected: %v", action, err)
+		}
+	}
+	for _, reason := range []AutoReason{AutoNone, AutoMine, AutoAssigned, AutoDependabot} {
+		if _, err := s.db.ExecContext(ctx, "UPDATE watches SET auto_reason = ? WHERE id = ?", reason, w.ID); err != nil {
+			t.Errorf("auto reason %q rejected: %v", reason, err)
+		}
+	}
+	for _, approval := range DependabotApprovals {
+		c := DefaultRepoConfig(repoID(t, s))
+		c.DependabotApproval = approval
+		if _, err := s.SaveRepoConfig(ctx, c); err != nil {
+			t.Errorf("Dependabot approval %q rejected: %v", approval, err)
+		}
+	}
+	for _, level := range dependabot.Levels {
+		c := DefaultRepoConfig(repoID(t, s))
+		c.DependabotScope = level
+		if _, err := s.SaveRepoConfig(ctx, c); err != nil {
+			t.Errorf("Dependabot scope %q rejected: %v", level, err)
 		}
 	}
 	for _, state := range PRStates {

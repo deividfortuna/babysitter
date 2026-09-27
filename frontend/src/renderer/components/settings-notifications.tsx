@@ -42,6 +42,10 @@ const KIND_COPY: Record<NotificationKind, KindCopy> = {
     label: "Merges",
     description: "A pull request that can merge, and one that failed to.",
   },
+  auto: {
+    label: "Auto start",
+    description: "A watch started on its own, or a Dependabot update waits on your approval.",
+  },
 };
 
 function unknownKinds(muted: readonly string[]): NotificationKind[] {

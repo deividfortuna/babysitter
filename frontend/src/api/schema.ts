@@ -193,6 +193,41 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/repos/{id}/config": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** What babysitter does with the new pull requests of a repository */
+        get: operations["getRepoConfig"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Change the configuration of a repository. A toggle that goes on records the time; only pull requests created from then on start. */
+        patch: operations["updateRepoConfig"];
+        trace?: never;
+    };
+    "/api/v1/repos/{id}/queue": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The Dependabot pull requests that wait for a place, oldest first */
+        get: operations["getRepoQueue"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/settings": {
         parameters: {
             query?: never;
@@ -277,7 +312,7 @@ export interface paths {
         delete?: never;
         options?: never;
         head?: never;
-        /** Change the approvals and the merge method of a watch while it runs. The other fields of a watch cannot change. */
+        /** Change the approvals, the merge method and merge when ready of a watch while it runs. The other fields of a watch cannot change. */
         patch: operations["updateWatch"];
         trace?: never;
     };
@@ -614,7 +649,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            kind: "comment" | "review_comment" | "review" | "check_failed" | "check_recovered" | "checks_green" | "commit" | "behind" | "conflict" | "merged" | "closed" | "heartbeat" | "watch_started" | "watch_stopped" | "session_started" | "session_exited" | "nudged" | "agent_failed" | "merge_ready" | "merge_failed" | "replied" | "review_requested" | "proposal" | "taken_over" | "handed_back";
+            kind: "comment" | "review_comment" | "review" | "check_failed" | "check_recovered" | "checks_green" | "commit" | "behind" | "conflict" | "merged" | "closed" | "heartbeat" | "watch_started" | "watch_stopped" | "session_started" | "session_exited" | "nudged" | "agent_failed" | "merge_ready" | "merge_failed" | "replied" | "review_requested" | "proposal" | "taken_over" | "handed_back" | "auto_started" | "approved" | "approval_asked";
             /**
              * Format: date-time
              * @description When the row reached the agent
@@ -661,7 +696,7 @@ export interface components {
              * @description Empty means agent: the agent asks you for something
              * @enum {string}
              */
-            kind?: "" | "agent" | "review" | "checks" | "watch" | "merge";
+            kind?: "" | "agent" | "review" | "checks" | "watch" | "merge" | "auto";
             number?: number;
             repo?: string;
             /** @description Do not make a sound */
@@ -678,16 +713,21 @@ export interface components {
             watch: components["schemas"]["HttpdWatch"];
         };
         HttpdNotification: {
+            /**
+             * @description What the app offers to do from the notification. approve_merge: approve the Dependabot update in your name and merge it
+             * @enum {string}
+             */
+            action?: "" | "approve_merge";
             body: string;
             /** Format: date-time */
             createdAt: string;
             /** Format: int64 */
             id: number;
             /**
-             * @description agent: the agent asks you for something; review: a review item nobody takes; checks: the checks of the pull request; watch: the life of a watch and of its session; merge: the pull request can merge, or failed to
+             * @description agent: the agent asks you for something; review: a review item nobody takes; checks: the checks of the pull request; watch: the life of a watch and of its session; merge: the pull request can merge, merged, or failed to; auto: a watch started on its own, or a Dependabot update waits on your approval
              * @enum {string}
              */
-            kind: "agent" | "review" | "checks" | "watch" | "merge";
+            kind: "agent" | "review" | "checks" | "watch" | "merge" | "auto";
             number: number;
             /**
              * Format: date-time
@@ -859,6 +899,7 @@ export interface components {
         HttpdPullRequest: {
             additions: number;
             approvals: number;
+            assignees: string[] | null;
             author: string;
             baseRef: string;
             changesRequested: number;
@@ -870,6 +911,8 @@ export interface components {
             createdAt: string;
             deletions: number;
             draft: boolean;
+            /** @description The head branch lives in another repository, so auto start skips the pull request */
+            fork: boolean;
             headRef: string;
             headSha: string;
             htmlUrl: string;
@@ -887,11 +930,27 @@ export interface components {
             /** Format: date-time */
             syncedAt: string;
             title: string;
+            /**
+             * @description The highest update of a Dependabot pull request
+             * @enum {string}
+             */
+            updateType?: "" | "patch" | "minor" | "major";
             /** Format: date-time */
             updatedAt: string;
         };
         HttpdPullRequestList: {
             pullRequests: components["schemas"]["HttpdPullRequest"][] | null;
+        };
+        HttpdQueuedPullRequest: {
+            /** Format: date-time */
+            createdAt: string;
+            number: number;
+            /** @description 1 starts next */
+            position: number;
+            title: string;
+            /** @enum {string} */
+            updateType: "patch" | "minor" | "major";
+            url: string;
         };
         HttpdRateLimit: {
             /** @description Requests the token may make in one window; 0 while unknown */
@@ -939,8 +998,49 @@ export interface components {
             name: string;
             owner: string;
         };
+        HttpdRepoConfig: {
+            /** @description Start a watch on each new pull request that the author opened or that is assigned to the author */
+            autoStartMine: boolean;
+            /**
+             * Format: date-time
+             * @description When the toggle went on; only pull requests created from then on start
+             */
+            autoStartMineSince?: string | null;
+            /** @description Start a watch on each new pull request of Dependabot */
+            autoWatchDependabot: boolean;
+            /**
+             * Format: date-time
+             * @description When the toggle went on; only pull requests created from then on start
+             */
+            autoWatchDependabotSince?: string | null;
+            /** @description The checkout auto start makes each worktree from; the toggles stay off without it */
+            checkoutDir: string;
+            /**
+             * @description never: the daemon submits no review; ask: a notification asks you to approve a green update in scope; green: the daemon approves a green update in scope in your name
+             * @enum {string}
+             */
+            dependabotApproval: "never" | "ask" | "green";
+            /** @description How many Dependabot watches run at the same time; the rest wait in the queue */
+            dependabotLimit: number;
+            /**
+             * @description The highest Dependabot update that merges on its own
+             * @enum {string}
+             */
+            dependabotScope: "patch" | "minor" | "major";
+            /** @description Auto start also takes a draft of the author */
+            includeDrafts: boolean;
+            overrides: components["schemas"]["HttpdWatchOverrides"];
+            repo: string;
+            /** Format: int64 */
+            repoId: number;
+        };
         HttpdRepoList: {
             repos: components["schemas"]["HttpdRepo"][] | null;
+        };
+        HttpdRepoQueue: {
+            /** @description The Dependabot pull requests that wait for a place, oldest first */
+            pullRequests: components["schemas"]["HttpdQueuedPullRequest"][] | null;
+            repo: string;
         };
         HttpdSession: {
             /** @description The file with everything the agent printed */
@@ -984,7 +1084,7 @@ export interface components {
              */
             mergeMethod: "" | "squash" | "merge" | "rebase";
             /** @description The notification kinds that reach nobody. The history keeps them either way */
-            mutedNotificationKinds: ("agent" | "review" | "checks" | "watch" | "merge")[] | null;
+            mutedNotificationKinds: ("agent" | "review" | "checks" | "watch" | "merge" | "auto")[] | null;
             /** @description A notification makes a sound */
             notificationSound: boolean;
             /** @description What happens on a watched pull request is shown as a notification of the operating system */
@@ -1013,6 +1113,8 @@ export interface components {
              * @enum {string|null}
              */
             mergeMethod?: "" | "squash" | "merge" | "rebase" | null;
+            /** @description The daemon merges with the method of the watch as soon as the watch is ready to merge; absent means off */
+            mergeWhenReady?: boolean | null;
             model?: string;
             /**
              * @description The AI provider that runs the agent session, or self when the caller's own session is the agent
@@ -1059,6 +1161,11 @@ export interface components {
             author: string;
             /** @description Approved work goes out after a clean rebase without asking again */
             autoApproveRebase: boolean;
+            /**
+             * @description Why auto start began the watch: the author opened the pull request, it is assigned to the author, or Dependabot opened it; absent for a watch started by hand
+             * @enum {string}
+             */
+            autoReason?: "" | "mine" | "assigned" | "dependabot";
             baseRef: string;
             checkStates: {
                 [key: string]: string;
@@ -1082,6 +1189,8 @@ export interface components {
              * @enum {string}
              */
             mergeMethod: "" | "squash" | "merge" | "rebase";
+            /** @description The daemon merges with the method of the watch as soon as the watch is ready to merge */
+            mergeWhenReady: boolean;
             mergeableState: string;
             model: string;
             number: number;
@@ -1118,6 +1227,11 @@ export interface components {
              */
             takenOverAt?: string | null;
             title: string;
+            /**
+             * @description The highest update of a Dependabot pull request; a type the daemon cannot read counts as major
+             * @enum {string}
+             */
+            updateType?: "" | "patch" | "minor" | "major";
             url: string;
             /** @description The private branch of the watch in its worktree */
             workBranch: string;
@@ -1125,6 +1239,29 @@ export interface components {
         };
         HttpdWatchList: {
             watches: components["schemas"]["HttpdWatch"][] | null;
+        };
+        HttpdWatchOverrides: {
+            /**
+             * @description Who releases the work of a turn of the agent; empty takes the setting of the daemon
+             * @enum {string}
+             */
+            approvalMode: "" | "auto" | "manual";
+            /** @description How many approvals the pull request needs; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch */
+            approvalsRequired?: number | null;
+            /** @description Report the review items the pull request has already; absent takes the setting of the daemon */
+            includeExisting?: boolean | null;
+            /**
+             * @description The merge method of the watches; empty takes the setting of the daemon
+             * @enum {string}
+             */
+            mergeMethod: "" | "squash" | "merge" | "rebase";
+            /** @description The model of the agent; empty takes the model of the provider */
+            model: string;
+            /**
+             * @description The AI provider of the watches auto start begins; empty takes the provider of watch start
+             * @enum {string}
+             */
+            provider: "" | "claude" | "copilot";
         };
         HttpdWatchSummary: {
             activity: {
@@ -1148,6 +1285,8 @@ export interface components {
             subject: string;
         };
         MergeWatchParams: {
+            /** @description Approve the Dependabot update in the name of the author before the merge. The daemon refuses a pull request that is not of Dependabot or an update outside the merge scope of the repository */
+            approve?: boolean;
             /**
              * @description The merge method for this merge; empty takes the method of the watch
              * @enum {string}
@@ -1167,6 +1306,19 @@ export interface components {
              * @description The comment the reply answers: a review comment, in its thread, or a comment on the conversation, on the conversation; absent posts a comment on the pull request
              */
             inReplyTo?: number;
+        };
+        RepoConfigParams: {
+            autoStartMine?: boolean | null;
+            autoWatchDependabot?: boolean | null;
+            /** @description A git checkout whose origin is the repository; empty clears it */
+            checkoutDir?: string | null;
+            /** @enum {string|null} */
+            dependabotApproval?: "never" | "ask" | "green" | null;
+            dependabotLimit?: number | null;
+            /** @enum {string|null} */
+            dependabotScope?: "patch" | "minor" | "major" | null;
+            includeDrafts?: boolean | null;
+            overrides?: components["schemas"]["HttpdWatchOverrides"];
         };
         SendParams: {
             message: string;
@@ -1189,6 +1341,8 @@ export interface components {
              * @enum {string|null}
              */
             mergeMethod?: "" | "squash" | "merge" | "rebase" | null;
+            /** @description The daemon merges as soon as the watch is ready to merge; absent keeps what the watch has */
+            mergeWhenReady?: boolean | null;
         };
     };
     responses: never;
@@ -1657,6 +1811,160 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    getRepoConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdRepoConfig"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    updateRepoConfig: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["RepoConfigParams"];
+            };
+        };
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdRepoConfig"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    getRepoQueue: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Repository id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdRepoQueue"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
             };
             /** @description Not Found */
             404: {

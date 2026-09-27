@@ -243,7 +243,7 @@ func TestAWatchChangesItsMergeRules(t *testing.T) {
 	pub := &recordingPublisher{}
 	s.SetPublisher(pub)
 
-	w, err = s.SetWatchMergeRules(ctx, w.ID, 2, "rebase")
+	w, err = s.SetWatchMergeRules(ctx, w.ID, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase"})
 	if err != nil || w.ApprovalsRequired != 2 || w.MergeMethod != "rebase" {
 		t.Fatalf("SetWatchMergeRules() = %+v, %v", w, err)
 	}
@@ -251,10 +251,10 @@ func TestAWatchChangesItsMergeRules(t *testing.T) {
 		t.Fatalf("event = %+v", e)
 	}
 	n := len(pub.types)
-	if _, err := s.SetWatchMergeRules(ctx, w.ID, 2, "rebase"); err != nil || len(pub.types) != n {
+	if _, err := s.SetWatchMergeRules(ctx, w.ID, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase"}); err != nil || len(pub.types) != n {
 		t.Fatalf("a change to the same values published %v, %v", pub.types[n:], err)
 	}
-	if _, err := s.SetWatchMergeRules(ctx, w.ID+100, 2, "rebase"); !errors.Is(err, ErrWatchNotFound) {
+	if _, err := s.SetWatchMergeRules(ctx, w.ID+100, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase"}); !errors.Is(err, ErrWatchNotFound) {
 		t.Fatalf("SetWatchMergeRules() of no watch = %v, want ErrWatchNotFound", err)
 	}
 }

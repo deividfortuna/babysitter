@@ -1,9 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api/schema";
 import { api, apiErrorMessage } from "../lib/api-client";
-import { pullsQueryKey, reposQueryKey } from "../lib/query-keys";
+import { pullsQueryKey, repoConfigQueryKey, repoQueueQueryKey, reposQueryKey } from "../lib/query-keys";
 
 export type Repo = components["schemas"]["HttpdRepo"];
+export type RepoConfig = components["schemas"]["HttpdRepoConfig"];
+export type RepoConfigUpdate = components["schemas"]["RepoConfigParams"];
+export type WatchOverrides = components["schemas"]["HttpdWatchOverrides"];
+export type QueuedPullRequest = components["schemas"]["HttpdQueuedPullRequest"];
+export type DependabotScope = RepoConfig["dependabotScope"];
+export type DependabotApproval = RepoConfig["dependabotApproval"];
 
 export function useRepos(enabled: boolean) {
   return useQuery({
@@ -50,6 +56,50 @@ export function useRequestSync() {
     mutationFn: async () => {
       const { error } = await api().POST("/api/v1/sync");
       if (error) throw new Error(apiErrorMessage(error, "Could not request a sync."));
+    },
+  });
+}
+
+export function useRepoConfig(repoId: number | null) {
+  return useQuery({
+    queryKey: repoConfigQueryKey(repoId ?? 0),
+    enabled: repoId !== null,
+    queryFn: async () => {
+      const { data, error } = await api().GET("/api/v1/repos/{id}/config", {
+        params: { path: { id: repoId ?? 0 } },
+      });
+      if (error) throw new Error(apiErrorMessage(error, "Could not load the repository settings."));
+      return data;
+    },
+  });
+}
+
+export function useUpdateRepoConfig(repoId: number) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (body: RepoConfigUpdate) => {
+      const { data, error } = await api().PATCH("/api/v1/repos/{id}/config", {
+        params: { path: { id: repoId } },
+        body,
+      });
+      if (error) throw new Error(apiErrorMessage(error, "Could not change the repository settings."));
+      return data;
+    },
+    onSuccess: (config) => {
+      queryClient.setQueryData(repoConfigQueryKey(repoId), config);
+      void queryClient.invalidateQueries({ queryKey: repoQueueQueryKey(repoId) });
+    },
+  });
+}
+
+export function useRepoQueue(repoId: number | null) {
+  return useQuery({
+    queryKey: repoQueueQueryKey(repoId ?? 0),
+    enabled: repoId !== null,
+    queryFn: async () => {
+      const { data, error } = await api().GET("/api/v1/repos/{id}/queue", { params: { path: { id: repoId ?? 0 } } });
+      if (error) throw new Error(apiErrorMessage(error, "Could not load the queue of the repository."));
+      return data.pullRequests ?? [];
     },
   });
 }

@@ -56,6 +56,19 @@ test("each kind has a switch, and a muted one is off", async () => {
   expect(screen.getByRole("switch", { name: "Agent requests" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Watches" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Merges" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Auto start" })).toBeChecked();
+});
+
+test("the auto start kind can be muted", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings(), savedSettings });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openNotifications();
+  await user.click(await screen.findByRole("switch", { name: "Auto start" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0].mutedNotificationKinds).toEqual(["auto"]);
 });
 
 test("turning a kind off mutes it and leaves the rest alone", async () => {

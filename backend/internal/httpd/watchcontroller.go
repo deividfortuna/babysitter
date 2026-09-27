@@ -131,6 +131,7 @@ var (
 		conflict("watch_stopped", prwatch.ErrWatchStopped),
 		conflict("not_ready", prwatch.ErrNotReady),
 		unprocessable("merge_refused", prwatch.ErrMergeRefused),
+		unprocessable("approve_refused", prwatch.ErrNotDependabot, prwatch.ErrOutOfScope),
 		badRequest("bad_merge_method", prwatch.ErrBadMergeMethod),
 		unavailable("watch_unavailable", errWatchUnavailable),
 	)

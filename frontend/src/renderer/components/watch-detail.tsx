@@ -17,11 +17,14 @@ import {
   PowerOffIcon,
   RefreshCwIcon,
   SendIcon,
+  ShieldCheckIcon,
+  ShieldQuestionMarkIcon,
   SquareIcon,
   TerminalIcon,
   TriangleAlertIcon,
   Undo2Icon,
   XCircleIcon,
+  ZapIcon,
   type LucideIcon,
 } from "lucide-react";
 import type { Proposal } from "@/hooks/useProposals";
@@ -33,6 +36,7 @@ import { useWatchActivity, type Activity } from "@/hooks/useWatchActivity";
 import { usePollWatch, useWatch, useWatches, type Watch } from "@/hooks/useWatches";
 import { AgentTerminal } from "@/components/agent-terminal";
 import {
+  AutoBadges,
   ChecksBadge,
   MergeableBadge,
   MergeBadge,
@@ -61,6 +65,7 @@ import {
   heldForHandback,
   isSelfWatch,
   isTakenOver,
+  mergeMethodText,
   sessionWord,
   stopReasonText,
   watchLabel,
@@ -94,6 +99,9 @@ const icons: Record<Activity["kind"], { icon: LucideIcon; tone?: string }> = {
   proposal: { icon: FileDiffIcon, tone: "text-attention" },
   taken_over: { icon: TerminalIcon },
   handed_back: { icon: Undo2Icon },
+  auto_started: { icon: ZapIcon },
+  approved: { icon: ShieldCheckIcon, tone: "text-success" },
+  approval_asked: { icon: ShieldQuestionMarkIcon, tone: "text-attention" },
 };
 
 const checkTone: Record<string, string> = {
@@ -215,6 +223,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
               <MergeableBadge state={watch.mergeableState} />
               <MergeBadge watch={watch} />
               {isTakenOver(watch) ? <ToneBadge tone="neutral">with you</ToneBadge> : null}
+              <AutoBadges watch={watch} />
               <Meta>
                 {watch.headRef} · {shortSha(watch.headSha)}
               </Meta>
@@ -242,8 +251,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
             <div className="flex flex-wrap items-center gap-2 border-b bg-success/5 px-5 py-2.5 text-sm">
               <GitMergeIcon className="size-4 shrink-0 text-success" />
               <span>
-                Ready to merge since {relativeTime(watch.readySince ?? "")}. Merge it when it suits you; the daemon
-                never merges on its own.
+                Ready to merge since {relativeTime(watch.readySince ?? "")}. {readyText(watch)}
               </span>
             </div>
           ) : null}
@@ -393,6 +401,13 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
       </div>
     </ProposalDecisionProvider>
   );
+}
+
+function readyText(watch: Watch): string {
+  if (watch.mergeWhenReady) {
+    return `Merge when ready is on, so the daemon merges it now with ${mergeMethodText(watch.mergeMethod)}.`;
+  }
+  return "Merge it when it suits you. Merge when ready is off, so the daemon does not merge it.";
 }
 
 function retryOffered(a: Activity, current: Proposal | undefined): number | null {

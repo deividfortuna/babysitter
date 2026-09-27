@@ -1,4 +1,4 @@
-import { CircleAlertIcon, GitMergeIcon, MessageSquareIcon, PlayIcon, SparklesIcon } from "lucide-react";
+import { CircleAlertIcon, GitMergeIcon, MessageSquareIcon, PlayIcon, SparklesIcon, ZapIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { NotificationKind } from "../../shared/notifications";
 
@@ -8,4 +8,5 @@ export const KIND_ICON: Record<NotificationKind, LucideIcon> = {
   checks: CircleAlertIcon,
   watch: PlayIcon,
   merge: GitMergeIcon,
+  auto: ZapIcon,
 };

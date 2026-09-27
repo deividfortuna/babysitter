@@ -60,6 +60,17 @@ babysitter/
   last, and 64 MiB of bodies at most. The repository watcher reads the checks of a pull request when its head
   moves, while a check still runs, and once the TTL of the stored status
   runs out, not on every pass.
+- `internal/autostart` starts watches on its own. The daemon passes
+  `Starter.Run` to the watcher as `watcher.WithAfterPass`, so it runs after
+  each pass; `babysitter serve` builds its watcher without it and starts
+  no watch. It reads the `repo_config` of each repository, picks the new
+  pull requests of the author and of Dependabot, claims each one in
+  `auto_start_claims` and calls `prwatch.Service.Start` with the overrides
+  of the repository. `autostart.Queue` is the Dependabot queue: a query
+  over the stored pull requests, not rows of its own. `autostart.Configure`
+  checks the checkout and records when a toggle went on.
+- `internal/dependabot` reads the update type of a Dependabot pull
+  request from its title and body, and compares it with a scope.
 
 ## Frontend
 
@@ -421,6 +432,8 @@ and only a new snapshot can judge the new count.
 | GET, PUT | `/api/v1/settings` | The settings of the daemon; a field the PUT leaves out keeps its value |
 | GET, POST | `/api/v1/repos` | List or watch repositories |
 | DELETE | `/api/v1/repos/{id}` | Stop watching a repository |
+| GET, PATCH | `/api/v1/repos/{id}/config` | The auto watch configuration of a repository; a toggle that goes on records the time |
+| GET | `/api/v1/repos/{id}/queue` | The Dependabot pull requests that wait for a place, oldest first |
 | GET | `/api/v1/prs` | Stored pull requests, `?repo=` and `?state=` |
 | GET, POST | `/api/v1/notifications` | The notification history, `?status=unread` and `?limit=`, or record one |
 | POST | `/api/v1/notifications/read` | Mark notifications as seen; no ids marks every unread one |
@@ -430,9 +443,9 @@ and only a new snapshot can judge the new count.
 | GET | `/api/v1/ratelimit` | The core GitHub budget the token has left, and whether the polls wait for a reset or a retry |
 | GET, POST | `/api/v1/watches` | List the watched pull requests, or start one |
 | GET | `/api/v1/watches/{id}` | One watch |
-| PATCH | `/api/v1/watches/{id}` | Change the approvals and the merge method of a running watch; `null` approvals read the rule of the base branch again, and any other field is refused |
+| PATCH | `/api/v1/watches/{id}` | Change the approvals, the merge method and merge when ready of a running watch; `null` approvals read the rule of the base branch again, and any other field is refused |
 | POST | `/api/v1/watches/{id}/stop` | Stop a watch, returns its summary |
-| POST | `/api/v1/watches/{id}/merge` | Merge the pull request of a watch when it is ready, returns the stopped watch |
+| POST | `/api/v1/watches/{id}/merge` | Merge the pull request of a watch when it is ready, returns the stopped watch; `approve` first approves a Dependabot update in scope in the name of the author |
 | POST | `/api/v1/watches/{id}/poll` | Poll a watch now |
 | GET | `/api/v1/watches/{id}/activity` | The activity of a watch, `?since=` and `?limit=` |
 | POST | `/api/v1/watches/{id}/send` | Type a message from the author into the agent session |
@@ -706,14 +719,27 @@ and only a new snapshot can judge the new count.
    author) and keeps it on the watch row. The first poll without a
    blocker starts a clock, a new head starts it again, and after one
    whole interval without a blocker a `merge_ready` row tells the
-   author once per head. The daemon never merges on its own: the author
-   merges from the app or with `babysitter watch merge`, the daemon
+   author once per head. The author merges from the app or with
+   `babysitter watch merge`, or turns on merge when ready and the poll
+   merges in the same step (`prwatch.mergeWhenReady`), once for each
+   head: a failure is a `merge_failed` row with the ref
+   `auto-merge@<head>`, and only a new head tries again. For a merge of
+   the author the daemon
    takes a fresh snapshot, assesses it as a poll does and refuses unless
    that assessment calls the pull request ready, so the merge waits for
    the same clock every other reader waits for; it merges with the head
    commit of that snapshot so a push in between makes GitHub refuse,
    records a `merged` row and stops the watch. A merge GitHub refuses is
    a `merge_failed` row and the watch goes on.
+   On a Dependabot watch that auto start began, the poll first applies
+   the approval of the repository (`prwatch.dependabotPolicy`): `green`
+   submits an approving review once for each head when the build is
+   green and the update is within the scope, and records `approved`;
+   `ask` records `approval_asked` when a review is the only blocker,
+   which notifies with the `approve_merge` action. `watch merge
+   --approve` approves and merges in one step, and skips the wait for
+   the clock because the approval it just gave changed the pull
+   request.
 10. Merged, closed, or three access errors in a row stop the watch with a
    summary. A stop ends the agent session, declines the proposal that
    did not go out, then deletes the worktree and its private branch,

@@ -7,6 +7,7 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/checks"
+	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
@@ -61,6 +62,9 @@ type PullRequest struct {
 	Deletions          int                  `json:"deletions"`
 	CIStatus           checks.CIStatus      `json:"ciStatus" enum:"success,failure,pending,none"`
 	SyncedAt           time.Time            `json:"syncedAt"`
+	Assignees          []string             `json:"assignees"`
+	Fork               bool                 `json:"fork" description:"The head branch lives in another repository, so auto start skips the pull request"`
+	UpdateType         dependabot.Level     `json:"updateType,omitempty" enum:",patch,minor,major" description:"The highest update of a Dependabot pull request"`
 }
 
 type PullRequestList struct {
@@ -97,6 +101,10 @@ func pullFromStore(p store.PullRequest) PullRequest {
 	if labels == nil {
 		labels = []string{}
 	}
+	assignees := p.Assignees
+	if assignees == nil {
+		assignees = []string{}
+	}
 	return PullRequest{
 		Repo:               p.RepoFullName,
 		Number:             p.Number,
@@ -122,6 +130,9 @@ func pullFromStore(p store.PullRequest) PullRequest {
 		Deletions:          p.Deletions,
 		CIStatus:           p.CIStatus,
 		SyncedAt:           p.SyncedAt,
+		Assignees:          assignees,
+		Fork:               p.Fork,
+		UpdateType:         p.UpdateType,
 	}
 }
 
@@ -163,6 +174,9 @@ type Watch struct {
 	AutoApproveRebase bool                    `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
 	PendingProposal   int                     `json:"pendingProposal,omitempty" description:"The number of the proposal that waits on the author, absent when none waits"`
 	TakenOverAt       *time.Time              `json:"takenOverAt,omitempty" description:"Since when the session is with the author in their terminal; absent while the daemon has it"`
+	AutoReason        store.AutoReason        `json:"autoReason,omitempty" enum:",mine,assigned,dependabot" description:"Why auto start began the watch: the author opened the pull request, it is assigned to the author, or Dependabot opened it; absent for a watch started by hand"`
+	MergeWhenReady    bool                    `json:"mergeWhenReady" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge"`
+	UpdateType        dependabot.Level        `json:"updateType,omitempty" enum:",patch,minor,major" description:"The highest update of a Dependabot pull request; a type the daemon cannot read counts as major"`
 	Session           Session                 `json:"session"`
 	Summary           *WatchSummary           `json:"summary,omitempty"`
 }
@@ -208,6 +222,7 @@ type StartWatchRequest struct {
 	MergeMethod       *string       `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the setting of the daemon"`
 	ApprovalMode      *string       `json:"approvalMode,omitempty" enum:"auto,manual" description:"Who releases the work of a turn of the agent; absent takes the setting of the daemon, and a self watch runs in auto"`
 	AutoApproveRebase *bool         `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon"`
+	MergeWhenReady    *bool         `json:"mergeWhenReady,omitempty" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge; absent means off"`
 }
 
 type ReplyRequest struct {
@@ -341,12 +356,14 @@ func proposalDetailFrom(d prwatch.ProposalDetail) ProposalDetail {
 }
 
 type MergeWatchRequest struct {
-	Method string `json:"method,omitempty" enum:",squash,merge,rebase" description:"The merge method for this merge; empty takes the method of the watch"`
+	Method  string `json:"method,omitempty" enum:",squash,merge,rebase" description:"The merge method for this merge; empty takes the method of the watch"`
+	Approve bool   `json:"approve,omitempty" description:"Approve the Dependabot update in the name of the author before the merge. The daemon refuses a pull request that is not of Dependabot or an update outside the merge scope of the repository"`
 }
 
 type UpdateWatchRequest struct {
 	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent keeps what the watch has, 0 asks for none, and null reads the rule of the base branch again"`
 	MergeMethod       *string       `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent keeps what the watch has"`
+	MergeWhenReady    *bool         `json:"mergeWhenReady,omitempty" description:"The daemon merges as soon as the watch is ready to merge; absent keeps what the watch has"`
 }
 
 type StopWatchRequest struct {
@@ -394,7 +411,7 @@ type Settings struct {
 	KeepWorktree           bool     `json:"keepWorktree" description:"A watch that stops leaves its worktree on disk"`
 	NotificationsEnabled   bool     `json:"notificationsEnabled" description:"What happens on a watched pull request is shown as a notification of the operating system"`
 	NotificationSound      bool     `json:"notificationSound" description:"A notification makes a sound"`
-	MutedNotificationKinds []string `json:"mutedNotificationKinds" items.enum:"agent,review,checks,watch,merge" description:"The notification kinds that reach nobody. The history keeps them either way"`
+	MutedNotificationKinds []string `json:"mutedNotificationKinds" items.enum:"agent,review,checks,watch,merge,auto" description:"The notification kinds that reach nobody. The history keeps them either way"`
 	ApprovalMode           string   `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent of a new watch: the daemon on its own, or the author"`
 	AutoApproveRebase      bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
 }
@@ -402,7 +419,8 @@ type Settings struct {
 type Notification struct {
 	ID        int64      `json:"id"`
 	WatchID   int64      `json:"watchId,omitempty" description:"The watch the notification belongs to; absent for one that belongs to none"`
-	Kind      string     `json:"kind" enum:"agent,review,checks,watch,merge" description:"agent: the agent asks you for something; review: a review item nobody takes; checks: the checks of the pull request; watch: the life of a watch and of its session; merge: the pull request can merge, or failed to"`
+	Kind      string     `json:"kind" enum:"agent,review,checks,watch,merge,auto" description:"agent: the agent asks you for something; review: a review item nobody takes; checks: the checks of the pull request; watch: the life of a watch and of its session; merge: the pull request can merge, merged, or failed to; auto: a watch started on its own, or a Dependabot update waits on your approval"`
+	Action    string     `json:"action,omitempty" enum:",approve_merge" description:"What the app offers to do from the notification. approve_merge: approve the Dependabot update in your name and merge it"`
 	Repo      string     `json:"repo"`
 	Number    int        `json:"number"`
 	Title     string     `json:"title"`
@@ -428,7 +446,7 @@ type NewNotificationRequest struct {
 	Body     string `json:"body"`
 	Subtitle string `json:"subtitle,omitempty" description:"The second line of the notification the operating system shows"`
 	URL      string `json:"url,omitempty"`
-	Kind     string `json:"kind,omitempty" enum:",agent,review,checks,watch,merge" description:"Empty means agent: the agent asks you for something"`
+	Kind     string `json:"kind,omitempty" enum:",agent,review,checks,watch,merge,auto" description:"Empty means agent: the agent asks you for something"`
 	WatchID  int64  `json:"watchId,omitempty"`
 	Repo     string `json:"repo,omitempty"`
 	Number   int    `json:"number,omitempty"`
@@ -454,6 +472,7 @@ func notificationFromStore(n store.Notification) Notification {
 		Body:      n.Body,
 		URL:       n.URL,
 		Silent:    n.Silent,
+		Action:    string(n.Action),
 		CreatedAt: n.CreatedAt,
 		ReadAt:    n.ReadAt,
 	}
@@ -488,7 +507,7 @@ type HookRequest struct {
 type Activity struct {
 	ID         int64              `json:"id"`
 	WatchID    int64              `json:"watchId"`
-	Kind       store.ActivityKind `json:"kind" enum:"comment,review_comment,review,check_failed,check_recovered,checks_green,commit,behind,conflict,merged,closed,heartbeat,watch_started,watch_stopped,session_started,session_exited,nudged,agent_failed,merge_ready,merge_failed,replied,review_requested,proposal,taken_over,handed_back"`
+	Kind       store.ActivityKind `json:"kind" enum:"comment,review_comment,review,check_failed,check_recovered,checks_green,commit,behind,conflict,merged,closed,heartbeat,watch_started,watch_stopped,session_started,session_exited,nudged,agent_failed,merge_ready,merge_failed,replied,review_requested,proposal,taken_over,handed_back,auto_started,approved,approval_asked"`
 	Ref        string             `json:"ref"`
 	At         time.Time          `json:"at"`
 	Actor      string             `json:"actor"`
@@ -523,6 +542,7 @@ func watchFromStore(w store.Watch, s prwatch.SessionInfo, readySince *time.Time,
 		CheckStates: states, GreenSHA: w.GreenSHA, AgentSession: w.AgentSession,
 		ApprovalsRequired: w.ApprovalsRequired, MergeMethod: w.MergeMethod, ReadySince: readySince, ReadyBlockers: blockers,
 		ApprovalMode: w.ApprovalMode, AutoApproveRebase: w.AutoApproveRebase, TakenOverAt: w.TakenOverAt,
+		AutoReason: w.AutoReason, MergeWhenReady: w.MergeWhenReady, UpdateType: w.UpdateType,
 		Session: Session{State: s.State, PID: s.PID, StartedAt: s.StartedAt, SignalAt: s.SignalAt, LogPath: s.LogPath},
 	}
 	if out.Session.State == "" {

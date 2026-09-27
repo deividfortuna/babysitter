@@ -11,6 +11,7 @@ const (
 	RepoAdded   Type = "repo_added"
 	RepoRemoved Type = "repo_removed"
 	RepoSynced  Type = "repo_synced"
+	RepoChanged Type = "repo_changed"
 	PullUpdated Type = "pull_updated"
 
 	WatchStarted  Type = "watch_started"

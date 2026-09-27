@@ -41,6 +41,9 @@ const (
 	ActivityProposal        ActivityKind = "proposal"
 	ActivityTakenOver       ActivityKind = "taken_over"
 	ActivityHandedBack      ActivityKind = "handed_back"
+	ActivityAutoStarted     ActivityKind = "auto_started"
+	ActivityApproved        ActivityKind = "approved"
+	ActivityApprovalAsked   ActivityKind = "approval_asked"
 )
 
 var ActivityKinds = []ActivityKind{
@@ -50,7 +53,7 @@ var ActivityKinds = []ActivityKind{
 	ActivityHeartbeat, ActivityWatchStarted, ActivityWatchStopped,
 	ActivitySessionStarted, ActivitySessionExited, ActivityNudged, ActivityAgentFailed,
 	ActivityMergeReady, ActivityMergeFailed, ActivityReplied, ActivityReviewRequested, ActivityProposal,
-	ActivityTakenOver, ActivityHandedBack,
+	ActivityTakenOver, ActivityHandedBack, ActivityAutoStarted, ActivityApproved, ActivityApprovalAsked,
 }
 
 func (k ActivityKind) Valid() bool { return slices.Contains(ActivityKinds, k) }

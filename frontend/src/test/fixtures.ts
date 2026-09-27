@@ -4,7 +4,7 @@ import type { Proposal, ProposalDetail } from "@/hooks/useProposals";
 import type { PullRequest } from "@/hooks/usePulls";
 import type { Provider } from "@/hooks/useProviders";
 import type { RateLimit } from "@/hooks/useRateLimit";
-import type { Repo } from "@/hooks/useRepos";
+import type { QueuedPullRequest, Repo, RepoConfig } from "@/hooks/useRepos";
 import type { Settings } from "@/hooks/useSettings";
 import type { Viewer } from "@/hooks/useViewer";
 import type { Watch } from "@/hooks/useWatches";
@@ -67,6 +67,7 @@ export function buildWatch(overrides: Partial<Watch> = {}): Watch {
     lastPollAt: null,
     mergeableState: "clean",
     mergeMethod: "",
+    mergeWhenReady: false,
     number: 12,
     prState: "open",
     readyBlockers: [],
@@ -122,10 +123,41 @@ export function buildRepo(overrides: Partial<Repo> = {}): Repo {
   };
 }
 
+export function buildRepoConfig(overrides: Partial<RepoConfig> = {}): RepoConfig {
+  return {
+    repoId: 1,
+    repo: "octo/babysitter",
+    checkoutDir: "",
+    autoStartMine: false,
+    autoStartMineSince: null,
+    includeDrafts: false,
+    autoWatchDependabot: false,
+    autoWatchDependabotSince: null,
+    overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "" },
+    dependabotScope: "patch",
+    dependabotApproval: "never",
+    dependabotLimit: 1,
+    ...overrides,
+  };
+}
+
+export function buildQueuedPullRequest(overrides: Partial<QueuedPullRequest> = {}): QueuedPullRequest {
+  return {
+    number: 30,
+    title: "Bump golang.org/x/net from 0.33.0 to 0.34.0",
+    url: "https://github.com/octo/babysitter/pull/30",
+    updateType: "minor",
+    createdAt: "2026-09-16T08:00:00Z",
+    position: 1,
+    ...overrides,
+  };
+}
+
 export function buildPullRequest(overrides: Partial<PullRequest> = {}): PullRequest {
   return {
     additions: 1,
     approvals: 1,
+    assignees: [],
     author: "octocat",
     baseRef: "main",
     changesRequested: 0,
@@ -133,6 +165,7 @@ export function buildPullRequest(overrides: Partial<PullRequest> = {}): PullRequ
     createdAt: "2026-09-16T08:00:00Z",
     deletions: 0,
     draft: false,
+    fork: false,
     headRef: "feature/notifications",
     headSha: "1234567890",
     htmlUrl: "https://github.com/octo/babysitter/pull/12",

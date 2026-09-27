@@ -2,6 +2,7 @@ import type { ComponentProps } from "react";
 import type { Watch } from "@/hooks/useWatches";
 import { Badge } from "@/components/ui/badge";
 import {
+  autoReasonText,
   checksWord,
   failedCheckNames,
   isAgentLive,
@@ -94,4 +95,37 @@ export function MergeBadge({ watch }: { watch: Pick<Watch, "status" | "readySinc
   const word = mergeWord(watch);
   if (!word) return null;
   return <ToneBadge tone={word.tone}>{word.label}</ToneBadge>;
+}
+
+export function QueuedBadge() {
+  return (
+    <ToneBadge tone="neutral" className="border-attention/50 text-attention">
+      queued
+    </ToneBadge>
+  );
+}
+
+type AutoFields = Pick<Watch, "autoReason" | "updateType" | "mergeWhenReady" | "dependabot">;
+
+export function AutoBadges({ watch }: { watch: AutoFields }) {
+  const dependabotUpdate = watch.dependabot && watch.updateType ? watch.updateType : null;
+  return (
+    <>
+      {watch.autoReason ? (
+        <ToneBadge tone="neutral" title={autoReasonText(watch.autoReason)}>
+          auto
+        </ToneBadge>
+      ) : null}
+      {dependabotUpdate ? (
+        <ToneBadge tone="neutral" title={`A ${dependabotUpdate} update`}>
+          {dependabotUpdate}
+        </ToneBadge>
+      ) : null}
+      {watch.mergeWhenReady ? (
+        <ToneBadge tone="neutral" title="The daemon merges as soon as the watch is ready to merge">
+          merge when ready
+        </ToneBadge>
+      ) : null}
+    </>
+  );
 }

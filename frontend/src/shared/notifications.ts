@@ -2,7 +2,7 @@ import type { components } from "../api/schema";
 
 export type NotificationKind = components["schemas"]["HttpdNotification"]["kind"];
 
-export const NOTIFICATION_KINDS: readonly NotificationKind[] = ["agent", "review", "checks", "watch", "merge"];
+export const NOTIFICATION_KINDS: readonly NotificationKind[] = ["agent", "review", "checks", "watch", "merge", "auto"];
 
 export type DesktopNotification = {
   id: number;

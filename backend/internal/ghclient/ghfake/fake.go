@@ -28,6 +28,7 @@ const (
 	RouteMerge           = "PUT /repos/{owner}/{repo}/pulls/{number}/merge"
 	RouteRequestReviews  = "POST /repos/{owner}/{repo}/pulls/{number}/requested_reviewers"
 	RouteReviews         = "GET /repos/{owner}/{repo}/pulls/{number}/reviews"
+	RouteSubmitReview    = "POST /repos/{owner}/{repo}/pulls/{number}/reviews"
 	RouteReviewComment   = "GET /repos/{owner}/{repo}/pulls/comments/{id}"
 	RouteReviewComments  = "GET /repos/{owner}/{repo}/pulls/{number}/comments"
 	RouteReply           = "POST /repos/{owner}/{repo}/pulls/{number}/comments"
@@ -142,6 +143,7 @@ func New() *GitHub {
 		g.route(RouteMerge, (*call).merge),
 		g.route(RouteRequestReviews, (*call).requestReviews),
 		g.route(RouteReviews, (*call).reviews),
+		g.route(RouteSubmitReview, (*call).submitReview),
 		g.route(RouteReviewComments, (*call).reviewComments),
 		g.route(RouteReply, (*call).reply),
 		g.route(RouteIssueComments, (*call).issueComments),

@@ -14,7 +14,10 @@ func (d *fakeDaemon) mergeRulesRoute() {
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		raw, _ := json.Marshal(body)
 		d.decisions = append(d.decisions, "merge-rules "+string(raw))
-		approvals, method := any(1), any("squash")
+		approvals, method, whenReady := any(1), any("squash"), any(false)
+		if v, ok := body["mergeWhenReady"]; ok {
+			whenReady = v
+		}
 		if v, ok := body["approvalsRequired"]; ok {
 			approvals = v
 		}
@@ -25,7 +28,7 @@ func (d *fakeDaemon) mergeRulesRoute() {
 			method = v
 		}
 		one := strings.TrimSuffix(strings.TrimPrefix(d.watches, "["), "]")
-		fmt.Fprint(w, strings.Replace(one, `"status":"active"`, fmt.Sprintf(`"status":"active","approvalsRequired":%v,"mergeMethod":%q`, approvals, method), 1))
+		fmt.Fprint(w, strings.Replace(one, `"status":"active"`, fmt.Sprintf(`"status":"active","approvalsRequired":%v,"mergeMethod":%q,"mergeWhenReady":%v`, approvals, method, whenReady), 1))
 	})
 }
 
@@ -35,21 +38,26 @@ func TestWatchMergeRulesChangesARunningWatch(t *testing.T) {
 	d.mergeRulesRoute()
 
 	out, err := runWatch(t, d, "merge-rules", "1", "--approvals", "0", "--merge-method", "rebase")
-	if err != nil || out != "Watch 1 needs no approval before it is ready to merge, and merges with rebase.\n" {
+	if err != nil || out != "Watch 1 needs no approval before it is ready to merge, and merges with rebase. You merge it.\n" {
 		t.Fatalf("merge-rules = %q, %v", out, err)
 	}
 	out, err = runWatch(t, d, "merge-rules", "1", "--approvals", "branch")
-	if err != nil || out != "Watch 1 needs 2 approvals before it is ready to merge, and merges with squash.\n" {
+	if err != nil || out != "Watch 1 needs 2 approvals before it is ready to merge, and merges with squash. You merge it.\n" {
 		t.Fatalf("merge-rules --approvals branch = %q, %v", out, err)
 	}
 	out, err = runWatch(t, d, "merge-rules", "1", "--merge-method", "")
-	if err != nil || out != "Watch 1 needs 1 approval before it is ready to merge, and merges with the first method the repository allows.\n" {
+	if err != nil || out != "Watch 1 needs 1 approval before it is ready to merge, and merges with the first method the repository allows. You merge it.\n" {
 		t.Fatalf("merge-rules --merge-method '' = %q, %v", out, err)
+	}
+	out, err = runWatch(t, d, "merge-rules", "1", "--merge-when-ready")
+	if err != nil || !strings.HasSuffix(out, "The daemon merges it as soon as it is ready.\n") {
+		t.Fatalf("merge-rules --merge-when-ready = %q, %v", out, err)
 	}
 	want := []string{
 		`merge-rules {"approvalsRequired":0,"mergeMethod":"rebase"}`,
 		`merge-rules {"approvalsRequired":null}`,
 		`merge-rules {"mergeMethod":""}`,
+		`merge-rules {"mergeWhenReady":true}`,
 	}
 	if strings.Join(d.decisions, "\n") != strings.Join(want, "\n") {
 		t.Fatalf("bodies = %q, want %q", d.decisions, want)

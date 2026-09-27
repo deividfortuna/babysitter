@@ -223,6 +223,42 @@ func (c *call) reviews() {
 	c.json(http.StatusOK, out)
 }
 
+var reviewStates = map[string]string{"APPROVE": "APPROVED", "REQUEST_CHANGES": "CHANGES_REQUESTED", "COMMENT": "COMMENTED"}
+
+func (c *call) submitReview() {
+	_, p := c.prOf()
+	if p == nil {
+		return
+	}
+	var body struct {
+		Event    string `json:"event"`
+		Body     string `json:"body"`
+		CommitID string `json:"commit_id"`
+	}
+	if !c.decode(&body) {
+		return
+	}
+	state, ok := reviewStates[body.Event]
+	if !ok {
+		c.fail(http.StatusUnprocessableEntity, "Unprocessable Entity")
+		return
+	}
+	commit := body.CommitID
+	if commit == "" {
+		commit = p.HeadSHA
+	}
+	id := c.g.id()
+	rv := Review{
+		ID: id, State: state, CommitID: commit, Author: c.g.viewer.GetLogin(), Body: body.Body,
+		URL: fmt.Sprintf("%s#pullrequestreview-%d", p.URL, id), SubmittedAt: time.Now().UTC(),
+	}
+	p.Reviews = append(p.Reviews, rv)
+	c.json(http.StatusOK, &github.PullRequestReview{
+		ID: new(rv.ID), State: new(rv.State), CommitID: str(rv.CommitID), User: user(rv.Author), Body: new(rv.Body),
+		HTMLURL: str(rv.URL), SubmittedAt: stamp(rv.SubmittedAt),
+	})
+}
+
 func (c *call) reviewComments() {
 	r, p := c.prOf()
 	if p == nil {
@@ -511,6 +547,10 @@ func pullRequest(r *Repo, p *PR) *github.PullRequest {
 	for _, name := range p.Labels {
 		out.Labels = append(out.Labels, &github.Label{Name: name})
 	}
+	for _, login := range p.Assignees {
+		out.Assignees = append(out.Assignees, user(login))
+	}
+	out.Body = str(p.Body)
 	return out
 }
 

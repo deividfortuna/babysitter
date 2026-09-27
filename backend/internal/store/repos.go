@@ -96,6 +96,18 @@ func (s *Store) GetRepo(ctx context.Context, owner, name string) (Repo, error) {
 	return r, nil
 }
 
+func (s *Store) GetRepoByID(ctx context.Context, id int64) (Repo, error) {
+	row := s.db.QueryRowContext(ctx, "SELECT "+repoColumns+" FROM repos WHERE id = ?", id)
+	r, err := scanRepo(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Repo{}, ErrRepoNotFound
+	}
+	if err != nil {
+		return Repo{}, fmt.Errorf("get repository: %w", err)
+	}
+	return r, nil
+}
+
 func (s *Store) SetRepoSync(ctx context.Context, id int64, at time.Time, syncErr error) error {
 	msg := ""
 	if syncErr != nil {

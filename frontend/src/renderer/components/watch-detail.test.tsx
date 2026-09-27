@@ -379,3 +379,63 @@ test("shows a watch that stopped because it merged in green", async () => {
 
   expect(await screen.findByText("stopped · merged")).toHaveClass("text-success");
 });
+
+test("the header names why auto start began the watch, and the activity marks the rows of auto start", async () => {
+  const watch = buildWatch({
+    id: 42,
+    dependabot: true,
+    autoReason: "dependabot",
+    updateType: "minor",
+    mergeWhenReady: true,
+  });
+  serveApi({
+    watches: [watch],
+    watchById: { 42: watch },
+    watchActivity: {
+      42: [
+        buildActivity({ id: 1, kind: "auto_started", summary: "Started on its own: Dependabot opened it", url: "" }),
+        buildActivity({ id: 2, kind: "approved", summary: "Approved on your behalf", url: "" }),
+        buildActivity({ id: 3, kind: "approval_asked", summary: "Asked you to approve", url: "" }),
+      ],
+    },
+  });
+
+  renderWatchDetail();
+
+  await screen.findByRole("heading", { level: 1, name: "Add notifications" });
+  const header = screen.getByRole("banner");
+  expect(within(header).getByText("auto")).toHaveAttribute(
+    "title",
+    "Auto start began it because Dependabot opened the pull request.",
+  );
+  expect(within(header).getByText("minor")).toBeVisible();
+  expect(within(header).getByText("merge when ready")).toBeVisible();
+  expect(await screen.findByText("Started on its own: Dependabot opened it")).toBeVisible();
+  expect(screen.getByText(/^auto started/)).toBeVisible();
+  expect(screen.getByText(/^approved ·/)).toBeVisible();
+  expect(screen.getByText(/^approval asked/)).toBeVisible();
+});
+
+test("the ready banner says the daemon merges when merge when ready is on", async () => {
+  const watch = buildWatch({
+    id: 42,
+    readySince: "2026-01-01T00:10:00Z",
+    mergeWhenReady: true,
+    mergeMethod: "squash",
+  });
+  serveApi({ watches: [watch], watchById: { 42: watch } });
+
+  renderWatchDetail();
+
+  expect(await screen.findByText(/Merge when ready is on, so the daemon merges it now with squash\./)).toBeVisible();
+});
+
+test("the ready banner leaves the merge to the author when merge when ready is off", async () => {
+  const watch = buildWatch({ id: 42, readySince: "2026-01-01T00:10:00Z" });
+  serveApi({ watches: [watch], watchById: { 42: watch } });
+
+  renderWatchDetail();
+
+  expect(await screen.findByText(/Merge it when it suits you\./)).toBeVisible();
+  expect(screen.queryByText(/the daemon merges it now/)).toBeNull();
+});

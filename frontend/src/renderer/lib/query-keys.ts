@@ -1,4 +1,12 @@
 export const reposQueryKey = ["repos"] as const;
+
+export function repoConfigQueryKey(id: number) {
+  return ["repos", id, "config"] as const;
+}
+
+export function repoQueueQueryKey(id: number) {
+  return ["repos", id, "queue"] as const;
+}
 export const pullsQueryKey = ["prs"] as const;
 export const watchesQueryKey = ["watches"] as const;
 
