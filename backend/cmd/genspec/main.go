@@ -78,6 +78,11 @@ type outputParams struct {
 	httpd.OutputQuery
 }
 
+type resizeParams struct {
+	watchIDParam
+	httpd.ResizeRequest
+}
+
 type hookParams struct {
 	watchIDParam
 	httpd.HookRequest
@@ -201,6 +206,7 @@ func build() ([]byte, error) {
 		{method: http.MethodPost, path: "/watches/{id}/approval", id: "setWatchApproval", summary: "Change who releases the turns of a watch while it runs", req: approvalParams{}, resp: httpd.Watch{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/proposals/{number}/retry", id: "retryProposal", summary: "Release a failed proposal of a watch again, rebased onto a pull request branch that moved", req: proposalParams{}, resp: httpd.Proposal{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodGet, path: "/watches/{id}/output", id: "getWatchOutput", summary: "The last lines the agent of a watched pull request printed", req: outputParams{}, resp: httpd.SessionOutput{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable}},
+		{method: http.MethodPost, path: "/watches/{id}/resize", id: "resizeWatchTerminal", summary: "Set the size of the terminal of the agent of a watched pull request. A session that starts later takes the same size.", req: resizeParams{}, status: http.StatusNoContent, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/hook", id: "reportWatchHook", summary: "Report an event of the agent of a watched pull request. The hook command of the agent calls it.", req: hookParams{}, status: http.StatusNoContent, errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/control/shutdown", id: "shutdown", summary: "Stop the daemon. Rejected for browser origins.", status: http.StatusAccepted, errors: []int{http.StatusForbidden}},
 	}

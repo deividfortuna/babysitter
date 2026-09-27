@@ -17,6 +17,7 @@ its issue does and goes with the fix.
 | 38  | The header of a watch cuts the title of the pull request to one letter | none, seen in the check of 30 to 37 |
 | 42  | The installed service and the app daemon poll the same repositories twice | none, seen in the check of the rate limit |
 | 46  | Two daemons can open the same database, and nothing stops the second | none, seen in the screenshot run of 45 |
+| 52  | A message that waits on a hung fetch reaches the agent twice          | none, seen in the live run of the Ghostty terminal |
 
 ## 04. prwatch cleanups, as a backlog
 
@@ -234,3 +235,31 @@ one worktree, or two watch loops on one watch, can do all three.
 SQLite lock row with the pid) and refuse to start while another live
 process holds it. Issue 42 is the same class of problem for the launchd
 service.
+
+## 52. A message that waits on a hung fetch reaches the agent twice
+
+Found: 2026-09-27, in the live run of the Ghostty terminal, on watch 1
+of `deividfortuna/gha-playground#19`, approval mode `manual`.
+
+I sent a message from the app. Before a message, the daemon fetches the
+branch of the pull request. That fetch did not end: after about 95 s
+the Send button was still disabled, with no word of what it waited on.
+I reloaded the page, which cancelled the request, and the daemon logged:
+
+```
+19:30:58.183 level=WARN msg="read the pull request branch before a message" component=prwatch watch=1 err="git fetch -q --no-tags origin +refs/heads/live/auto-watch-mine:refs/remotes/origin/live/auto-watch-mine: git: context canceled"
+```
+
+I sent the same message again. It went through in about 4 s, and the
+daemon logged one `you told the agent` row. But the pseudo terminal got
+the text twice before the Enter, so the agent got it twice in one line:
+
+```
+\x1b[2G\xa0 Say in one short sentence what line 6 of greeting.md says. Change nothing.\x1b[78G\x1b[78GSay in one short sentence what line 6 of greeting.md says. Change nothing.
+you: Say in one short sentence what line 6 of greeting.md says. Change nothing.Say in one short sentence what line 6 of greeting.md says. Change nothing.
+```
+
+So the cancelled send still typed its text after its fetch failed, and
+did not submit it. The next message submitted both. A cancelled send
+must type nothing, or the send must not wait on the fetch without a
+limit. Issue 23 is in the same path of the daemon.

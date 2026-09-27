@@ -3,6 +3,7 @@ import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
 
 export default defineConfig({
+  assetsInclude: ["**/*.wasm"],
   plugins: [react()],
   resolve: {
     alias: [

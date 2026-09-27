@@ -2,6 +2,7 @@ package prwatch
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strconv"
@@ -162,7 +163,10 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	}
 	env = append(env, "BABYSITTER_WATCH="+strconv.FormatInt(w.ID, 10), "BABYSITTER_DATA_DIR="+s.dataDir)
 	logPath := s.sessionLogPath(w.ID)
-	h, err := s.host.Start(ctx, session.Spec{Dir: w.WorktreeDir, Argv: argv, Env: env, LogPath: logPath})
+	size := s.sizes.get(w.ID)
+	h, err := s.host.Start(ctx, session.Spec{
+		Dir: w.WorktreeDir, Argv: argv, Env: env, LogPath: logPath, Rows: size.Rows, Cols: size.Cols,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -177,6 +181,7 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	}
 	l := &live{handle: h, state: state, startedAt: s.now(), resumed: resume, signals: runner.Signals(), logPath: logPath, key: w.Key()}
 	s.sessions.set(w.ID, l)
+	s.catchUpSize(w.ID, l, size)
 	s.recordSessionStart(ctx, w, l, sessionID, resume)
 	go s.watchExit(w.ID, l)
 	s.awaitReady(ctx, l)
@@ -195,6 +200,18 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 		return l, err
 	}
 	return l, nil
+}
+
+func (s *Service) catchUpSize(watchID int64, l *live, startSize TerminalSize) {
+	unlock := s.sizeLocks.lock(watchID)
+	defer unlock()
+	size := s.sizes.get(watchID)
+	if size == startSize {
+		return
+	}
+	if err := l.handle.Resize(size.Rows, size.Cols); err != nil && !errors.Is(err, session.ErrExited) {
+		s.log.Error("resize the new agent session", "watch", watchID, "err", err)
+	}
 }
 
 func (s *Service) settleContinued(w store.Watch, l *live) {

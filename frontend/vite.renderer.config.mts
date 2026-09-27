@@ -8,7 +8,7 @@ import tailwindcss from "@tailwindcss/vite";
 function contentSecurityPolicy(inlineScriptHashes: string[]): string {
   return [
     "default-src 'self'",
-    ["script-src 'self'", ...inlineScriptHashes.map((hash) => `'sha256-${hash}'`)].join(" "),
+    ["script-src 'self' 'wasm-unsafe-eval'", ...inlineScriptHashes.map((hash) => `'sha256-${hash}'`)].join(" "),
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' data:",
@@ -40,6 +40,7 @@ const injectCspMeta: Plugin = {
 };
 
 export default defineConfig({
+  assetsInclude: ["**/*.wasm"],
   resolve: {
     alias: [
       { find: /^cn$/, replacement: fileURLToPath(new URL("./src/renderer/lib/utils.ts", import.meta.url)) },

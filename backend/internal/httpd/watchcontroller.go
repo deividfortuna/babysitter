@@ -28,6 +28,7 @@ type WatchController interface {
 	SetApproval(ctx context.Context, id int64, c prwatch.ApprovalChange) (store.Watch, error)
 	SetMergeRules(ctx context.Context, id int64, c prwatch.MergeRulesChange) (store.Watch, error)
 	Output(ctx context.Context, id int64, lines int) (string, error)
+	Resize(ctx context.Context, id int64, size prwatch.TerminalSize) error
 	Session(ctx context.Context, w store.Watch) (prwatch.SessionInfo, error)
 	Readiness(w store.Watch, state agent.State) (*time.Time, []string)
 	Hook(ctx context.Context, id int64, event string, payload []byte) error
@@ -100,6 +101,10 @@ func (noopWatches) SetMergeRules(context.Context, int64, prwatch.MergeRulesChang
 
 func (noopWatches) Output(context.Context, int64, int) (string, error) {
 	return "", errWatchUnavailable
+}
+
+func (noopWatches) Resize(context.Context, int64, prwatch.TerminalSize) error {
+	return errWatchUnavailable
 }
 func (noopWatches) Hook(context.Context, int64, string, []byte) error { return errWatchUnavailable }
 
@@ -196,6 +201,12 @@ var (
 	)
 	outputErrors = newErrorMap("output_failed",
 		notFound("watch_not_found", store.ErrWatchNotFound),
+		badRequest("self_watch", prwatch.ErrSelfWatch),
+		unavailable("watch_unavailable", errWatchUnavailable),
+	)
+	resizeErrors = newErrorMap("resize_failed",
+		notFound("watch_not_found", store.ErrWatchNotFound),
+		conflict("watch_stopped", prwatch.ErrWatchStopped),
 		badRequest("self_watch", prwatch.ErrSelfWatch),
 		unavailable("watch_unavailable", errWatchUnavailable),
 	)

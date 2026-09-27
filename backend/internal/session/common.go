@@ -21,6 +21,7 @@ type Handle interface {
 	Send(ctx context.Context, text string) error
 	Ready(ctx context.Context) error
 	Interrupt() error
+	Resize(rows, cols uint16) error
 	Output(n int) string
 	Done() <-chan struct{}
 	Err() error

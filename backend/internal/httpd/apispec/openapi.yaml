@@ -1450,6 +1450,58 @@ paths:
           description: Service Unavailable
       summary: Take a reply of the agent on a watched pull request; the daemon posts
         it when the turn ends, or at once for a self watch
+  /api/v1/watches/{id}/resize:
+    post:
+      operationId: resizeWatchTerminal
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResizeParams'
+      responses:
+        "204":
+          description: No Content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Set the size of the terminal of the agent of a watched pull request.
+        A session that starts later takes the same size.
   /api/v1/watches/{id}/send:
     post:
       operationId: sendWatchMessage
@@ -3284,6 +3336,22 @@ components:
           type: boolean
         overrides:
           $ref: '#/components/schemas/HttpdWatchOverrides'
+      type: object
+    ResizeParams:
+      properties:
+        cols:
+          description: Columns of the terminal of the agent, 1 to 1000
+          maximum: 1000
+          minimum: 1
+          type: integer
+        rows:
+          description: Rows of the terminal of the agent, 1 to 500
+          maximum: 500
+          minimum: 1
+          type: integer
+      required:
+      - rows
+      - cols
       type: object
     SendParams:
       properties:

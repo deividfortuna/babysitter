@@ -44,6 +44,7 @@ type fakeWatches struct {
 	sessions    int
 	approval    approvalCalls
 	mergeRules  []prwatch.MergeRulesChange
+	sizes       []prwatch.TerminalSize
 
 	authorRunning bool
 	authorWork    *prwatch.WorkError
@@ -389,6 +390,22 @@ func (f *fakeWatches) Output(ctx context.Context, id int64, lines int) (string, 
 	return fmt.Sprintf("prompt ❯ (%d lines)\n", lines), nil
 }
 
+func (f *fakeWatches) Resize(ctx context.Context, id int64, size prwatch.TerminalSize) error {
+	if _, err := f.st.GetWatch(ctx, id); err != nil {
+		return err
+	}
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.sizes = append(f.sizes, size)
+	return nil
+}
+
+func (f *fakeWatches) resizes() []prwatch.TerminalSize {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return append([]prwatch.TerminalSize(nil), f.sizes...)
+}
+
 func (f *fakeWatches) Session(_ context.Context, w store.Watch) (prwatch.SessionInfo, error) {
 	f.mu.Lock()
 	f.sessions++
@@ -549,10 +566,47 @@ func TestSessionRoutesWithoutService(t *testing.T) {
 		{http.MethodPost, "/watches/1/next", ""},
 		{http.MethodGet, "/watches/1/output", ""},
 		{http.MethodPost, "/watches/1/hook", `{"event":"stop","payload":{}}`},
+		{http.MethodPost, "/watches/1/resize", `{"rows":40,"cols":120}`},
 	} {
 		if rec := call(t, h, c.method, c.path, c.body, nil); rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("%s %s without service: %d %s", c.method, c.path, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestResizeRoute(t *testing.T) {
+	t.Parallel()
+	h, st, fw := newTestAPI(t)
+	if _, err := st.CreateWatch(context.Background(), store.Watch{Owner: "octo", Name: "hello", Number: 3, StartedAt: time.Now()}); err != nil {
+		t.Fatal(err)
+	}
+
+	if rec := call(t, h, http.MethodPost, "/watches/1/resize", `{"rows":52,"cols":214}`, nil); rec.Code != http.StatusNoContent {
+		t.Fatalf("resize: %d %s", rec.Code, rec.Body)
+	}
+	if got := fw.resizes(); len(got) != 1 || got[0] != (prwatch.TerminalSize{Rows: 52, Cols: 214}) {
+		t.Fatalf("sizes = %+v", got)
+	}
+
+	for _, body := range []string{
+		`{"rows":0,"cols":120}`,
+		`{"rows":40,"cols":0}`,
+		`{"rows":40,"cols":1001}`,
+		`{"rows":501,"cols":120}`,
+		`{"rows":-1,"cols":120}`,
+		`{"rows":40,"cols":70000}`,
+		`{"rows":40}`,
+		`not json`,
+	} {
+		if rec := call(t, h, http.MethodPost, "/watches/1/resize", body, nil); rec.Code != http.StatusBadRequest {
+			t.Errorf("resize %s: %d %s", body, rec.Code, rec.Body)
+		}
+	}
+	if rec := call(t, h, http.MethodPost, "/watches/9/resize", `{"rows":40,"cols":120}`, nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("resize missing: %d %s", rec.Code, rec.Body)
+	}
+	if got := fw.resizes(); len(got) != 1 {
+		t.Fatalf("a refused size reached the service: %+v", got)
 	}
 }
 

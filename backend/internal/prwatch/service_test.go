@@ -581,17 +581,19 @@ func (r *fakeRunner) Prelude() string {
 }
 
 type fakeHandle struct {
-	mu      sync.Mutex
-	spec    session.Spec
-	sent    []string
-	sendErr error
-	done    chan struct{}
-	err     error
-	pid     int
-	stopped bool
-	stopErr error
-	screen  string
-	onSend  func()
+	mu       sync.Mutex
+	spec     session.Spec
+	sent     []string
+	sendErr  error
+	done     chan struct{}
+	err      error
+	pid      int
+	stopped  bool
+	stopErr  error
+	screen   string
+	onSend   func()
+	onResize func(TerminalSize)
+	size     TerminalSize
 }
 
 func (h *fakeHandle) Send(_ context.Context, text string) error {
@@ -618,6 +620,32 @@ func (h *fakeHandle) Send(_ context.Context, text string) error {
 func (h *fakeHandle) Ready(context.Context) error { return nil }
 
 func (h *fakeHandle) Interrupt() error { return nil }
+
+func (h *fakeHandle) Resize(rows, cols uint16) error {
+	size := TerminalSize{Rows: rows, Cols: cols}
+	h.mu.Lock()
+	hook := h.onResize
+	h.mu.Unlock()
+	if hook != nil {
+		hook(size)
+	}
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	select {
+	case <-h.done:
+		return session.ErrExited
+	default:
+	}
+	h.size = size
+	return nil
+}
+
+func (h *fakeHandle) terminalSize() TerminalSize {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	return h.size
+}
+
 func (h *fakeHandle) Output(int) string {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -671,16 +699,23 @@ type fakeHost struct {
 	mu       sync.Mutex
 	handles  []*fakeHandle
 	startErr error
+	onStart  func()
 }
 
 func (f *fakeHost) Start(_ context.Context, spec session.Spec) (session.Handle, error) {
 	f.mu.Lock()
-	defer f.mu.Unlock()
 	if f.startErr != nil {
+		f.mu.Unlock()
 		return nil, f.startErr
 	}
-	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles)}
+	size := TerminalSize{Rows: spec.Rows, Cols: spec.Cols}
+	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles), size: size}
 	f.handles = append(f.handles, h)
+	hook := f.onStart
+	f.mu.Unlock()
+	if hook != nil {
+		hook()
+	}
 	return h, nil
 }
 
