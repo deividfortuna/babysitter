@@ -6,7 +6,7 @@ updates:
     schedule:
       interval: daily
     cooldown:
-      default-days: 3
+      default-days: 7
     groups:
       actions:
         patterns:
@@ -17,7 +17,7 @@ updates:
     schedule:
       interval: daily
     cooldown:
-      default-days: 3
+      default-days: 7
     groups:
       go-minor-and-patch:
         update-types:
@@ -29,7 +29,7 @@ updates:
     schedule:
       interval: daily
     cooldown:
-      default-days: 3
+      default-days: 7
     versioning-strategy: increase
     open-pull-requests-limit: 10
     groups:
@@ -69,7 +69,7 @@ updates:
     schedule:
       interval: daily
     cooldown:
-      default-days: 3
+      default-days: 7
     versioning-strategy: increase
     ignore:
       - dependency-name: typescript
