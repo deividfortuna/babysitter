@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { GhosttySurface, scrollbarThumb, terminalGrid, wheelRows } from "./surface";
+import { GhosttySurface, scrollbarThumb, terminalGrid, wheelRows, wheelStep } from "./surface";
 
 const theme = {
   foreground: { r: 0, g: 0, b: 0 },
@@ -26,6 +26,19 @@ test("turns wheel pixels, lines and pages into rows", () => {
   expect(wheelRows({ deltaY: 40, deltaMode: 0 }, 20, 30)).toBe(2);
   expect(wheelRows({ deltaY: 3, deltaMode: 1 }, 20, 30)).toBe(3);
   expect(wheelRows({ deltaY: -1, deltaMode: 2 }, 20, 30)).toBe(-30);
+});
+
+test("adds up wheel deltas smaller than a row until they make one", () => {
+  const first = wheelStep(0.4, 10, 90);
+  const second = wheelStep(first.remainder + 0.7, 10, 90);
+
+  expect(first).toEqual({ move: 0, remainder: 0.4 });
+  expect(second.move).toBe(1);
+  expect(second.remainder).toBeCloseTo(0.1);
+});
+
+test("drops the rest of a wheel delta that goes past the end of the scrollback", () => {
+  expect(wheelStep(2.5, 89, 90)).toEqual({ move: 1, remainder: 0 });
 });
 
 const cell = { width: 6.6, height: 13 };

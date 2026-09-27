@@ -58,6 +58,13 @@ export function wheelRows(event: Pick<WheelEvent, "deltaY" | "deltaMode">, cellH
   return event.deltaY * (linesPerUnit[event.deltaMode] ?? 1 / cellHeight);
 }
 
+export function wheelStep(pending: number, offset: number, maxOffset: number): { move: number; remainder: number } {
+  const rows = Math.trunc(pending);
+  const target = Math.max(0, Math.min(maxOffset, offset + rows));
+  const clamped = target !== offset + rows;
+  return { move: target - offset, remainder: clamped ? 0 : pending - rows };
+}
+
 function selectionMode(clickCount: number): SelectionMode {
   if (clickCount >= 3) return "line";
   if (clickCount === 2) return "word";
@@ -336,17 +343,12 @@ export class GhosttySurface {
   private readonly onWheel = (event: WheelEvent) => {
     const state = this.core.scrollbarState();
     if (!state) return;
-    const total = this.wheelRemainder + wheelRows(event, this.metrics.height, this.rows);
-    const rows = Math.trunc(total);
-    const maxOffset = Math.max(0, state.total - state.len);
-    const target = Math.max(0, Math.min(maxOffset, state.offset + rows));
-    if (target === state.offset) {
-      this.wheelRemainder = 0;
-      return;
-    }
+    const pending = this.wheelRemainder + wheelRows(event, this.metrics.height, this.rows);
+    const step = wheelStep(pending, state.offset, Math.max(0, state.total - state.len));
+    this.wheelRemainder = step.remainder;
+    if (step.move === 0) return;
     event.preventDefault();
-    this.wheelRemainder = total - rows;
-    this.core.scroll(target - state.offset);
+    this.core.scroll(step.move);
     if (this.selecting) this.extendSelection(event);
     this.requestRender();
   };
