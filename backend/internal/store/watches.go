@@ -428,6 +428,12 @@ WHERE id = ? AND (approvals_required != ? OR merge_method != ? OR merge_when_rea
 		r.ApprovalsRequired, r.MergeMethod, r.MergeWhenReady, id, r.ApprovalsRequired, r.MergeMethod, r.MergeWhenReady)
 }
 
+func (s *Store) SetWatchUpdateType(ctx context.Context, id int64, level dependabot.Level, mergeWhenReady bool) (Watch, error) {
+	return s.updateWatch(ctx, id, "set watch update type",
+		"UPDATE watches SET update_type = ?, merge_when_ready = ? WHERE id = ? AND (update_type != ? OR merge_when_ready != ?)",
+		level, mergeWhenReady, id, level, mergeWhenReady)
+}
+
 func (s *Store) SetWatchTakeover(ctx context.Context, id int64, at *time.Time, pid int) (Watch, error) {
 	since := timePtrToDB(at)
 	return s.updateWatch(ctx, id, "set watch takeover",

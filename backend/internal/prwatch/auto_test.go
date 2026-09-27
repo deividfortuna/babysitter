@@ -337,3 +337,43 @@ func TestApproveAndMergeApprovesOnceForEachHeadWhenTheMergeWaits(t *testing.T) {
 		t.Fatalf("merges = %+v, want one", merges)
 	}
 }
+
+func TestApproveUsesTheUpdateTypeOfThePullRequestNow(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.dependabotPR("Bump lib from 1.2.0 to 1.2.1", "")
+	fx.policy(dependabot.Patch, store.ApproveAsk)
+	w := fx.startAuto(store.AutoDependabot, true)
+	fx.agentIdle(w)
+	fx.update(func() { fx.pr.Title = "Bump lib from 1.2.0 to 2.0.0" })
+
+	if _, err := fx.svc.Merge(context.Background(), w.ID, MergeOptions{Approve: true}); !errors.Is(err, ErrOutOfScope) {
+		t.Fatalf("Merge(approve) after the update became a major = %v, want ErrOutOfScope", err)
+	}
+	if reviews := fx.reviews(); len(reviews) != 0 {
+		t.Fatalf("reviews = %+v, want none", reviews)
+	}
+}
+
+func TestMergeWhenReadyStopsWhenTheUpdateLeavesTheScope(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.dependabotPR("Bump lib from 1.2.0 to 1.2.1", "")
+	fx.policy(dependabot.Patch, store.ApproveNever)
+	w := fx.startAuto(store.AutoDependabot, true)
+	fx.agentIdle(w)
+	fx.update(func() {
+		fx.pr.Title = "Bump lib from 1.2.0 to 2.0.0"
+		fx.pr.Reviews = []ghfake.Review{approvalFromBob}
+	})
+	for range 4 {
+		fx.poll(w)
+	}
+	if merges := fx.merges(); len(merges) != 0 {
+		t.Fatalf("merges = %+v, want none for a major outside the patch scope", merges)
+	}
+	got := fx.watch(w)
+	if got.UpdateType != dependabot.Major || got.MergeWhenReady {
+		t.Fatalf("watch = update %q, merge when ready %v, want major and off", got.UpdateType, got.MergeWhenReady)
+	}
+}

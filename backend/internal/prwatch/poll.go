@@ -70,6 +70,9 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		return err
 	}
 	w = p.watch
+	if w, err = s.followUpdateType(ctx, w, snap); err != nil {
+		return err
+	}
 	if len(p.inserted) > 0 {
 		if err := s.store.SetWatchHeartbeat(ctx, w.ID, now); err != nil {
 			return err

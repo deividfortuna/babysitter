@@ -44,16 +44,19 @@ func (s *Service) approveByHand(ctx context.Context, client *github.Client, w st
 	if !agent.IsDependabot(w.Author) {
 		return fmt.Errorf("%w: %s#%d is by %s", ErrNotDependabot, w.Repo(), w.Number, w.Author)
 	}
+	snap, err := snapshot.Collect(ctx, client, s.store, target(w), s.watchOptions(w))
+	if err != nil {
+		return err
+	}
+	if w, err = s.followUpdateType(ctx, w, snap); err != nil {
+		return err
+	}
 	cfg, ok, err := s.inScope(ctx, w)
 	if err != nil {
 		return err
 	}
 	if !ok {
 		return fmt.Errorf("%w: %s update, the scope is %s", ErrOutOfScope, updateWord(w.UpdateType), cfg.DependabotScope)
-	}
-	snap, err := snapshot.Collect(ctx, client, s.store, target(w), s.watchOptions(w))
-	if err != nil {
-		return err
 	}
 	return s.approveOnce(ctx, client, w, snap, "approved in your name from babysitter")
 }
@@ -63,6 +66,22 @@ func (s *Service) approveOnce(ctx context.Context, client *github.Client, w stor
 		return err
 	}
 	return s.approvePull(ctx, client, w, snap, why)
+}
+
+func (s *Service) followUpdateType(ctx context.Context, w store.Watch, snap *snapshot.Snapshot) (store.Watch, error) {
+	level := snap.PR.UpdateType
+	if level == "" || level == w.UpdateType {
+		return w, nil
+	}
+	mergeWhenReady := w.MergeWhenReady
+	if w.AutoReason == store.AutoDependabot {
+		cfg, err := s.repoConfigOf(ctx, w)
+		if err != nil {
+			return w, err
+		}
+		mergeWhenReady = mergeWhenReady && dependabot.Within(level, cfg.DependabotScope)
+	}
+	return s.store.SetWatchUpdateType(ctx, w.ID, level, mergeWhenReady)
 }
 
 func updateWord(l dependabot.Level) string {
