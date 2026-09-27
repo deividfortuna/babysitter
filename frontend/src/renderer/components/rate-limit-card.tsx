@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useAlwaysShowRateLimit } from "@/hooks/use-always-show-rate-limit";
 import { useRateLimit, type RateLimit } from "@/hooks/useRateLimit";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -30,6 +31,8 @@ const COPY: Record<KnownState, Copy> = {
 
 const TICK_MS = 15_000;
 
+const RELEVANT_USED_PERCENT = 50;
+
 const count = new Intl.NumberFormat("en-US");
 
 function useNow(intervalMs: number) {
@@ -56,6 +59,11 @@ function usedPercent(rate: RateLimit): number {
   return Math.round(((rate.limit - rate.remaining) / rate.limit) * 1000) / 10;
 }
 
+function isRelevant(rate: RateLimit): boolean {
+  const used = rate.limit - rate.remaining;
+  return rate.state !== "ok" || used * 100 > rate.limit * RELEVANT_USED_PERCENT;
+}
+
 function episodeOf(rate: RateLimit): string {
   return [rate.state, rate.resetAt ?? "", rate.retryAt ?? ""].join("|");
 }
@@ -67,11 +75,13 @@ type RateLimitCardProps = {
 
 export function RateLimitCard({ enabled, onPollLessOften }: RateLimitCardProps) {
   const rateLimit = useRateLimit(enabled);
+  const { alwaysShow } = useAlwaysShowRateLimit();
   const now = useNow(TICK_MS);
   const [dismissed, setDismissed] = useState<string | null>(null);
 
   const rate = rateLimit.data;
   if (!rate || rate.state === "unknown") return null;
+  if (!alwaysShow && !isRelevant(rate)) return null;
 
   const { title, note } = COPY[rate.state];
   const episode = episodeOf(rate);

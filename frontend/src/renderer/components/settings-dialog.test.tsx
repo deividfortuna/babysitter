@@ -53,6 +53,16 @@ test("has a pane for the updates of the app", async () => {
   expect(await screen.findByText(/This build does not update itself/)).toBeVisible();
 });
 
+test("has a pane for the developer settings", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+
+  await user.click(screen.getByRole("button", { name: "Developer" }));
+
+  expect(screen.getByRole("heading", { name: "Developer" })).toBeVisible();
+  expect(screen.getByRole("switch", { name: "Always show the GitHub rate limit" })).toBeVisible();
+});
+
 test("stays shut when it is not open", () => {
   renderWithProviders(<SettingsDialog open={false} onOpenChange={vi.fn()} />);
 

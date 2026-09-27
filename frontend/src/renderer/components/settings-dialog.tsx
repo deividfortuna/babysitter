@@ -1,6 +1,7 @@
 import { useState, type ComponentType } from "react";
-import { BellIcon, DownloadIcon, EyeIcon, SettingsIcon, type LucideIcon } from "lucide-react";
+import { BellIcon, CodeIcon, DownloadIcon, EyeIcon, SettingsIcon, type LucideIcon } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { DeveloperPanel } from "@/components/settings-developer";
 import { NotificationsPanel } from "@/components/settings-notifications";
 import { UpdatesPanel } from "@/components/settings-updates";
 import { WatchingPanel } from "@/components/settings-watching";
@@ -27,7 +28,7 @@ function GeneralPanel() {
   );
 }
 
-export type SettingsCategory = "general" | "watching" | "notifications" | "updates";
+export type SettingsCategory = "general" | "watching" | "notifications" | "updates" | "developer";
 
 type Category = {
   id: SettingsCategory;
@@ -41,6 +42,7 @@ const CATEGORIES: Category[] = [
   { id: "watching", label: "Watching", Icon: EyeIcon, Panel: WatchingPanel },
   { id: "notifications", label: "Notifications", Icon: BellIcon, Panel: NotificationsPanel },
   { id: "updates", label: "Updates", Icon: DownloadIcon, Panel: UpdatesPanel },
+  { id: "developer", label: "Developer", Icon: CodeIcon, Panel: DeveloperPanel },
 ];
 
 type Props = {

@@ -1238,7 +1238,10 @@ only.
 
 The daemon reads the budget from the headers of each GitHub answer.
 `babysitter ratelimit` prints it, and the sidebar of the desktop app
-shows it above the account. The card says when the budget is nearly
+shows it above the account when more than half of the budget is used,
+or when the daemon slows down or pauses its polls. "Always show the
+GitHub rate limit" in the Developer pane of the settings shows the card
+all the time. The card says when the budget is nearly
 used, when the polls pause until the reset, and when GitHub asked for a
 slow down with its secondary limit. "Poll less often" opens the Watching
 pane of the settings.

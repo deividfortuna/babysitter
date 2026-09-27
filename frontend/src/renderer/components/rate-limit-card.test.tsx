@@ -29,19 +29,46 @@ async function findCard() {
   return screen.findByRole("region", { name: "GitHub rate limit" });
 }
 
-test("shows the budget that is left and when it resets", async () => {
-  renderCard(buildRateLimit({ state: "ok", remaining: 4212, resetAt: "2026-09-24T12:38:00Z" }));
+test("shows the budget that is left and when it resets once more than half is used", async () => {
+  renderCard(buildRateLimit({ state: "ok", remaining: 2079, resetAt: "2026-09-24T12:38:00Z" }));
 
   const card = await findCard();
 
   expect(within(card).getByText("GitHub API")).toBeVisible();
   expect(within(card).getByText("resets in 38m")).toBeVisible();
-  expect(within(card).getByText("4,212 of 5,000 left")).toBeVisible();
+  expect(within(card).getByText("2,079 of 5,000 left")).toBeVisible();
   expect(within(card).getByRole("progressbar", { name: "GitHub requests used this hour" })).toHaveAttribute(
     "aria-valuenow",
-    "15.8",
+    "58.4",
   );
   expect(within(card).queryByRole("button")).not.toBeInTheDocument();
+});
+
+test("shows nothing while half of the budget or less is used", async () => {
+  serveApi({ rateLimit: buildRateLimit({ state: "ok", remaining: 2500 }) });
+  const queryClient = createQueryClientForTests();
+  renderWithProviders(<RateLimitCard enabled onPollLessOften={vi.fn()} />, { queryClient });
+
+  await vi.waitFor(() => expect(queryClient.getQueryState(rateLimitQueryKey)?.status).toBe("success"));
+
+  expect(screen.queryByRole("region", { name: "GitHub rate limit" })).not.toBeInTheDocument();
+});
+
+test("shows the budget when a little more than half is used", async () => {
+  renderCard(buildRateLimit({ state: "ok", remaining: 2498 }));
+
+  const card = await findCard();
+
+  expect(within(card).getByText("2,498 of 5,000 left")).toBeVisible();
+});
+
+test("shows the budget at any use when the developer setting always shows it", async () => {
+  window.localStorage.setItem("always_show_rate_limit", "true");
+  renderCard(buildRateLimit({ state: "ok", remaining: 4212 }));
+
+  const card = await findCard();
+
+  expect(within(card).getByText("4,212 of 5,000 left")).toBeVisible();
 });
 
 test("says the budget is nearly used and offers to poll less often", async () => {
@@ -99,6 +126,7 @@ test("says GitHub asked to slow down and when the polls go on", async () => {
 });
 
 test("leaves the reset out once the window passed", async () => {
+  window.localStorage.setItem("always_show_rate_limit", "true");
   renderCard(buildRateLimit({ state: "ok", remaining: 5000, resetAt: undefined }));
 
   const card = await findCard();
