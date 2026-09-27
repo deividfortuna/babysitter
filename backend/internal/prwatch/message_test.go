@@ -137,6 +137,44 @@ func TestResizeGivesTheLiveSessionTheSize(t *testing.T) {
 	}
 }
 
+func TestOverlappingResizesLeaveTheSessionAtTheKeptSize(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	older, newer := TerminalSize{Rows: 30, Cols: 87}, TerminalSize{Rows: 60, Cols: 177}
+	entered, release := make(chan struct{}), make(chan struct{})
+	h := fx.host.last()
+	h.mu.Lock()
+	h.onResize = func(size TerminalSize) {
+		if size == older {
+			close(entered)
+			<-release
+		}
+	}
+	h.mu.Unlock()
+
+	olderDone, newerDone := make(chan error, 1), make(chan error, 1)
+	go func() { olderDone <- fx.svc.Resize(ctx, w.ID, older) }()
+	<-entered
+	go func() { newerDone <- fx.svc.Resize(ctx, w.ID, newer) }()
+	select {
+	case err := <-newerDone:
+		newerDone <- err
+	case <-time.After(100 * time.Millisecond):
+	}
+	close(release)
+	for _, done := range []chan error{olderDone, newerDone} {
+		if err := <-done; err != nil {
+			t.Fatalf("Resize() error = %v", err)
+		}
+	}
+
+	if live, kept := h.terminalSize(), fx.svc.sizes.get(w.ID); live != kept {
+		t.Fatalf("live session at %+v, kept size %+v, want the same size", live, kept)
+	}
+}
+
 func TestANewSessionStartsAtTheLastSize(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

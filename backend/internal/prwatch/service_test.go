@@ -581,18 +581,19 @@ func (r *fakeRunner) Prelude() string {
 }
 
 type fakeHandle struct {
-	mu      sync.Mutex
-	spec    session.Spec
-	sent    []string
-	sendErr error
-	done    chan struct{}
-	err     error
-	pid     int
-	stopped bool
-	stopErr error
-	screen  string
-	onSend  func()
-	size    TerminalSize
+	mu       sync.Mutex
+	spec     session.Spec
+	sent     []string
+	sendErr  error
+	done     chan struct{}
+	err      error
+	pid      int
+	stopped  bool
+	stopErr  error
+	screen   string
+	onSend   func()
+	onResize func(TerminalSize)
+	size     TerminalSize
 }
 
 func (h *fakeHandle) Send(_ context.Context, text string) error {
@@ -621,6 +622,13 @@ func (h *fakeHandle) Ready(context.Context) error { return nil }
 func (h *fakeHandle) Interrupt() error { return nil }
 
 func (h *fakeHandle) Resize(rows, cols uint16) error {
+	size := TerminalSize{Rows: rows, Cols: cols}
+	h.mu.Lock()
+	hook := h.onResize
+	h.mu.Unlock()
+	if hook != nil {
+		hook(size)
+	}
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	select {
@@ -628,7 +636,7 @@ func (h *fakeHandle) Resize(rows, cols uint16) error {
 		return session.ErrExited
 	default:
 	}
-	h.size = TerminalSize{Rows: rows, Cols: cols}
+	h.size = size
 	return nil
 }
 

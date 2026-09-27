@@ -172,6 +172,8 @@ func (s *Service) Resize(ctx context.Context, id int64, size TerminalSize) error
 	if !s.hosted(w) {
 		return ErrSelfWatch
 	}
+	unlock := s.sizeLocks.lock(id)
+	defer unlock()
 	s.sizes.set(id, size)
 	l := s.sessions.get(id)
 	if l == nil {

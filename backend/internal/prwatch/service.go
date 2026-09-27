@@ -91,6 +91,7 @@ type Service struct {
 	locks         keyedLocks
 	sessions      sessions
 	sizes         registry[TerminalSize]
+	sizeLocks     keyedLocks
 	turns         keyedQueues
 	work          selfWork
 	waiting       waiting
