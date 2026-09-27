@@ -1083,6 +1083,8 @@ export interface components {
              * @enum {string}
              */
             mergeMethod: "" | "squash" | "merge" | "rebase";
+            /** @description The model of that provider; empty takes the default of the provider */
+            model: string;
             /** @description The notification kinds that reach nobody. The history keeps them either way */
             mutedNotificationKinds: ("agent" | "review" | "checks" | "watch" | "merge" | "auto")[] | null;
             /** @description A notification makes a sound */
@@ -1091,36 +1093,44 @@ export interface components {
             notificationsEnabled: boolean;
             /** @description Time between passes of the repository watcher */
             pollIntervalSeconds: number;
+            /**
+             * @description The AI provider of a new watch
+             * @enum {string}
+             */
+            provider: "claude" | "copilot";
             /** @description Time between polls of a watched pull request */
             watchIntervalSeconds: number;
         };
         HttpdStartWatchRequest: {
             /**
-             * @description Who releases the work of a turn of the agent; absent takes the setting of the daemon, and a self watch runs in auto
+             * @description Who releases the work of a turn of the agent; absent takes the repository, then the daemon, and a self watch runs in auto
              * @enum {string|null}
              */
             approvalMode?: "auto" | "manual" | null;
-            /** @description How many approvals the pull request needs before the watch calls it ready to merge; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds */
+            /** @description How many approvals the pull request needs before the watch calls it ready to merge; absent takes the repository, then the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds */
             approvalsRequired?: number | null;
-            /** @description Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon */
+            /** @description Approved work goes out after a clean rebase without asking again; absent takes the repository, then the daemon */
             autoApproveRebase?: boolean | null;
-            /** @description Report the review items the pull request has already; absent takes the setting of the daemon */
+            /** @description Report the review items the pull request has already; absent takes the repository, then the daemon */
             includeExisting?: boolean | null;
-            /** @description Report the comments of the token's own user; absent takes the setting of the daemon */
+            /** @description Report the comments of the token's own user; absent takes the repository, then the daemon */
             includeOwn?: boolean | null;
+            /** @description A stop leaves the worktree of the watch on disk; absent takes the repository, then the daemon */
+            keepWorktree?: boolean | null;
             /**
-             * @description The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the setting of the daemon
+             * @description The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the repository, then the daemon
              * @enum {string|null}
              */
             mergeMethod?: "" | "squash" | "merge" | "rebase" | null;
             /** @description The daemon merges with the method of the watch as soon as the watch is ready to merge; absent means off */
             mergeWhenReady?: boolean | null;
+            /** @description The model of the provider; empty takes the model of the layer that gives the provider */
             model?: string;
             /**
-             * @description The AI provider that runs the agent session, or self when the caller's own session is the agent
+             * @description The AI provider that runs the agent session, or self when the caller's own session is the agent; empty takes the repository, then the daemon
              * @enum {string}
              */
-            provider?: "claude" | "copilot" | "self";
+            provider?: "" | "claude" | "copilot" | "self";
             repo: string;
             sourceDir: string;
             target: string;
@@ -1179,6 +1189,8 @@ export interface components {
             id: number;
             includeExisting: boolean;
             includeOwn: boolean;
+            /** @description A stop leaves the worktree of the watch on disk unless the stop says otherwise */
+            keepWorktree: boolean;
             lastError: string;
             /** Format: date-time */
             lastHeartbeatAt?: string | null;
@@ -1248,17 +1260,23 @@ export interface components {
             approvalMode: "" | "auto" | "manual";
             /** @description How many approvals the pull request needs; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch */
             approvalsRequired?: number | null;
+            /** @description Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon */
+            autoApproveRebase?: boolean | null;
             /** @description Report the review items the pull request has already; absent takes the setting of the daemon */
             includeExisting?: boolean | null;
+            /** @description Report the comments of the token's own user; absent takes the setting of the daemon */
+            includeOwn?: boolean | null;
+            /** @description A stop leaves the worktree of the watch on disk; absent takes the setting of the daemon */
+            keepWorktree?: boolean | null;
             /**
              * @description The merge method of the watches; empty takes the setting of the daemon
              * @enum {string}
              */
             mergeMethod: "" | "squash" | "merge" | "rebase";
-            /** @description The model of the agent; empty takes the model of the provider */
+            /** @description The model of that provider; empty takes the default of the provider. Needs a provider */
             model: string;
             /**
-             * @description The AI provider of the watches auto start begins; empty takes the provider of watch start
+             * @description The AI provider of a watch on the repository; empty takes the provider of the daemon
              * @enum {string}
              */
             provider: "" | "claude" | "copilot";
@@ -1324,7 +1342,7 @@ export interface components {
             message: string;
         };
         StopWatchParams: {
-            /** @description Leave the worktree of the watch on disk instead of deleting it; absent takes the setting of the daemon */
+            /** @description Leave the worktree of the watch on disk instead of deleting it; absent takes the rule the watch started with */
             keepWorktree?: boolean | null;
         };
         TakeoverParams: {

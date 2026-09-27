@@ -220,9 +220,12 @@ babysitter repo queue <owner/name>                                    # the Depe
 ```
 
 The flags of `watch start` (`--provider`, `--model`, `--approval-mode`,
-`--merge-method`, `--approvals`, `--include-existing`) set the overrides
-of the watches that auto start begins. `--approvals default` and
-`--reset-overrides` give them back to the settings of the daemon. Turn a
+`--merge-method`, `--approvals`, `--include-existing`,
+`--auto-approve-rebase`, `--include-own`, `--keep-worktree`) set the
+overrides of each watch on the repository, by hand or by auto start. A
+value comes from the first layer that sets it: watch, then repository,
+then daemon. `--approvals default` and `--reset-overrides` give the
+overrides back to the settings of the daemon. Turn a
 toggle off with `=false`, for example `--auto-start-mine=false`.
 
 What to tell the user:

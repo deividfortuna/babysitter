@@ -93,6 +93,51 @@ func TestWatchStartLeavesTheApprovalsOutWhenNobodyTypedThem(t *testing.T) {
 	}
 }
 
+func TestWatchStartLeavesTheAgentAndTheWorktreeToTheChainWhenNobodyTypedThem(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	if _, err := runWatch(t, d, "start", "octo/hello#3"); err != nil {
+		t.Fatalf("watch start error = %v", err)
+	}
+	for _, field := range []string{"provider", "model", "keepWorktree"} {
+		if _, named := d.starts[0][field]; named {
+			t.Fatalf("body = %v, want no %s field so the repository, then the daemon, decides", d.starts[0], field)
+		}
+	}
+}
+
+func TestWatchStartSendsTheWorktreeRuleThatWasTyped(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	if _, err := runWatch(t, d, "start", "octo/hello#3", "--keep-worktree", "--provider", "copilot"); err != nil {
+		t.Fatalf("watch start error = %v", err)
+	}
+	if body := d.starts[0]; body["keepWorktree"] != true || body["provider"] != "copilot" {
+		t.Fatalf("body = %v, want the worktree kept on copilot", body)
+	}
+}
+
+func TestSettingsSetChangesTheAgentOfANewWatch(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	if _, err := runSettings(t, d, "set", "--provider", "copilot"); err != nil {
+		t.Fatalf("settings set error = %v", err)
+	}
+	if got := d.settingsPut[0]; got["provider"] != "copilot" || got["model"] != "" {
+		t.Fatalf("body = %v, want copilot with its default model", got)
+	}
+
+	if _, err := runSettings(t, d, "set", "--provider", "copilot", "--model", "auto"); err != nil {
+		t.Fatalf("settings set error = %v", err)
+	}
+	if got := d.settingsPut[1]; got["provider"] != "copilot" || got["model"] != "auto" {
+		t.Fatalf("body = %v, want copilot with the model of the flag", got)
+	}
+}
+
 func TestWatchStartRejectsApprovalsThatAreNotANumber(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()

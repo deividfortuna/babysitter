@@ -3,7 +3,6 @@ package autostart
 import (
 	"context"
 	"fmt"
-	"slices"
 	"time"
 
 	"github.com/deividfortuna/babysitter/internal/dependabot"
@@ -33,7 +32,7 @@ func Configure(ctx context.Context, st ConfigStore, repo store.Repo, c Change, n
 		return store.RepoConfig{}, err
 	}
 	next := apply(cfg, c, now)
-	if err := checkProvider(next.Overrides.Provider); err != nil {
+	if err := checkAgent(next.Overrides); err != nil {
 		return store.RepoConfig{}, err
 	}
 	if c.checksCheckout(cfg) && next.CheckoutDir != "" {
@@ -51,13 +50,14 @@ func (c Change) checksCheckout(current store.RepoConfig) bool {
 
 func isOn(toggle *bool) bool { return toggle != nil && *toggle }
 
-var overrideProviders = []string{"", prwatch.ProviderClaude, prwatch.ProviderCopilot}
-
-func checkProvider(provider string) error {
-	if slices.Contains(overrideProviders, provider) {
+func checkAgent(o store.WatchOverrides) error {
+	if o.Provider == "" && o.Model == "" {
 		return nil
 	}
-	return fmt.Errorf("%w: unknown provider %q: use claude or copilot", store.ErrInvalidRepoConfig, provider)
+	if err := prwatch.CheckHostedAgent(o.Provider, o.Model); err != nil {
+		return fmt.Errorf("%w: %w", store.ErrInvalidRepoConfig, err)
+	}
+	return nil
 }
 
 func apply(cfg store.RepoConfig, c Change, now time.Time) store.RepoConfig {

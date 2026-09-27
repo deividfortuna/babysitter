@@ -13,6 +13,7 @@ import {
 import { useSettings } from "@/hooks/useSettings";
 import { AgentLogo } from "@/components/agent-logo";
 import { mergeMethodLabel } from "@/components/merge-method-select";
+import { OptionSelect, type Option } from "@/components/option-select";
 import { SettingRow } from "@/components/setting-row";
 import { Meta } from "@/components/status-badges";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -23,16 +24,23 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
+import {
+  agentLabel,
+  daemonDefaults,
+  defaultLabel,
+  mergeMethodDefaultLabel,
+  modelLabel,
+  overrideOf,
+  repositoryDefaults,
+  type WatchDefaults as Defaults,
+} from "@/lib/watch-defaults";
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { shortDate } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
-type Option<T extends string> = { value: T; label: string };
-
-const DAEMON_SETTING = "Daemon setting";
 const NARROW_SELECT = "w-26 shrink-0 font-mono text-xs";
-const OVERRIDE_SELECT = "w-32 shrink-0";
+const OVERRIDE_SELECT = "w-40 shrink-0";
 
 const SCOPES: Option<DependabotScope>[] = [
   { value: "patch", label: "patch" },
@@ -51,33 +59,6 @@ const APPROVAL_HELP: Record<DependabotApproval, string> = {
   ask: "A notification asks you to approve when the build is green and the update is in scope.",
   green: "Approve in your name when the build is green and the update is in scope.",
 };
-
-const APPROVAL_MODES: Option<WatchOverrides["approvalMode"]>[] = [
-  { value: "", label: DAEMON_SETTING },
-  { value: "manual", label: "manual" },
-  { value: "auto", label: "auto" },
-];
-
-const MERGE_METHODS: Option<WatchOverrides["mergeMethod"]>[] = [
-  { value: "", label: DAEMON_SETTING },
-  ...(["squash", "merge", "rebase"] as const).map((value) => ({ value, label: mergeMethodLabel(value) })),
-];
-
-type ReportChoice = "" | "on" | "off";
-
-const REPORT_CHOICES: Option<ReportChoice>[] = [
-  { value: "", label: DAEMON_SETTING },
-  { value: "on", label: "Report them" },
-  { value: "off", label: "Skip them" },
-];
-
-type ApprovalsChoice = "" | "branch" | "count";
-
-const APPROVALS_CHOICES: Option<ApprovalsChoice>[] = [
-  { value: "", label: DAEMON_SETTING },
-  { value: "branch", label: "Branch rule" },
-  { value: "count", label: "A number" },
-];
 
 type Props = { repo: Repo; onClose: () => void };
 
@@ -229,7 +210,7 @@ function ConfigSections({ repo, config }: { repo: Repo; config: RepoConfig }) {
         </Section>
       ) : null}
 
-      <WatchesItStarts
+      <WatchDefaults
         overrides={config.overrides}
         pending={overrides.isPending}
         onChange={(next) => overrides.mutate({ overrides: next })}
@@ -358,88 +339,29 @@ function LimitRow({
   );
 }
 
-type OptionSelectProps<T extends string> = {
-  id?: string;
-  className?: string;
-  label?: string;
-  options: Option<T>[];
-  value: T;
-  disabled?: boolean;
-  onChange: (value: T) => void;
-};
-
-function OptionSelect<T extends string>({
-  id,
-  className,
-  label,
-  options,
-  value,
-  disabled,
-  onChange,
-}: OptionSelectProps<T>) {
-  return (
-    <Select
-      value={toSelectValue(value)}
-      disabled={disabled}
-      onValueChange={(next) => onChange(fromSelectValue(next) as T)}
-    >
-      <SelectTrigger id={id} size="sm" aria-label={label} className={className}>
-        <SelectValue />
-      </SelectTrigger>
-      <SelectContent>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={toSelectValue(option.value)}>
-            {option.label}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-}
-
-function reportChoice(value: boolean | null | undefined): ReportChoice {
-  if (value === true) return "on";
-  if (value === false) return "off";
-  return "";
-}
-
-function reportValue(choice: ReportChoice): boolean | undefined {
-  if (choice === "") return undefined;
-  return choice === "on";
-}
-
-function approvalsChoice(value: number | null | undefined): ApprovalsChoice {
-  if (value === undefined) return "";
-  if (value === null) return "branch";
-  return "count";
-}
-
-function approvalsOfChoice(choice: ApprovalsChoice, current: number | null | undefined): number | null | undefined {
-  if (choice === "") return undefined;
-  if (choice === "branch") return null;
-  return typeof current === "number" ? current : 1;
-}
-
-type WatchesItStartsProps = {
+type WatchDefaultsProps = {
   overrides: WatchOverrides;
   pending: boolean;
   onChange: (overrides: WatchOverrides) => void;
 };
 
-function WatchesItStarts({ overrides, pending, onChange }: WatchesItStartsProps) {
+function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
   const providers = useProviders(true);
   const settings = useSettings(true);
   const catalog = providers.data ?? [];
-  const provider: Provider["id"] = overrides.provider || "claude";
-  const current = catalog.find((item) => item.id === provider);
-  const models = current?.models ?? [];
-  const agentLabel = current?.label ?? provider;
-  const modelLabel = overrides.model
-    ? (models.find((item) => item.id === overrides.model)?.label ?? overrides.model)
+  const daemon = settings.data ? daemonDefaults(settings.data) : undefined;
+  const effective = settings.data ? repositoryDefaults(settings.data, overrides) : undefined;
+  const provider: Provider["id"] = overrides.provider || daemon?.provider || "claude";
+  const models = catalog.find((item) => item.id === provider)?.models ?? [];
+  const summary = effective
+    ? [agentLabel(catalog, effective.provider, effective.model), effective.approvalMode].join(" · ")
     : "";
-  const approvalMode = overrides.approvalMode || settings.data?.approvalMode || "manual";
-  const summary = [modelLabel ? `${agentLabel} ${modelLabel}` : agentLabel, approvalMode].join(" · ");
   const save = (next: Partial<WatchOverrides>) => onChange({ ...overrides, ...next });
+  const inherited = <T,>(format: (defaults: Defaults) => T) => (daemon ? format(daemon) : undefined);
+  const daemonProvider = inherited((d) => catalog.find((item) => item.id === d.provider)?.label ?? d.provider);
+  const modelOptions: Option<string>[] = overrides.provider
+    ? models.map((item) => ({ value: item.id, label: item.label }))
+    : [{ value: "", label: defaultLabel(inherited((d) => modelLabel(catalog, d.provider, d.model))) }];
 
   return (
     <Collapsible className="border-t pt-2">
@@ -453,21 +375,25 @@ function WatchesItStarts({ overrides, pending, onChange }: WatchesItStartsProps)
             data-icon="inline-start"
             className="-rotate-90 text-muted-foreground transition-transform [[data-state=open]>&]:rotate-0"
           />
-          Watches it starts
+          Watch defaults
           <span className="ml-auto flex min-w-0 items-center gap-1.5">
-            <AgentLogo provider={provider} className="size-3" />
+            <AgentLogo provider={effective?.provider ?? provider} className="size-3" />
             <Meta className="truncate">{summary}</Meta>
           </span>
         </Button>
       </CollapsibleTrigger>
       <CollapsibleContent className="mt-2 flex flex-col gap-4">
+        <p className="text-body/4.5 text-muted-foreground">
+          Each watch on this repository starts with these values, by hand or by auto start. A value equal to the setting
+          of the daemon follows the daemon.
+        </p>
         <SettingRow
           label="Agent"
           htmlFor="repo-override-provider"
           description="Prepares the fixes and the replies."
           className="flex-col items-stretch"
         >
-          <div className="flex gap-2">
+          <div className="grid grid-cols-1 gap-2">
             <Select
               value={toSelectValue(overrides.provider)}
               disabled={pending || catalog.length === 0}
@@ -475,11 +401,14 @@ function WatchesItStarts({ overrides, pending, onChange }: WatchesItStartsProps)
                 save({ provider: fromSelectValue(next) as WatchOverrides["provider"], model: "" })
               }
             >
-              <SelectTrigger id="repo-override-provider" size="sm" className={OVERRIDE_SELECT}>
+              <SelectTrigger id="repo-override-provider" size="sm" className="w-full">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value={toSelectValue("")}>{DAEMON_SETTING}</SelectItem>
+                <SelectItem value={toSelectValue("")}>
+                  {daemon ? <AgentLogo provider={daemon.provider} /> : null}
+                  {defaultLabel(daemonProvider)}
+                </SelectItem>
                 {catalog.map((item) => (
                   <SelectItem key={item.id} value={item.id}>
                     <AgentLogo provider={item.id} />
@@ -490,8 +419,8 @@ function WatchesItStarts({ overrides, pending, onChange }: WatchesItStartsProps)
             </Select>
             <OptionSelect
               label="Model"
-              className="min-w-0 flex-1"
-              options={models.map((item) => ({ value: item.id, label: item.label }))}
+              className="w-full"
+              options={modelOptions}
               value={overrides.model}
               disabled={pending || !overrides.provider || models.length === 0}
               onChange={(model) => save({ model })}
@@ -506,12 +435,24 @@ function WatchesItStarts({ overrides, pending, onChange }: WatchesItStartsProps)
           <OptionSelect
             id="repo-override-approval-mode"
             className={OVERRIDE_SELECT}
-            options={APPROVAL_MODES}
+            options={[
+              { value: "", label: defaultLabel(daemon?.approvalMode) },
+              { value: "manual", label: "manual" },
+              { value: "auto", label: "auto" },
+            ]}
             value={overrides.approvalMode}
             disabled={pending}
             onChange={(approvalMode) => save({ approvalMode })}
           />
         </SettingRow>
+        <SwitchOverride
+          id="repo-override-auto-rebase"
+          label="Approve a clean rebase on its own"
+          description="Approved work does not ask again because the branch moved. No effect in auto."
+          checked={effective?.autoApproveRebase}
+          disabled={pending || !daemon}
+          onChange={(on) => save({ autoApproveRebase: overrideOf(on, daemon?.autoApproveRebase) })}
+        />
         <SettingRow
           label="Merge method"
           htmlFor="repo-override-merge-method"
@@ -520,58 +461,86 @@ function WatchesItStarts({ overrides, pending, onChange }: WatchesItStartsProps)
           <OptionSelect
             id="repo-override-merge-method"
             className={OVERRIDE_SELECT}
-            options={MERGE_METHODS}
+            options={[
+              { value: "", label: defaultLabel(inherited((d) => mergeMethodDefaultLabel(d.mergeMethod))) },
+              ...(["squash", "merge", "rebase"] as const).map((value) => ({ value, label: mergeMethodLabel(value) })),
+            ]}
             value={overrides.mergeMethod}
             disabled={pending}
             onChange={(mergeMethod) => save({ mergeMethod })}
           />
         </SettingRow>
-        <ApprovalsOverride
-          key={String(overrides.approvalsRequired)}
-          value={overrides.approvalsRequired}
-          pending={pending}
-          onChange={(approvalsRequired) => save({ approvalsRequired })}
-        />
-        <SettingRow
-          label="Report existing review items"
-          htmlFor="repo-override-include-existing"
-          description="Items that were there before the watch started."
-        >
-          <OptionSelect
-            id="repo-override-include-existing"
-            className={OVERRIDE_SELECT}
-            options={REPORT_CHOICES}
-            value={reportChoice(overrides.includeExisting)}
-            disabled={pending}
-            onChange={(choice) => save({ includeExisting: reportValue(choice) })}
+        {effective && daemon ? (
+          <ApprovalsOverride
+            key={String(effective.approvalsRequired)}
+            value={effective.approvalsRequired}
+            pending={pending}
+            onChange={(approvals) => save({ approvalsRequired: overrideOf(approvals, daemon.approvalsRequired) })}
           />
-        </SettingRow>
+        ) : null}
+        <SwitchOverride
+          id="repo-override-include-existing"
+          label="Report existing review items"
+          description="Items that were there before the watch started."
+          checked={effective?.includeExisting}
+          disabled={pending || !daemon}
+          onChange={(on) => save({ includeExisting: overrideOf(on, daemon?.includeExisting) })}
+        />
+        <SwitchOverride
+          id="repo-override-include-own"
+          label="Report my own comments"
+          description="Treat your comments like a reviewer's."
+          checked={effective?.includeOwn}
+          disabled={pending || !daemon}
+          onChange={(on) => save({ includeOwn: overrideOf(on, daemon?.includeOwn) })}
+        />
+        <SwitchOverride
+          id="repo-override-keep-worktree"
+          label="Keep the worktree when a watch stops"
+          description="The stop dialog can still say otherwise."
+          checked={effective?.keepWorktree}
+          disabled={pending || !daemon}
+          onChange={(on) => save({ keepWorktree: overrideOf(on, daemon?.keepWorktree) })}
+        />
       </CollapsibleContent>
     </Collapsible>
   );
 }
 
+type SwitchOverrideProps = {
+  id: string;
+  label: string;
+  description: string;
+  checked: boolean | undefined;
+  disabled: boolean;
+  onChange: (on: boolean) => void;
+};
+
+function SwitchOverride({ id, label, description, checked, disabled, onChange }: SwitchOverrideProps) {
+  return (
+    <SettingRow label={label} htmlFor={id} description={description}>
+      <Switch id={id} checked={checked ?? false} disabled={disabled} onCheckedChange={onChange} />
+    </SettingRow>
+  );
+}
+
 type ApprovalsOverrideProps = {
-  value: number | null | undefined;
+  value: number | null;
   pending: boolean;
-  onChange: (value: number | null | undefined) => void;
+  onChange: (value: number | null) => void;
 };
 
 function ApprovalsOverride({ value, pending, onChange }: ApprovalsOverrideProps) {
   const [draft, setDraft] = useState(approvalsField(value));
   const [invalid, setInvalid] = useState(false);
-  const choice = approvalsChoice(value);
-
-  function pick(next: ApprovalsChoice) {
-    onChange(approvalsOfChoice(next, value));
-  }
 
   function commit() {
     if (pending) return;
-    const wanted = approvalsRequired(draft);
-    const refused = approvalsInvalid(draft) || wanted === undefined;
+    const refused = approvalsInvalid(draft);
     setInvalid(refused);
-    if (refused || wanted === value) return;
+    if (refused) return;
+    const wanted = approvalsRequired(draft) ?? null;
+    if (wanted === value) return;
     onChange(wanted);
   }
 
@@ -581,39 +550,26 @@ function ApprovalsOverride({ value, pending, onChange }: ApprovalsOverrideProps)
       htmlFor="repo-override-approvals"
       description={
         invalid ? (
-          <span className="text-destructive">Use a whole number from 0.</span>
+          <span className="text-destructive">Use a whole number from 0, or leave it empty.</span>
         ) : (
-          "The rule of the base branch, or a number."
+          "Empty takes the rule of the base branch."
         )
       }
-      className="flex-col items-stretch"
     >
-      <div className="flex gap-2">
-        <OptionSelect
-          id="repo-override-approvals"
-          className={OVERRIDE_SELECT}
-          options={APPROVALS_CHOICES}
-          value={choice}
-          disabled={pending}
-          onChange={pick}
-        />
-        {choice === "count" ? (
-          <Input
-            type="number"
-            inputMode="numeric"
-            min={0}
-            aria-label="Approvals"
-            className="h-8 w-18 shrink-0"
-            value={draft}
-            aria-invalid={invalid || undefined}
-            onChange={(e) => setDraft(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") commit();
-            }}
-          />
-        ) : null}
-      </div>
+      <Input
+        id="repo-override-approvals"
+        type="number"
+        inputMode="numeric"
+        min={0}
+        className="h-8 w-18 shrink-0"
+        value={draft}
+        aria-invalid={invalid || undefined}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") commit();
+        }}
+      />
     </SettingRow>
   );
 }

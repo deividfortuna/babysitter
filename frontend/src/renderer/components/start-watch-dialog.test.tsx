@@ -2,7 +2,14 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vitest";
 import { http, HttpResponse } from "msw";
-import { buildProviders, buildPullRequest, buildSettings, buildWatch } from "@test/fixtures";
+import {
+  buildProviders,
+  buildPullRequest,
+  buildRepo,
+  buildRepoConfig,
+  buildSettings,
+  buildWatch,
+} from "@test/fixtures";
 import { chooseOption, optionLabels, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { StartWatchDialog } from "./start-watch-dialog";
@@ -165,7 +172,7 @@ test("folds the additional settings, and names what the watch will use", async (
   await openAdditional(user);
 
   expect(additionalSettings()).toHaveAttribute("aria-expanded", "true");
-  expect(additionalSettings()).toHaveTextContent("from your defaults");
+  expect(additionalSettings()).toHaveTextContent("Default takes the repository, then the daemon");
   for (const label of [
     "Agent",
     "Model",
@@ -175,10 +182,24 @@ test("folds the additional settings, and names what the watch will use", async (
     "Merge method",
     "Report existing review items",
     "Include my own comments",
+    "Keep the worktree when the watch stops",
   ]) {
     expect(screen.getByLabelText(label)).toBeVisible();
   }
 });
+
+const INHERITED_FIELDS = [
+  "provider",
+  "model",
+  "approvalsRequired",
+  "mergeMethod",
+  "includeExisting",
+  "includeOwn",
+  "keepWorktree",
+  "approvalMode",
+  "autoApproveRebase",
+  "mergeWhenReady",
+];
 
 test("starts with the defaults while the additional settings stay folded", async () => {
   const startBodies: Record<string, unknown>[] = [];
@@ -191,18 +212,105 @@ test("starts with the defaults while the additional settings stay folded", async
   await user.click(screen.getByRole("button", { name: "Start watching" }));
 
   await waitFor(() => expect(startBodies).toHaveLength(1));
-  expect(startBodies[0]).toMatchObject({ target: "octo/babysitter#12", provider: "claude", model: "" });
-  for (const field of [
-    "approvalsRequired",
-    "mergeMethod",
-    "includeExisting",
-    "includeOwn",
-    "approvalMode",
-    "autoApproveRebase",
-    "mergeWhenReady",
-  ]) {
+  expect(startBodies[0]).toMatchObject({ target: "octo/babysitter#12" });
+  for (const field of INHERITED_FIELDS) {
     expect(startBodies[0]).not.toHaveProperty(field);
   }
+});
+
+test("each field opens on the value of the daemon", async () => {
+  serveApi({
+    settings: buildSettings({
+      provider: "copilot",
+      model: "gpt-5.3-codex",
+      approvalMode: "manual",
+      autoApproveRebase: true,
+      approvalsRequired: 2,
+      mergeMethod: "rebase",
+      includeExisting: true,
+      includeOwn: true,
+      keepWorktree: true,
+    }),
+  });
+  renderDialog();
+  const user = userEvent.setup();
+  await waitForCatalog(user);
+
+  await waitFor(() => expect(screen.getByLabelText("Agent")).toHaveTextContent("Default (Copilot)"));
+  expect(screen.getByLabelText("Model")).toHaveTextContent("Default (GPT-5.3 Codex)");
+  expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)");
+  expect(screen.getByLabelText("Merge method")).toHaveTextContent("Default (rebase)");
+  expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2);
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Report existing review items" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Include my own comments" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Keep the worktree when the watch stops" })).toBeChecked();
+});
+
+test("the override of the repository beats the daemon", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({
+    settings: buildSettings({
+      approvalMode: "manual",
+      approvalsRequired: 2,
+      mergeMethod: "rebase",
+      keepWorktree: true,
+    }),
+    repos: [buildRepo()],
+    repoConfig: buildRepoConfig({
+      overrides: {
+        provider: "copilot",
+        model: "",
+        approvalMode: "auto",
+        mergeMethod: "squash",
+        approvalsRequired: null,
+        keepWorktree: false,
+      },
+    }),
+    startBodies,
+  });
+  renderDialog();
+  const user = userEvent.setup();
+  await fillTarget(user);
+  await waitFor(() =>
+    expect(additionalSettings()).toHaveTextContent("Copilot · auto · rule of the base branch · squash"),
+  );
+  await openAdditional(user);
+
+  expect(screen.getByLabelText("Agent")).toHaveTextContent("Default (Copilot)");
+  expect(screen.getByLabelText("Model")).toHaveTextContent("Default (Provider default)");
+  expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (auto)");
+  expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(null);
+  expect(screen.getByLabelText("Merge method")).toHaveTextContent("Default (squash)");
+  expect(screen.getByRole("switch", { name: "Keep the worktree when the watch stops" })).not.toBeChecked();
+
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  for (const field of INHERITED_FIELDS) {
+    expect(startBodies[0]).not.toHaveProperty(field);
+  }
+});
+
+test("holds the start until the settings of the repository have landed", async () => {
+  serveApi({ repos: [buildRepo()] });
+  let answer: (() => void) | undefined;
+  const landed = new Promise<void>((resolve) => {
+    answer = resolve;
+  });
+  server.use(
+    http.get(apiUrl("/api/v1/repos/:id/config"), async () => {
+      await landed;
+      return HttpResponse.json(buildRepoConfig());
+    }),
+  );
+  renderDialog();
+  const user = userEvent.setup();
+
+  await fillTarget(user);
+  expect(screen.getByRole("button", { name: "Start watching" })).toBeDisabled();
+
+  answer?.();
+  await waitFor(() => expect(screen.getByRole("button", { name: "Start watching" })).toBeEnabled());
 });
 
 test("the summary follows the choices of the author", async () => {
@@ -240,7 +348,7 @@ test("offers the models of the selected provider and sends the one picked", asyn
   await waitForCatalog(user);
 
   const models = screen.getByLabelText("Model");
-  expect(await optionLabels(user, models)).toEqual(["Provider default", "Opus", "Sonnet"]);
+  expect(await optionLabels(user, models)).toEqual(["Default (Provider default)", "Opus", "Sonnet"]);
 
   await chooseOption(user, screen.getByLabelText("Agent"), /Copilot/);
   expect(await optionLabels(user, models)).toEqual(["Provider default", "GPT-5.3 Codex"]);
@@ -251,6 +359,22 @@ test("offers the models of the selected provider and sends the one picked", asyn
 
   await waitFor(() => expect(startBodies).toHaveLength(1));
   expect(startBodies[0]).toMatchObject({ provider: "copilot", model: "gpt-5.3-codex" });
+});
+
+test("a model without an agent runs on the agent of the defaults", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ startBodies });
+  renderDialog();
+  const user = userEvent.setup();
+  await waitForCatalog(user);
+
+  await chooseOption(user, screen.getByLabelText("Model"), "Sonnet");
+  await fillTarget(user);
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).toMatchObject({ model: "sonnet" });
+  expect(startBodies[0]).not.toHaveProperty("provider");
 });
 
 test("resets the model when the provider changes", async () => {
@@ -307,6 +431,21 @@ test("sends the approvals and the merge method of the watch", async () => {
   expect(startBodies[0]).toMatchObject({ approvalsRequired: 2, mergeMethod: "rebase" });
 });
 
+test("the repository default of GitHub is a choice apart from Default", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ settings: buildSettings({ mergeMethod: "squash" }), startBodies });
+  renderDialog();
+  const user = userEvent.setup();
+  await waitForCatalog(user);
+
+  await chooseOption(user, screen.getByLabelText("Merge method"), "Repository default");
+  await fillTarget(user);
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).toHaveProperty("mergeMethod", "");
+});
+
 test("refuses approvals that are not a whole number", async () => {
   const startBodies: Record<string, unknown>[] = [];
   serveApi({ startBodies });
@@ -348,39 +487,7 @@ test("leaves the approvals out of the body unless the author touches the field",
   expect(startBodies[1]).toMatchObject({ approvalsRequired: 0 });
 });
 
-test("opens on the defaults the settings of the daemon hold", async () => {
-  const startBodies: Record<string, unknown>[] = [];
-  serveApi({
-    settings: buildSettings({ approvalsRequired: 2, mergeMethod: "rebase", includeExisting: true, includeOwn: true }),
-    startBodies,
-  });
-  renderDialog();
-  const user = userEvent.setup();
-  await waitForCatalog(user);
-
-  await waitFor(() => expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2));
-  expect(screen.getByLabelText("Merge method")).toHaveTextContent("Rebase");
-  expect(screen.getByRole("switch", { name: "Report existing review items" })).toBeChecked();
-  expect(screen.getByRole("switch", { name: "Include my own comments" })).toBeChecked();
-
-  await fillTarget(user);
-  await user.click(screen.getByRole("button", { name: "Start watching" }));
-
-  await waitFor(() => expect(startBodies).toHaveLength(1));
-  for (const field of [
-    "approvalsRequired",
-    "mergeMethod",
-    "includeExisting",
-    "includeOwn",
-    "approvalMode",
-    "autoApproveRebase",
-    "mergeWhenReady",
-  ]) {
-    expect(startBodies[0]).not.toHaveProperty(field);
-  }
-});
-
-test("clearing the approvals asks for the base branch over a setting that names a number", async () => {
+test("clearing the approvals asks for the base branch over a default that names a number", async () => {
   const startBodies: Record<string, unknown>[] = [];
   serveApi({ settings: buildSettings({ approvalsRequired: 2 }), startBodies });
   renderDialog();
@@ -420,10 +527,12 @@ test("sends only the options the author touched", async () => {
   await waitFor(() => expect(screen.getByRole("button", { name: "Start watching" })).toBeEnabled());
   await openAdditional(user);
   await user.click(screen.getByRole("switch", { name: "Include my own comments" }));
+  await user.click(screen.getByRole("switch", { name: "Keep the worktree when the watch stops" }));
   await user.click(screen.getByRole("button", { name: "Start watching" }));
 
   await waitFor(() => expect(startBodies).toHaveLength(1));
   expect(startBodies[0]).toHaveProperty("includeOwn", false);
+  expect(startBodies[0]).toHaveProperty("keepWorktree", true);
   expect(startBodies[0]).not.toHaveProperty("includeExisting");
   expect(startBodies[0]).not.toHaveProperty("approvalsRequired");
   expect(startBodies[0]).not.toHaveProperty("mergeMethod");
@@ -469,7 +578,7 @@ test("the approval mode and the clean rebase go with the start when the author s
   const user = userEvent.setup();
   await openAdditional(user);
 
-  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("manual"));
+  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
   const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
@@ -488,7 +597,8 @@ test("a new watch in auto sends its mode, and the clean rebase means nothing the
   const user = userEvent.setup();
   await openAdditional(user);
 
-  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("manual"));
+  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
+  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase on its own" }));
   await chooseOption(user, screen.getByLabelText("Approval mode"), "auto");
   expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
   await fillTarget(user);
@@ -505,7 +615,7 @@ test("the approval mode says what each mode does", async () => {
   const user = userEvent.setup();
   await openAdditional(user);
 
-  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("manual"));
+  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
   expect(screen.getByText("Manual holds each turn until you approve it. Nothing goes out before.")).toBeVisible();
 
   await chooseOption(user, screen.getByLabelText("Approval mode"), "auto");
@@ -518,7 +628,7 @@ test("the command beside the start button carries the choices of the author", as
   renderDialog();
   const user = userEvent.setup();
   await waitForCatalog(user);
-  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("manual"));
+  await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
 
   await user.type(screen.getByPlaceholderText("search your open PRs, or paste a URL"), "octo/babysitter#12");
   expect(screen.getByText("babysitter watch start octo/babysitter#12")).toBeVisible();

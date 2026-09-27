@@ -36,6 +36,7 @@ type StartRequest struct {
 	ApprovalMode      *store.ApprovalMode
 	AutoApproveRebase *bool
 	MergeWhenReady    *bool
+	KeepWorktree      *bool
 	AutoReason        store.AutoReason
 	UpdateType        dependabot.Level
 }
@@ -246,7 +247,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 		IncludeExisting: *req.IncludeExisting, IncludeOwn: *req.IncludeOwn, StartedAt: now,
 		ApprovalsRequired: approvals, MergeMethod: co.method,
 		ApprovalMode: req.approvalMode(co.provider), AutoApproveRebase: *req.AutoApproveRebase,
-		MergeWhenReady: req.MergeWhenReady != nil && *req.MergeWhenReady, AutoReason: req.AutoReason, UpdateType: cmp.Or(req.UpdateType, snap.PR.UpdateType),
+		MergeWhenReady: req.MergeWhenReady != nil && *req.MergeWhenReady, KeepWorktree: *req.KeepWorktree, AutoReason: req.AutoReason, UpdateType: cmp.Or(req.UpdateType, snap.PR.UpdateType),
 		HeadSHA: base.HeadSHA, PRState: base.PRState, MergeableState: base.MergeableState, CheckStates: base.Checks, GreenSHA: base.GreenSHA,
 	})
 	if err != nil {
@@ -432,7 +433,7 @@ func (s *Service) stop(ctx context.Context, id int64, reason store.StopReason, d
 	s.work.clear(w.ID)
 	s.rereviewTries.drop(w.ID)
 	fate := worktreeNotTried
-	keep := s.keepsWorktree(ctx, w, o)
+	keep := s.keepsWorktree(w, o)
 	if !keep {
 		fate = s.removeWorktree(ctx, w)
 	}

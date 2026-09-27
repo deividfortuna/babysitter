@@ -258,6 +258,7 @@ func newWatchStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		approvalMode    string
 		autoRebase      bool
 		mergeWhenReady  bool
+		keepWorktree    bool
 	)
 	cmd := &cobra.Command{
 		Use:   "start [target]",
@@ -274,12 +275,16 @@ failed, is told at once.
 exist on the pull request.
 
 The daemon says when the pull request is ready to merge: checks green,
-the approvals --approvals asks for, or the setting of the daemon, or the
-rule of the base branch, nobody requesting changes, every review thread
+the approvals --approvals asks for, or the override of the repository,
+or the setting of the daemon, or the rule of the base branch, nobody requesting changes, every review thread
 resolved, nothing
 pending from the agent. You merge it with
 'babysitter watch merge' when it suits you. With --merge-when-ready the
-daemon merges it with the method of the watch as soon as it is ready.`,
+daemon merges it with the method of the watch as soon as it is ready.
+
+A flag you do not type takes the override of the repository
+('babysitter repo config'), and without one the setting of the daemon
+('babysitter settings'). The watch keeps the values it starts with.`,
 		Args: cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			target := ""
@@ -306,6 +311,7 @@ daemon merges it with the method of the watch as soon as it is ready.`,
 				ApprovalMode:      typed(cmd, "approval-mode", &approvalMode),
 				AutoApproveRebase: typed(cmd, "auto-approve-rebase", &autoRebase),
 				MergeWhenReady:    typed(cmd, "merge-when-ready", &mergeWhenReady),
+				KeepWorktree:      typed(cmd, "keep-worktree", &keepWorktree),
 			}
 			if req.ApprovalsRequired, err = typedApprovals(cmd, approvals); err != nil {
 				return err
@@ -330,15 +336,16 @@ daemon merges it with the method of the watch as soon as it is ready.`,
 		},
 	}
 	cmd.Flags().StringVar(&repo, "repo", "", "repository of a bare number, as owner/name")
-	cmd.Flags().StringVar(&provider, "provider", "claude", "AI provider that babysits the watch: claude, copilot, or self when your own session is the agent and takes each message with 'watch next'")
-	cmd.Flags().StringVar(&model, "model", "", "model of that provider, empty for its default; none for self")
-	cmd.Flags().BoolVar(&includeExisting, "include-existing", false, "also report the review items that already exist; without the flag the setting of the daemon decides")
-	cmd.Flags().BoolVar(&includeOwn, "include-own", false, "also report your own comments to the agent, for a repository you review yourself; without the flag the setting of the daemon decides")
-	cmd.Flags().StringVar(&approvals, "approvals", "", "approvals the pull request needs before it is ready to merge: a number, 0 for none, or 'branch' for the rule of the base branch; without the flag the setting of the daemon decides")
-	cmd.Flags().StringVar(&mergeMethod, "merge-method", "", "merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; without the flag the setting of the daemon decides")
-	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "manual holds the work of each turn of the agent until you approve it, auto pushes and posts when the turn ends; without the flag the setting of the daemon decides")
-	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again; without the flag the setting of the daemon decides")
+	cmd.Flags().StringVar(&provider, "provider", "", "AI provider that babysits the watch: claude, copilot, or self when your own session is the agent and takes each message with 'watch next'; without the flag the repository, then the daemon, decides")
+	cmd.Flags().StringVar(&model, "model", "", "model of that provider, empty for the model of the layer that gives the provider; none for self")
+	cmd.Flags().BoolVar(&includeExisting, "include-existing", false, "also report the review items that already exist; without the flag the repository, then the daemon, decides")
+	cmd.Flags().BoolVar(&includeOwn, "include-own", false, "also report your own comments to the agent, for a repository you review yourself; without the flag the repository, then the daemon, decides")
+	cmd.Flags().StringVar(&approvals, "approvals", "", "approvals the pull request needs before it is ready to merge: a number, 0 for none, or 'branch' for the rule of the base branch; without the flag the repository, then the daemon, decides")
+	cmd.Flags().StringVar(&mergeMethod, "merge-method", "", "merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; without the flag the repository, then the daemon, decides")
+	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "manual holds the work of each turn of the agent until you approve it, auto pushes and posts when the turn ends; without the flag the repository, then the daemon, decides")
+	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&mergeWhenReady, "merge-when-ready", false, "the daemon merges with the method of the watch as soon as the watch is ready to merge; off without the flag")
+	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "a stop leaves the worktree of the watch on disk; without the flag the repository, then the daemon, decides")
 	return cmd
 }
 
@@ -406,7 +413,7 @@ func newWatchStopCmd(opts *options, dataDirFlag *string) *cobra.Command {
 			return opts.print(cmd.OutOrStdout(), watchOutput(stopped))
 		}),
 	}
-	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "leave the worktree of the watch on disk; without the flag the setting of the daemon decides")
+	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "leave the worktree of the watch on disk; without the flag the repository, then the daemon, decides")
 	return cmd
 }
 

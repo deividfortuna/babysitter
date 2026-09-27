@@ -33,6 +33,7 @@ func (s settingsOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(tw, "Muted notification kinds\t%s\n", mutedKindsWord(s.MutedNotificationKinds))
 	fmt.Fprintf(tw, "Approval mode\t%s\n", s.ApprovalMode)
 	fmt.Fprintf(tw, "Approve a clean rebase on its own\t%s\n", yesNo(s.AutoApproveRebase))
+	fmt.Fprintf(tw, "Agent\t%s\n", providerLabel(s.Provider, s.Model))
 	return tw.Flush()
 }
 
@@ -114,6 +115,8 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		mutedKinds      string
 		approvalMode    string
 		autoRebase      bool
+		provider        string
+		model           string
 	)
 	cmd := &cobra.Command{
 		Use:   "set",
@@ -144,6 +147,8 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				{"mute-notifications", func(s *httpd.Settings) { s.MutedNotificationKinds = muted }},
 				{"approval-mode", func(s *httpd.Settings) { s.ApprovalMode = approvalMode }},
 				{"auto-approve-rebase", func(s *httpd.Settings) { s.AutoApproveRebase = autoRebase }},
+				{"provider", func(s *httpd.Settings) { s.Provider, s.Model = provider, "" }},
+				{"model", func(s *httpd.Settings) { s.Model = model }},
 			}
 
 			var asked []func(*httpd.Settings)
@@ -185,6 +190,8 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().BoolVar(&sound, "notification-sound", true, "let a notification make a sound")
 	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "who releases the work of a turn of the agent of a new watch: manual waits for you, auto pushes and posts when the turn ends")
 	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "a new watch lets approved work go out after a clean rebase without asking again")
+	cmd.Flags().StringVar(&provider, "provider", "", "AI provider of a new watch: claude or copilot; a new provider takes its default model unless --model names one")
+	cmd.Flags().StringVar(&model, "model", "", "model of the provider of a new watch, empty for its default")
 	cmd.Flags().StringVar(&mutedKinds, "mute-notifications", "", "notification kinds that reach nobody, separated by commas: "+store.JoinKinds()+". An empty list shows them all again")
 	return cmd
 }

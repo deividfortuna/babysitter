@@ -18,6 +18,7 @@ func (fx *fixture) settings(s store.Settings) {
 	fx.t.Helper()
 	s.PollInterval, s.WatchInterval = time.Minute, time.Minute
 	s.ApprovalMode = cmp.Or(s.ApprovalMode, store.ApprovalAuto)
+	s.Provider = cmp.Or(s.Provider, ProviderClaude)
 	if _, err := fx.st.SaveSettings(context.Background(), s); err != nil {
 		fx.t.Fatal(err)
 	}
@@ -147,5 +148,117 @@ func TestAStopThatAsksForTheWorktreeBeatsTheSettings(t *testing.T) {
 
 	if got := fx.git.removedDirs(); len(got) != before+1 {
 		t.Fatalf("removed = %v, want the worktree removed as the stop asked", got)
+	}
+}
+
+func (fx *fixture) repoOverrides(o store.WatchOverrides) {
+	fx.t.Helper()
+	ctx := context.Background()
+	repo, err := fx.st.AddRepo(ctx, "octo", "hello")
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	cfg := store.DefaultRepoConfig(repo.ID)
+	cfg.Overrides = o
+	if _, err := fx.st.SaveRepoConfig(ctx, cfg); err != nil {
+		fx.t.Fatal(err)
+	}
+}
+
+func TestStartTakesTheRepositoryOverTheSettings(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	approvals := 3
+	fx.settings(store.Settings{
+		ApprovalsRequired: &approvals, MergeMethod: "rebase", ApprovalMode: store.ApprovalManual,
+		IncludeExisting: true, IncludeOwn: true, KeepWorktree: true, AutoApproveRebase: true,
+	})
+	fx.repoOverrides(store.WatchOverrides{
+		Provider: ProviderCopilot, Model: "auto", MergeMethod: "squash", ApprovalMode: store.ApprovalAuto,
+		ApprovalsSet: true, Approvals: new(1),
+		IncludeExisting: new(false), IncludeOwn: new(false), KeepWorktree: new(false), AutoApproveRebase: new(false),
+	})
+
+	w := fx.start()
+
+	if w.Provider != ProviderCopilot || w.Model != "auto" || w.MergeMethod != "squash" || w.ApprovalMode != store.ApprovalAuto ||
+		w.ApprovalsRequired != 1 || w.IncludeExisting || w.IncludeOwn || w.KeepWorktree || w.AutoApproveRebase {
+		t.Fatalf("watch = %+v, want what the repository says", w)
+	}
+}
+
+func TestStartTakesTheSettingsWhereTheRepositoryIsSilent(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	approvals := 3
+	fx.settings(store.Settings{
+		Provider: ProviderCopilot, Model: "auto", ApprovalsRequired: &approvals, MergeMethod: "rebase",
+		ApprovalMode: store.ApprovalManual, IncludeExisting: true, KeepWorktree: true, AutoApproveRebase: true,
+	})
+	fx.repoOverrides(store.WatchOverrides{IncludeOwn: new(true)})
+
+	w := fx.start()
+
+	if w.Provider != ProviderCopilot || w.Model != "auto" || w.MergeMethod != "rebase" || w.ApprovalMode != store.ApprovalManual ||
+		w.ApprovalsRequired != 3 || !w.IncludeExisting || !w.IncludeOwn || !w.KeepWorktree || !w.AutoApproveRebase {
+		t.Fatalf("watch = %+v, want the settings with the one field the repository sets", w)
+	}
+}
+
+func TestStartTakesTheRequestOverTheRepository(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.settings(store.Settings{})
+	fx.repoOverrides(store.WatchOverrides{
+		Provider: ProviderCopilot, Model: "auto", MergeMethod: "squash", ApprovalMode: store.ApprovalManual,
+		ApprovalsSet: true, Approvals: new(4), KeepWorktree: new(true), IncludeExisting: new(true),
+	})
+
+	w, err := fx.svc.Start(context.Background(), StartRequest{
+		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
+		Provider: ProviderClaude, MergeMethod: new("merge"), ApprovalMode: new(store.ApprovalAuto),
+		ApprovalsRequired: ApprovalsOf(0), KeepWorktree: new(false), IncludeExisting: new(false),
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if w.Provider != ProviderClaude || w.Model != "" || w.MergeMethod != "merge" || w.ApprovalMode != store.ApprovalAuto ||
+		w.ApprovalsRequired != 0 || w.KeepWorktree || w.IncludeExisting {
+		t.Fatalf("watch = %+v, want what the request asked for", w)
+	}
+}
+
+func TestAModelWithoutAProviderRunsOnTheProviderOfTheChain(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.settings(store.Settings{})
+	fx.repoOverrides(store.WatchOverrides{Provider: ProviderCopilot, Model: "auto"})
+
+	w, err := fx.svc.Start(context.Background(), StartRequest{
+		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
+		Model: "gpt-5.3-codex",
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if w.Provider != ProviderCopilot || w.Model != "gpt-5.3-codex" {
+		t.Fatalf("agent = %s %s, want copilot with the model of the request", w.Provider, w.Model)
+	}
+}
+
+func TestAStoppedWatchKeepsTheWorktreeRuleItStartedWith(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.settings(store.Settings{KeepWorktree: true})
+	w := fx.start()
+	fx.settings(store.Settings{KeepWorktree: false})
+	before := len(fx.git.removedDirs())
+
+	if _, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{}); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+
+	if got := fx.git.removedDirs(); len(got) != before {
+		t.Fatalf("the worktree was removed (%v), want it kept as the watch took at start", got[before:])
 	}
 }

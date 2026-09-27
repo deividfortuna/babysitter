@@ -61,7 +61,7 @@ func TestPutSettingsStoresThemAndHandsThemToTheDaemon(t *testing.T) {
 
 	var got Settings
 	rec := call(t, h, http.MethodPut, "/settings",
-		`{"pollIntervalSeconds":120,"watchIntervalSeconds":45,"approvalsRequired":2,"mergeMethod":"rebase","includeExisting":true,"includeOwn":true,"keepWorktree":true}`, &got)
+		`{"pollIntervalSeconds":120,"watchIntervalSeconds":45,"approvalsRequired":2,"mergeMethod":"rebase","includeExisting":true,"includeOwn":true,"keepWorktree":true,"provider":"copilot","model":"auto"}`, &got)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
 	}
@@ -73,7 +73,8 @@ func TestPutSettingsStoresThemAndHandsThemToTheDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.PollInterval != 2*time.Minute || stored.WatchInterval != 45*time.Second || !stored.KeepWorktree {
+	if stored.PollInterval != 2*time.Minute || stored.WatchInterval != 45*time.Second || !stored.KeepWorktree ||
+		stored.Provider != "copilot" || stored.Model != "auto" {
 		t.Fatalf("stored = %+v, want what was sent", stored)
 	}
 	if len(applied()) != 1 || applied()[0].WatchInterval != 45*time.Second {
@@ -85,11 +86,13 @@ func TestPutSettingsRejectsWhatTheDaemonCannotRun(t *testing.T) {
 	t.Parallel()
 	h, _, _, applied := newTestAPISettings(t)
 	cases := map[string]string{
-		"interval below the floor": `{"pollIntervalSeconds":1,"watchIntervalSeconds":60,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
-		"merge method unknown":     `{"pollIntervalSeconds":60,"watchIntervalSeconds":60,"mergeMethod":"fast-forward","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
-		"approvals below zero":     `{"pollIntervalSeconds":60,"watchIntervalSeconds":60,"approvalsRequired":-1,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
-		"body that is not JSON":    `not json`,
-		"field the daemon has not": `{"pollIntervalSeconds":60,"colour":"blue"}`,
+		"interval below the floor":  `{"pollIntervalSeconds":1,"watchIntervalSeconds":60,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
+		"merge method unknown":      `{"pollIntervalSeconds":60,"watchIntervalSeconds":60,"mergeMethod":"fast-forward","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
+		"approvals below zero":      `{"pollIntervalSeconds":60,"watchIntervalSeconds":60,"approvalsRequired":-1,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
+		"body that is not JSON":     `not json`,
+		"field the daemon has not":  `{"pollIntervalSeconds":60,"colour":"blue"}`,
+		"provider of your session":  `{"provider":"self"}`,
+		"model of another provider": `{"provider":"claude","model":"auto"}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -114,17 +117,19 @@ func TestStartWatchHandsTheWatchServiceWhatTheBodySaid(t *testing.T) {
 	if len(got) != 1 {
 		t.Fatalf("started %d watches, want 1", len(got))
 	}
-	if got[0].IncludeExisting != nil || got[0].IncludeOwn != nil || got[0].ApprovalsRequired.Set || got[0].MergeMethod != nil {
+	if got[0].IncludeExisting != nil || got[0].IncludeOwn != nil || got[0].ApprovalsRequired.Set || got[0].MergeMethod != nil ||
+		got[0].Provider != "" || got[0].KeepWorktree != nil {
 		t.Fatalf("start request = %+v, want every field the body left out unset", got[0])
 	}
 
 	rec := call(t, h, http.MethodPost, "/watches",
-		`{"target":"octo/hello#4","sourceDir":"/src","includeExisting":false,"includeOwn":true,"mergeMethod":"rebase","approvalsRequired":0}`, nil)
+		`{"target":"octo/hello#4","sourceDir":"/src","includeExisting":false,"includeOwn":true,"mergeMethod":"rebase","approvalsRequired":0,"keepWorktree":true}`, nil)
 	if rec.Code != http.StatusCreated {
 		t.Fatalf("start watch: %d %s", rec.Code, rec.Body)
 	}
 	got = fw.started()
-	if got[1].IncludeExisting == nil || *got[1].IncludeExisting || got[1].IncludeOwn == nil || !*got[1].IncludeOwn {
+	if got[1].IncludeExisting == nil || *got[1].IncludeExisting || got[1].IncludeOwn == nil || !*got[1].IncludeOwn ||
+		got[1].KeepWorktree == nil || !*got[1].KeepWorktree {
 		t.Fatalf("start request = %+v, want the false and the true the body set", got[1])
 	}
 	if got[1].ApprovalsRequired.Count == nil || *got[1].ApprovalsRequired.Count != 0 || got[1].MergeMethod == nil || *got[1].MergeMethod != "rebase" {
@@ -160,7 +165,7 @@ func TestStopWatchHandsTheWatchServiceWhatTheBodySaid(t *testing.T) {
 		t.Fatalf("stop watch: %d %s", rec.Code, rec.Body)
 	}
 	if got := fw.stopped(); len(got) != 1 || got[0].KeepWorktree != nil {
-		t.Fatalf("stop options = %+v, want the worktree left to the settings", got)
+		t.Fatalf("stop options = %+v, want the worktree left to the rule of the watch", got)
 	}
 
 	if rec := call(t, h, http.MethodPost, "/watches/1/stop", `{"keepWorktree":false}`, nil); rec.Code != http.StatusOK {

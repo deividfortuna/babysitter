@@ -83,6 +83,18 @@ func normalizeProvider(s string) (string, bool) {
 	}
 }
 
+var hostedProviders = []string{ProviderClaude, ProviderCopilot}
+
+func CheckHostedAgent(provider, model string) error {
+	if !slices.Contains(hostedProviders, provider) {
+		return fmt.Errorf("%w: provider must be %q or %q, got %q", ErrBadProvider, ProviderClaude, ProviderCopilot, provider)
+	}
+	if _, ok := normalizeModel(provider, model); !ok {
+		return modelError(provider, model)
+	}
+	return nil
+}
+
 func providerError(s string) error {
 	return fmt.Errorf("%w: provider must be %q, %q or %q, got %q", ErrBadProvider, ProviderClaude, ProviderCopilot, ProviderSelf, s)
 }

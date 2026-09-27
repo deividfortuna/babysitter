@@ -3,6 +3,7 @@ package prwatch
 import (
 	"cmp"
 	"context"
+	"errors"
 
 	"github.com/deividfortuna/babysitter/internal/store"
 )
@@ -17,29 +18,66 @@ func (s *Service) withDefaults(ctx context.Context, req StartRequest) (StartRequ
 	if err != nil {
 		return req, err
 	}
-	req.IncludeExisting = cmp.Or(req.IncludeExisting, &set.IncludeExisting)
-	req.IncludeOwn = cmp.Or(req.IncludeOwn, &set.IncludeOwn)
-	req.MergeMethod = cmp.Or(req.MergeMethod, &set.MergeMethod)
-	req.ApprovalMode = cmp.Or(req.ApprovalMode, &set.ApprovalMode)
-	req.AutoApproveRebase = cmp.Or(req.AutoApproveRebase, &set.AutoApproveRebase)
-	if !req.ApprovalsRequired.Set {
-		req.ApprovalsRequired = Approvals{Set: true, Count: set.ApprovalsRequired}
+	repo, err := s.repoOverrides(ctx, req)
+	if err != nil {
+		return req, err
 	}
+	req.Provider, req.Model = agentOf(req, repo, set)
+	req.IncludeExisting = cmp.Or(req.IncludeExisting, repo.IncludeExisting, &set.IncludeExisting)
+	req.IncludeOwn = cmp.Or(req.IncludeOwn, repo.IncludeOwn, &set.IncludeOwn)
+	req.MergeMethod = cmp.Or(req.MergeMethod, setOrNil(repo.MergeMethod), &set.MergeMethod)
+	req.ApprovalMode = cmp.Or(req.ApprovalMode, setOrNil(repo.ApprovalMode), &set.ApprovalMode)
+	req.AutoApproveRebase = cmp.Or(req.AutoApproveRebase, repo.AutoApproveRebase, &set.AutoApproveRebase)
+	req.KeepWorktree = cmp.Or(req.KeepWorktree, repo.KeepWorktree, &set.KeepWorktree)
+	req.ApprovalsRequired = approvalsOf(req.ApprovalsRequired, repo, set)
 	return req, nil
 }
 
-func (s *Service) keepsWorktree(ctx context.Context, w store.Watch, o StopOptions) bool {
-	return s.withAuthor(w) || s.keepWorktree(ctx, o)
+func (s *Service) repoOverrides(ctx context.Context, req StartRequest) (store.WatchOverrides, error) {
+	repo, err := s.store.GetRepo(ctx, req.Target.Owner, req.Target.Name)
+	if errors.Is(err, store.ErrRepoNotFound) {
+		return store.WatchOverrides{}, nil
+	}
+	if err != nil {
+		return store.WatchOverrides{}, err
+	}
+	cfg, err := s.store.GetRepoConfig(ctx, repo.ID)
+	if err != nil {
+		return store.WatchOverrides{}, err
+	}
+	return cfg.Overrides, nil
 }
 
-func (s *Service) keepWorktree(ctx context.Context, o StopOptions) bool {
-	if o.KeepWorktree != nil {
-		return *o.KeepWorktree
+func agentOf(req StartRequest, repo store.WatchOverrides, set store.Settings) (provider, model string) {
+	switch {
+	case req.Provider != "":
+		return req.Provider, req.Model
+	case repo.Provider != "":
+		return repo.Provider, cmp.Or(req.Model, repo.Model)
+	default:
+		return set.Provider, cmp.Or(req.Model, set.Model)
 	}
-	set, err := s.store.Settings(ctx)
-	if err != nil {
-		s.log.Warn("read the settings for the worktree of a stopped watch, removing it", "err", err)
-		return false
+}
+
+func approvalsOf(asked Approvals, repo store.WatchOverrides, set store.Settings) Approvals {
+	switch {
+	case asked.Set:
+		return asked
+	case repo.ApprovalsSet:
+		return Approvals{Set: true, Count: repo.Approvals}
+	default:
+		return Approvals{Set: true, Count: set.ApprovalsRequired}
 	}
-	return set.KeepWorktree
+}
+
+func setOrNil[T comparable](v T) *T {
+	var zero T
+	if v == zero {
+		return nil
+	}
+	return &v
+}
+
+func (s *Service) keepsWorktree(w store.Watch, o StopOptions) bool {
+	return s.withAuthor(w) || *cmp.Or(o.KeepWorktree, &w.KeepWorktree)
 }

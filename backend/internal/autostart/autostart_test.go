@@ -141,13 +141,13 @@ func (fx *fixture) wantStarted(want ...int) {
 	}
 }
 
-func TestANewPullRequestOfTheAuthorStartsWithTheOverrides(t *testing.T) {
+func TestANewPullRequestOfTheAuthorLeavesTheOverridesToTheWatchService(t *testing.T) {
 	fx := newFixture(t)
 	two, yes := 2, true
 	fx.configure(func(c *store.RepoConfig) {
 		mineOn(c)
 		c.Overrides = store.WatchOverrides{
-			Provider: "copilot", Model: "gpt-5", ApprovalMode: store.ApprovalManual, MergeMethod: "squash",
+			Provider: "copilot", Model: "auto", ApprovalMode: store.ApprovalManual, MergeMethod: "squash",
 			ApprovalsSet: true, Approvals: &two, IncludeExisting: &yes,
 		}
 	})
@@ -162,24 +162,14 @@ func TestANewPullRequestOfTheAuthorStartsWithTheOverrides(t *testing.T) {
 	if mine.AutoReason != store.AutoMine || assigned.AutoReason != store.AutoAssigned {
 		t.Errorf("reasons = %s, %s, want mine and assigned", mine.AutoReason, assigned.AutoReason)
 	}
-	if mine.SourceDir != "/code/billing" || mine.Provider != "copilot" || mine.Model != "gpt-5" ||
-		*mine.ApprovalMode != store.ApprovalManual || *mine.MergeMethod != "squash" ||
-		!mine.ApprovalsRequired.Set || *mine.ApprovalsRequired.Count != 2 || !*mine.IncludeExisting {
-		t.Errorf("request = %+v, want the overrides of the repository", mine)
+	if mine.SourceDir != "/code/billing" {
+		t.Errorf("SourceDir = %q, want the checkout of the repository", mine.SourceDir)
+	}
+	if mine.Provider != "" || mine.ApprovalMode != nil || mine.MergeMethod != nil || mine.ApprovalsRequired.Set || mine.IncludeExisting != nil {
+		t.Errorf("request = %+v, want no field set: the watch service reads the repository, then the daemon", mine)
 	}
 	if mine.MergeWhenReady != nil {
 		t.Errorf("MergeWhenReady = %v, want the setting of the daemon for a pull request of the author", *mine.MergeWhenReady)
-	}
-}
-
-func TestAnEmptyOverrideTakesTheSettingOfTheDaemon(t *testing.T) {
-	fx := newFixture(t)
-	fx.configure(mineOn)
-	fx.pr(1, nil)
-	fx.run()
-	req := fx.reqs[0]
-	if req.Provider != "" || req.ApprovalMode != nil || req.MergeMethod != nil || req.ApprovalsRequired.Set || req.IncludeExisting != nil {
-		t.Fatalf("request = %+v, want no override", req)
 	}
 }
 

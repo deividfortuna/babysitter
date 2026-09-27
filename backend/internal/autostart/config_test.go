@@ -106,6 +106,15 @@ func TestATogglePointingAtACheckoutThatIsGoneIsRefused(t *testing.T) {
 	}
 }
 
+func TestAnUnknownModelIsRefused(t *testing.T) {
+	fx := newFixture(t)
+	for _, o := range []store.WatchOverrides{{Provider: "claude", Model: "gpt-9"}, {Model: "opus"}} {
+		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); !errors.Is(err, store.ErrInvalidRepoConfig) {
+			t.Errorf("%+v: Configure() = %v, want ErrInvalidRepoConfig", o, err)
+		}
+	}
+}
+
 func TestAnUnknownProviderIsRefused(t *testing.T) {
 	fx := newFixture(t)
 	for _, provider := range []string{"gemini", "self"} {
