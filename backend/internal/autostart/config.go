@@ -2,9 +2,12 @@ package autostart
 
 import (
 	"context"
+	"fmt"
+	"slices"
 	"time"
 
 	"github.com/deividfortuna/babysitter/internal/dependabot"
+	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
@@ -29,12 +32,32 @@ func Configure(ctx context.Context, st ConfigStore, repo store.Repo, c Change, n
 	if err != nil {
 		return store.RepoConfig{}, err
 	}
-	if c.CheckoutDir != nil && *c.CheckoutDir != "" && *c.CheckoutDir != cfg.CheckoutDir {
-		if err := CheckCheckout(ctx, *c.CheckoutDir, repo); err != nil {
+	next := apply(cfg, c, now)
+	if err := checkProvider(next.Overrides.Provider); err != nil {
+		return store.RepoConfig{}, err
+	}
+	if c.checksCheckout(cfg) && next.CheckoutDir != "" {
+		if err := CheckCheckout(ctx, next.CheckoutDir, repo); err != nil {
 			return store.RepoConfig{}, err
 		}
 	}
-	return st.SaveRepoConfig(ctx, apply(cfg, c, now))
+	return st.SaveRepoConfig(ctx, next)
+}
+
+func (c Change) checksCheckout(current store.RepoConfig) bool {
+	newPath := c.CheckoutDir != nil && *c.CheckoutDir != current.CheckoutDir
+	return newPath || isOn(c.AutoStartMine) || isOn(c.AutoWatchDependabot)
+}
+
+func isOn(toggle *bool) bool { return toggle != nil && *toggle }
+
+var overrideProviders = []string{"", prwatch.ProviderClaude, prwatch.ProviderCopilot}
+
+func checkProvider(provider string) error {
+	if slices.Contains(overrideProviders, provider) {
+		return nil
+	}
+	return fmt.Errorf("%w: unknown provider %q: use claude or copilot", store.ErrInvalidRepoConfig, provider)
 }
 
 func apply(cfg store.RepoConfig, c Change, now time.Time) store.RepoConfig {

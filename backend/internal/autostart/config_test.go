@@ -3,6 +3,7 @@ package autostart
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
 	"testing"
 	"time"
@@ -82,5 +83,41 @@ func TestAToggleRecordsWhenItWentOn(t *testing.T) {
 	}
 	if !cfg.DependabotSince.Equal(first) {
 		t.Fatalf("the other toggle moved to %v", cfg.DependabotSince)
+	}
+}
+
+func TestATogglePointingAtACheckoutThatIsGoneIsRefused(t *testing.T) {
+	fx := newFixture(t)
+	ctx := context.Background()
+	dir := gitCheckout(t, "git@github.com:acme/billing.git")
+	on := true
+	if _, err := Configure(ctx, fx.st, fx.repo, Change{CheckoutDir: &dir, AutoStartMine: &on}, fx.now); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Configure(ctx, fx.st, fx.repo, Change{AutoWatchDependabot: &on}, fx.now); !errors.Is(err, ErrBadCheckout) {
+		t.Fatalf("Configure() with a checkout that is gone = %v, want ErrBadCheckout", err)
+	}
+	off := false
+	if _, err := Configure(ctx, fx.st, fx.repo, Change{AutoStartMine: &off}, fx.now); err != nil {
+		t.Fatalf("turning the toggle off with a checkout that is gone = %v, want it to work", err)
+	}
+}
+
+func TestAnUnknownProviderIsRefused(t *testing.T) {
+	fx := newFixture(t)
+	for _, provider := range []string{"gemini", "self"} {
+		o := store.WatchOverrides{Provider: provider}
+		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); !errors.Is(err, store.ErrInvalidRepoConfig) {
+			t.Errorf("provider %q: Configure() = %v, want ErrInvalidRepoConfig", provider, err)
+		}
+	}
+	for _, provider := range []string{"", "claude", "copilot"} {
+		o := store.WatchOverrides{Provider: provider}
+		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); err != nil {
+			t.Errorf("provider %q: Configure() = %v", provider, err)
+		}
 	}
 }
