@@ -177,6 +177,12 @@ func reviewPayload(it snapshot.ReviewItem) map[string]any {
 	if it.Line != nil {
 		p["line"] = *it.Line
 	}
+	if it.Side != "" {
+		p["side"] = it.Side
+	}
+	if it.CommitID != "" {
+		p["commit_id"] = it.CommitID
+	}
 	if it.State != "" {
 		p["state"] = it.State
 	}

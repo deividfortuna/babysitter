@@ -50,7 +50,7 @@ func newFakePR() (*ghfake.GitHub, *ghfake.PR) {
 		},
 		{
 			ID: 31, Author: "bob", Body: "rename this", Association: "MEMBER", CreatedAt: ghfake.At("2026-09-02T00:00:00Z"),
-			ReviewID: 7, Path: "internal/x.go", OriginalLine: 12,
+			ReviewID: 7, Path: "internal/x.go", OriginalLine: 12, Side: "RIGHT", CommitID: "abc", OriginalCommitID: "old",
 		},
 	}
 	pr.CheckRuns = []ghfake.CheckRun{
@@ -185,6 +185,9 @@ func TestCollectFailingPR(t *testing.T) {
 	}
 	if it := s.NewReviewItems[2]; it.Path != "internal/x.go" || it.Line == nil || *it.Line != 12 || it.Author != "bob" || it.AuthorAssociation != "MEMBER" {
 		t.Errorf("review comment = %+v", it)
+	}
+	if it := s.NewReviewItems[2]; it.Side != "RIGHT" || it.CommitID != "old" {
+		t.Errorf("an outdated comment keeps the commit of its original line: side %q, commit %q", it.Side, it.CommitID)
 	}
 	if want := "process_review_comment,diagnose_ci_failure,retry_failed_checks,stop_action_required"; strings.Join(s.Actions, ",") != want {
 		t.Errorf("actions = %v, want %s", s.Actions, want)

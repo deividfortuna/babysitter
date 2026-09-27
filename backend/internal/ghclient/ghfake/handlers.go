@@ -576,6 +576,7 @@ func reviewComment(r *Repo, p *PR, rc ReviewComment) wireReviewComment {
 		ID: new(rc.ID), PullRequestReviewID: nonZero(rc.ReviewID), InReplyTo: nonZero(rc.InReplyTo),
 		User: user(rc.Author), Body: new(rc.Body), CreatedAt: stamp(rc.CreatedAt),
 		Path: str(rc.Path), Line: nonZeroInt(rc.Line), OriginalLine: nonZeroInt(rc.OriginalLine),
+		Side: str(rc.Side), CommitID: str(rc.CommitID), OriginalCommitID: str(rc.OriginalCommitID),
 		HTMLURL:        str(rc.URL),
 		PullRequestURL: new(fmt.Sprintf("https://api.github.com/repos/%s/pulls/%d", r.FullName(), p.Number)),
 	}, rc.Association}
