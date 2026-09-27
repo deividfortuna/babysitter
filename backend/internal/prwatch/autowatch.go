@@ -1,6 +1,7 @@
 package prwatch
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -69,17 +70,18 @@ func (s *Service) approveOnce(ctx context.Context, client *github.Client, w stor
 }
 
 func (s *Service) followUpdateType(ctx context.Context, w store.Watch, snap *snapshot.Snapshot) (store.Watch, error) {
-	level := snap.PR.UpdateType
-	if level == "" || level == w.UpdateType {
-		return w, nil
-	}
+	level := cmp.Or(snap.PR.UpdateType, w.UpdateType)
 	mergeWhenReady := w.MergeWhenReady
-	if w.AutoReason == store.AutoDependabot {
+	if w.AutoReason == store.AutoDependabot && mergeWhenReady {
 		cfg, err := s.repoConfigOf(ctx, w)
 		if err != nil {
 			return w, err
 		}
-		mergeWhenReady = mergeWhenReady && dependabot.Within(level, cfg.DependabotScope)
+		mergeWhenReady = dependabot.Within(level, cfg.DependabotScope)
+	}
+	unchanged := level == w.UpdateType && mergeWhenReady == w.MergeWhenReady
+	if unchanged {
+		return w, nil
 	}
 	return s.store.SetWatchUpdateType(ctx, w.ID, level, mergeWhenReady)
 }

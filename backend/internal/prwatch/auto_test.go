@@ -377,3 +377,40 @@ func TestMergeWhenReadyStopsWhenTheUpdateLeavesTheScope(t *testing.T) {
 		t.Fatalf("watch = update %q, merge when ready %v, want major and off", got.UpdateType, got.MergeWhenReady)
 	}
 }
+
+func (fx *fixture) narrowScope(scope dependabot.Level) {
+	fx.t.Helper()
+	ctx := context.Background()
+	repo, err := fx.st.GetRepo(ctx, "octo", "hello")
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	cfg, err := fx.st.GetRepoConfig(ctx, repo.ID)
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	cfg.DependabotScope = scope
+	if _, err := fx.st.SaveRepoConfig(ctx, cfg); err != nil {
+		fx.t.Fatal(err)
+	}
+}
+
+func TestMergeWhenReadyStopsWhenTheScopeNarrows(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.dependabotPR("Bump golang.org/x/net from 0.33.0 to 0.34.0", "")
+	fx.policy(dependabot.Minor, store.ApproveNever)
+	w := fx.startAuto(store.AutoDependabot, true)
+	fx.agentIdle(w)
+	fx.update(func() { fx.pr.Reviews = []ghfake.Review{approvalFromBob} })
+	fx.narrowScope(dependabot.Patch)
+	for range 4 {
+		fx.poll(w)
+	}
+	if merges := fx.merges(); len(merges) != 0 {
+		t.Fatalf("merges = %+v, want none for a minor after the scope became patch", merges)
+	}
+	if got := fx.watch(w); got.MergeWhenReady {
+		t.Fatal("merge when ready is still on after the scope left the update out")
+	}
+}
