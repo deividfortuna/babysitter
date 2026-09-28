@@ -2,7 +2,8 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { renderWithProviders } from "@test/test-utils";
-import { AppHeader, TitlebarNav, type HistoryControls } from "./app-header";
+import type { HistoryControls } from "@/hooks/use-view-history";
+import { AppHeader, TitlebarNav } from "./app-header";
 
 const platform = vi.hoisted(() => ({ isMac: false }));
 
@@ -19,6 +20,10 @@ afterEach(() => {
 
 function history(overrides: Partial<HistoryControls> = {}): HistoryControls {
   return { canGoBack: false, canGoForward: false, onBack: vi.fn(), onForward: vi.fn(), ...overrides };
+}
+
+function titlebarNav() {
+  return screen.getByRole("button", { name: "Toggle Sidebar" }).closest("[data-slot=titlebar-nav]");
 }
 
 test("keeps the sidebar toggle in the same header when the sidebar collapses", async () => {
@@ -85,16 +90,12 @@ test("on macOS keeps the sidebar toggle, back and forward beside the window butt
 
   expect(screen.queryByRole("banner")).not.toBeInTheDocument();
 
-  const toggle = screen.getByRole("button", { name: "Toggle Sidebar" });
-  const cluster = toggle.closest("[data-slot=titlebar-nav]");
-  expect(cluster).toHaveClass("fixed", "left-20");
+  const cluster = titlebarNav();
+  expect(cluster).toHaveClass("fixed", "left-titlebar-nav-left");
   expect(cluster).toContainElement(screen.getByRole("button", { name: "Go back" }));
   expect(cluster).toContainElement(screen.getByRole("button", { name: "Go forward" }));
 
-  await user.click(toggle);
+  await user.click(screen.getByRole("button", { name: "Toggle Sidebar" }));
 
-  expect(screen.getByRole("button", { name: "Toggle Sidebar" }).closest("[data-slot=titlebar-nav]")).toHaveClass(
-    "fixed",
-    "left-20",
-  );
+  expect(titlebarNav()).toHaveClass("fixed", "left-titlebar-nav-left");
 });

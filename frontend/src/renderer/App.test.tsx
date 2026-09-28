@@ -58,7 +58,6 @@ test("on macOS renders the sidebar toggle after the view header, so the drag reg
 
   expect(viewHeader).toHaveClass("app-drag");
   expect(viewHeader.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  expect(toggle.closest("[data-slot=titlebar-nav]")).toContainElement(screen.getByRole("button", { name: "Go back" }));
 });
 
 function activeView() {

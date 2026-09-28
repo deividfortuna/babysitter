@@ -1,40 +1,48 @@
 import { useEffect } from "react";
 import { isMac } from "@/lib/platform";
 
-export type HistoryMove = "back" | "forward";
+type Modifier = "metaKey" | "altKey";
+type Shortcut = { code: string; label: string };
+type HistoryShortcuts = { modifier: Modifier; back: Shortcut; forward: Shortcut };
+type HistoryMoves = { back: () => void; forward: () => void };
+type HistoryKey = Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">;
+
+const MAC_SHORTCUTS: HistoryShortcuts = {
+  modifier: "metaKey",
+  back: { code: "BracketLeft", label: "⌘[" },
+  forward: { code: "BracketRight", label: "⌘]" },
+};
+
+const OTHER_SHORTCUTS: HistoryShortcuts = {
+  modifier: "altKey",
+  back: { code: "ArrowLeft", label: "Alt+←" },
+  forward: { code: "ArrowRight", label: "Alt+→" },
+};
 
 const MOUSE_BACK_BUTTON = 3;
 const MOUSE_FORWARD_BUTTON = 4;
 
-type HistoryKey = Pick<KeyboardEvent, "code" | "key" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">;
+export function historyShortcuts(): HistoryShortcuts {
+  return isMac ? MAC_SHORTCUTS : OTHER_SHORTCUTS;
+}
 
-function onlyModifier(event: HistoryKey, modifier: "metaKey" | "altKey"): boolean {
+function onlyModifier(event: HistoryKey, modifier: Modifier): boolean {
   const pressed = [event.metaKey, event.ctrlKey, event.altKey, event.shiftKey].filter(Boolean).length;
   return event[modifier] && pressed === 1;
 }
 
-function macShortcut(event: HistoryKey): HistoryMove | null {
-  if (!onlyModifier(event, "metaKey")) return null;
-  if (event.code === "BracketLeft") return "back";
-  if (event.code === "BracketRight") return "forward";
-  return null;
+function keyMove(event: HistoryKey, moves: HistoryMoves): (() => void) | undefined {
+  const shortcuts = historyShortcuts();
+  if (!onlyModifier(event, shortcuts.modifier)) return undefined;
+  if (event.code === shortcuts.back.code) return moves.back;
+  if (event.code === shortcuts.forward.code) return moves.forward;
+  return undefined;
 }
 
-function altShortcut(event: HistoryKey): HistoryMove | null {
-  if (!onlyModifier(event, "altKey")) return null;
-  if (event.key === "ArrowLeft") return "back";
-  if (event.key === "ArrowRight") return "forward";
-  return null;
-}
-
-export function historyShortcut(event: HistoryKey, mac: boolean): HistoryMove | null {
-  return mac ? macShortcut(event) : altShortcut(event);
-}
-
-export function historyMouseButton(button: number): HistoryMove | null {
-  if (button === MOUSE_BACK_BUTTON) return "back";
-  if (button === MOUSE_FORWARD_BUTTON) return "forward";
-  return null;
+function mouseMove(button: number, moves: HistoryMoves): (() => void) | undefined {
+  if (button === MOUSE_BACK_BUTTON) return moves.back;
+  if (button === MOUSE_FORWARD_BUTTON) return moves.forward;
+  return undefined;
 }
 
 function typesText(target: EventTarget | null): boolean {
@@ -44,22 +52,22 @@ function typesText(target: EventTarget | null): boolean {
 
 export function useHistoryShortcuts(back: () => void, forward: () => void) {
   useEffect(() => {
-    const moves: Record<HistoryMove, () => void> = { back, forward };
+    const moves = { back, forward };
 
-    function run(event: Event, move: HistoryMove | null) {
+    function run(event: Event, move: (() => void) | undefined) {
       if (!move) return;
       event.preventDefault();
-      moves[move]();
+      move();
     }
 
     function onKeyDown(event: KeyboardEvent) {
       if (event.defaultPrevented || typesText(event.target)) return;
-      run(event, historyShortcut(event, isMac));
+      run(event, keyMove(event, moves));
     }
 
     function onMouseUp(event: MouseEvent) {
       if (event.defaultPrevented) return;
-      run(event, historyMouseButton(event.button));
+      run(event, mouseMove(event.button, moves));
     }
 
     window.addEventListener("keydown", onKeyDown);

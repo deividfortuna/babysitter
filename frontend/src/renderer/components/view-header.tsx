@@ -3,7 +3,7 @@ import { isMac } from "@/lib/platform";
 import { cn } from "@/lib/utils";
 
 export const clearsWindowButtonsWhenSidebarCollapses =
-  "[[data-slot=sidebar][data-state=collapsed]~[data-slot=sidebar-inset]_&]:pl-48";
+  "[[data-slot=sidebar][data-state=collapsed]~[data-slot=sidebar-inset]_&]:pl-titlebar-nav-clearance";
 
 export function ViewHeader({ className, ...props }: ComponentProps<"header">) {
   return (

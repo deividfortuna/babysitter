@@ -26,7 +26,7 @@ import { useViewHistory } from "@/hooks/use-view-history";
 import { connectEventTransport, type EventsConnection, type ReadyFrame } from "@/lib/event-transport";
 import { presents } from "@/lib/presenting";
 import { cn } from "@/lib/utils";
-import { TITLEBAR_HEIGHT } from "../shared/titlebar";
+import { TITLEBAR_HEIGHT, TITLEBAR_NAV_CLEARANCE, TITLEBAR_NAV_LEFT, TITLEBAR_NAV_WIDTH } from "../shared/titlebar";
 
 export function App() {
   const status = useDaemonStatus();
@@ -42,9 +42,8 @@ export function App() {
   const sidebar = useSidebarWidth();
   const [resizing, setResizing] = useState(false);
 
-  const { view, navigate, back, forward, canGoBack, canGoForward } = useViewHistory({ kind: "watching" });
-  useHistoryShortcuts(back, forward);
-  const historyControls = { canGoBack, canGoForward, onBack: back, onForward: forward };
+  const { view, navigate, controls: history } = useViewHistory({ kind: "watching" });
+  useHistoryShortcuts(history.onBack, history.onForward);
   const [startOpen, setStartOpen] = useState(false);
   const [startPull, setStartPull] = useState<PullRequest | null>(null);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
@@ -122,7 +121,15 @@ export function App() {
 
   return (
     <SidebarProvider
-      style={{ "--sidebar-width": `${sidebar.width}px`, "--titlebar-height": `${TITLEBAR_HEIGHT}px` } as CSSProperties}
+      style={
+        {
+          "--sidebar-width": `${sidebar.width}px`,
+          "--titlebar-height": `${TITLEBAR_HEIGHT}px`,
+          "--titlebar-nav-left": `${TITLEBAR_NAV_LEFT}px`,
+          "--titlebar-nav-width": `${TITLEBAR_NAV_WIDTH}px`,
+          "--titlebar-nav-clearance": `${TITLEBAR_NAV_CLEARANCE}px`,
+        } as CSSProperties
+      }
       className={cn(
         resizing &&
           "select-none **:data-[slot=sidebar-container]:transition-none **:data-[slot=sidebar-gap]:transition-none",
@@ -141,12 +148,12 @@ export function App() {
         onResizingChange={setResizing}
       />
       <SidebarInset className="h-svh overflow-hidden">
-        <AppHeader {...historyControls} />
+        <AppHeader {...history} />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {ready ? screen() : <DaemonDown status={status} />}
         </div>
       </SidebarInset>
-      <TitlebarNav {...historyControls} />
+      <TitlebarNav {...history} />
 
       <StartWatchDialog
         open={startOpen}

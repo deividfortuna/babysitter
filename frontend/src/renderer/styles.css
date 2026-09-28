@@ -9,6 +9,9 @@
   --font-sans: "Mona Sans Variable", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, Menlo, "SF Mono", Consolas, monospace;
   --spacing-titlebar: var(--titlebar-height);
+  --spacing-titlebar-nav-left: var(--titlebar-nav-left);
+  --spacing-titlebar-nav-width: var(--titlebar-nav-width);
+  --spacing-titlebar-nav-clearance: var(--titlebar-nav-clearance);
   --text-3xs: 10px;
   --text-2xs: 11px;
   --text-body: 13px;

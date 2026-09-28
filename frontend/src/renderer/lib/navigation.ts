@@ -17,7 +17,7 @@ export function sameView(a: View, b: View): boolean {
 
 export const HISTORY_LIMIT = 20;
 
-export type ViewHistory = { back: View[]; current: View; forward: View[] };
+type ViewHistory = { back: View[]; current: View; forward: View[] };
 
 export function startHistory(view: View): ViewHistory {
   return { back: [], current: view, forward: [] };

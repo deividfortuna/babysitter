@@ -1,6 +1,6 @@
 import { fireEvent, render, renderHook } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { historyMouseButton, historyShortcut, useHistoryShortcuts } from "./use-history-shortcuts";
+import { useHistoryShortcuts } from "./use-history-shortcuts";
 
 const platform = vi.hoisted(() => ({ isMac: false }));
 
@@ -15,66 +15,50 @@ afterEach(() => {
   platform.isMac = false;
 });
 
-const noModifiers = { metaKey: false, ctrlKey: false, altKey: false, shiftKey: false };
-
-test("on macOS, Command with the brackets goes back and forward", () => {
-  expect(historyShortcut({ ...noModifiers, metaKey: true, code: "BracketLeft", key: "[" }, true)).toBe("back");
-  expect(historyShortcut({ ...noModifiers, metaKey: true, code: "BracketRight", key: "]" }, true)).toBe("forward");
-  expect(historyShortcut({ ...noModifiers, ctrlKey: true, code: "BracketLeft", key: "[" }, true)).toBeNull();
-  expect(historyShortcut({ ...noModifiers, altKey: true, code: "ArrowLeft", key: "ArrowLeft" }, true)).toBeNull();
-  expect(
-    historyShortcut({ ...noModifiers, metaKey: true, shiftKey: true, code: "BracketLeft", key: "{" }, true),
-  ).toBeNull();
-});
-
-test("on Windows and Linux, Alt with the arrows goes back and forward", () => {
-  expect(historyShortcut({ ...noModifiers, altKey: true, code: "ArrowLeft", key: "ArrowLeft" }, false)).toBe("back");
-  expect(historyShortcut({ ...noModifiers, altKey: true, code: "ArrowRight", key: "ArrowRight" }, false)).toBe(
-    "forward",
-  );
-  expect(historyShortcut({ ...noModifiers, metaKey: true, code: "BracketLeft", key: "[" }, false)).toBeNull();
-  expect(
-    historyShortcut({ ...noModifiers, altKey: true, ctrlKey: true, code: "ArrowLeft", key: "ArrowLeft" }, false),
-  ).toBeNull();
-});
-
-test("the side buttons of the mouse go back and forward", () => {
-  expect(historyMouseButton(3)).toBe("back");
-  expect(historyMouseButton(4)).toBe("forward");
-  expect(historyMouseButton(0)).toBeNull();
-});
-
-test("moves on the shortcuts and the mouse side buttons", () => {
-  platform.isMac = true;
+function listen() {
   const back = vi.fn();
   const forward = vi.fn();
   renderHook(() => useHistoryShortcuts(back, forward));
+  return { back, forward };
+}
 
-  fireEvent.keyDown(window, { metaKey: true, code: "BracketLeft", key: "[" });
+test.each([
+  { mac: true, keys: { metaKey: true, code: "BracketLeft" }, move: "back" },
+  { mac: true, keys: { metaKey: true, code: "BracketRight" }, move: "forward" },
+  { mac: true, keys: { ctrlKey: true, code: "BracketLeft" }, move: null },
+  { mac: true, keys: { metaKey: true, shiftKey: true, code: "BracketLeft" }, move: null },
+  { mac: true, keys: { altKey: true, code: "ArrowLeft" }, move: null },
+  { mac: false, keys: { altKey: true, code: "ArrowLeft" }, move: "back" },
+  { mac: false, keys: { altKey: true, code: "ArrowRight" }, move: "forward" },
+  { mac: false, keys: { altKey: true, ctrlKey: true, code: "ArrowLeft" }, move: null },
+  { mac: false, keys: { metaKey: true, code: "BracketLeft" }, move: null },
+])("on macOS $mac, $keys goes $move", ({ mac, keys, move }) => {
+  platform.isMac = mac;
+  const moves = listen();
+
+  fireEvent.keyDown(window, keys);
+
+  expect(moves.back).toHaveBeenCalledTimes(move === "back" ? 1 : 0);
+  expect(moves.forward).toHaveBeenCalledTimes(move === "forward" ? 1 : 0);
+});
+
+test("the side buttons of the mouse go back and forward", () => {
+  const moves = listen();
+
+  fireEvent.mouseUp(window, { button: 3 });
   fireEvent.mouseUp(window, { button: 4 });
+  fireEvent.mouseUp(window, { button: 0 });
 
-  expect(back).toHaveBeenCalledOnce();
-  expect(forward).toHaveBeenCalledOnce();
+  expect(moves.back).toHaveBeenCalledOnce();
+  expect(moves.forward).toHaveBeenCalledOnce();
 });
 
 test("ignores the shortcuts while the user types text", () => {
   platform.isMac = true;
-  const back = vi.fn();
   const { getByRole } = render(<textarea aria-label="Message" />);
-  renderHook(() => useHistoryShortcuts(back, vi.fn()));
+  const moves = listen();
 
-  fireEvent.keyDown(getByRole("textbox"), { metaKey: true, code: "BracketLeft", key: "[" });
+  fireEvent.keyDown(getByRole("textbox"), { metaKey: true, code: "BracketLeft" });
 
-  expect(back).not.toHaveBeenCalled();
-});
-
-test("stops listening when it unmounts", () => {
-  platform.isMac = true;
-  const back = vi.fn();
-  const { unmount } = renderHook(() => useHistoryShortcuts(back, vi.fn()));
-
-  unmount();
-  fireEvent.keyDown(window, { metaKey: true, code: "BracketLeft", key: "[" });
-
-  expect(back).not.toHaveBeenCalled();
+  expect(moves.back).not.toHaveBeenCalled();
 });

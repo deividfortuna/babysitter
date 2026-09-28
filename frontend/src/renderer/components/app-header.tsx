@@ -4,16 +4,9 @@ import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { historyShortcuts } from "@/hooks/use-history-shortcuts";
+import type { HistoryControls } from "@/hooks/use-view-history";
 import { isMac } from "@/lib/platform";
-
-export type HistoryControls = {
-  canGoBack: boolean;
-  canGoForward: boolean;
-  onBack: () => void;
-  onForward: () => void;
-};
-
-const shortcuts = isMac ? { back: "⌘[", forward: "⌘]" } : { back: "Alt+←", forward: "Alt+→" };
 
 function HistoryButton({
   label,
@@ -52,13 +45,14 @@ function HistoryButton({
 }
 
 function NavigationButtons({ canGoBack, canGoForward, onBack, onForward }: HistoryControls) {
+  const shortcuts = historyShortcuts();
   return (
     <>
       <SidebarTrigger />
-      <HistoryButton label="Go back" shortcut={shortcuts.back} disabled={!canGoBack} onClick={onBack}>
+      <HistoryButton label="Go back" shortcut={shortcuts.back.label} disabled={!canGoBack} onClick={onBack}>
         <ArrowLeftIcon />
       </HistoryButton>
-      <HistoryButton label="Go forward" shortcut={shortcuts.forward} disabled={!canGoForward} onClick={onForward}>
+      <HistoryButton label="Go forward" shortcut={shortcuts.forward.label} disabled={!canGoForward} onClick={onForward}>
         <ArrowRightIcon />
       </HistoryButton>
     </>
@@ -79,7 +73,7 @@ export function TitlebarNav(history: HistoryControls) {
   return (
     <div
       data-slot="titlebar-nav"
-      className="fixed top-[calc((var(--titlebar-height)-(--spacing(7)))/2)] left-20 z-20 flex items-center gap-0.5"
+      className="fixed top-[calc((var(--titlebar-height)-(--spacing(7)))/2)] left-titlebar-nav-left z-20 flex w-titlebar-nav-width items-center justify-between"
     >
       <NavigationButtons {...history} />
     </div>
