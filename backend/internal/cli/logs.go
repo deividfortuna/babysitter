@@ -145,17 +145,21 @@ the debug records, such as each HTTP request, until the daemon stops.`,
 			if err := c.get(cmd.Context(), "/logs?limit=0", &got); err != nil {
 				return err
 			}
-			if err := opts.print(cmd.OutOrStdout(), logList{Records: filter.apply(got.Records)}); err != nil {
-				return err
-			}
+			kept := filter.apply(got.Records)
 			if !follow {
-				return nil
+				return opts.print(cmd.OutOrStdout(), logList{Records: kept})
+			}
+			emit := logPrinter(opts, cmd.OutOrStdout())
+			for _, r := range kept {
+				if err := emit(r); err != nil {
+					return err
+				}
 			}
 			var after int64
 			if n := len(got.Records); n > 0 {
 				after = got.Records[n-1].Seq
 			}
-			return followLogs(cmd.Context(), c, after, filter, logPrinter(opts, cmd.OutOrStdout()))
+			return followLogs(cmd.Context(), c, after, filter, emit)
 		},
 	}
 	cmd.Flags().IntVarP(&lines, "lines", "n", 100, "print at most this many records from the end, 0 for all")

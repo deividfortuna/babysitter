@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, renameSync, statSync } from "node:fs";
+import { appendFileSync, mkdirSync, renameSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 import type { LogAttr, LogLevel, LogRecord } from "../shared/logs";
 
@@ -82,25 +82,34 @@ export class AppLog {
   }
 
   private write(record: LogRecord) {
+    const line = `${JSON.stringify(record)}\n`;
+    const bytes = Buffer.byteLength(line);
     try {
-      const line = `${JSON.stringify(record)}\n`;
-      this.rotateBefore(Buffer.byteLength(line));
+      this.makeRoomFor(bytes);
       appendFileSync(this.opts.file, line, { mode: 0o600 });
-      this.size = (this.size ?? 0) + Buffer.byteLength(line);
+      this.size = (this.size ?? 0) + bytes;
     } catch {
       this.size = null;
     }
   }
 
-  private rotateBefore(bytes: number) {
+  private makeRoomFor(bytes: number) {
     if (this.size === null) {
       mkdirSync(this.folder, { recursive: true, mode: 0o750 });
       this.size = fileSize(this.opts.file);
     }
     const fits = this.size === 0 || this.size + bytes <= this.maxBytes;
     if (fits) return;
-    renameSync(this.opts.file, this.opts.file + BACKUP_SUFFIX);
+    this.rotate();
     this.size = 0;
+  }
+
+  private rotate() {
+    const backup = this.opts.file + BACKUP_SUFFIX;
+    try {
+      rmSync(backup, { force: true });
+      renameSync(this.opts.file, backup);
+    } catch {}
   }
 }
 

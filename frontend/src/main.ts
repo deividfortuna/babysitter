@@ -72,11 +72,13 @@ const dataDir = defaultDataDir(process.platform, process.env, os.homedir());
 
 let themePreference: ThemePreference = readStoredTheme(dataDir);
 
-const appLog = new AppLog({ file: path.join(dataDir, "logs", "app.log"), echo: (line) => console.log(line) });
+const devTerminal = app.isPackaged ? () => undefined : (line: string) => console.log(line);
+
+const appLog = new AppLog({ file: path.join(dataDir, "logs", "app.log"), echo: devTerminal });
 
 function routeDaemonOutput(line: string) {
   if (isDaemonLogRecord(line)) {
-    console.log(`daemon: ${line}`);
+    devTerminal(`daemon: ${line}`);
     return;
   }
   appLog.warn(`daemon: ${line}`);

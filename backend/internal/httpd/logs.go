@@ -138,6 +138,10 @@ func (a *api) handleStreamLogs(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
+	if after < 0 {
+		writeError(w, http.StatusBadRequest, "bad_request", "after must not be negative")
+		return
+	}
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeError(w, http.StatusInternalServerError, "sse_unsupported", "streaming is not supported")

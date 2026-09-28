@@ -170,8 +170,15 @@ func (b *Book) write(r Record) {
 func (b *Book) rotate() {
 	_ = b.file.Close()
 	b.file = nil
-	_ = os.Rename(b.path, b.path+BackupSuffix)
-	_ = b.openFile()
+	backup := b.path + BackupSuffix
+	_ = os.Remove(backup)
+	moved := os.Rename(b.path, backup) == nil
+	if b.openFile() != nil {
+		return
+	}
+	if !moved {
+		b.size = 0
+	}
 }
 
 func (b *Book) openFile() error {

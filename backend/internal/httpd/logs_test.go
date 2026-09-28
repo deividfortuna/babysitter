@@ -59,6 +59,15 @@ func TestLogsRefuseANegativeLimit(t *testing.T) {
 	}
 }
 
+func TestLogStreamRefusesANegativeAfter(t *testing.T) {
+	t.Parallel()
+	h, _, _ := newLogAPI(t)
+
+	if rec := call(t, h, http.MethodGet, "/logs/stream?after=-1", "", nil); rec.Code != http.StatusBadRequest {
+		t.Fatalf("GET /logs/stream?after=-1 = %d, want 400", rec.Code)
+	}
+}
+
 func TestLogsRefuseALimitPastTheMaximum(t *testing.T) {
 	t.Parallel()
 	h, _, _ := newLogAPI(t)

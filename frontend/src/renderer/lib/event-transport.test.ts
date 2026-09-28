@@ -4,6 +4,7 @@ import { FakeEventSource } from "@test/fake-event-source";
 import { setApiBaseUrl } from "./api-client";
 import { connectEventTransport } from "./event-transport";
 import {
+  logLevelQueryKey,
   notificationsQueryKey,
   providersQueryKey,
   rateLimitQueryKey,
@@ -29,6 +30,19 @@ describe("connectEventTransport", () => {
     es.dispatch("ready");
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: providersQueryKey });
+
+    dispose();
+  });
+
+  it("reads the log level again when the daemon changes it", () => {
+    setApiBaseUrl("http://localhost:1234");
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+
+    const dispose = connectEventTransport(queryClient);
+    FakeEventSource.instances.at(-1)!.dispatch("log_level_changed");
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: logLevelQueryKey });
 
     dispose();
   });

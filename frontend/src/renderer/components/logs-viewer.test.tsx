@@ -46,6 +46,27 @@ test("shows what the daemon streams, from the start of the records it keeps", as
   expect(logLines().getByText("poll failed")).toBeVisible();
 });
 
+test("shows each attribute of a record that repeats a key", async () => {
+  serveApi();
+  renderWithProviders(<LogsViewer />);
+  const stream = await openDaemonStream();
+
+  act(() =>
+    stream.dispatch(
+      "log",
+      record(1, {
+        msg: "retry",
+        attrs: [
+          { key: "id", value: "1" },
+          { key: "id", value: "2" },
+        ],
+      }),
+    ),
+  );
+
+  expect(await logLines().findByText("id=1 id=2")).toBeVisible();
+});
+
 test("says it waits while the daemon does not answer", () => {
   renderWithProviders(<LogsViewer />);
 

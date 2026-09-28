@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { afterEach, expect, test } from "vite-plus/test";
@@ -67,6 +67,28 @@ test("moves the file aside when the next line would pass the size", () => {
   expect(existsSync(`${file}.1`)).toBe(true);
   expect(fileRecords(`${file}.1`).map((r) => r.msg)).toEqual(["first"]);
   expect(fileRecords(file).map((r) => r.msg)).toEqual(["second"]);
+});
+
+test("a second rotation replaces the file moved aside before", () => {
+  const file = logFile();
+  const log = new AppLog({ file, maxBytes: 200 });
+
+  for (const msg of ["first", "second", "third"]) log.info(msg, { padding: "x".repeat(60) });
+
+  expect(fileRecords(`${file}.1`).map((r) => r.msg)).toEqual(["second"]);
+  expect(fileRecords(file).map((r) => r.msg)).toEqual(["third"]);
+});
+
+test("keeps writing the record when the file cannot move aside", () => {
+  const file = logFile();
+  const log = new AppLog({ file, maxBytes: 200 });
+  log.info("first", { padding: "x".repeat(60) });
+  mkdirSync(path.join(`${file}.1`, "blocked"), { recursive: true });
+
+  log.info("second", { padding: "x".repeat(60) });
+  log.info("third", { padding: "x".repeat(60) });
+
+  expect(fileRecords(file).map((r) => r.msg)).toEqual(["first", "second", "third"]);
 });
 
 test("keeps the records in memory when the file cannot be written", () => {

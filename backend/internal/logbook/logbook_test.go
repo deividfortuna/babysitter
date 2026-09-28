@@ -119,6 +119,26 @@ func TestTheFileKeepsTheRecordsAndRotatesPastTheSize(t *testing.T) {
 	}
 }
 
+func TestASecondRotationReplacesTheBackup(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "daemon.log")
+	b := open(t, Options{Path: path, MaxBytes: 200})
+	log := slog.New(b.Handler())
+	for _, msg := range []string{"first", "second", "third", "fourth"} {
+		log.Info(msg, "padding", "0123456789012345678901234567890123456789")
+	}
+	if err := b.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	backup, err := readFile(path + BackupSuffix)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := messages(backup); !slices.Equal(got, []string{"third", "fourth"}) {
+		t.Fatalf("backup = %v, want the records of the second rotation only", got)
+	}
+}
+
 func TestReadTailOfNoFileIsEmpty(t *testing.T) {
 	got, err := ReadTail(filepath.Join(t.TempDir(), "daemon.log"), 10)
 	if err != nil || len(got) != 0 {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"slices"
 	"strings"
 	"testing"
 
@@ -107,6 +108,27 @@ func TestDaemonLogsPrintJSON(t *testing.T) {
 	var got logList
 	if err := json.Unmarshal([]byte(out), &got); err != nil || len(got.Records) != 3 {
 		t.Fatalf("daemon logs = %q, %v, want the three records as JSON", out, err)
+	}
+}
+
+func TestDaemonLogsFollowPrintJSONLines(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+	serveLogs(d)
+
+	out, _ := runAgainstDaemon(t, d, "daemon", "logs", "-f", "--output", "json")
+
+	lines := strings.Split(strings.TrimSpace(out), "\n")
+	var seqs []int64
+	for _, line := range lines {
+		var r logbook.Record
+		if err := json.Unmarshal([]byte(line), &r); err != nil {
+			t.Fatalf("line %q is not one JSON record: %v", line, err)
+		}
+		seqs = append(seqs, r.Seq)
+	}
+	if want := []int64{1, 2, 3, 4, 5}; !slices.Equal(seqs, want) {
+		t.Fatalf("seqs = %v, want the kept records then the streamed ones", seqs)
 	}
 }
 

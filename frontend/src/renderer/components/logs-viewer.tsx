@@ -8,7 +8,7 @@ import { useCopy } from "@/hooks/useCopy";
 import { useAppLogs, useDaemonLogs } from "@/hooks/useLogs";
 import { bridge } from "@/lib/bridge";
 import { cn } from "@/lib/utils";
-import { atLeast, type LogLevel, type LogRecord } from "../../shared/logs";
+import { atLeast, type LogAttr, type LogLevel, type LogRecord } from "../../shared/logs";
 
 type Source = "daemon" | "app";
 
@@ -28,9 +28,12 @@ const LEVEL_STYLES: Record<LogLevel, string> = {
 
 const STICK_TO_END_PX = 24;
 
+function formatAttrs(attrs: LogAttr[]): string {
+  return attrs.map((a) => ` ${a.key}=${a.value}`).join("");
+}
+
 export function formatLogLine(record: LogRecord): string {
-  const attrs = record.attrs.map((a) => ` ${a.key}=${a.value}`).join("");
-  return `${record.time} ${record.level.toUpperCase()} ${record.msg}${attrs}`;
+  return `${record.time} ${record.level.toUpperCase()} ${record.msg}${formatAttrs(record.attrs)}`;
 }
 
 function clockTime(iso: string): string {
@@ -143,12 +146,9 @@ function LogLines({ records, empty }: { records: LogRecord[]; empty: string }) {
             <span className="text-muted-foreground">{clockTime(record.time)}</span>{" "}
             <span className={cn("inline-block w-11 uppercase", LEVEL_STYLES[record.level])}>{record.level}</span>{" "}
             <span className={record.level === "error" ? "text-destructive" : undefined}>{record.msg}</span>
-            {record.attrs.map((a) => (
-              <span key={a.key} className="text-muted-foreground">
-                {" "}
-                {a.key}={a.value}
-              </span>
-            ))}
+            {record.attrs.length > 0 ? (
+              <span className="text-muted-foreground">{formatAttrs(record.attrs)}</span>
+            ) : null}
           </div>
         ))
       )}
