@@ -108,6 +108,18 @@ test("skip ships no update feed settings, even with a named identity", () => {
   ).toEqual([]);
 });
 
+test("a preview ships no update feed settings, even with a named identity, so it never updates", () => {
+  expect(
+    updateResources({ BABYSITTER_RELEASE_CHANNEL: "preview", BABYSITTER_SIGN_IDENTITY: "Developer ID Application: X" }),
+  ).toEqual([]);
+});
+
+test("a nightly with a named identity ships the update feed settings", () => {
+  expect(
+    updateResources({ BABYSITTER_RELEASE_CHANNEL: "nightly", BABYSITTER_SIGN_IDENTITY: "Developer ID Application: X" }),
+  ).toEqual(["assets/app-update.yml"]);
+});
+
 test("the update feed settings point at the GitHub releases of babysitter", () => {
   const yml = readFileSync(path.join(__dirname, "..", "assets", "app-update.yml"), "utf8");
   expect(yml).toBe(

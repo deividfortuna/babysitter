@@ -38,8 +38,12 @@ function signsWithIdentity(env: Env): boolean {
   return !skipsSignature(env) && setting(env, "BABYSITTER_SIGN_IDENTITY") !== undefined;
 }
 
+function isPreview(env: Env): boolean {
+  return setting(env, "BABYSITTER_RELEASE_CHANNEL") === "preview";
+}
+
 export function updateResources(env: Env): string[] {
-  return signsWithIdentity(env) ? ["assets/app-update.yml"] : [];
+  return signsWithIdentity(env) && !isPreview(env) ? ["assets/app-update.yml"] : [];
 }
 
 export function macSigning(env: Env): MacSigning {

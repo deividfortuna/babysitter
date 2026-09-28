@@ -11,7 +11,7 @@ import { isBusy, isUpdateChannel, type UpdateChannel, type UpdateStatus } from "
 
 const CHANNELS: { value: UpdateChannel; label: string }[] = [
   { value: "stable", label: "Stable" },
-  { value: "prerelease", label: "Prerelease" },
+  { value: "nightly", label: "Nightly" },
 ];
 
 function describe(status: UpdateStatus): string {
@@ -93,8 +93,8 @@ export function UpdatesPanel() {
               <FieldContent>
                 <FieldLabel htmlFor="updates-channel">Channel</FieldLabel>
                 <FieldDescription>
-                  Prerelease also installs alpha and beta versions. A change back to Stable does not install an older
-                  version: the app stays on this one until a newer stable version is out.
+                  Nightly installs a build of main at most every six hours. A change back to Stable does not install an
+                  older version: the app stays on this one until a newer stable version is out.
                 </FieldDescription>
               </FieldContent>
               <Select

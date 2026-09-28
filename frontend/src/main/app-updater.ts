@@ -19,6 +19,7 @@ export type UpdaterLogger = {
 export type UpdaterEngine = {
   autoDownload: boolean;
   autoInstallOnAppQuit: boolean;
+  channel: string | null;
   allowPrerelease: boolean;
   allowDowngrade: boolean;
   disableDifferentialDownload: boolean;
@@ -117,7 +118,10 @@ export function createUpdateController(deps: UpdateControllerDeps): UpdateContro
   }
 
   function followChannel(updater: UpdaterEngine, current: UpdateSettings) {
-    updater.allowPrerelease = current.channel === "prerelease";
+    const nightly = current.channel === "nightly";
+    updater.channel = nightly ? "nightly" : "latest";
+    updater.allowPrerelease = nightly;
+    updater.allowDowngrade = false;
   }
 
   function configure(created: UpdaterEngine): UpdaterEngine {
@@ -125,7 +129,6 @@ export function createUpdateController(deps: UpdateControllerDeps): UpdateContro
     created.logger = { info: write, warn: write, error: write };
     created.autoDownload = false;
     created.autoInstallOnAppQuit = true;
-    created.allowDowngrade = false;
     created.disableDifferentialDownload = true;
     followChannel(created, settings());
     if (deps.feedUrl) created.setFeedURL({ provider: "generic", url: deps.feedUrl });

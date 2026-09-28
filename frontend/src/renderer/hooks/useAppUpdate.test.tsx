@@ -75,11 +75,11 @@ test("download and install go to the main process", async () => {
 });
 
 test("the update choices load from the main process", async () => {
-  vi.spyOn(bridge.updates, "getSettings").mockResolvedValue({ autoDownload: false, channel: "prerelease" });
+  vi.spyOn(bridge.updates, "getSettings").mockResolvedValue({ autoDownload: false, channel: "nightly" });
 
   const { result } = renderHook(() => useUpdateSettings());
 
-  await waitFor(() => expect(result.current.settings).toEqual({ autoDownload: false, channel: "prerelease" }));
+  await waitFor(() => expect(result.current.settings).toEqual({ autoDownload: false, channel: "nightly" }));
 });
 
 test("a change shows at once and keeps what the main process saved", async () => {
@@ -96,15 +96,15 @@ test("a change shows at once and keeps what the main process saved", async () =>
 
   let saving: Promise<void> = Promise.resolve();
   act(() => {
-    saving = result.current.save({ channel: "prerelease" });
+    saving = result.current.save({ channel: "nightly" });
   });
-  expect(result.current.settings).toEqual({ autoDownload: true, channel: "prerelease" });
+  expect(result.current.settings).toEqual({ autoDownload: true, channel: "nightly" });
 
   await act(async () => {
-    answer({ autoDownload: true, channel: "prerelease" });
+    answer({ autoDownload: true, channel: "nightly" });
     await saving;
   });
-  expect(result.current.settings).toEqual({ autoDownload: true, channel: "prerelease" });
+  expect(result.current.settings).toEqual({ autoDownload: true, channel: "nightly" });
 });
 
 test("a change the main process refuses goes back", async () => {

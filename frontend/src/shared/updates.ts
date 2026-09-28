@@ -18,7 +18,7 @@ export type UpdateStatus = {
   checkedAt?: string;
 };
 
-export type UpdateChannel = "stable" | "prerelease";
+export type UpdateChannel = "stable" | "nightly";
 
 export type UpdateSettings = {
   autoDownload: boolean;
@@ -27,6 +27,8 @@ export type UpdateSettings = {
 
 export const RELEASES_URL = "https://github.com/deividfortuna/babysitter/releases";
 
+const NIGHTLY_VERSION = /^\d+\.\d+\.\d+-nightly\.\d{8}\.\d+$/;
+
 const BUSY_STATES: UpdateState[] = ["checking", "downloading", "downloaded", "installing"];
 
 export function isBusy(state: UpdateState): boolean {
@@ -34,11 +36,11 @@ export function isBusy(state: UpdateState): boolean {
 }
 
 export function isUpdateChannel(value: unknown): value is UpdateChannel {
-  return value === "stable" || value === "prerelease";
+  return value === "stable" || value === "nightly";
 }
 
 export function defaultChannel(currentVersion: string): UpdateChannel {
-  return currentVersion.includes("-") ? "prerelease" : "stable";
+  return NIGHTLY_VERSION.test(currentVersion) ? "nightly" : "stable";
 }
 
 export function resolveSettings(saved: Partial<UpdateSettings>, currentVersion: string): UpdateSettings {

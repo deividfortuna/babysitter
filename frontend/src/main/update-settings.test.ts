@@ -24,8 +24,8 @@ test("a file that is not JSON means no saved choice", () => {
 });
 
 test("keys with the wrong type are dropped when read", () => {
-  writeFileSync(path.join(dir, "update-settings.json"), JSON.stringify({ autoDownload: "yes", channel: "prerelease" }));
-  expect(readUpdateSettings(dir)).toEqual({ channel: "prerelease" });
+  writeFileSync(path.join(dir, "update-settings.json"), JSON.stringify({ autoDownload: "yes", channel: "nightly" }));
+  expect(readUpdateSettings(dir)).toEqual({ channel: "nightly" });
 });
 
 test("a written choice reads back", () => {
@@ -35,9 +35,9 @@ test("a written choice reads back", () => {
 
 test("a write makes the data directory when it is missing", () => {
   const nested = path.join(dir, "data");
-  writeUpdateSettings(nested, { channel: "prerelease" });
+  writeUpdateSettings(nested, { channel: "nightly" });
   expect(JSON.parse(readFileSync(path.join(nested, "update-settings.json"), "utf8"))).toEqual({
-    channel: "prerelease",
+    channel: "nightly",
   });
 });
 
