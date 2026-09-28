@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net/url"
 	"strconv"
 	"strings"
 	"text/tabwriter"
@@ -78,6 +79,9 @@ func (p proposalOutput) writeText(out io.Writer) error {
 	}
 	for i, c := range p.Commits {
 		fmt.Fprintf(out, "%s%s %s%s\n", label(i, "Commits:   "), textx.ShortSHA(c.SHA), c.Subject, heldBackWord(c.HeldBack))
+	}
+	if p.Commit != "" {
+		fmt.Fprintf(out, "Commit:    %s only, for the files and the diff\n", textx.ShortSHA(p.Commit))
 	}
 	for i, f := range p.Files {
 		fmt.Fprintf(out, "%s%s %s +%d -%d\n", label(i, "Files:     "), f.Status, f.Path, f.Added, f.Deleted)
@@ -203,8 +207,19 @@ func isFailed(p httpd.Proposal) bool { return p.Status == store.ProposalFailed }
 
 func isRejectable(p httpd.Proposal) bool { return p.Status.Rejectable() }
 
+func proposalPathOf(watch int64, number int, commit string) string {
+	path := fmt.Sprintf("/watches/%d/proposals/%d", watch, number)
+	if commit == "" {
+		return path
+	}
+	return path + "?" + url.Values{"commit": {commit}}.Encode()
+}
+
 func newWatchProposalsCmd(opts *options, dataDirFlag *string) *cobra.Command {
-	var diff bool
+	var (
+		diff   bool
+		commit string
+	)
 	cmd := &cobra.Command{
 		Use:   "proposals <watch> [proposal]",
 		Short: "List the proposals of a watch, or read one",
@@ -213,7 +228,8 @@ work branch and the replies it recorded. In manual mode a proposal waits
 for you. Without a number, the command lists the proposals, newest
 first. With one, it prints the commits, the files, and each reply with
 the comment it answers, which is what you read before you approve.
---diff adds the plain unified diff.`,
+--diff adds the plain unified diff. --commit shows the files and the
+diff of one commit of the proposal only.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, args []string) error {
 			if len(args) == 0 {
@@ -228,13 +244,14 @@ the comment it answers, which is what you read before you approve.
 				return err
 			}
 			var d httpd.ProposalDetail
-			if err := c.get(cmd.Context(), fmt.Sprintf("/watches/%d/proposals/%d", w.ID, n), &d); err != nil {
+			if err := c.get(cmd.Context(), proposalPathOf(w.ID, n, commit), &d); err != nil {
 				return err
 			}
 			return opts.print(cmd.OutOrStdout(), proposalOutput{watch: w.ID, ProposalDetail: d, diff: diff})
 		}),
 	}
 	cmd.Flags().BoolVar(&diff, "diff", false, "also print the plain unified diff of the work")
+	cmd.Flags().StringVar(&commit, "commit", "", "only the files and the diff of this commit, as a SHA of 7 characters or more")
 	return cmd
 }
 

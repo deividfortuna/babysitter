@@ -8,9 +8,7 @@ type Props = {
   items: readonly Item[];
   options?: { diffStyle?: string; overflow?: string };
   className?: string;
-  renderHeaderPrefix?: (item: Item) => ReactNode;
-  renderHeaderFilenameSuffix?: (item: Item) => ReactNode;
-  renderHeaderMetadata?: (item: Item) => ReactNode;
+  renderCustomHeader?: (item: Item) => ReactNode;
   renderAnnotation?: (annotation: DiffLineAnnotation<unknown>, item: Item) => ReactNode;
 };
 
@@ -44,12 +42,7 @@ export function CodeView({ ref, items, options, className, ...render }: Props) {
     >
       {items.map((item) => (
         <section key={item.id} aria-label={`File ${item.id}`} data-collapsed={item.collapsed ? "true" : "false"}>
-          <header>
-            {render.renderHeaderPrefix?.(item)}
-            <span>{item.fileDiff.name}</span>
-            {render.renderHeaderFilenameSuffix?.(item)}
-            {render.renderHeaderMetadata?.(item)}
-          </header>
+          <header>{render.renderCustomHeader?.(item) ?? <span>{item.fileDiff.name}</span>}</header>
           {item.collapsed ? null : (
             <>
               {(item.annotations ?? [])

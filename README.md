@@ -346,6 +346,7 @@ babysitter watch reply 1 --to 31 "done, see 1a2b3c" # record a reply of the agen
 babysitter watch retry 1                          # push and post the proposal of watch 1 whose release failed, again
 babysitter watch proposals 1                      # the work of each turn of the agent of watch 1
 babysitter watch proposals 1 3 --diff             # read proposal 3: commits, files, replies, and the diff
+babysitter watch proposals 1 3 --diff --commit 1a2b3c4 # the files and the diff of one commit of proposal 3 only
 babysitter watch approve 1                        # push and post the proposal that waits for you
 babysitter watch approve 1 --edit 5="Fixed, thanks." --drop 6   # rewrite reply 5 and take reply 6 out first
 babysitter watch approve 1 --stop-asking          # release it and run the watch in auto from now on
@@ -958,7 +959,8 @@ and the blocker `proposal N waits on your approval` in `watch status`
 and the app, so the watch never calls the pull request ready before the
 work you are about to read. `watch proposals <watch> <n>` prints the
 commits, the changed files, and each reply with the comment it
-answers; `--diff` adds the plain unified diff. Then:
+answers; `--diff` adds the plain unified diff, and `--commit <sha>`
+keeps the files and the diff to one commit of the proposal. Then:
 
 - `watch approve <watch>` pushes and posts it, under your account.
 - `--edit <reply id>=<text>` rewrites a reply first, and `--drop <reply

@@ -908,13 +908,15 @@ export interface components {
             baseSha: string;
             /** @description Why the commits, files and diff could not be read from the worktree; when set, they are empty and the work is unknown, not absent */
             codeError?: string;
+            /** @description The commit the files and the diff are of; absent when they are of the whole work */
+            commit?: string;
             commits: components["schemas"]["HttpdProposalCommit"][] | null;
             /**
              * Format: date-time
              * @description When the author approved or rejected it
              */
             decidedAt?: string | null;
-            /** @description The plain unified diff of the work */
+            /** @description The plain unified diff of the work, or of the commit when commit is set */
             diff: string;
             /** Format: date-time */
             endedAt?: string | null;
@@ -3238,7 +3240,10 @@ export interface operations {
     };
     getProposal: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Only the files and the diff of this commit of the proposal, as a full SHA or a prefix of 7 characters or more */
+                commit?: string;
+            };
             header?: never;
             path: {
                 /** @description Watch id */

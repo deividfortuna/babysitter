@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   CheckIcon,
+  ChevronDownIcon,
   CircleXIcon,
   FileDiffIcon,
   MessageSquareReplyIcon,
@@ -9,12 +10,19 @@ import {
   TriangleAlertIcon,
   Undo2Icon,
 } from "lucide-react";
-import type { Proposal, ProposalReply } from "@/hooks/useProposals";
+import { useProposal, type Proposal, type ProposalDetail, type ProposalReply } from "@/hooks/useProposals";
 import type { Watch } from "@/hooks/useWatches";
 import { AttentionBadge, Meta, ToneBadge } from "@/components/status-badges";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -27,7 +35,7 @@ import {
   type Outgoing,
 } from "@/components/proposal-dialogs";
 import { outgoing, useProposalDecision, type Preview } from "@/components/proposal-decision";
-import { CodeArea, type RenderReply } from "@/components/proposal-code";
+import { CodeArea, type Commit, type RenderReply, type ShownCode } from "@/components/proposal-code";
 import { anchorReplies, readProposalDiff, type AnchoredReplies, type ProposalDiff } from "@/lib/proposal-diff";
 import { relativeTime, shortSha } from "@/lib/time";
 import { cn } from "@/lib/utils";
@@ -86,20 +94,45 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
 
   const replies = useMemo(() => detail?.replies ?? proposal.replies ?? [], [detail?.replies, proposal.replies]);
   const code = preview.ready ? preview.detail : undefined;
+  const commits = useMemo(() => code?.commits ?? [], [code?.commits]);
   const diff = useMemo(() => (code ? readProposalDiff(code.diff, code.truncated, code.files ?? []) : null), [code]);
-  const inline = proposal.hasPush && !pushRejected;
+  const [picked, setPicked] = useState<{ work: string; sha: string } | null>(null);
+  const commit = picked?.work === proposal.workSha ? picked.sha : null;
+  const shown = useShownCode(watch, proposal, code, diff, commit);
+  const inline = proposal.hasPush && !pushRejected && startsOnHead(commits, commit);
   const anchored = useMemo(
     (): AnchoredReplies =>
-      diff && inline
-        ? anchorReplies(replies, diff.files, proposal.headSha)
+      shown.diff && inline
+        ? anchorReplies(replies, shown.diff.files, proposal.headSha)
         : { annotations: new Map(), unanchored: replies },
-    [diff, inline, replies, proposal.headSha],
+    [shown.diff, inline, replies, proposal.headSha],
   );
   const inDiff = [...anchored.annotations.values()].flat().filter((a) => !dropped.includes(a.metadata.replyId)).length;
-  const placing = inline && !diff && !preview.error;
+  const placing = inline && !shown.diff && !preview.error && !shown.error;
   const bot = watch.dependabot;
   const pushes = proposal.hasPush && !pushRejected;
   const out = decision.out ?? outgoing(watch, proposal, detail, draft);
+  const heldBack = commits.filter((c) => c.heldBack).length;
+
+  const actions = (
+    <DecisionButtons
+      hasPush={proposal.hasPush}
+      pushes={pushes}
+      approving={approving.isPending}
+      codeUnread={codeUnread}
+      onApprove={() => decision.approve(proposal.number, false)}
+      onStopAsking={() => setStopAsking(true)}
+      onReject={() => setRejecting(true)}
+      onRejectPush={() => setRejectingPush(true)}
+    />
+  );
+  const failed = approving.error ?? rejectRequest.error;
+  const refusal = failed ? (
+    <Alert variant="destructive">
+      <CircleXIcon />
+      <AlertTitle>{failed.message}</AlertTitle>
+    </Alert>
+  ) : null;
 
   const renderReply: RenderReply = (r, anchor) =>
     dropped.includes(r.id) ? (
@@ -155,8 +188,16 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
             {proposal.rebasedFrom ? `, was ${shortSha(proposal.rebasedFrom)}` : ""}
           </Meta>
         ) : null}
+        <div className="ml-auto">{actions}</div>
       </Heading>
       <p className="text-sm text-foreground/80">{intro}</p>
+      {heldBack > 0 ? (
+        <p className="text-sm text-attention">
+          {heldBack === 1
+            ? "1 commit here is one you kept off the pull request in an earlier decision. Approving pushes it with the rest."
+            : `${heldBack} commits here are ones you kept off the pull request in an earlier decision. Approving pushes them with the rest.`}
+        </p>
+      ) : null}
 
       {pushRejected ? (
         <div className="flex items-center gap-2 rounded-md border border-destructive/60 px-3 py-2 text-sm">
@@ -174,57 +215,38 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
         </div>
       ) : null}
 
+      {refusal}
+
       {proposal.hasPush ? (
         <ProposalCode
           preview={preview}
-          diff={diff}
+          shown={shown}
+          commits={commits}
+          commit={commit}
+          onCommit={(sha) => setPicked(sha ? { work: proposal.workSha, sha } : null)}
           anchored={anchored}
           replies={replies}
           renderReply={renderReply}
           dimmed={pushRejected}
+          title={`proposal ${proposal.number} · ${watch.repo}#${watch.number}`}
+          actions={actions}
+          notice={refusal}
         />
       ) : null}
 
-      {replies.length > 0 && !placing ? (
-        <div className="flex flex-col gap-2.5">
+      <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        {replies.length > 0 && !placing ? (
           <span className="eyebrow">
             {count(replies.length - dropped.length, "reply", "replies")} · posted under your account
             {dropped.length > 0 ? ` · ${dropped.length} dropped` : ""}
             {inDiff > 0 ? ` · ${inDiff} in the diff` : ""}
           </span>
-          {anchored.unanchored.map((r) => renderReply(r))}
-        </div>
-      ) : null}
-
-      {approving.error || rejectRequest.error ? (
-        <Alert variant="destructive">
-          <CircleXIcon />
-          <AlertTitle>{(approving.error ?? rejectRequest.error)?.message}</AlertTitle>
-        </Alert>
-      ) : null}
-
-      <div className="flex flex-wrap items-center gap-2">
-        <Button
-          size="sm"
-          disabled={approving.isPending || codeUnread}
-          onClick={() => decision.approve(proposal.number, false)}
-        >
-          {approving.isPending ? <Spinner data-icon="inline-start" /> : <CheckIcon data-icon="inline-start" />}
-          {proposal.hasPush ? "Approve" : "Approve and post"}
-        </Button>
-        <Button size="sm" variant="outline" disabled={codeUnread} onClick={() => setStopAsking(true)}>
-          Approve and stop asking
-        </Button>
-        <Button size="sm" variant="outline" onClick={() => setRejecting(true)}>
-          Reject proposal
-        </Button>
-        {pushes ? (
-          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => setRejectingPush(true)}>
-            Reject push
-          </Button>
         ) : null}
         <Meta className="ml-auto">{noteLine(out, proposal)}</Meta>
       </div>
+      {anchored.unanchored.length > 0 && !placing ? (
+        <div className="flex flex-col gap-2.5">{anchored.unanchored.map((r) => renderReply(r))}</div>
+      ) : null}
 
       <DropReplyDialog
         open={dropping !== null}
@@ -271,6 +293,95 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
         onConfirm={() => decision.approve(proposal.number, true, () => setStopAsking(false))}
       />
     </section>
+  );
+}
+
+function useShownCode(
+  watch: Watch,
+  proposal: Proposal,
+  code: ProposalDetail | undefined,
+  whole: ProposalDiff | null,
+  commit: string | null,
+): ShownCode {
+  const query = useProposal(commit ? watch.id : null, commit ? proposal.number : null, proposal, commit ?? undefined);
+  const one = commit ? query.data : undefined;
+  const diff = useMemo(() => (one ? readProposalDiff(one.diff, one.truncated, one.files ?? []) : null), [one]);
+  if (!commit) {
+    return { diff: whole, truncated: code?.truncated ?? false, loading: false, error: null, reload: () => {} };
+  }
+  return {
+    diff,
+    truncated: one?.truncated ?? false,
+    loading: query.isFetching,
+    error: query.error?.message ?? one?.codeError ?? null,
+    reload: () => void query.refetch(),
+  };
+}
+
+function startsOnHead(commits: Commit[], commit: string | null): boolean {
+  return commit === null || commits[0]?.sha === commit;
+}
+
+function DecisionButtons({
+  hasPush,
+  pushes,
+  approving,
+  codeUnread,
+  onApprove,
+  onStopAsking,
+  onReject,
+  onRejectPush,
+}: {
+  hasPush: boolean;
+  pushes: boolean;
+  approving: boolean;
+  codeUnread: boolean;
+  onApprove: () => void;
+  onStopAsking: () => void;
+  onReject: () => void;
+  onRejectPush: () => void;
+}) {
+  return (
+    <div className="flex items-center gap-2">
+      <ButtonGroup>
+        <Button size="sm" disabled={approving || codeUnread} onClick={onApprove}>
+          {approving ? <Spinner data-icon="inline-start" /> : <CheckIcon data-icon="inline-start" />}
+          {hasPush ? "Approve" : "Approve and post"}
+        </Button>
+        <ButtonGroupSeparator className="bg-primary-foreground/30" />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button size="icon-sm" className="w-7" aria-label="More ways to approve">
+              <ChevronDownIcon />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end">
+            <DropdownMenuItem disabled={codeUnread} onSelect={onStopAsking}>
+              Approve and stop asking
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </ButtonGroup>
+      <ButtonGroup>
+        <Button size="sm" variant="outline" onClick={onReject}>
+          Reject
+        </Button>
+        {pushes ? (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon-sm" variant="outline" className="w-7" aria-label="More ways to reject">
+                <ChevronDownIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem variant="destructive" onSelect={onRejectPush}>
+                Reject push
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        ) : null}
+      </ButtonGroup>
+    </div>
   );
 }
 
@@ -370,30 +481,46 @@ function CodeUnread({ preview }: { preview: Preview }) {
 
 function ProposalCode({
   preview,
-  diff,
+  shown,
+  commits,
+  commit,
+  onCommit,
   anchored,
   replies,
   renderReply,
   dimmed,
+  title,
+  actions,
+  notice,
 }: {
   preview: Preview;
-  diff: ProposalDiff | null;
+  shown: ShownCode;
+  commits: Commit[];
+  commit: string | null;
+  onCommit: (sha: string | null) => void;
   anchored: AnchoredReplies;
   replies: ProposalReply[];
   renderReply: RenderReply;
   dimmed: boolean;
+  title: string;
+  actions: React.ReactNode;
+  notice: React.ReactNode;
 }) {
   if (preview.error) return <CodeUnread preview={preview} />;
-  if (!preview.ready || !preview.detail || !diff) return <Spinner />;
+  if (!preview.ready || !preview.detail) return <Spinner />;
   return (
     <CodeArea
-      diff={diff}
-      commits={preview.detail.commits ?? []}
-      truncated={preview.detail.truncated}
+      shown={shown}
+      commits={commits}
+      commit={commit}
+      onCommit={onCommit}
       annotations={anchored.annotations}
       replies={replies}
       renderReply={renderReply}
       dimmed={dimmed}
+      title={title}
+      actions={actions}
+      notice={notice}
     />
   );
 }

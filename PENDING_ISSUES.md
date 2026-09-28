@@ -18,6 +18,7 @@ its issue does and goes with the fix.
 | 42  | The installed service and the app daemon poll the same repositories twice | none, seen in the check of the rate limit |
 | 46  | Two daemons can open the same database, and nothing stops the second | none, seen in the screenshot run of 45 |
 | 52  | A message that waits on a hung fetch reaches the agent twice          | none, seen in the live run of the Ghostty terminal |
+| 53  | Collapse all leaves a gap above the first file of a scrolled diff     | none, seen in the live run of the proposal diff |
 
 ## 04. prwatch cleanups, as a backlog
 
@@ -263,3 +264,16 @@ So the cancelled send still typed its text after its fetch failed, and
 did not submit it. The next message submitted both. A cancelled send
 must type nothing, or the send must not wait on the fetch without a
 limit. Issue 23 is in the same path of the daemon.
+
+## 53. Collapse all leaves a gap above the first file of a scrolled diff
+
+Found: 2026-09-28, in the live run of the proposal diff, on watch 1 of
+the local harness, proposal 1 with 3 files.
+
+When the diff is scrolled and Collapse all folds every file, the three
+file headers are 40 px apart as they must be, but the first one starts
+about 20 px under the toolbar of the diff. Before the scroll, the first
+header touches the toolbar. The scroll position of the viewer of
+`@pierre/diffs` seems to stay above 0 when its content gets shorter
+than the panel. The page `docs/evidences/proposal-diff. Live run of the
+proposal diff redesign.md` shows it in `pd-16-collapse-all.png`.

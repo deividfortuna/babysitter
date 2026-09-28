@@ -1298,6 +1298,14 @@ paths:
     get:
       operationId: getProposal
       parameters:
+      - description: Only the files and the diff of this commit of the proposal, as
+          a full SHA or a prefix of 7 characters or more
+        in: query
+        name: commit
+        schema:
+          description: Only the files and the diff of this commit of the proposal,
+            as a full SHA or a prefix of 7 characters or more
+          type: string
       - description: Watch id
         in: path
         name: id
@@ -2328,6 +2336,10 @@ components:
           description: Why the commits, files and diff could not be read from the
             worktree; when set, they are empty and the work is unknown, not absent
           type: string
+        commit:
+          description: The commit the files and the diff are of; absent when they
+            are of the whole work
+          type: string
         commits:
           items:
             $ref: '#/components/schemas/HttpdProposalCommit'
@@ -2339,7 +2351,8 @@ components:
           nullable: true
           type: string
         diff:
-          description: The plain unified diff of the work
+          description: The plain unified diff of the work, or of the commit when commit
+            is set
           type: string
         endedAt:
           format: date-time

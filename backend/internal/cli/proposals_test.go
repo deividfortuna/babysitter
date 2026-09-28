@@ -25,8 +25,12 @@ func (d *fakeDaemon) proposalRoutes() {
 		fmt.Fprintf(w, `{"proposals":[%s,%s]}`, pendingProposalJSON, failedProposalJSON)
 	})
 	d.mux.HandleFunc("GET /api/v1/watches/1/proposals/2", func(w http.ResponseWriter, r *http.Request) {
+		commit := ""
+		if r.URL.Query().Get("commit") == "1a2b3c4" {
+			commit = `"commit":"1a2b3c4d5e6f7",`
+		}
 		detail := strings.TrimSuffix(pendingProposalJSON, "}") +
-			`,"commits":[{"sha":"1a2b3c4d5e6f7","subject":"Rename the thing"}],"files":[{"path":"x.go","status":"M","added":3,"deleted":1}],"diff":"diff --git a/x.go b/x.go\n-old\n+new\n","truncated":false}`
+			`,"commits":[{"sha":"1a2b3c4d5e6f7","subject":"Rename the thing"}],` + commit + `"files":[{"path":"x.go","status":"M","added":3,"deleted":1}],"diff":"diff --git a/x.go b/x.go\n-old\n+new\n","truncated":false}`
 		fmt.Fprint(w, detail)
 	})
 	record := func(kind string) http.HandlerFunc {
@@ -85,8 +89,11 @@ func TestWatchProposalsListsAndShowsOne(t *testing.T) {
 			t.Errorf("the detail lacks %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "+new") {
-		t.Fatalf("the diff shows without --diff:\n%s", out)
+	if strings.Contains(out, "+new") || strings.Contains(out, "Commit:") {
+		t.Fatalf("the diff or a commit shows without --diff or --commit:\n%s", out)
+	}
+	if out, err = runWatch(t, d, "proposals", "1", "2", "--commit", "1a2b3c4"); err != nil || !strings.Contains(out, "Commit:    1a2b3c4 only, for the files and the diff") {
+		t.Fatalf("proposal 2 of one commit = %q, %v", out, err)
 	}
 	if out, err = runWatch(t, d, "proposals", "1", "2", "--diff"); err != nil || !strings.Contains(out, "diff --git a/x.go b/x.go\n-old\n+new") {
 		t.Fatalf("proposal 2 with the diff = %q, %v", out, err)

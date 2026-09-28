@@ -1,4 +1,4 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, onTestFinished, test, vi } from "vite-plus/test";
 import { delay, http, HttpResponse } from "msw";
@@ -28,7 +28,7 @@ function renderPending({
     watches: [w],
     watchById: { 42: w },
     proposals: { 42: [p] },
-    proposalDetail: { "42/3": buildProposalDetail({ ...p, ...detail }) },
+    proposalDetail: { "42/3": buildProposalDetail({ ...p, ...detail }) } as Record<string, ProposalDetail>,
     decisions,
   };
   serveApi(api);
@@ -64,22 +64,65 @@ function file(panel: HTMLElement, path: string): HTMLElement {
   return within(panel).getByRole("region", { name: `File ${path}` });
 }
 
+type User = ReturnType<typeof userEvent.setup>;
+
+async function codeShown(panel: HTMLElement): Promise<HTMLElement> {
+  return within(panel).findByRole("toolbar", { name: "Diff tools" });
+}
+
+async function openMenu(user: User, panel: HTMLElement, trigger: string): Promise<HTMLElement> {
+  const button = await within(panel).findByRole("button", { name: trigger });
+  act(() => button.focus());
+  await user.click(button);
+  return screen.findByRole("menu");
+}
+
+async function choose(user: User, panel: HTMLElement, trigger: string, item: string | RegExp) {
+  const menu = await openMenu(user, panel, trigger);
+  await user.click(within(menu).getByRole("menuitem", { name: item }));
+}
+
+async function rejectPush(user: User, panel: HTMLElement) {
+  await choose(user, panel, "More ways to reject", "Reject push");
+}
+
+async function stopAskingItem(user: User, panel: HTMLElement): Promise<HTMLElement> {
+  const menu = await openMenu(user, panel, "More ways to approve");
+  return within(menu).getByRole("menuitem", { name: "Approve and stop asking" });
+}
+
+async function openTree(user: User, panel: HTMLElement): Promise<HTMLElement> {
+  await user.click(await within(panel).findByRole("button", { name: "File tree" }));
+  return within(panel).getByRole("navigation", { name: "Changed files" });
+}
+
 test("a proposal that waits shows what goes out", async () => {
-  renderPending();
+  const { user } = renderPending();
   const panel = await section();
 
   expect(within(panel).getByRole("heading", { name: "Proposal 3" })).toBeVisible();
   expect(within(panel).getByText("approval needed")).toBeVisible();
   expect(within(panel).getByText("head 9f3c2a1")).toBeVisible();
   expect(within(panel).getByText("work 4e7d0b8")).toBeVisible();
+  expect(within(panel).getByRole("button", { name: "Approve" })).toBeVisible();
+  expect(within(panel).getByRole("button", { name: "Reject" })).toBeVisible();
   expect(
     within(panel).getByText(
       "The agent finished a turn. None of it is on GitHub yet: what you approve is what goes out, under your account.",
     ),
   ).toBeVisible();
-  expect(await within(panel).findByText("2 commits on the work branch")).toBeVisible();
-  expect(within(panel).getByText("Move the retry into deliver")).toBeVisible();
-  expect(within(panel).getByText("2 changed files")).toBeVisible();
+  const toolbar = await codeShown(panel);
+  expect(within(toolbar).getByRole("button", { name: "Commits" })).toHaveTextContent("All commits");
+  expect(within(toolbar).getByText("2 files")).toBeVisible();
+  expect(within(toolbar).getByText("+54")).toBeVisible();
+  expect(within(panel).queryByRole("navigation", { name: "Changed files" })).toBeNull();
+  const menu = await openMenu(user, panel, "Commits");
+  expect(within(menu).getByRole("menuitem", { name: /All commits\s*2 commits/ })).toHaveAttribute(
+    "aria-current",
+    "true",
+  );
+  expect(within(menu).getByRole("menuitem", { name: /Move the retry into deliver\s*3b1e9c4/ })).toBeVisible();
+  await user.keyboard("{Escape}");
   const diff = within(panel).getByLabelText("Diff");
   expect(diff).toHaveTextContent("return retry(ctx, send, req)");
   expect(diff).toHaveTextContent("TestDeliverRetries");
@@ -93,13 +136,113 @@ test("a proposal that waits shows what goes out", async () => {
   ).toBeVisible();
 });
 
-test("a file in the list scrolls the diff to it", async () => {
+test("a file in the list scrolls the diff to it and is marked as the one in view", async () => {
   const { user } = renderPending();
   const panel = await section();
+  const tree = await openTree(user, panel);
 
-  await user.click(await within(panel).findByRole("button", { name: /^deliver_test.go/ }));
+  expect(within(tree).getByRole("button", { name: /^deliver.go/ })).toHaveAttribute("aria-current", "location");
+  await user.click(within(tree).getByRole("button", { name: /^deliver_test.go/ }));
 
   expect(viewer(panel)).toHaveAttribute("data-scrolled-to", "internal/webhook/deliver_test.go");
+  expect(within(tree).getByRole("button", { name: /^deliver_test.go/ })).toHaveAttribute("aria-current", "location");
+  expect(within(tree).getByRole("button", { name: /^deliver.go/ })).not.toHaveAttribute("aria-current");
+});
+
+test("the filter keeps the files whose path has the text", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  const tree = await openTree(user, panel);
+
+  await user.type(within(tree).getByRole("searchbox", { name: "Filter files" }), "_test");
+
+  expect(within(tree).getByRole("button", { name: /^deliver_test.go/ })).toBeVisible();
+  expect(within(tree).queryByRole("button", { name: /^deliver.go/ })).toBeNull();
+
+  await user.type(within(tree).getByRole("searchbox", { name: "Filter files" }), "zzz");
+
+  expect(within(tree).getByText("No file matches.")).toBeVisible();
+});
+
+test("one commit shows its own files and diff, and all commits come back", async () => {
+  const detail = buildProposalDetail();
+  const { api, user } = renderPending();
+  api.proposalDetail["42/3@7a20d55ddddddddddddddddddddddddddddddddd"] = buildProposalDetail({
+    ...detail,
+    commit: "7a20d55ddddddddddddddddddddddddddddddddd",
+    files: [{ path: "internal/webhook/deliver_test.go", status: "A", added: 40, deleted: 0 }],
+    diff: detail.diff.slice(detail.diff.indexOf("diff --git a/internal/webhook/deliver_test.go")),
+  });
+  const panel = await section();
+  await codeShown(panel);
+
+  await choose(user, panel, "Commits", /Test the retry of a delivery/);
+
+  const toolbar = await codeShown(panel);
+  expect(within(toolbar).getByRole("button", { name: "Commits" })).toHaveTextContent("Test the retry of a delivery");
+  expect(await within(toolbar).findByText("1 file")).toBeVisible();
+  const diff = within(panel).getByLabelText("Diff");
+  expect(diff).toHaveTextContent("TestDeliverRetries");
+  expect(diff).not.toHaveTextContent("return retry(ctx, send, req)");
+  expect(within(diff).queryByLabelText("Reply to mhernandez")).toBeNull();
+  expect(within(panel).getByLabelText("Reply to mhernandez")).toBeVisible();
+  expect(within(panel).getByText("2 replies · posted under your account")).toBeVisible();
+
+  await choose(user, panel, "Commits", /^All commits/);
+
+  expect(await within(toolbar).findByText("2 files")).toBeVisible();
+  expect(within(within(panel).getByLabelText("Diff")).getByLabelText("Reply to mhernandez")).toBeVisible();
+});
+
+test("the first commit keeps the replies on its lines", async () => {
+  const detail = buildProposalDetail();
+  const { api, user } = renderPending();
+  api.proposalDetail["42/3@3b1e9c4cccccccccccccccccccccccccccccccc"] = buildProposalDetail({
+    ...detail,
+    commit: "3b1e9c4cccccccccccccccccccccccccccccccc",
+    files: [{ path: "internal/webhook/deliver.go", status: "M", added: 14, deleted: 3 }],
+    diff: detail.diff.slice(0, detail.diff.indexOf("diff --git a/internal/webhook/deliver_test.go")),
+  });
+  const panel = await section();
+  await codeShown(panel);
+
+  await choose(user, panel, "Commits", /Move the retry into deliver/);
+
+  expect(await within(panel).findByText("1 file")).toBeVisible();
+  expect(within(within(panel).getByLabelText("Diff")).getByLabelText("Reply to mhernandez")).toBeVisible();
+});
+
+test("a commit whose code cannot be read says so and reads it again", async () => {
+  const { api, user } = renderPending();
+  const panel = await section();
+  await codeShown(panel);
+
+  await choose(user, panel, "Commits", /Test the retry of a delivery/);
+
+  expect(await within(panel).findByText("The code of this commit could not be read.")).toBeVisible();
+  expect(within(panel).getByText("commit not found")).toBeVisible();
+  api.proposalDetail["42/3@7a20d55ddddddddddddddddddddddddddddddddd"] = buildProposalDetail({
+    commit: "7a20d55ddddddddddddddddddddddddddddddddd",
+  });
+  await user.click(within(panel).getByRole("button", { name: "Read it again" }));
+
+  expect(await within(panel).findByLabelText("Diff")).toHaveTextContent("TestDeliverRetries");
+});
+
+test("collapse all folds every file and expand all opens them again", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await codeShown(panel);
+
+  await user.click(within(panel).getByRole("button", { name: "Collapse all" }));
+
+  expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "true");
+  expect(file(panel, "internal/webhook/deliver_test.go")).toHaveAttribute("data-collapsed", "true");
+
+  await user.click(within(panel).getByRole("button", { name: "Expand all" }));
+
+  expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "false");
+  expect(file(panel, "internal/webhook/deliver_test.go")).toHaveAttribute("data-collapsed", "false");
 });
 
 test("approve releases the proposal and says what went out", async () => {
@@ -148,17 +291,19 @@ test("an event of the stream does not fetch the code of the proposal again", asy
   const fetches = countDetailFetches();
   const { queryClient } = renderPending();
   const panel = await section();
-  expect(await within(panel).findByText("2 commits on the work branch")).toBeVisible();
+  await codeShown(panel);
 
   await queryClient.invalidateQueries({ queryKey: watchesQueryKey });
 
   expect(fetches.count).toBe(1);
 });
 
-test("a proposal on new work shows its new code", async () => {
-  const { api, queryClient } = renderPending();
+test("a proposal on new work shows its new code, with all its commits", async () => {
+  const { api, queryClient, user } = renderPending();
   const panel = await section();
-  expect(await within(panel).findByText("Move the retry into deliver")).toBeVisible();
+  expect(within(await openMenu(user, panel, "Commits")).getByText("Move the retry into deliver")).toBeVisible();
+  await user.click(screen.getByRole("menuitem", { name: /Move the retry into deliver/ }));
+  expect(within(panel).getByRole("button", { name: "Commits" })).toHaveTextContent("Move the retry into deliver");
 
   const rebased = buildProposal({ headSha: "7a1b2c3", workSha: "8d9e0f1", rebasedFrom: "4e7d0b8" });
   api.proposals[42] = [rebased];
@@ -168,7 +313,8 @@ test("a proposal on new work shows its new code", async () => {
   });
   await queryClient.invalidateQueries({ queryKey: watchesQueryKey });
 
-  expect(await within(panel).findByText("Move the retry, on the new head")).toBeVisible();
+  await waitFor(() => expect(within(panel).getByRole("button", { name: "Commits" })).toHaveTextContent("All commits"));
+  expect(within(await openMenu(user, panel, "Commits")).getByText("Move the retry, on the new head")).toBeVisible();
 });
 
 test("a dropped reply asks first and is not sent", async () => {
@@ -223,7 +369,7 @@ test("the heading of the replies does not count a dropped one", async () => {
 });
 
 test("a commit the author kept off before is marked", async () => {
-  renderPending({
+  const { user } = renderPending({
     detail: {
       commits: [
         { sha: "e1197bcaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa", subject: "Strip punctuation in slug", heldBack: true },
@@ -233,9 +379,12 @@ test("a commit the author kept off before is marked", async () => {
   });
   const panel = await section();
 
-  const commit = (await within(panel).findByText("Strip punctuation in slug")).parentElement!;
-  expect(within(commit).getByText("kept off before")).toBeVisible();
-  expect(within(panel).queryAllByText("kept off before")).toHaveLength(1);
+  const menu = await openMenu(user, panel, "Commits");
+  expect(within(menu).getByRole("menuitem", { name: /Strip punctuation in slug/ })).toHaveTextContent(
+    "kept off before",
+  );
+  expect(within(menu).queryAllByText("kept off before")).toHaveLength(1);
+  await user.keyboard("{Escape}");
   expect(
     within(panel).getByText(
       "1 commit here is one you kept off the pull request in an earlier decision. Approving pushes it with the rest.",
@@ -259,7 +408,7 @@ test("the push is rejected after a warning, and the replies still go out", async
   const { decisions, user } = renderPending();
   const panel = await section();
 
-  await user.click(await within(panel).findByRole("button", { name: "Reject push" }));
+  await rejectPush(user, panel);
   const dialog = await screen.findByRole("dialog", { name: "Reject the push of proposal 3?" });
   expect(within(dialog).getByRole("alert")).toHaveTextContent("The replies still go out, and they describe this code.");
   await user.click(within(dialog).getByRole("button", { name: "Reject push" }));
@@ -276,18 +425,18 @@ test("the push comes back with restore", async () => {
   const { user } = renderPending();
   const panel = await section();
 
-  await user.click(await within(panel).findByRole("button", { name: "Reject push" }));
+  await rejectPush(user, panel);
   await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Reject push" }));
   await user.click(await within(panel).findByRole("button", { name: "Restore the push" }));
 
-  expect(within(panel).getByRole("button", { name: "Reject push" })).toBeVisible();
+  expect(within(panel).getByRole("button", { name: "More ways to reject" })).toBeVisible();
 });
 
 test("a rejection takes a reason, and discards the commits only when asked", async () => {
   const { decisions, user } = renderPending();
   const panel = await section();
 
-  await user.click(await within(panel).findByRole("button", { name: "Reject proposal" }));
+  await user.click(await within(panel).findByRole("button", { name: "Reject" }));
   const dialog = await screen.findByRole("dialog", { name: "Reject proposal 3 of octo/babysitter#12" });
   const discard = within(dialog).getByRole("checkbox", { name: "Discard the commits" });
   expect(discard).not.toBeChecked();
@@ -312,7 +461,7 @@ test("approve and stop asking names what goes out and switches the watch to auto
   const { decisions, user } = renderPending();
   const panel = await section();
 
-  await user.click(await within(panel).findByRole("button", { name: "Approve and stop asking" }));
+  await user.click(await stopAskingItem(user, panel));
   const dialog = await screen.findByRole("dialog", { name: "Approve and stop asking on octo/babysitter#12" });
   expect(within(dialog).getByText("What goes out now")).toBeVisible();
   expect(within(dialog).getByText(/2 commits pushed to/)).toBeVisible();
@@ -358,7 +507,7 @@ test("a Dependabot proposal carries replies only", async () => {
     ),
   ).toBeVisible();
   expect(await within(panel).findByRole("button", { name: "Approve and post" })).toBeVisible();
-  expect(within(panel).queryByRole("button", { name: "Reject push" })).toBeNull();
+  expect(within(panel).queryByRole("button", { name: "More ways to reject" })).toBeNull();
   expect(within(panel).queryByText(/work /)).toBeNull();
   expect(within(panel).getByText("1 reply · posted under your account")).toBeVisible();
 });
@@ -373,7 +522,7 @@ test("a person whose login starts with dependabot gets the push of a person", as
     ),
   ).toBeVisible();
   expect(within(panel).queryByText(/Dependabot owns this branch/)).toBeNull();
-  expect(await within(panel).findByRole("button", { name: "Reject push" })).toBeVisible();
+  expect(await within(panel).findByRole("button", { name: "More ways to reject" })).toBeVisible();
 });
 
 test("a push that failed offers a retry", async () => {
@@ -546,7 +695,7 @@ test("a rejection never shows the line of an older release", async () => {
   await offer(buildProposal({ number: 4 }));
   expect(await screen.findByRole("heading", { name: "Proposal 4" })).toBeVisible();
   decide("reject", "rejected");
-  await user.click(within(await section()).getByRole("button", { name: "Reject proposal" }));
+  await user.click(within(await section()).getByRole("button", { name: "Reject" }));
   await user.click(within(await screen.findByRole("dialog")).getByRole("button", { name: "Reject proposal" }));
 
   await waitFor(() => expect(screen.queryByRole("heading", { name: "Proposal 4" })).toBeNull());
@@ -585,9 +734,9 @@ test("the push warning counts one commit in the singular", async () => {
     detail: { commits: [{ sha: "3b1e9c4cccccccccccccccccccccccccccccccc", subject: "Move the retry into deliver" }] },
   });
   const panel = await section();
-  await within(panel).findByText("1 commit on the work branch");
+  await codeShown(panel);
 
-  await user.click(within(panel).getByRole("button", { name: "Reject push" }));
+  await rejectPush(user, panel);
 
   expect(await screen.findByText(/The 1 commit stays on the work branch/)).toBeVisible();
 });
@@ -596,9 +745,9 @@ test("the push warning speaks of one reply as one", async () => {
   const one = (buildProposal().replies ?? []).slice(0, 1);
   const { user } = renderPending({ proposal: { replies: one }, detail: { replies: one } });
   const panel = await section();
-  await within(panel).findByText("2 commits on the work branch");
+  await codeShown(panel);
 
-  await user.click(within(panel).getByRole("button", { name: "Reject push" }));
+  await rejectPush(user, panel);
 
   const alert = within(await screen.findByRole("dialog")).getByRole("alert");
   expect(alert).toHaveTextContent("The reply still goes out, and it describes this code.");
@@ -625,16 +774,18 @@ test("a preview that did not load shows the error and holds the approval until i
 
   expect(await within(panel).findByRole("alert")).toHaveTextContent("the worktree is gone");
   expect(within(panel).getByRole("button", { name: "Approve" })).toBeDisabled();
-  expect(within(panel).getByRole("button", { name: "Approve and stop asking" })).toBeDisabled();
+  expect(await stopAskingItem(user, panel)).toHaveAttribute("aria-disabled", "true");
+  await user.keyboard("{Escape}");
   expect(within(panel).queryByText(/0 commits/)).toBeNull();
   expect(within(panel).getByText(/pushes commits not read yet to feature\/notifications/)).toBeVisible();
 
   await user.click(within(panel).getByRole("button", { name: "Read the code again" }));
 
-  expect(await within(panel).findByText("2 commits on the work branch")).toBeVisible();
+  expect(await codeShown(panel)).toBeVisible();
   expect(within(panel).queryByRole("alert")).toBeNull();
   expect(within(panel).getByRole("button", { name: "Approve" })).toBeEnabled();
-  expect(within(panel).getByRole("button", { name: "Approve and stop asking" })).toBeEnabled();
+  expect(await stopAskingItem(user, panel)).not.toHaveAttribute("aria-disabled");
+  await user.keyboard("{Escape}");
   expect(within(panel).getByText(/pushes 2 commits to feature\/notifications/)).toBeVisible();
 });
 
@@ -646,15 +797,16 @@ test("code the daemon could not read is an error, not zero changes, and a retry 
   const panel = await section();
 
   expect(await within(panel).findByRole("alert")).toHaveTextContent("git log: exit status 128");
-  expect(within(panel).queryByText("0 commits on the work branch")).toBeNull();
-  expect(within(panel).queryByText(/0 changed files/)).toBeNull();
+  expect(within(panel).queryByRole("toolbar", { name: "Diff tools" })).toBeNull();
+  expect(within(panel).queryByText(/0 files/)).toBeNull();
   expect(within(panel).getByRole("button", { name: "Approve" })).toBeDisabled();
-  expect(within(panel).getByRole("button", { name: "Approve and stop asking" })).toBeDisabled();
+  expect(await stopAskingItem(user, panel)).toHaveAttribute("aria-disabled", "true");
+  await user.keyboard("{Escape}");
 
   api.proposalDetail["42/3"] = buildProposalDetail();
   await user.click(within(panel).getByRole("button", { name: "Read the code again" }));
 
-  expect(await within(panel).findByText("2 commits on the work branch")).toBeVisible();
+  expect(await codeShown(panel)).toBeVisible();
   expect(fetches.count).toBe(2);
   expect(within(panel).getByRole("button", { name: "Approve" })).toBeEnabled();
 });
@@ -674,7 +826,7 @@ test("rejecting the push frees the approval while the code is not read", async (
   const panel = await section();
   await within(panel).findByRole("alert");
 
-  await user.click(within(panel).getByRole("button", { name: "Reject push" }));
+  await rejectPush(user, panel);
   const dialog = await screen.findByRole("dialog", { name: "Reject the push of proposal 3?" });
   expect(dialog).toHaveTextContent("The commits stay on the work branch");
   expect(dialog).not.toHaveTextContent("0 commits");
@@ -690,8 +842,8 @@ test("rejecting the push frees the approval while the code is not read", async (
 test("an open stop asking dialog holds the release when the work moves to code that cannot be read", async () => {
   const { api, decisions, queryClient, user } = renderPending();
   const panel = await section();
-  await within(panel).findByText("2 commits on the work branch");
-  await user.click(within(panel).getByRole("button", { name: "Approve and stop asking" }));
+  await codeShown(panel);
+  await user.click(await stopAskingItem(user, panel));
   const dialog = await screen.findByRole("dialog", { name: "Approve and stop asking on octo/babysitter#12" });
   expect(within(dialog).getByRole("button", { name: "Approve and switch to auto" })).toBeEnabled();
 
@@ -736,24 +888,24 @@ function inlineReply(payload: Record<string, unknown>, body = "Done."): Proposal
 test("a viewed file folds away and is ticked in the list", async () => {
   const { user } = renderPending();
   const panel = await section();
-  await within(panel).findByLabelText("Diff");
+  const tree = await openTree(user, panel);
 
   await user.click(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver.go" }));
 
   expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "true");
-  expect(within(panel).getByText("2 changed files · 1 viewed")).toBeVisible();
-  expect(within(panel).getByRole("button", { name: /^Viewed:\s*deliver.go/ })).toBeVisible();
+  expect(within(panel).getByText("2 files · 1 viewed")).toBeVisible();
+  expect(within(tree).getByRole("button", { name: /^Viewed:\s*deliver.go/ })).toBeVisible();
 
   await user.click(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver.go" }));
 
   expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "false");
-  expect(within(panel).getByText("2 changed files")).toBeVisible();
+  expect(within(panel).getByText("2 files")).toBeVisible();
 });
 
 test("the changed files show as a tree of folders", async () => {
   const { user } = renderPending();
   const panel = await section();
-  const tree = await within(panel).findByRole("navigation", { name: "Changed files" });
+  const tree = await openTree(user, panel);
 
   const folder = within(tree).getByRole("button", { name: "internal/webhook" });
   expect(folder).toHaveAttribute("aria-expanded", "true");
@@ -844,7 +996,7 @@ test("the split layout and the wrap stay for the next proposal", async () => {
 });
 
 test("a cut diff says so and names the files it lost", async () => {
-  renderPending({
+  const { user } = renderPending({
     detail: {
       truncated: true,
       files: [
@@ -861,21 +1013,65 @@ test("a cut diff says so and names the files it lost", async () => {
     within(panel).getByText("The last file shown stops where the cut is, and 1 file after it is not in the diff."),
   ).toBeVisible();
   expect(within(file(panel, "internal/webhook/deliver_test.go")).getByText("cut here")).toBeVisible();
-  expect(within(panel).getByText("not in the diff")).toBeVisible();
-  expect(within(panel).getByText("3 changed files")).toBeVisible();
+  expect(within(panel).getByText("3 files")).toBeVisible();
+  const tree = await openTree(user, panel);
+  expect(within(tree).getByText("not in the diff")).toBeVisible();
 });
 
-test("the full window opens the diff with its replies", async () => {
-  const { user } = renderPending();
+test("the full window opens the diff with its replies, the tree and the decision", async () => {
+  const { decisions, user } = renderPending();
   const panel = await section();
   await within(panel).findByLabelText("Diff");
 
   await user.click(within(panel).getByRole("button", { name: "Full window" }));
 
   const dialog = await screen.findByRole("dialog", { name: "Files changed" });
+  expect(within(dialog).getByText("proposal 3 · octo/babysitter#12")).toBeVisible();
   expect(within(dialog).getByLabelText("Diff")).toHaveTextContent("return retry(ctx, send, req)");
   expect(within(dialog).getByLabelText("Reply to mhernandez")).toBeVisible();
+  expect(within(dialog).getByRole("navigation", { name: "Changed files" })).toBeVisible();
+  expect(within(dialog).getByRole("button", { name: "File tree" })).toHaveAttribute("aria-pressed", "true");
+  expect(within(dialog).queryByRole("button", { name: "Full window" })).toBeNull();
   expect(within(panel).getByText("The diff is open in the full window.")).toBeVisible();
+
+  await user.click(within(dialog).getByRole("button", { name: "Approve" }));
+
+  await waitFor(() => expect(decisions).toHaveLength(1));
+  expect(decisions[0]).toEqual({ route: "approve", watch: 42, number: 3, body: {} });
+});
+
+test("an approval that fails in the full window says why in the full window", async () => {
+  const { user } = renderPending();
+  server.use(
+    http.post(apiUrl("/api/v1/watches/:id/proposals/:number/approve"), () =>
+      HttpResponse.json(
+        { error: { code: "proposal_failed", message: "the lease on 9f3c2a1 failed" } },
+        { status: 500 },
+      ),
+    ),
+  );
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+  await user.click(within(panel).getByRole("button", { name: "Full window" }));
+  const dialog = await screen.findByRole("dialog", { name: "Files changed" });
+
+  await user.click(within(dialog).getByRole("button", { name: "Approve" }));
+
+  expect(await within(dialog).findByRole("alert")).toHaveTextContent("the lease on 9f3c2a1 failed");
+});
+
+test("escape closes the full window and brings the diff back to the proposal", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await within(panel).findByLabelText("Diff");
+  await user.click(within(panel).getByRole("button", { name: "Full window" }));
+  await screen.findByRole("dialog", { name: "Files changed" });
+
+  await user.keyboard("{Escape}");
+
+  await waitFor(() => expect(screen.queryByRole("dialog", { name: "Files changed" })).toBeNull());
+  expect(within(panel).queryByText("The diff is open in the full window.")).toBeNull();
+  expect(within(panel).getByLabelText("Diff")).toHaveTextContent("return retry(ctx, send, req)");
 });
 
 test("a rejected push keeps every reply in the list", async () => {
@@ -883,7 +1079,7 @@ test("a rejected push keeps every reply in the list", async () => {
   const panel = await section();
   await within(panel).findByLabelText("Diff");
 
-  await user.click(within(panel).getByRole("button", { name: "Reject push" }));
+  await rejectPush(user, panel);
   const dialog = await screen.findByRole("dialog");
   await user.click(within(dialog).getByRole("button", { name: /Reject push/ }));
 
