@@ -91,3 +91,25 @@ func queryInt(w http.ResponseWriter, r *http.Request, name string, fallback int6
 	}
 	return n, true
 }
+
+func pathNumber(w http.ResponseWriter, r *http.Request, name string) (int, bool) {
+	n, err := strconv.Atoi(chi.URLParam(r, name))
+	if err != nil || n <= 0 {
+		writeError(w, http.StatusBadRequest, "bad_request", name+" must be a positive integer")
+		return 0, false
+	}
+	return n, true
+}
+
+func queryCount(w http.ResponseWriter, r *http.Request, name string, fallback int) (int, bool) {
+	raw := r.URL.Query().Get(name)
+	if raw == "" {
+		return fallback, true
+	}
+	n, err := strconv.Atoi(raw)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "bad_request", name+" must be an integer")
+		return 0, false
+	}
+	return n, true
+}

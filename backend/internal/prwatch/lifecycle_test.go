@@ -16,6 +16,33 @@ func (fx *fixture) startRequest() StartRequest {
 	return StartRequest{Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir}
 }
 
+func TestWorktreeDirNameKeepsTheDirectoryUnderTheWorktreesRoot(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		key  store.WatchKey
+		want string
+	}{
+		{store.WatchKey{Owner: "Octo", Name: "Hello.World", Number: 3}, "octo-hello.world-3"},
+		{store.WatchKey{Owner: "octo", Name: "my_repo-2", Number: 12}, "octo-my_repo-2-12"},
+		{store.WatchKey{Owner: "..", Name: "..", Number: 1}, "..-..-1"},
+	}
+	for _, c := range cases {
+		got, err := worktreeDirName(c.key)
+		if err != nil || got != c.want {
+			t.Errorf("worktreeDirName(%+v) = %q, %v, want %q", c.key, got, err, c.want)
+		}
+	}
+	for _, key := range []store.WatchKey{
+		{Owner: "../../etc", Name: "x", Number: 1},
+		{Owner: "octo", Name: `..\..\x`, Number: 1},
+		{Owner: "octo", Name: "hello world", Number: 1},
+	} {
+		if got, err := worktreeDirName(key); err == nil {
+			t.Errorf("worktreeDirName(%+v) = %q, want an error", key, got)
+		}
+	}
+}
+
 func TestStartAnswersWithTheAgentSessionItOpened(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

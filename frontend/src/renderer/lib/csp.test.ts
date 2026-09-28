@@ -24,7 +24,7 @@ function builtPage(): Promise<string> {
 function policyOf(html: string): string {
   const meta = html.match(/<meta http-equiv="Content-Security-Policy" content="([^"]*)"/)?.[1];
   if (!meta) throw new Error("the built page carries no Content-Security-Policy");
-  return meta.replaceAll("&#39;", "'").replaceAll("&amp;", "&").replaceAll("&quot;", '"');
+  return meta.replaceAll("&#39;", "'").replaceAll("&quot;", '"').replaceAll("&amp;", "&");
 }
 
 function directive(policy: string, name: string): string {

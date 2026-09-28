@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strconv"
 	"strings"
 	"sync"
@@ -318,9 +319,23 @@ func checkHeadBranch(ctx context.Context, sourceDir, headRef string) error {
 	return nil
 }
 
+var worktreeName = regexp.MustCompile(`^[a-z0-9._-]+-[0-9]+$`)
+
+func worktreeDirName(key store.WatchKey) (string, error) {
+	name := fmt.Sprintf("%s-%s-%d", strings.ToLower(key.Owner), strings.ToLower(key.Name), key.Number)
+	if !worktreeName.MatchString(name) {
+		return "", fmt.Errorf("%s has characters that are not safe in a directory name", key.Repo())
+	}
+	return name, nil
+}
+
 func (s *Service) makeWorktree(ctx context.Context, sourceDir string, key store.WatchKey, headRef string) (dir, branch string, err error) {
+	name, err := worktreeDirName(key)
+	if err != nil {
+		return "", "", err
+	}
 	branch = "babysitter/" + headRef
-	dir = filepath.Join(s.dataDir, "worktrees", fmt.Sprintf("%s-%s-%d", strings.ToLower(key.Owner), strings.ToLower(key.Name), key.Number))
+	dir = filepath.Join(s.dataDir, "worktrees", name)
 	if s.git == nil {
 		return dir, branch, nil
 	}
