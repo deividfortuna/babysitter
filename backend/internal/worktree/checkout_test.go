@@ -65,6 +65,37 @@ func TestEnsureClonesOnceAndMakesWorktrees(t *testing.T) {
 	}
 }
 
+func TestEnsureRestoresTheOriginThatAWorktreeChanged(t *testing.T) {
+	t.Parallel()
+	origin, _, other := repos(t)
+	ctx := context.Background()
+	c := checkouts(t, origin)
+	dir, err := c.Ensure(ctx, "octo/hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	g := New()
+	if err := g.Fetch(ctx, dir, "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	wt := filepath.Join(t.TempDir(), "wt")
+	if err := g.Create(ctx, dir, wt, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	git(t, wt, "remote", "set-url", "origin", other)
+	git(t, wt, "remote", "set-url", "--add", "--push", "origin", other)
+
+	if _, err := c.Ensure(ctx, "octo/hello"); err != nil {
+		t.Fatal(err)
+	}
+	if got := git(t, dir, "config", "--get-all", "remote.origin.url"); got != "file://"+origin {
+		t.Fatalf("origin url = %q, want file://%s", got, origin)
+	}
+	if got := git(t, dir, "config", "--get", "--default", "", "remote.origin.pushurl"); got != "" {
+		t.Fatalf("origin pushurl = %q, want none", got)
+	}
+}
+
 func TestEnsureClonesOnceForConcurrentCalls(t *testing.T) {
 	t.Parallel()
 	origin, _, _ := repos(t)

@@ -15,8 +15,9 @@ import (
 )
 
 const (
-	gitHubHelperConfig = "credential.https://github.com.helper=!gh auth git-credential"
-	cloneTimeout       = 10 * time.Minute
+	gitHubHelperConfig  = "credential.https://github.com.helper=!gh auth git-credential"
+	cloneTimeout        = 10 * time.Minute
+	gitConfigKeyMissing = 5
 )
 
 type Checkouts struct {
@@ -42,7 +43,7 @@ func (c *Checkouts) Ensure(ctx context.Context, repo string) (string, error) {
 	unlock := c.locks.Lock(dir)
 	defer unlock()
 	if isCheckout(dir) {
-		return dir, nil
+		return dir, restoreOrigin(ctx, dir, c.url(owner+"/"+name))
 	}
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("%s is not a git checkout, left in place", dir)
@@ -51,6 +52,17 @@ func (c *Checkouts) Ensure(ctx context.Context, repo string) (string, error) {
 		return "", err
 	}
 	return dir, nil
+}
+
+func restoreOrigin(ctx context.Context, dir, url string) error {
+	if _, err := execx.RunIn(ctx, dir, "", nil, "git", "remote", "set-url", "origin", url); err != nil {
+		return fmt.Errorf("restore the origin of %s: %w", dir, err)
+	}
+	_, err := execx.RunIn(ctx, dir, "", nil, "git", "config", "--unset-all", "remote.origin.pushurl")
+	if err != nil && execx.ExitCode(err) != gitConfigKeyMissing {
+		return fmt.Errorf("restore the origin of %s: %w", dir, err)
+	}
+	return nil
 }
 
 func (c *Checkouts) clone(ctx context.Context, repo, dir string) error {
