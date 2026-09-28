@@ -9,10 +9,10 @@ import {
   type UpdateState,
 } from "./updates";
 
-test("only stable and prerelease are channels", () => {
+test("only stable and nightly are channels", () => {
   expect(isUpdateChannel("stable")).toBe(true);
-  expect(isUpdateChannel("prerelease")).toBe(true);
-  expect(isUpdateChannel("nightly")).toBe(false);
+  expect(isUpdateChannel("nightly")).toBe(true);
+  expect(isUpdateChannel("prerelease")).toBe(false);
   expect(isUpdateChannel(undefined)).toBe(false);
 });
 
@@ -20,28 +20,33 @@ test("a stable build follows stable releases", () => {
   expect(defaultChannel("0.2.0")).toBe("stable");
 });
 
-test("a prerelease build follows prereleases, so an alpha finds the next alpha", () => {
-  expect(defaultChannel("0.1.0-alpha.1")).toBe("prerelease");
+test("a nightly build follows nightlies, so it finds the next nightly", () => {
+  expect(defaultChannel("0.2.1-nightly.20260928.41")).toBe("nightly");
+});
+
+test("a build of any other prerelease follows stable releases", () => {
+  expect(defaultChannel("0.1.0-alpha.5")).toBe("stable");
+  expect(defaultChannel("0.2.1-preview.20260928.42")).toBe("stable");
 });
 
 test("a build with no saved choice downloads on its own and follows the channel of its version", () => {
-  expect(resolveSettings({}, "0.1.0-alpha.1")).toEqual({ autoDownload: true, channel: "prerelease" });
+  expect(resolveSettings({}, "0.2.1-nightly.20260928.41")).toEqual({ autoDownload: true, channel: "nightly" });
   expect(resolveSettings({}, "0.2.0")).toEqual({ autoDownload: true, channel: "stable" });
 });
 
 test("a saved choice wins over the defaults", () => {
-  expect(resolveSettings({ autoDownload: false, channel: "stable" }, "0.1.0-alpha.1")).toEqual({
+  expect(resolveSettings({ autoDownload: false, channel: "stable" }, "0.2.1-nightly.20260928.41")).toEqual({
     autoDownload: false,
     channel: "stable",
   });
 });
 
 test("a patch keeps the keys with the right type and drops the others", () => {
-  expect(parseSettingsPatch({ autoDownload: false, channel: "prerelease" })).toEqual({
+  expect(parseSettingsPatch({ autoDownload: false, channel: "nightly" })).toEqual({
     autoDownload: false,
-    channel: "prerelease",
+    channel: "nightly",
   });
-  expect(parseSettingsPatch({ autoDownload: "no", channel: "nightly", other: 1 })).toEqual({});
+  expect(parseSettingsPatch({ autoDownload: "no", channel: "prerelease", other: 1 })).toEqual({});
   expect(parseSettingsPatch({ channel: "stable" })).toEqual({ channel: "stable" });
 });
 

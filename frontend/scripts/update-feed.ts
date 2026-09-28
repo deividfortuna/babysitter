@@ -1,3 +1,5 @@
+import { channelOfVersion, type Channel } from "./release-channel.ts";
+
 export type FeedFile = {
   name: string;
   sha512: string;
@@ -10,9 +12,8 @@ export type FeedRelease = {
   releaseDate: string;
 };
 
-const VERSION = /^\d+\.\d+\.\d+(?:-([0-9A-Za-z-]+)(?:\.[0-9A-Za-z-]+)*)?$/;
 const SHA512 = /^[A-Za-z0-9+/]{86}==$/;
-const UPDATER_PRERELEASES = ["alpha", "beta"];
+const FEED_CHANNELS: (Channel | undefined)[] = ["stable", "nightly"];
 const ARCH_ORDER = ["arm64", "x64"];
 
 function escapeRegExp(text: string): string {
@@ -21,18 +22,11 @@ function escapeRegExp(text: string): string {
 
 function assertVersion(version: string): void {
   if (version.startsWith("v")) throw new Error(`version ${JSON.stringify(version)} has a leading v`);
-  const match = VERSION.exec(version);
-  if (!match) throw new Error(`version ${JSON.stringify(version)} is not semver`);
-  const prerelease = match[1];
-  if (!readableByUpdater(prerelease)) {
+  if (!FEED_CHANNELS.includes(channelOfVersion(version))) {
     throw new Error(
-      `prerelease ${JSON.stringify(prerelease)} is not alpha or beta, and the updater reads any other name as a channel of its own`,
+      `version ${JSON.stringify(version)} is not a stable version or a nightly, and only those have a feed`,
     );
   }
-}
-
-function readableByUpdater(prerelease: string | undefined): boolean {
-  return prerelease === undefined || UPDATER_PRERELEASES.includes(prerelease);
 }
 
 function isPositiveWhole(size: number): boolean {

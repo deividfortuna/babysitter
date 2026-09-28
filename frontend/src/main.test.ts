@@ -270,9 +270,9 @@ test("a build that is not packaged says it does not update itself", () => {
 });
 
 test("the update choices keep only the keys with the right type", () => {
-  expect(invoke(UPDATES_SET_SETTINGS_CHANNEL, { autoDownload: false, channel: "nightly" })).toEqual({
+  expect(invoke(UPDATES_SET_SETTINGS_CHANNEL, { autoDownload: false, channel: "beta" })).toEqual({
     autoDownload: false,
-    channel: "prerelease",
+    channel: "stable",
   });
   expect(electron.updateSettings).toEqual({ autoDownload: false });
 });

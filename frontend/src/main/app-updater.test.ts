@@ -23,8 +23,15 @@ class FakeEngine extends EventEmitter {
   downloadUpdate = vi.fn(async (): Promise<unknown> => []);
   quitAndInstall = vi.fn();
   setFeedURL = vi.fn();
-  set channel(_value: string) {
-    throw new Error("the channel setter turns on downgrades and breaks the prerelease lookup");
+  private followed: string | null = null;
+
+  get channel(): string | null {
+    return this.followed;
+  }
+
+  set channel(value: string | null) {
+    this.followed = value;
+    this.allowDowngrade = true;
   }
 
   offers(version: string) {
@@ -110,20 +117,25 @@ test("the engine downloads only when told, installs on quit, never downgrades an
   expect(engine.logger).not.toBeNull();
 });
 
-test("a stable build asks only for stable releases", () => {
+test("a stable build asks only for stable releases and their latest feed", () => {
   controller().start();
   expect(engine.allowPrerelease).toBe(false);
+  expect(engine.channel).toBe("latest");
+  expect(engine.allowDowngrade).toBe(false);
 });
 
-test("a prerelease build asks for prereleases too", () => {
-  controller({ currentVersion: "0.1.0-alpha.1" }).start();
+test("a nightly build asks for nightlies and their nightly feed, and never downgrades", () => {
+  controller({ currentVersion: "0.1.1-nightly.20260928.41" }).start();
   expect(engine.allowPrerelease).toBe(true);
+  expect(engine.channel).toBe("nightly");
+  expect(engine.allowDowngrade).toBe(false);
 });
 
 test("a saved channel wins over the channel of the version", () => {
   saved = { channel: "stable" };
-  controller({ currentVersion: "0.1.0-alpha.1" }).start();
+  controller({ currentVersion: "0.1.1-nightly.20260928.41" }).start();
   expect(engine.allowPrerelease).toBe(false);
+  expect(engine.channel).toBe("latest");
 });
 
 test("a feed address replaces GitHub, for a local test of an update", () => {
@@ -465,11 +477,13 @@ test("a new channel is saved, changes what the engine asks for and checks at onc
   const updates = controller();
   updates.start();
 
-  expect(updates.setSettings({ channel: "prerelease" })).toEqual({ autoDownload: true, channel: "prerelease" });
+  expect(updates.setSettings({ channel: "nightly" })).toEqual({ autoDownload: true, channel: "nightly" });
   await vi.advanceTimersByTimeAsync(0);
 
-  expect(saved).toEqual({ channel: "prerelease" });
+  expect(saved).toEqual({ channel: "nightly" });
   expect(engine.allowPrerelease).toBe(true);
+  expect(engine.channel).toBe("nightly");
+  expect(engine.allowDowngrade).toBe(false);
   expect(engine.checkForUpdates).toHaveBeenCalledOnce();
 });
 

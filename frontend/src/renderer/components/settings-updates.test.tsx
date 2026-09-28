@@ -98,13 +98,13 @@ test("the switch turns the automatic download off", async () => {
   expect(toggle).not.toBeChecked();
 });
 
-test("the channel picks between stable and prerelease versions", async () => {
+test("the channel picks between stable versions and nightlies", async () => {
   const { setSettings } = renderPanel({ state: "idle", currentVersion: "0.1.0" });
   const user = userEvent.setup();
 
   const channel = await screen.findByLabelText("Channel");
   expect(channel).toHaveTextContent("Stable");
-  await chooseOption(user, channel, "Prerelease");
+  await chooseOption(user, channel, "Nightly");
 
-  expect(setSettings).toHaveBeenCalledWith({ channel: "prerelease" });
+  expect(setSettings).toHaveBeenCalledWith({ channel: "nightly" });
 });

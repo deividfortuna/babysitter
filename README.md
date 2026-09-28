@@ -45,7 +45,7 @@ xattr -dr com.apple.quarantine /Applications/Babysitter.app
 
 The app updates itself: it checks the releases once an hour, downloads
 a new version, and asks you to restart. **Settings > Updates** turns the download off or follows
-prereleases. See [docs/release.md](docs/release.md#updates-of-the-app).
+nightlies. See [docs/release.md](docs/release.md#updates-of-the-app).
 
 For the CLI only, on Linux or macOS, each release also has a
 `babysitter_<version>_<os>_<arch>.tar.gz` archive and `checksums.txt`.
@@ -242,7 +242,7 @@ keeps it in `update-settings.json` in the data directory:
 | --- | --- |
 | Check for updates | Asks the releases now. The app also asks once an hour |
 | Download updates automatically | On by default. Off, the app still checks and the sidebar offers **Download** |
-| Channel | Stable, or Prerelease for the `alpha` and `beta` versions too. A prerelease build starts on Prerelease. A change back to Stable does not install an older version |
+| Channel | Stable, or Nightly for a build of `main` at most every 6 hours. A nightly build starts on Nightly. A change back to Stable does not install an older version |
 
 A build that does not update itself shows only its version there, and
 tells you to install a new version with Homebrew or from the release
@@ -1352,35 +1352,51 @@ change a file.
 
 ## Release
 
-A push of a tag that starts with `v` runs the release workflow in
-`.github/workflows/release.yaml`. One tag releases the CLI, the desktop
-app and the Homebrew cask:
+`.github/workflows/release.yaml` releases the CLI, the desktop app and
+the Homebrew cask on three channels:
 
-1. `cli` runs [GoReleaser](https://goreleaser.com) inside the
+| Channel | How it starts | What it publishes |
+| --- | --- | --- |
+| Nightly | A schedule runs every 30 minutes. It releases only when `main` has new commits and 6 hours have passed since the last nightly. You can also start it by hand with `channel=nightly` from `main` | A GitHub prerelease `vX.Y.Z-nightly.YYYYMMDD.<run>` with the `nightly-mac.yml` update feed |
+| Stable | Start it by hand with `channel=stable` from `main`, or push a `vX.Y.Z` tag | The GitHub "latest" release with the `latest-mac.yml` update feed, and the Homebrew cask |
+| Preview | Start it by hand with `channel=preview` from any branch. This is the default input | A test build for maintainers, `vX.Y.Z-preview.YYYYMMDD.<run>`. It has no update feed and no cask, and its notes tell users not to install it |
+
+A stable release that you start by hand ships the commit of the latest
+nightly, so stable only gets a build that nightly users already ran.
+Its version is the one that nightly previews, or the `version` input.
+
+The workflow has these jobs:
+
+1. `resolve` runs `frontend/scripts/resolve-release.mjs`. It selects the
+   channel, the commit and the version, and for a scheduled run it
+   decides if a nightly is due.
+2. `cli` runs [GoReleaser](https://goreleaser.com) inside the
    `goreleaser-cross` image, because the SQLite driver needs a C compiler
-   for each target. GoReleaser runs `go mod tidy` and `go test` first.
-   It makes the GitHub release, with archives for Linux and macOS on
-   amd64 and arm64, and a checksum file.
-2. `desktop` makes the app on a macOS runner of each arch, because cgo
+   for each target. GoReleaser runs `go mod tidy` and `go test` first,
+   then makes archives for Linux and macOS on amd64 and arm64, and a
+   checksum file.
+3. `desktop` makes the app on a macOS runner of each arch, because cgo
    does not cross compile there. It sets the version of the app and of
-   the daemon to the tag, checks the arch and the version of the daemon,
-   then uploads the DMG and the zip to the release, each under its
-   versioned name and as `babysitter-darwin-<arch>`.
-3. `feed` writes `latest-mac.yml`, the file that the app reads to
-   update itself.
-4. `homebrew` writes `Casks/babysitter.rb` in the tap after `desktop`
-   passes. It runs only when the repository variable `HOMEBREW_TAP` is
-   set, and it skips a tag with a `-`, such as `v0.2.0-beta.1`.
+   the daemon, checks the arch and the version of the daemon, and keeps
+   the DMG and the zip, each under its versioned name and as
+   `babysitter-darwin-<arch>`.
+4. `publish` writes the update feed of the channel and makes the GitHub
+   release with all the files. A release that fails before this job
+   leaves no release.
+5. `homebrew` writes `Casks/babysitter.rb` in the tap after a stable
+   release. It runs only when the repository variable `HOMEBREW_TAP` is
+   set.
 
 ```sh
 git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Run the workflow by hand from the Actions tab to get snapshot builds as
-workflow artifacts without a release: the CLI, and the app of each arch
-as `babysitter-desktop-<arch>` at version `0.0.0-snapshot.<run>`. The
-binary prints its version with `babysitter --version`.
+The version of a nightly or a preview is the next patch after the latest
+stable release. To release a minor or a major version, set it in
+`frontend/package.json` in a pull request. When that version is higher,
+the nightlies use it. The workflow does not change `main` after a
+release.
 
 The secrets of the release and the tap are in
 [docs/release.md](docs/release.md).

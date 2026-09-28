@@ -38,20 +38,27 @@ test("one arch alone makes a feed, for a local test build", () => {
   );
 });
 
-test("alpha and beta prereleases make a feed", () => {
-  const alpha = { ...arm, name: "Babysitter-0.2.0-alpha.1-darwin-arm64.zip" };
-  expect(renderFeed({ version: "0.2.0-alpha.1", files: [alpha], releaseDate })).toContain("version: 0.2.0-alpha.1");
-  const beta = { ...arm, name: "Babysitter-0.2.0-beta.3-darwin-arm64.zip" };
-  expect(renderFeed({ version: "0.2.0-beta.3", files: [beta], releaseDate })).toContain("version: 0.2.0-beta.3");
+test("a nightly makes a feed", () => {
+  const nightly = { ...arm, name: "Babysitter-0.2.1-nightly.20260928.41-darwin-arm64.zip" };
+  expect(renderFeed({ version: "0.2.1-nightly.20260928.41", files: [nightly], releaseDate })).toContain(
+    "version: 0.2.1-nightly.20260928.41",
+  );
 });
 
 test("a version with a leading v is refused", () => {
   expect(() => renderFeed({ version: "v0.2.0", files: [arm], releaseDate })).toThrow(/leading v/);
 });
 
-test("a prerelease that is not alpha or beta is refused, because the updater treats it as a channel of its own", () => {
-  const rc = { ...arm, name: "Babysitter-0.2.0-rc.1-darwin-arm64.zip" };
-  expect(() => renderFeed({ version: "0.2.0-rc.1", files: [rc], releaseDate })).toThrow(/alpha or beta/);
+test("a preview is refused, because no app may update to it", () => {
+  const preview = { ...arm, name: "Babysitter-0.2.1-preview.20260928.42-darwin-arm64.zip" };
+  expect(() => renderFeed({ version: "0.2.1-preview.20260928.42", files: [preview], releaseDate })).toThrow(
+    /only those have a feed/,
+  );
+});
+
+test("any other prerelease is refused", () => {
+  const beta = { ...arm, name: "Babysitter-0.2.0-beta.1-darwin-arm64.zip" };
+  expect(() => renderFeed({ version: "0.2.0-beta.1", files: [beta], releaseDate })).toThrow(/only those have a feed/);
 });
 
 test("a zip that is not the macOS zip of this version is refused", () => {
