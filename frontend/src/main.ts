@@ -11,12 +11,13 @@ import {
   Tray,
   type IpcMainInvokeEvent,
 } from "electron";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import started from "electron-squirrel-startup";
 import { autoUpdater } from "electron-updater";
 import { createUpdateController } from "./main/app-updater";
+import { AppLog } from "./main/app-log";
 import { DaemonSupervisor } from "./main/daemon-supervisor";
 import { readUpdateSettings, writeUpdateSettings } from "./main/update-settings";
 import { killLoginShells, shellRunner } from "./main/login-shell";
@@ -30,6 +31,9 @@ import {
   DAEMON_RESTART_CHANNEL,
   DAEMON_STATUS_CHANNEL,
   DIALOG_PICK_DIRECTORY_CHANNEL,
+  LOGS_APP_RECORD_CHANNEL,
+  LOGS_APP_RECORDS_CHANNEL,
+  LOGS_OPEN_FOLDER_CHANNEL,
   NOTIFICATIONS_BADGE_CHANNEL,
   NOTIFICATIONS_CLICK_CHANNEL,
   NOTIFICATIONS_OPEN_CHANNEL,
@@ -45,6 +49,7 @@ import {
   UPDATES_SET_SETTINGS_CHANNEL,
   UPDATES_STATUS_CHANNEL,
 } from "./shared/ipc";
+import { isDaemonLogRecord, type OpenLogFolderResult } from "./shared/logs";
 import { parseSettingsPatch } from "./shared/updates";
 import {
   badgeText,
@@ -67,6 +72,18 @@ const dataDir = defaultDataDir(process.platform, process.env, os.homedir());
 
 let themePreference: ThemePreference = readStoredTheme(dataDir);
 
+const devTerminal = app.isPackaged ? () => undefined : (line: string) => console.log(line);
+
+const appLog = new AppLog({ file: path.join(dataDir, "logs", "app.log"), echo: devTerminal });
+
+function routeDaemonOutput(line: string) {
+  if (isDaemonLogRecord(line)) {
+    devTerminal(`daemon: ${line}`);
+    return;
+  }
+  appLog.warn(`daemon: ${line}`);
+}
+
 const LOGIN_SHELL_TIMEOUT_MS = 10_000;
 
 const daemon = new DaemonSupervisor({
@@ -77,9 +94,10 @@ const daemon = new DaemonSupervisor({
     env: process.env,
     home: os.homedir(),
     run: shellRunner(LOGIN_SHELL_TIMEOUT_MS),
-    log: (msg) => console.log(msg),
+    log: (msg) => appLog.info(msg),
   }),
-  log: (msg) => console.log(msg),
+  log: (msg) => appLog.info(msg),
+  output: routeDaemonOutput,
 });
 
 function broadcast(channel: string, payload: unknown) {
@@ -88,7 +106,19 @@ function broadcast(channel: string, payload: unknown) {
   }
 }
 
-daemon.onStatus((status) => broadcast(DAEMON_STATUS_CHANNEL, status));
+daemon.onStatus((status) => {
+  if (status.state === "error") appLog.error(`daemon: ${status.message}`);
+  broadcast(DAEMON_STATUS_CHANNEL, status);
+});
+
+appLog.onRecord((record) => broadcast(LOGS_APP_RECORD_CHANNEL, record));
+
+ipcMain.handle(LOGS_APP_RECORDS_CHANNEL, () => appLog.records());
+ipcMain.handle(LOGS_OPEN_FOLDER_CHANNEL, async (): Promise<OpenLogFolderResult> => {
+  mkdirSync(appLog.folder, { recursive: true, mode: 0o750 });
+  const error = await shell.openPath(appLog.folder);
+  return error ? { ok: false, error } : { ok: true };
+});
 
 ipcMain.handle(DAEMON_GET_STATUS_CHANNEL, () => daemon.getStatus());
 ipcMain.handle(DAEMON_RESTART_CHANNEL, () => daemon.restart());
@@ -117,7 +147,7 @@ const updates = createUpdateController({
     return daemon.stopAndWait(DAEMON_STOP_BEFORE_INSTALL_MS);
   },
   onInstallFailed: () => void daemon.start(),
-  log: (msg) => console.log(msg),
+  log: (msg) => appLog.info(msg),
 });
 
 updates.onStatus((status) => broadcast(UPDATES_STATUS_CHANNEL, status));
@@ -288,7 +318,7 @@ async function markAllRead() {
     });
     if (response.ok) setUnread(0);
   } catch (err) {
-    console.log(`menu bar: could not mark the notifications read: ${String(err)}`);
+    appLog.warn(`menu bar: could not mark the notifications read: ${String(err)}`);
   }
 }
 

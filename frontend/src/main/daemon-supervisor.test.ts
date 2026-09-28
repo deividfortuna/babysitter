@@ -44,16 +44,33 @@ afterEach(() => {
   spawn.mockClear();
 });
 
-function supervisor(env: () => Promise<Env>) {
+function supervisor(env: () => Promise<Env>, output?: (line: string) => void) {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), "babysitter-supervisor-"));
   dataDirs.push(dataDir);
   const daemon = new DaemonSupervisor({
     launch: { command: "/app/daemon/babysitter", source: "bundled" },
     dataDir,
     env,
+    output,
   });
   return { daemon, dataDir };
 }
+
+test("hands over each whole line the daemon prints, also a line that comes in two pieces", async () => {
+  const lines: string[] = [];
+  const { daemon } = supervisor(
+    async () => ({ PATH: "/usr/bin" }),
+    (line) => lines.push(line),
+  );
+  await daemon.start();
+
+  children[0].stderr.write("error: open the data");
+  children[0].stderr.write("base\n\ntime=2026-09-28T10:00:00Z level=INFO msg=hi\n");
+
+  await vi.waitFor(() =>
+    expect(lines).toEqual(["error: open the database", "time=2026-09-28T10:00:00Z level=INFO msg=hi"]),
+  );
+});
 
 test("starts the daemon with the environment the app resolves", async () => {
   const env = { PATH: "/opt/homebrew/bin:/usr/bin", GITHUB_TOKEN: "ghp_shell" };

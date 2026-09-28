@@ -26,6 +26,8 @@ const (
 	NotificationsRead Type = "notifications_read"
 
 	SettingsChanged Type = "settings_changed"
+
+	LogLevelChanged Type = "log_level_changed"
 )
 
 type Event struct {

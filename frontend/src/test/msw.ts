@@ -20,6 +20,7 @@ import type { QueuedPullRequest, Repo, RepoConfig, RepoConfigUpdate } from "@/ho
 import type { Settings } from "@/hooks/useSettings";
 import type { Viewer } from "@/hooks/useViewer";
 import type { Watch } from "@/hooks/useWatches";
+import type { LogLevel } from "../shared/logs";
 
 export const testApiBaseUrl = "http://127.0.0.1:8080";
 
@@ -40,6 +41,8 @@ type ApiFixtures = {
   addedRepo?: Repo;
   settings?: Settings;
   savedSettings?: Settings[];
+  logLevel?: LogLevel;
+  savedLogLevels?: LogLevel[];
   notifications?: Notification[];
   readNotifications?: { ids?: number[] }[];
   stopBodies?: StopBody[];
@@ -111,6 +114,12 @@ export function serveApi(fixtures: ApiFixtures = {}) {
     http.get(apiUrl("/api/v1/ratelimit"), () =>
       HttpResponse.json(fixtures.rateLimit ?? { state: "unknown", limit: 0, remaining: 0 }),
     ),
+    http.get(apiUrl("/api/v1/logs/level"), () => HttpResponse.json({ level: fixtures.logLevel ?? "info" })),
+    http.put(apiUrl("/api/v1/logs/level"), async ({ request }) => {
+      const body = (await request.json()) as { level: LogLevel };
+      fixtures.savedLogLevels?.push(body.level);
+      return HttpResponse.json(body);
+    }),
     http.get(apiUrl("/api/v1/watches"), ({ request }) => {
       const status = new URL(request.url).searchParams.get("status") ?? "active";
       const watches = fixtures.watches ?? [];

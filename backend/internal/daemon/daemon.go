@@ -15,6 +15,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/gitrelease"
 	"github.com/deividfortuna/babysitter/internal/httpd"
+	"github.com/deividfortuna/babysitter/internal/logbook"
 	"github.com/deividfortuna/babysitter/internal/notify"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/runfile"
@@ -44,6 +45,7 @@ type Config struct {
 	Version       string
 	NewClient     watcher.ClientFunc
 	Log           *slog.Logger
+	Logs          *logbook.Book
 }
 
 var ErrAlreadyRunning = errors.New("a daemon is already running")
@@ -160,6 +162,7 @@ func Run(ctx context.Context, cfg Config) error {
 		RateLimit: func() httpd.RateLimit {
 			return rateLimit(ghclient.SharedRates().Status(w.Guard().Floor))
 		},
+		Logs: cfg.Logs,
 	})
 	srv, err = httpd.Listen(ctx, cfg.Port, handler)
 	if err != nil {

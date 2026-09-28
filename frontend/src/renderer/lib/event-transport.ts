@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { getApiBaseUrl, subscribeApiBaseUrl } from "./api-client";
 import {
+  logLevelQueryKey,
   notificationsQueryKey,
   providersQueryKey,
   pullsQueryKey,
@@ -116,6 +117,9 @@ export function connectEventTransport(
     }
     es.addEventListener("settings_changed", () => {
       void queryClient.invalidateQueries({ queryKey: settingsQueryKey });
+    });
+    es.addEventListener("log_level_changed", () => {
+      void queryClient.invalidateQueries({ queryKey: logLevelQueryKey });
     });
     for (const type of ["notification_added", "notifications_read"] as const) {
       es.addEventListener(type, () => {

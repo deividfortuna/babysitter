@@ -48,4 +48,10 @@ export const bridge: BabysitterBridge = window.babysitter ?? {
     getSettings: async () => BROWSER_UPDATE_SETTINGS,
     setSettings: async (patch) => ({ ...BROWSER_UPDATE_SETTINGS, ...patch }),
   },
+  logs: {
+    desktop: false,
+    appRecords: async () => [],
+    onAppRecord: () => () => undefined,
+    openFolder: async () => ({ ok: false, error: "Only the desktop app can open the log folder." }),
+  },
 };

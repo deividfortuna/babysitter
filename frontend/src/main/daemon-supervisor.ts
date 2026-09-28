@@ -1,6 +1,8 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { createInterface } from "node:readline";
+import type { Readable } from "node:stream";
 import { apiBaseUrl, parseRunFile, type RunFileInfo } from "../shared/daemon-discovery";
 import type { DaemonLaunchSpec } from "../shared/daemon-launch";
 import type { DaemonStatus } from "../shared/daemon-status";
@@ -18,6 +20,7 @@ export type DaemonSupervisorOptions = {
   dataDir: string;
   env: () => Promise<Env>;
   log?: (msg: string) => void;
+  output?: (line: string) => void;
 };
 
 export class DaemonSupervisor {
@@ -29,9 +32,11 @@ export class DaemonSupervisor {
   private logTail: string[] = [];
   private attempt = 0;
   private readonly log: (msg: string) => void;
+  private readonly output: (line: string) => void;
 
   constructor(private readonly opts: DaemonSupervisorOptions) {
     this.log = opts.log ?? (() => undefined);
+    this.output = opts.output ?? ((line) => this.log(`daemon: ${line}`));
   }
 
   getStatus(): DaemonStatus {
@@ -96,10 +101,8 @@ export class DaemonSupervisor {
     }
     this.child = child;
     this.logTail = [];
-    child.stdout?.setEncoding("utf8");
-    child.stderr?.setEncoding("utf8");
-    child.stdout?.on("data", (chunk: string) => this.collect(chunk));
-    child.stderr?.on("data", (chunk: string) => this.collect(chunk));
+    this.readLines(child.stdout);
+    this.readLines(child.stderr);
 
     child.on("error", (err) => {
       this.setStatus({
@@ -213,13 +216,16 @@ export class DaemonSupervisor {
     }
   }
 
-  private collect(chunk: string) {
-    for (const line of chunk.split("\n")) {
-      if (!line.trim()) continue;
-      this.log(`daemon: ${line}`);
-      this.logTail.push(line);
-      if (this.logTail.length > LOG_TAIL_LINES) this.logTail.shift();
-    }
+  private readLines(stream: Readable | null) {
+    if (!stream) return;
+    createInterface({ input: stream, crlfDelay: Infinity }).on("line", (line) => this.collect(line));
+  }
+
+  private collect(line: string) {
+    if (!line.trim()) return;
+    this.output(line);
+    this.logTail.push(line);
+    if (this.logTail.length > LOG_TAIL_LINES) this.logTail.shift();
   }
 
   private details(): string {

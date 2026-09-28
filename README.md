@@ -147,6 +147,7 @@ go run ./cmd/babysitter daemon stop
 
 The data directory holds `running.json`, the supervisor socket, the
 `worktrees/` of the watches, the `sessions/` logs of the agents, the
+`logs/` of the daemon and the app (see [Logs](#logs)), the
 `git-hooks/` the daemon installs, and the `update-settings.json` and
 `theme.json` of the app. By default it holds `babysitter.db` too. It
 comes from, in this order:
@@ -303,8 +304,14 @@ babysitter pr owner/name#42                       # same
 babysitter pr https://github.com/owner/name/pull/42 -o json
 
 babysitter daemon start                           # the daemon in the foreground, until Ctrl-C
+babysitter daemon start --log-level debug         # also log the records a developer needs
 babysitter daemon status                          # pid, port and health
 babysitter daemon stop
+babysitter daemon logs                            # the last 100 records of the daemon
+babysitter daemon logs -f --level warn            # follow the warnings and errors until Ctrl-C
+babysitter daemon logs --app -n 0                 # the whole log of the desktop app
+babysitter daemon log-level                       # the level the running daemon logs at
+babysitter daemon log-level debug                 # change it until the daemon stops
 
 babysitter notify "PR #42 needs a reply to alice" # notification, through the daemon when one runs
 babysitter notify --title "PR #42" --url https://github.com/owner/name/pull/42 "Reply to alice"
@@ -1279,6 +1286,40 @@ used, when the polls pause until the reset, and when GitHub asked for a
 slow down with its secondary limit. "Poll less often" opens the Watching
 pane of the settings.
 
+## Logs
+
+The daemon and the desktop app each write a log to the `logs/` folder
+of the data directory, one JSON record per line:
+
+- `daemon.log`: what the daemon did, from each poll to each failure.
+  A daemon started from a terminal also prints it as text on stderr.
+- `app.log`: what the app did to start, attach to and stop the daemon,
+  the updates it checked, and the lines the daemon printed that are not
+  records, such as a panic.
+
+A file that reaches 5 MiB moves to `daemon.log.1` or `app.log.1`, and
+the one before it goes. The daemon keeps its last 2000 records in
+memory too, for the API and the app.
+
+The daemon logs at info level. Debug adds the records that only a
+developer needs, such as each HTTP request. `daemon start --log-level
+debug` starts at that level, and `babysitter daemon log-level debug`
+changes the level of a running daemon until it stops.
+
+`babysitter daemon logs` prints the last records: from the running
+daemon, or from `daemon.log` when no daemon runs. `-f` follows the
+daemon until Ctrl-C, `--level` hides the records below a level, and
+`--app` prints `app.log`.
+
+In the desktop app, the Developer pane of the settings has the same
+view: a live log of the daemon or of the app, a level filter, a text
+filter, a copy button, and a button that opens the `logs/` folder. Its
+"Debug logs" switch changes the level of the daemon.
+
+The API serves the records at `GET /api/v1/logs`, streams them as
+server-sent events at `GET /api/v1/logs/stream`, and reads and changes
+the level at `/api/v1/logs/level`.
+
 ## Layout
 
 The repository is a Go workspace with the backend module and an npm
@@ -1291,6 +1332,7 @@ project for the desktop app. Paths below are relative to `backend/`.
 - `internal/httpd`: the loopback HTTP API
 - `internal/httpd/apispec`: the OpenAPI document, `openapi.yaml`, which `go generate` writes with `cmd/genspec` and the API serves
 - `internal/events`: the in-process change feed the API streams
+- `internal/logbook`: the log of the daemon: the slog handler, the records it keeps in memory, the rotated file and the level
 - `internal/runfile`: `running.json`, the handshake the desktop app reads
 - `internal/supervisor`: the socket that stops the daemon when the app quits
 - `internal/processalive`: checks whether a pid still runs
