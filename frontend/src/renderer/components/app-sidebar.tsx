@@ -22,6 +22,7 @@ import { RateLimitCard } from "@/components/rate-limit-card";
 import { UpdateCard } from "@/components/update-card";
 import type { SettingsCategory } from "@/components/settings-dialog";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
+import { initials } from "@/lib/initials";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -269,16 +270,9 @@ export function AppSidebar({
   );
 }
 
-function initials(viewer: Viewer): string {
-  const source = viewer.name?.trim() || viewer.login;
-  const parts = source.split(/[\s._-]+/).filter(Boolean);
-  const letters = parts.length > 1 ? parts[0][0] + parts[1][0] : source.slice(0, 2);
-  return letters.toUpperCase();
-}
-
 function Avatar({ viewer }: { viewer?: Viewer }) {
   const [broken, setBroken] = useState(false);
-  const label = viewer ? initials(viewer) : null;
+  const label = viewer ? initials(viewer.name?.trim() || viewer.login) : null;
   return (
     <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent text-3xs font-semibold text-muted-foreground">
       {viewer?.avatarUrl && !broken ? (

@@ -104,11 +104,11 @@ export function buildStoppedWatch(overrides: StoppedWatchOverrides = {}): Watch 
     worktreeRemoved: true,
   };
   return buildWatch({
-    ...watchOverrides,
     session: { state: "none", pid: 0, logPath: "" },
     status: "stopped",
     stopReason: "user",
     stoppedAt: "2026-01-01T01:00:00Z",
+    ...watchOverrides,
     summary: { ...summary, ...summaryOverride },
   });
 }

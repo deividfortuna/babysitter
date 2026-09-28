@@ -1,9 +1,10 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useMemo, useState } from "react";
 import {
   CircleAlertIcon,
   EyeIcon,
   ExternalLinkIcon,
   FolderGitIcon,
+  GitPullRequestDraftIcon,
   GitPullRequestIcon,
   PanelRightIcon,
   RefreshCwIcon,
@@ -12,11 +13,11 @@ import { usePulls, type PullRequest } from "@/hooks/usePulls";
 import { useRepoQueue, useRepos, useRequestSync, type QueuedPullRequest } from "@/hooks/useRepos";
 import { useWatches, type Watch } from "@/hooks/useWatches";
 import { RepoSettingsPanel } from "@/components/repo-settings-panel";
-import { Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
+import { AuthorName, DiffStat, InboxGroup, InboxItem, LabelBadges } from "@/components/inbox-row";
+import { CheckIcon, Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
 import { ViewHeader } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -50,67 +51,73 @@ function reviewWord(decision: PullRequest["reviewDecision"]): { label: string; t
   }
 }
 
-function SectionLabel({ children }: { children: ReactNode }) {
-  return (
-    <div className="sticky top-0 z-10 border-b bg-muted px-5 py-2 font-mono text-2xs tracking-label text-muted-foreground">
-      {children}
-    </div>
-  );
-}
-
 type PullRowProps = { pr: PullRequest; queued?: QueuedPullRequest; onWatch: () => void };
 
 function PullRow({ pr, queued, onWatch }: PullRowProps) {
   const ci = ciWord(pr.ciStatus);
   const review = reviewWord(pr.reviewDecision);
+  const labels = pr.labels ?? [];
+  const hasTags = pr.draft || Boolean(queued);
   return (
-    <div className="flex items-start gap-3 border-b px-5 py-3 transition-colors hover:bg-muted/60">
-      <div className="flex min-w-0 flex-1 flex-col gap-1.5">
-        <div className="flex items-baseline gap-2">
-          <span className="truncate text-title font-medium text-foreground/75">
-            {pr.title || `${pr.repo}#${pr.number}`}
-          </span>
-          <Meta>#{pr.number}</Meta>
-          {pr.draft ? (
-            <Badge variant="outline" className="font-mono">
-              draft
-            </Badge>
-          ) : null}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <Meta>@{pr.author}</Meta>
-          <Meta>
-            {pr.headRef} → {pr.baseRef}
-          </Meta>
-          {ci ? <ToneBadge tone={ci.tone}>{ci.label}</ToneBadge> : null}
+    <InboxItem
+      icon={
+        pr.draft ? (
+          <GitPullRequestDraftIcon aria-hidden="true" className="text-muted-foreground" />
+        ) : (
+          <GitPullRequestIcon aria-hidden="true" className="text-success" />
+        )
+      }
+      title={pr.title || `${pr.repo}#${pr.number}`}
+      status={
+        <>
           {review ? <ToneBadge tone={review.tone}>{review.label}</ToneBadge> : null}
-          {queued ? (
-            <>
-              <QueuedBadge />
-              <Meta>
-                {queuePlace(queued.position)} · {queued.updateType}
-              </Meta>
-            </>
-          ) : null}
-          <Meta>updated {relativeTime(pr.updatedAt)}</Meta>
-          <a
-            href={pr.htmlUrl}
-            target="_blank"
-            rel="noreferrer"
-            title="Open on GitHub"
-            className="text-muted-foreground transition-colors hover:text-foreground"
-          >
-            <ExternalLinkIcon className="size-3" />
-            <span className="sr-only">Open on GitHub</span>
-          </a>
-        </div>
-      </div>
-      <Button type="button" variant="outline" size="xs" className="shrink-0 self-center" onClick={onWatch}>
-        <EyeIcon data-icon="inline-start" />
-        Watch
-      </Button>
-    </div>
+          {ci ? <CheckIcon tone={ci.tone} text={ci.label} /> : null}
+          <DiffStat pull={pr} />
+        </>
+      }
+      details={[
+        <span key="number">#{pr.number}</span>,
+        <AuthorName key="author" login={pr.author} />,
+        labels.length > 0 ? <LabelBadges key="labels" labels={labels} /> : null,
+        hasTags ? (
+          <span key="tags" className="inline-flex flex-wrap gap-1.5">
+            {pr.draft ? <ToneBadge tone="neutral">draft</ToneBadge> : null}
+            {queued ? <QueuedBadge /> : null}
+          </span>
+        ) : null,
+        queued ? (
+          <span key="queue">
+            {queuePlace(queued.position)} · {queued.updateType}
+          </span>
+        ) : null,
+        <a
+          key="github"
+          href={pr.htmlUrl}
+          target="_blank"
+          rel="noreferrer"
+          title="Open on GitHub"
+          className="inline-flex transition-colors hover:text-foreground"
+        >
+          <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
+          <span className="sr-only">Open on GitHub</span>
+        </a>,
+      ]}
+      time={`updated ${relativeTime(pr.updatedAt)}`}
+      actions={
+        <Button type="button" variant="outline" size="xs" onClick={onWatch}>
+          <EyeIcon data-icon="inline-start" />
+          Watch
+        </Button>
+      }
+    />
   );
+}
+
+function unwatchedEmptyText(open: number, unwatched: number, everSynced: boolean): string | null {
+  if (unwatched > 0) return null;
+  if (open > 0) return "Every open pull request is watched.";
+  if (everSynced) return "No open pull request. The daemon syncs every few minutes.";
+  return "The daemon has not synced this repository yet.";
 }
 
 type Props = {
@@ -144,6 +151,7 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
     [pulls.data, name],
   );
   const unwatched = open.filter((pr) => !watchedNumbers.has(pr.number));
+  const pullsByNumber = useMemo(() => new Map(open.map((pr) => [pr.number, pr])), [open]);
 
   const title = <h1 className="truncate text-lg font-medium tracking-tight">{name}</h1>;
 
@@ -245,29 +253,34 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
           </Alert>
         ) : null}
 
-        <SectionLabel>watching · {watched.length}</SectionLabel>
-        {watched.length === 0 ? (
-          <p className="border-b px-5 py-4 text-sm text-muted-foreground">
-            No pull request of this repository is watched. Pick one from the open ones below.
-          </p>
-        ) : (
-          watched.map((w) => <WatchRow key={w.id} watch={w} onOpen={() => onNavigate({ kind: "watch", id: w.id })} />)
-        )}
+        <div className="flex flex-col gap-3 p-3">
+          <InboxGroup
+            heading={`Watching · ${watched.length}`}
+            empty={
+              watched.length === 0
+                ? "No pull request of this repository is watched. Pick one from the open ones below."
+                : null
+            }
+          >
+            {watched.map((w) => (
+              <WatchRow
+                key={w.id}
+                watch={w}
+                pull={pullsByNumber.get(w.number)}
+                onOpen={() => onNavigate({ kind: "watch", id: w.id })}
+              />
+            ))}
+          </InboxGroup>
 
-        <SectionLabel>open, not watched · {unwatched.length}</SectionLabel>
-        {unwatched.length === 0 ? (
-          <p className="border-b px-5 py-4 text-sm text-muted-foreground">
-            {open.length === 0
-              ? repo.lastSyncedAt
-                ? "No open pull request. The daemon syncs every few minutes."
-                : "The daemon has not synced this repository yet."
-              : "Every open pull request is watched."}
-          </p>
-        ) : (
-          unwatched.map((pr) => (
-            <PullRow key={pr.number} pr={pr} queued={queuedByNumber.get(pr.number)} onWatch={() => onWatchPull(pr)} />
-          ))
-        )}
+          <InboxGroup
+            heading={`Open, not watched · ${unwatched.length}`}
+            empty={unwatchedEmptyText(open.length, unwatched.length, Boolean(repo.lastSyncedAt))}
+          >
+            {unwatched.map((pr) => (
+              <PullRow key={pr.number} pr={pr} queued={queuedByNumber.get(pr.number)} onWatch={() => onWatchPull(pr)} />
+            ))}
+          </InboxGroup>
+        </div>
       </div>
       {settingsOpen ? <RepoSettingsPanel repo={repo} onClose={() => setSettingsOpen(false)} /> : null}
     </div>

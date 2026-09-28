@@ -84,6 +84,29 @@ export function autoReasonText(reason: Watch["autoReason"]): string {
   }
 }
 
+export type Tag = { label: string; tone: Tone; title?: string };
+
+export function autoTags(w: Pick<Watch, "autoReason" | "updateType" | "mergeWhenReady" | "dependabot">): Tag[] {
+  const tags: Tag[] = [];
+  if (w.autoReason) tags.push({ label: "auto", tone: "neutral", title: autoReasonText(w.autoReason) });
+  if (w.dependabot && w.updateType)
+    tags.push({ label: w.updateType, tone: "neutral", title: `A ${w.updateType} update` });
+  if (w.mergeWhenReady) {
+    tags.push({
+      label: "merge when ready",
+      tone: "neutral",
+      title: "The daemon merges as soon as the watch is ready to merge",
+    });
+  }
+  return tags;
+}
+
+export function mergeTroubleTags(state: string): Tag[] {
+  const word = mergeableWord(state);
+  if (!word || word.tone === "good") return [];
+  return [word];
+}
+
 const ordinals = new Intl.PluralRules("en-US", { type: "ordinal" });
 const ordinalSuffix: Record<string, string> = { one: "st", two: "nd", few: "rd", other: "th" };
 

@@ -1,7 +1,7 @@
-import { screen } from "@testing-library/react";
+import { screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
-import { buildStoppedWatch } from "@test/fixtures";
+import { buildPullRequest, buildStoppedWatch } from "@test/fixtures";
 import { expectViewTitle, renderWithProviders } from "@test/test-utils";
 import { http, HttpResponse } from "msw";
 import { apiUrl, server, serveApi } from "@test/msw";
@@ -54,4 +54,46 @@ test("shows a watch that stopped because it merged in green", async () => {
   renderWithProviders(<StoppedView enabled onNavigate={vi.fn()} />);
 
   expect(await screen.findByText("stopped · merged")).toHaveClass("text-success");
+});
+
+test("groups stopped watches into today and earlier", async () => {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 1).toISOString();
+  serveApi({
+    watches: [
+      buildStoppedWatch({ id: 1, number: 1, title: "Old one", stoppedAt: "2026-01-01T01:00:00Z" }),
+      buildStoppedWatch({ id: 2, number: 2, title: "Fresh one", stoppedAt: startOfToday }),
+    ],
+  });
+
+  renderWithProviders(<StoppedView enabled onNavigate={vi.fn()} />);
+
+  const today = await screen.findByRole("region", { name: "Today" });
+  expect(within(today).getByRole("button", { name: /Fresh one/ })).toBeVisible();
+  const earlier = screen.getByRole("region", { name: "Earlier" });
+  expect(within(earlier).getByRole("button", { name: /Old one/ })).toBeVisible();
+});
+
+test("a stopped row reads the labels and changed lines of its merged pull request", async () => {
+  serveApi({ watches: [buildStoppedWatch({ id: 1, number: 12, title: "Ship notifications" })] });
+  server.use(
+    http.get(apiUrl("/api/v1/prs"), ({ request }) => {
+      const state = new URL(request.url).searchParams.get("state");
+      const pull = buildPullRequest({
+        number: 12,
+        state: "merged",
+        labels: ["frontend"],
+        additions: 154,
+        deletions: 9,
+      });
+      return HttpResponse.json({ pullRequests: state === "all" ? [pull] : [] });
+    }),
+  );
+
+  renderWithProviders(<StoppedView enabled onNavigate={vi.fn()} />);
+
+  const row = await screen.findByRole("button", { name: /Ship notifications/ });
+  expect(await within(row).findByText("+154")).toBeVisible();
+  expect(within(row).getByText("frontend")).toBeVisible();
+  expect(within(row).getByText("watched 1h 0m · 3 messages to the agent")).toBeVisible();
 });

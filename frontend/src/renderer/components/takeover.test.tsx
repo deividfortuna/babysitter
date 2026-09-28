@@ -179,6 +179,5 @@ test("marks the moves of the author and the rows held for the hand-back", async 
 test("shows a watch that is taken over in the list", () => {
   renderWithProviders(<WatchRow watch={takenOver()} onOpen={vi.fn()} />);
 
-  expect(screen.getByText("with you · 4m")).toBeInTheDocument();
-  expect(screen.getByText("with you")).toBeInTheDocument();
+  expect(screen.getByText("with you")).toHaveAttribute("title", "With you for 4m");
 });
