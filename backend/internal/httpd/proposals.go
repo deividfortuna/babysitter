@@ -11,8 +11,8 @@ func proposalPath(w http.ResponseWriter, r *http.Request) (int64, int, bool) {
 	if !ok {
 		return 0, 0, false
 	}
-	number, ok := pathID(w, r, "number")
-	return id, int(number), ok
+	number, ok := pathNumber(w, r, "number")
+	return id, number, ok
 }
 
 func (a *api) handleListProposals(w http.ResponseWriter, r *http.Request) {

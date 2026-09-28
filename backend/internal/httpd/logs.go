@@ -82,7 +82,7 @@ func (a *api) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit, ok := queryInt(w, r, "limit", logsDefaultLimit)
+	limit, ok := queryCount(w, r, "limit", logsDefaultLimit)
 	if !ok {
 		return
 	}
@@ -94,7 +94,7 @@ func (a *api) handleListLogs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("limit must be %d or less", logsMaxLimit))
 		return
 	}
-	writeJSON(w, http.StatusOK, LogList{Records: logRecords(book.Since(after, int(limit))), Path: book.Path()})
+	writeJSON(w, http.StatusOK, LogList{Records: logRecords(book.Since(after, limit)), Path: book.Path()})
 }
 
 func (a *api) handleGetLogLevel(w http.ResponseWriter, r *http.Request) {

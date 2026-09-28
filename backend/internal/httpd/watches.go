@@ -243,11 +243,11 @@ func (a *api) handleListActivity(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	limit, ok := queryInt(w, r, "limit", 0)
+	limit, ok := queryCount(w, r, "limit", 0)
 	if !ok {
 		return
 	}
-	rows, err := a.store.ListActivity(r.Context(), id, since, int(limit))
+	rows, err := a.store.ListActivity(r.Context(), id, since, limit)
 	if storeErrors.write(w, err) {
 		return
 	}
@@ -397,7 +397,7 @@ func (a *api) handleWatchOutput(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	lines, ok := queryInt(w, r, "lines", 200)
+	lines, ok := queryCount(w, r, "lines", 200)
 	if !ok {
 		return
 	}
@@ -405,7 +405,7 @@ func (a *api) handleWatchOutput(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "lines must not be negative")
 		return
 	}
-	out, err := a.watches.Output(r.Context(), id, int(lines))
+	out, err := a.watches.Output(r.Context(), id, lines)
 	if outputErrors.write(w, err) {
 		return
 	}
