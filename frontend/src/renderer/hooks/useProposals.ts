@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueries, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
 import type { components } from "../../api/schema";
 import { api, apiErrorMessage } from "../lib/api-client";
 import { proposalCodeQueryKey, watchProposalsQueryKey, watchesQueryKey } from "../lib/query-keys";
@@ -20,24 +20,45 @@ export function useProposals(id: number | null) {
   });
 }
 
-export function useProposal(
-  id: number | null,
-  number: number | null,
-  code?: Pick<Proposal, "headSha" | "workSha">,
-  commit?: string,
-) {
-  return useQuery({
-    queryKey: proposalCodeQueryKey(id ?? 0, number ?? 0, code?.headSha ?? "", code?.workSha ?? "", commit),
+type Code = Pick<Proposal, "headSha" | "workSha">;
+
+function proposalQuery(id: number | null, number: number | null, code?: Code, commit?: string, path?: string) {
+  const query = { ...(commit ? { commit } : {}), ...(path ? { path } : {}) };
+  return {
+    queryKey: proposalCodeQueryKey(id ?? 0, number ?? 0, code?.headSha ?? "", code?.workSha ?? "", commit, path),
     enabled: id !== null && number !== null,
     staleTime: Infinity,
-    refetchInterval: false,
+    refetchInterval: false as const,
     queryFn: async () => {
       const { data, error } = await api().GET("/api/v1/watches/{id}/proposals/{number}", {
-        params: { path: { id: id ?? 0, number: number ?? 0 }, query: commit ? { commit } : undefined },
+        params: { path: { id: id ?? 0, number: number ?? 0 }, query: commit || path ? query : undefined },
       });
       if (error) throw new Error(apiErrorMessage(error, "Could not load the proposal."));
       return data;
     },
+  };
+}
+
+export function useProposal(id: number | null, number: number | null, code?: Code, commit?: string) {
+  return useQuery(proposalQuery(id, number, code, commit));
+}
+
+export type FileLoad = Pick<UseQueryResult<ProposalDetail>, "data" | "error" | "isFetching" | "refetch">;
+
+function fileLoads(results: UseQueryResult<ProposalDetail>[]): FileLoad[] {
+  return results.map(({ data, error, isFetching, refetch }) => ({ data, error, isFetching, refetch }));
+}
+
+export function useProposalFiles(
+  id: number,
+  number: number,
+  code: Code,
+  commit: string | undefined,
+  paths: string[],
+): FileLoad[] {
+  return useQueries({
+    queries: paths.map((path) => proposalQuery(id, number, code, commit, path)),
+    combine: fileLoads,
   });
 }
 

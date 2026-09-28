@@ -26,8 +26,15 @@ export function watchProposalsQueryKey(id: number) {
   return ["watches", id, "proposals"] as const;
 }
 
-export function proposalCodeQueryKey(id: number, number: number, headSha: string, workSha: string, commit = "") {
-  return ["proposal-code", id, number, headSha, workSha, commit] as const;
+export function proposalCodeQueryKey(
+  id: number,
+  number: number,
+  headSha: string,
+  workSha: string,
+  commit = "",
+  path = "",
+) {
+  return ["proposal-code", id, number, headSha, workSha, commit, path] as const;
 }
 
 export const providersQueryKey = ["providers"] as const;

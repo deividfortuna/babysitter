@@ -174,11 +174,13 @@ export function serveApi(fixtures: ApiFixtures = {}) {
       HttpResponse.json({ proposals: fixtures.proposals?.[Number(params.id)] ?? [] }),
     ),
     http.get(apiUrl("/api/v1/watches/:id/proposals/:number"), ({ params, request }) => {
-      const commit = new URL(request.url).searchParams.get("commit");
-      const key = `${String(params.id)}/${String(params.number)}`;
-      const detail = fixtures.proposalDetail?.[commit ? `${key}@${commit}` : key];
+      const query = new URL(request.url).searchParams;
+      const commit = query.get("commit");
+      const path = query.get("path");
+      const key = `${String(params.id)}/${String(params.number)}${commit ? `@${commit}` : ""}${path ? `#${path}` : ""}`;
+      const detail = fixtures.proposalDetail?.[key];
       if (!detail) {
-        const code = commit ? "commit_not_found" : "proposal_not_found";
+        const code = path ? "file_not_found" : commit ? "commit_not_found" : "proposal_not_found";
         return HttpResponse.json({ error: { code, message: code.replaceAll("_", " ") } }, { status: 404 });
       }
       return HttpResponse.json(detail);

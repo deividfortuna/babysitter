@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import {
   CheckIcon,
+  RotateCcwIcon,
   ChevronRightIcon,
   FolderIcon,
   FolderOpenIcon,
@@ -14,12 +15,17 @@ import {
 import { fileTree, type TreeNode } from "@/lib/file-tree";
 import type { ProposalDiff } from "@/lib/proposal-diff";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
+import { count } from "@/components/proposal-dialogs";
 
 type Change = "new" | "deleted" | "change" | "missing";
 
-type Listed = { path: string; added: number; deleted: number; change: Change };
+export type MissingLoad = "loading" | "too-large" | "failed";
+
+type Listed = { path: string; added: number; deleted: number; binary: boolean; change: Change };
 
 const CHANGE_ICONS: Record<Change, { icon: LucideIcon; tone: string; label: string }> = {
   new: { icon: SquarePlusIcon, tone: "text-success", label: "added" },
@@ -37,10 +43,30 @@ export function changeIcon(type: string) {
   return CHANGE_ICONS[changeOf(type)];
 }
 
-export function LineCounts({ added, deleted, className }: { added: number; deleted: number; className?: string }) {
+function spokenCounts(added: number, deleted: number): string {
+  return `${count(added, "line")} added, ${count(deleted, "line")} deleted`;
+}
+
+export function LineCounts({
+  added,
+  deleted,
+  binary = false,
+  className,
+}: {
+  added: number;
+  deleted: number;
+  binary?: boolean;
+  className?: string;
+}) {
+  if (binary) return <span className={cn("shrink-0 font-mono", className)}>binary</span>;
   return (
-    <span className={cn("shrink-0 font-mono", className)}>
-      <span className="text-success">+{added}</span> <span className="text-destructive">−{deleted}</span>
+    <span role="group" aria-label={spokenCounts(added, deleted)} className={cn("shrink-0 font-mono", className)}>
+      <span aria-hidden className="text-success">
+        +{added}
+      </span>{" "}
+      <span aria-hidden className="text-destructive">
+        −{deleted}
+      </span>
     </span>
   );
 }
@@ -49,22 +75,32 @@ function matches(path: string, filter: string): boolean {
   return path.toLowerCase().includes(filter.trim().toLowerCase());
 }
 
-export function FileTree({
-  diff,
-  viewed,
-  current,
-  onJump,
-}: {
-  diff: ProposalDiff;
+type Rows = {
   viewed: ReadonlySet<string>;
   current: string | undefined;
   onJump: (path: string) => void;
-}) {
+  loads: ReadonlyMap<string, MissingLoad>;
+  onLoad: (path: string) => void;
+};
+
+export function FileTree({ diff, ...rows }: Rows & { diff: ProposalDiff }) {
   const [filter, setFilter] = useState("");
   const tree = useMemo(() => {
     const listed: Listed[] = [
-      ...diff.files.map((f) => ({ path: f.path, added: f.added, deleted: f.deleted, change: changeOf(f.diff.type) })),
-      ...diff.missing.map((f) => ({ path: f.path, added: f.added, deleted: f.deleted, change: "missing" as const })),
+      ...diff.files.map((f) => ({
+        path: f.path,
+        added: f.added,
+        deleted: f.deleted,
+        binary: f.binary,
+        change: changeOf(f.diff.type),
+      })),
+      ...diff.missing.map((f) => ({
+        path: f.path,
+        added: f.added,
+        deleted: f.deleted,
+        binary: f.binary ?? false,
+        change: "missing" as const,
+      })),
     ];
     return fileTree(
       listed.filter((f) => matches(f.path, filter)),
@@ -91,7 +127,7 @@ export function FileTree({
         />
       </div>
       {tree.length > 0 ? (
-        <Level nodes={tree} viewed={viewed} current={current} onJump={onJump} />
+        <Level nodes={tree} {...rows} />
       ) : (
         <p className="px-1.5 text-muted-foreground">No file matches.</p>
       )}
@@ -99,34 +135,24 @@ export function FileTree({
   );
 }
 
-function Level({
-  nodes,
-  viewed,
-  current,
-  onJump,
-  nested = false,
-}: {
-  nodes: TreeNode<Listed>[];
-  viewed: ReadonlySet<string>;
-  current: string | undefined;
-  onJump: (path: string) => void;
-  nested?: boolean;
-}) {
+function Level({ nodes, nested = false, ...rows }: Rows & { nodes: TreeNode<Listed>[]; nested?: boolean }) {
   return (
     <ul className={cn("flex flex-col gap-px", nested && "ml-[11px] border-l pl-1.5")}>
       {nodes.map((node) => (
         <li key={node.path}>
           {node.type === "dir" ? (
             <Folder name={node.name}>
-              <Level nodes={node.children} viewed={viewed} current={current} onJump={onJump} nested />
+              <Level nodes={node.children} {...rows} nested />
             </Folder>
           ) : (
             <FileRow
               file={node.item}
               name={node.name}
-              viewed={viewed.has(node.path)}
-              current={current === node.path}
-              onJump={onJump}
+              viewed={rows.viewed.has(node.path)}
+              current={rows.current === node.path}
+              onJump={rows.onJump}
+              load={rows.loads.get(node.path)}
+              onLoad={rows.onLoad}
             />
           )}
         </li>
@@ -152,18 +178,48 @@ function Folder({ name, children }: { name: string; children: React.ReactNode })
   );
 }
 
+function MissingAction({
+  path,
+  load,
+  onLoad,
+}: {
+  path: string;
+  load: MissingLoad | undefined;
+  onLoad: (path: string) => void;
+}) {
+  if (load === "loading") return <Spinner aria-label={`Loading ${path}`} className="size-3.5 shrink-0" />;
+  if (load === "too-large") return <span className="shrink-0 font-mono text-2xs">too large to show</span>;
+  const failed = load === "failed";
+  return (
+    <Button
+      variant="outline"
+      size="xs"
+      className="h-5 shrink-0 px-1.5 text-2xs"
+      aria-label={failed ? `Load ${path} again` : `Load ${path}`}
+      onClick={() => onLoad(path)}
+    >
+      {failed ? <RotateCcwIcon data-icon="inline-start" /> : null}
+      {failed ? "Retry" : "Load"}
+    </Button>
+  );
+}
+
 function FileRow({
   file,
   name,
   viewed,
   current,
   onJump,
+  load,
+  onLoad,
 }: {
   file: Listed;
   name: string;
   viewed: boolean;
   current: boolean;
   onJump: (path: string) => void;
+  load: MissingLoad | undefined;
+  onLoad: (path: string) => void;
 }) {
   const { icon: Icon, tone, label } = CHANGE_ICONS[file.change];
   const missing = file.change === "missing";
@@ -180,9 +236,9 @@ function FileRow({
       <span className={cn("min-w-0 flex-1 truncate", viewed && "text-muted-foreground")}>{name}</span>
       <span className="sr-only">, {label}</span>
       {missing ? (
-        <span className="shrink-0 font-mono text-2xs">not in the diff</span>
+        <MissingAction path={file.path} load={load} onLoad={onLoad} />
       ) : (
-        <LineCounts added={file.added} deleted={file.deleted} className="text-2xs" />
+        <LineCounts added={file.added} deleted={file.deleted} binary={file.binary} className="text-2xs" />
       )}
     </>
   );

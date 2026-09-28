@@ -13,6 +13,10 @@ export default defineConfig({
         find: /^@pierre\/diffs\/react$/,
         replacement: fileURLToPath(new URL("./src/test/diffs-react.tsx", import.meta.url)),
       },
+      {
+        find: /^@pierre\/diffs\/worker$/,
+        replacement: fileURLToPath(new URL("./src/test/diffs-worker.ts", import.meta.url)),
+      },
       { find: "@test", replacement: fileURLToPath(new URL("./src/test", import.meta.url)) },
     ],
   },

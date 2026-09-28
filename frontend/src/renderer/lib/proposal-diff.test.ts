@@ -1,7 +1,7 @@
 import { expect, test } from "vite-plus/test";
 import { buildActivity } from "@test/fixtures";
 import type { ProposalReply } from "@/hooks/useProposals";
-import { anchorReplies, isNoisy, placeOnHead, readProposalDiff } from "./proposal-diff";
+import { anchorReplies, contentKey, isNoisy, placeOnHead, readPatch, readProposalDiff, viewKey } from "./proposal-diff";
 
 const HEAD = "9f3c2a1aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
@@ -44,24 +44,81 @@ function reply(id: number, payload: Record<string, unknown>): ProposalReply {
   };
 }
 
-test("the patch splits into files, with the stats of the API", () => {
-  const diff = readProposalDiff(patch, false, files);
+const later = [
+  "diff --git a/later.go b/later.go",
+  "new file mode 100644",
+  "index 0000000..4444444",
+  "--- /dev/null",
+  "+++ b/later.go",
+  "@@ -0,0 +1,3 @@",
+  "+package later",
+  "+",
+  "+func run() {}",
+  "",
+].join("\n");
 
-  expect(diff.files.map((f) => [f.path, f.added, f.deleted, f.cut])).toEqual([
+test("the patch splits into files, with the stats of the API", () => {
+  const diff = readProposalDiff(patch, files);
+
+  expect(diff.files.map((f) => [f.path, f.added, f.deleted, f.binary])).toEqual([
     ["app.go", 2, 1, false],
     ["gone.go", 0, 1, false],
   ]);
   expect(diff.missing.map((f) => f.path)).toEqual(["later.go"]);
 });
 
-test("a cut patch marks its last file", () => {
-  const diff = readProposalDiff(patch, true, files);
+test("a file read on its own joins the diff and leaves the missing list", () => {
+  const diff = readProposalDiff(patch, files, readPatch(later, [files[2]]));
 
-  expect(diff.files.map((f) => f.cut)).toEqual([false, true]);
+  expect(diff.files.map((f) => [f.path, f.added])).toEqual([
+    ["app.go", 2],
+    ["gone.go", 0],
+    ["later.go", 3],
+  ]);
+  expect(diff.missing).toEqual([]);
+});
+
+test("a path git quotes finds its stats, and a binary file says so", () => {
+  const quoted = [
+    'diff --git "a/caf\\303\\251.go" "b/caf\\303\\251.go"',
+    "index 1111111..2222222 100644",
+    '--- "a/caf\\303\\251.go"',
+    '+++ "b/caf\\303\\251.go"',
+    "@@ -1 +1 @@",
+    "-old",
+    "+new",
+    "diff --git a/logo.png b/logo.png",
+    "new file mode 100644",
+    "index 0000000..5555555",
+    "Binary files /dev/null and b/logo.png differ",
+    "",
+  ].join("\n");
+  const stats = [
+    { path: "café.go", status: "M", added: 1, deleted: 1 },
+    { path: "logo.png", status: "A", added: 0, deleted: 0, binary: true },
+  ];
+
+  const diff = readProposalDiff(quoted, stats);
+
+  expect(diff.files.map((f) => [f.path, f.added, f.binary])).toEqual([
+    ["café.go", 1, false],
+    ["logo.png", 0, true],
+  ]);
+  expect(diff.missing).toEqual([]);
+});
+
+test("the content key follows the lines, and the view key follows the blob", () => {
+  const [app] = readPatch(patch, files);
+  const [again] = readPatch(patch, files);
+  const [changed] = readPatch(patch.replace("+trois", "+quatre"), files);
+
+  expect(contentKey(again.diff)).toBe(contentKey(app.diff));
+  expect(contentKey(changed.diff)).not.toBe(contentKey(app.diff));
+  expect(viewKey(app)).toBe("2222222");
 });
 
 test("a line of the head lands on the side that shows it", () => {
-  const [app] = readProposalDiff(patch, false, files).files;
+  const [app] = readProposalDiff(patch, files).files;
 
   expect(placeOnHead(app.diff, 10)).toEqual({ side: "additions", lineNumber: 10 });
   expect(placeOnHead(app.diff, 11)).toEqual({ side: "deletions", lineNumber: 11 });
@@ -82,7 +139,7 @@ test("lockfiles, generated code and big changes are noisy", () => {
 });
 
 test("replies anchor to their line, the top of their file, or stay out", () => {
-  const diff = readProposalDiff(patch, false, files);
+  const diff = readProposalDiff(patch, files);
   const replies = [
     reply(1, { path: "app.go", line: 11, side: "RIGHT", commit_id: HEAD }),
     reply(2, { path: "app.go", line: 12 }),

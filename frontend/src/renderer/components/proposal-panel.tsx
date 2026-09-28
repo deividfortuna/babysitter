@@ -10,7 +10,14 @@ import {
   TriangleAlertIcon,
   Undo2Icon,
 } from "lucide-react";
-import { useProposal, type Proposal, type ProposalDetail, type ProposalReply } from "@/hooks/useProposals";
+import {
+  useProposal,
+  useProposalFiles,
+  type FileLoad,
+  type Proposal,
+  type ProposalDetail,
+  type ProposalReply,
+} from "@/hooks/useProposals";
 import type { Watch } from "@/hooks/useWatches";
 import { AttentionBadge, Meta, ToneBadge } from "@/components/status-badges";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -36,7 +43,8 @@ import {
 } from "@/components/proposal-dialogs";
 import { outgoing, useProposalDecision, type Preview } from "@/components/proposal-decision";
 import { CodeArea, type RenderReply, type ShownCode } from "@/components/proposal-code";
-import { anchorReplies, readProposalDiff, type AnchoredReplies } from "@/lib/proposal-diff";
+import type { MissingLoad } from "@/components/proposal-file-tree";
+import { anchorReplies, readPatch, readProposalDiff, type AnchoredReplies } from "@/lib/proposal-diff";
 import { relativeTime, shortSha } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -228,6 +236,7 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
           renderReply={renderReply}
           dimmed={pushRejected}
           title={`proposal ${proposal.number} · ${watch.repo}#${watch.number}`}
+          viewedKey={`${watch.id}:${proposal.number}`}
           actions={actions}
           notice={refusal}
         />
@@ -295,6 +304,15 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
   );
 }
 
+const NO_PATHS: string[] = [];
+
+function loadOf(file: FileLoad): MissingLoad | null {
+  if (file.isFetching) return "loading";
+  if (file.error) return "failed";
+  if (file.data?.truncated) return "too-large";
+  return file.data ? null : "loading";
+}
+
 function useShownCode(
   watchId: number,
   proposal: Proposal,
@@ -303,10 +321,33 @@ function useShownCode(
 ): ShownCode {
   const query = useProposal(commit ? watchId : null, commit ? proposal.number : null, proposal, commit ?? undefined);
   const source = commit ? query.data : code;
-  const diff = useMemo(
-    () => (source ? readProposalDiff(source.diff, source.truncated, source.files ?? []) : null),
-    [source],
+  const scope = `${proposal.workSha}:${commit ?? ""}`;
+  const [asked, setAsked] = useState({ scope, paths: NO_PATHS });
+  const paths = asked.scope === scope ? asked.paths : NO_PATHS;
+  const files = useProposalFiles(watchId, proposal.number, proposal, commit ?? undefined, paths);
+  const loaded = useMemo(
+    () => files.flatMap((f) => (f.data && !f.data.truncated ? readPatch(f.data.diff, f.data.files ?? []) : [])),
+    [files],
   );
+  const diff = useMemo(
+    () => (source ? readProposalDiff(source.diff, source.files ?? [], loaded) : null),
+    [source, loaded],
+  );
+  const loads = useMemo(
+    () =>
+      new Map(
+        paths.flatMap((path, i) => {
+          const load = loadOf(files[i]);
+          return load ? [[path, load] as const] : [];
+        }),
+      ),
+    [paths, files],
+  );
+  const load = (path: string) => {
+    const i = paths.indexOf(path);
+    if (i >= 0) void files[i].refetch();
+    else setAsked({ scope, paths: [...paths, path] });
+  };
   return {
     diff,
     base: commit ? source?.base : proposal.headSha,
@@ -314,6 +355,8 @@ function useShownCode(
     loading: query.isFetching,
     error: commit ? (query.error?.message ?? source?.codeError ?? null) : null,
     reload: () => void query.refetch(),
+    loads,
+    load,
   };
 }
 
