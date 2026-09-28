@@ -239,6 +239,7 @@ function DiffCard({
     () => new Set((diff?.files ?? []).filter((f) => reading.viewed(f)).map((f) => f.path)),
     [diff, reading],
   );
+  const loadable = (diff?.missing ?? []).filter((f) => shown.loads.get(f.path) !== "too-large").length;
 
   const jump = useCallback((path: string) => {
     setCurrent(path);
@@ -278,8 +279,8 @@ function DiffCard({
           />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col">
-          {shown.truncated && diff ? (
-            <CutNotice missing={diff.missing.length} tree={tree} onTree={() => setTree(true)} />
+          {shown.truncated && loadable > 0 ? (
+            <CutNotice missing={loadable} tree={tree} onTree={() => setTree(true)} />
           ) : null}
           {diff ? (
             <DiffViewer

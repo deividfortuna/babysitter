@@ -151,7 +151,8 @@ func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal,
 		}
 		work = head
 	}
-	if work == p.HeadSHA && q.Commit == "" {
+	onlyReplies := work == p.HeadSHA && q == CodeQuery{}
+	if onlyReplies {
 		return ProposalCode{}, nil
 	}
 	var c ProposalCode

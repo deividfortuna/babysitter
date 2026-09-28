@@ -175,6 +175,20 @@ func TestTheCodeOfOneFileOfAProposal(t *testing.T) {
 	}
 }
 
+func TestAFileOfAProposalWithRepliesOnlyIsChecked(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	ctx := context.Background()
+	w := fx.startManual()
+	fx.turn(w)
+	fx.reply(w, 31, "noted")
+	fx.hook(w, agent.EventStop, `{}`)
+
+	if _, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{Path: "nope.go"}); !errors.Is(err, ErrUnknownFile) {
+		t.Fatalf("Proposal(nope.go) of a proposal with replies only, error = %v, want ErrUnknownFile", err)
+	}
+}
+
 func TestAnEditedReplyIsPostedAndTheAgentHearsOfIt(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

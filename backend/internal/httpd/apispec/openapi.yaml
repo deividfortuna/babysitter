@@ -1306,13 +1306,13 @@ paths:
           description: Only the files and the diff of this commit of the proposal,
             as a full SHA or a prefix of 7 characters or more
           type: string
-      - description: Only the file and the diff of this path, as files names it; with
-          commit, of this path in that commit
+      - description: Only the file and the diff of this path, as the files list names
+          it; with commit, of this path in that commit
         in: query
         name: path
         schema:
-          description: Only the file and the diff of this path, as files names it;
-            with commit, of this path in that commit
+          description: Only the file and the diff of this path, as the files list
+            names it; with commit, of this path in that commit
           type: string
       - description: Watch id
         in: path

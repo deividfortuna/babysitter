@@ -1150,12 +1150,35 @@ test("a cut diff stops at a whole file and reads the files after it one at a tim
     "TestDeliverRetries",
   );
   expect(within(tree).getByRole("button", { name: /^deliver_test.go, added/ })).toBeVisible();
+  expect(within(panel).getByText(/Load the 2 files after it one at a time/)).toBeVisible();
 
   await user.click(within(tree).getByRole("button", { name: "Load internal/webhook/retry.go" }));
   expect(await within(tree).findByText("too large to show")).toBeVisible();
+  expect(within(panel).getByText(/Load the 1 file after it one at a time/)).toBeVisible();
 
   await user.click(within(tree).getByRole("button", { name: "Load internal/webhook/handler.go" }));
-  expect(await within(tree).findByRole("button", { name: "Load internal/webhook/handler.go again" })).toBeVisible();
+  const again = await within(tree).findByRole("button", { name: "Load internal/webhook/handler.go again" });
+
+  api.proposalDetail["42/3#internal/webhook/handler.go"] = buildProposalDetail({
+    files: [handler],
+    diff: [
+      "diff --git a/internal/webhook/handler.go b/internal/webhook/handler.go",
+      "index 1111111..2222222 100644",
+      "--- a/internal/webhook/handler.go",
+      "+++ b/internal/webhook/handler.go",
+      "@@ -1,2 +1,2 @@",
+      "-package old",
+      "+package webhook",
+      " ",
+      "",
+    ].join("\n"),
+  });
+  await user.click(again);
+
+  expect(await within(panel).findByRole("region", { name: "File internal/webhook/handler.go" })).toHaveTextContent(
+    "package webhook",
+  );
+  expect(within(panel).queryByText("The diff is longer than one megabyte.")).toBeNull();
 });
 
 test("a binary file says so in its header and in the tree", async () => {

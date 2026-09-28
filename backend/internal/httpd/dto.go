@@ -286,7 +286,7 @@ type ProposalDetail struct {
 
 type ProposalQuery struct {
 	Commit string `query:"commit" description:"Only the files and the diff of this commit of the proposal, as a full SHA or a prefix of 7 characters or more"`
-	Path   string `query:"path" description:"Only the file and the diff of this path, as files names it; with commit, of this path in that commit"`
+	Path   string `query:"path" description:"Only the file and the diff of this path, as the files list names it; with commit, of this path in that commit"`
 }
 
 type ProposalCommit struct {

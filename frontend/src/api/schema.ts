@@ -3247,7 +3247,7 @@ export interface operations {
             query?: {
                 /** @description Only the files and the diff of this commit of the proposal, as a full SHA or a prefix of 7 characters or more */
                 commit?: string;
-                /** @description Only the file and the diff of this path, as files names it; with commit, of this path in that commit */
+                /** @description Only the file and the diff of this path, as the files list names it; with commit, of this path in that commit */
                 path?: string;
             };
             header?: never;
