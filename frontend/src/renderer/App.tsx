@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AddRepoDialog } from "@/components/add-repo-dialog";
-import { AppHeader, TitlebarSidebarTrigger } from "@/components/app-header";
+import { AppHeader, TitlebarNav } from "@/components/app-header";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DaemonDown } from "@/components/daemon-down";
 import { LoadingScreen } from "@/components/loading-screen";
@@ -20,14 +20,13 @@ import { useDaemonStatus } from "@/hooks/useDaemonStatus";
 import { useNativeNotifications } from "@/hooks/useNativeNotifications";
 import { useNotificationsPresent } from "@/hooks/useNotificationsPresent";
 import { useSettings } from "@/hooks/useSettings";
+import { useHistoryShortcuts } from "@/hooks/use-history-shortcuts";
 import { useSidebarWidth } from "@/hooks/use-sidebar-width";
+import { useViewHistory } from "@/hooks/use-view-history";
 import { connectEventTransport, type EventsConnection, type ReadyFrame } from "@/lib/event-transport";
-import { sameView, type View } from "@/lib/navigation";
 import { presents } from "@/lib/presenting";
 import { cn } from "@/lib/utils";
-import { TITLEBAR_HEIGHT } from "../shared/titlebar";
-
-const HISTORY_LIMIT = 20;
+import { TITLEBAR_HEIGHT, TITLEBAR_NAV_CLEARANCE, TITLEBAR_NAV_LEFT, TITLEBAR_NAV_WIDTH } from "../shared/titlebar";
 
 export function App() {
   const status = useDaemonStatus();
@@ -43,8 +42,8 @@ export function App() {
   const sidebar = useSidebarWidth();
   const [resizing, setResizing] = useState(false);
 
-  const [view, setView] = useState<View>({ kind: "watching" });
-  const history = useRef<View[]>([]);
+  const { view, navigate, controls: history } = useViewHistory({ kind: "watching" });
+  useHistoryShortcuts(history.onBack, history.onForward);
   const [startOpen, setStartOpen] = useState(false);
   const [startPull, setStartPull] = useState<PullRequest | null>(null);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
@@ -59,14 +58,6 @@ export function App() {
     if (present === null) return;
     return connectEventTransport(queryClient, onConnection, { present });
   }, [queryClient, present, onConnection]);
-
-  const navigate = useCallback((next: View) => {
-    setView((current) => {
-      if (sameView(current, next)) return current;
-      history.current = [...history.current, current].slice(-HISTORY_LIMIT);
-      return next;
-    });
-  }, []);
 
   useNativeNotifications(ready && present === true, navigate, presentedFrom);
 
@@ -130,7 +121,15 @@ export function App() {
 
   return (
     <SidebarProvider
-      style={{ "--sidebar-width": `${sidebar.width}px`, "--titlebar-height": `${TITLEBAR_HEIGHT}px` } as CSSProperties}
+      style={
+        {
+          "--sidebar-width": `${sidebar.width}px`,
+          "--titlebar-height": `${TITLEBAR_HEIGHT}px`,
+          "--titlebar-nav-left": `${TITLEBAR_NAV_LEFT}px`,
+          "--titlebar-nav-width": `${TITLEBAR_NAV_WIDTH}px`,
+          "--titlebar-nav-clearance": `${TITLEBAR_NAV_CLEARANCE}px`,
+        } as CSSProperties
+      }
       className={cn(
         resizing &&
           "select-none **:data-[slot=sidebar-container]:transition-none **:data-[slot=sidebar-gap]:transition-none",
@@ -149,12 +148,12 @@ export function App() {
         onResizingChange={setResizing}
       />
       <SidebarInset className="h-svh overflow-hidden">
-        <AppHeader />
+        <AppHeader {...history} />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {ready ? screen() : <DaemonDown status={status} />}
         </div>
       </SidebarInset>
-      <TitlebarSidebarTrigger />
+      <TitlebarNav {...history} />
 
       <StartWatchDialog
         open={startOpen}

@@ -1,4 +1,5 @@
 import { act, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { bridge } from "@/lib/bridge";
 import type { DaemonStatus } from "../shared/daemon-status";
@@ -57,4 +58,39 @@ test("on macOS renders the sidebar toggle after the view header, so the drag reg
 
   expect(viewHeader).toHaveClass("app-drag");
   expect(viewHeader.compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
+function activeView() {
+  return screen.getAllByRole("button").find((button) => button.dataset.active === "true")?.textContent;
+}
+
+test("goes back to the previous view and forward again", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+  expect(activeView()).toBe("Watching");
+  expect(screen.getByRole("button", { name: "Go back" })).toBeDisabled();
+
+  await user.click(screen.getByRole("button", { name: "Stopped" }));
+  expect(activeView()).toBe("Stopped");
+
+  await user.click(screen.getByRole("button", { name: "Go back" }));
+  expect(activeView()).toBe("Watching");
+  expect(screen.getByRole("button", { name: "Go back" })).toBeDisabled();
+
+  await user.click(screen.getByRole("button", { name: "Go forward" }));
+  expect(activeView()).toBe("Stopped");
+  expect(screen.getByRole("button", { name: "Go forward" })).toBeDisabled();
+});
+
+test("on macOS goes back with Command and the left bracket", async () => {
+  platform.isMac = true;
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.click(screen.getByRole("button", { name: "Stopped" }));
+  await user.keyboard("{Meta>}[[{/Meta}");
+
+  expect(activeView()).toBe("Watching");
 });
