@@ -1,7 +1,9 @@
-import { Fragment, useMemo } from "react";
+import { useMemo } from "react";
 import { CircleAlertIcon, EyeIcon } from "lucide-react";
+import { usePullsByLabel } from "@/hooks/usePulls";
 import { useWatches, type Watch } from "@/hooks/useWatches";
 import { FirstRun } from "@/components/first-run";
+import { InboxGroup, PullsErrorAlert } from "@/components/inbox-row";
 import { Meta } from "@/components/status-badges";
 import { ViewHeader } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
@@ -11,7 +13,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Navigate } from "@/lib/navigation";
-import { needsAttention } from "@/lib/watch-status";
+import { needsAttention, watchLabel } from "@/lib/watch-status";
 
 const ALL = "__all__";
 
@@ -25,6 +27,7 @@ type Props = {
 
 export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }: Props) {
   const watches = useWatches(enabled);
+  const pulls = usePullsByLabel(enabled);
 
   const repos = useMemo(() => [...new Set((watches.data ?? []).map((w) => w.repo))].sort(), [watches.data]);
   const groups = useMemo(() => {
@@ -107,6 +110,8 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
         </div>
       </ViewHeader>
 
+      <PullsErrorAlert error={pulls.error} />
+
       {groups.length === 0 ? (
         <Empty className="py-16">
           <EmptyHeader>
@@ -122,22 +127,33 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
             </Button>
           </EmptyContent>
         </Empty>
-      ) : null}
-
-      {groups.map(([name, list]) => (
-        <Fragment key={name}>
-          <button
-            type="button"
-            onClick={() => onNavigate({ kind: "repo", name })}
-            className="sticky top-0 z-10 w-full border-b bg-muted px-5 py-2 text-left font-mono text-2xs tracking-label text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {name} · {list.length}
-          </button>
-          {list.map((w) => (
-            <WatchRow key={w.id} watch={w} onOpen={() => onNavigate({ kind: "watch", id: w.id })} />
+      ) : (
+        <div className="flex flex-col gap-3 p-3">
+          {groups.map(([name, list]) => (
+            <InboxGroup
+              key={name}
+              heading={
+                <button
+                  type="button"
+                  onClick={() => onNavigate({ kind: "repo", name })}
+                  className="transition-colors hover:text-foreground"
+                >
+                  {name} · {list.length}
+                </button>
+              }
+            >
+              {list.map((w) => (
+                <WatchRow
+                  key={w.id}
+                  watch={w}
+                  pull={pulls.byLabel.get(watchLabel(w))}
+                  onOpen={() => onNavigate({ kind: "watch", id: w.id })}
+                />
+              ))}
+            </InboxGroup>
           ))}
-        </Fragment>
-      ))}
+        </div>
+      )}
     </div>
   );
 }

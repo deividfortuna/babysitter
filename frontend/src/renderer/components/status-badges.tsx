@@ -1,8 +1,9 @@
 import type { ComponentProps } from "react";
+import { CircleCheckIcon, CircleDotIcon, CircleXIcon, type LucideIcon } from "lucide-react";
 import type { Watch } from "@/hooks/useWatches";
 import { Badge } from "@/components/ui/badge";
 import {
-  autoReasonText,
+  autoTags,
   checksWord,
   failedCheckNames,
   isAgentLive,
@@ -11,6 +12,7 @@ import {
   sessionWord,
   stopWord,
   type SessionState,
+  type Tag,
   type Tone,
 } from "@/lib/watch-status";
 import { cn } from "@/lib/utils";
@@ -105,27 +107,40 @@ export function QueuedBadge() {
   );
 }
 
+export function TagBadges({ tags }: { tags: Tag[] }) {
+  return tags.map((tag) => (
+    <ToneBadge key={tag.label} tone={tag.tone} title={tag.title}>
+      {tag.label}
+    </ToneBadge>
+  ));
+}
+
 type AutoFields = Pick<Watch, "autoReason" | "updateType" | "mergeWhenReady" | "dependabot">;
 
 export function AutoBadges({ watch }: { watch: AutoFields }) {
-  const dependabotUpdate = watch.dependabot && watch.updateType ? watch.updateType : null;
+  return <TagBadges tags={autoTags(watch)} />;
+}
+
+const checkIcons: Partial<Record<Tone, { icon: LucideIcon; className: string }>> = {
+  good: { icon: CircleCheckIcon, className: "text-success" },
+  wait: { icon: CircleDotIcon, className: "text-chart-3" },
+  bad: { icon: CircleXIcon, className: "text-destructive" },
+};
+
+export function ChecksIcon({ watch }: { watch: Pick<Watch, "checkStates" | "greenSha" | "headSha"> }) {
+  const checks = checksWord(watch);
+  const failed = failedCheckNames(watch);
+  const text = failed.length > 0 ? `${checks.label}: ${failed.join(", ")}` : checks.label;
+  return <CheckIcon tone={checks.tone} text={text} />;
+}
+
+export function CheckIcon({ tone, text }: { tone: Tone; text: string }) {
+  const look = checkIcons[tone];
+  if (!look) return null;
   return (
-    <>
-      {watch.autoReason ? (
-        <ToneBadge tone="neutral" title={autoReasonText(watch.autoReason)}>
-          auto
-        </ToneBadge>
-      ) : null}
-      {dependabotUpdate ? (
-        <ToneBadge tone="neutral" title={`A ${dependabotUpdate} update`}>
-          {dependabotUpdate}
-        </ToneBadge>
-      ) : null}
-      {watch.mergeWhenReady ? (
-        <ToneBadge tone="neutral" title="The daemon merges as soon as the watch is ready to merge">
-          merge when ready
-        </ToneBadge>
-      ) : null}
-    </>
+    <span title={text} className="inline-flex">
+      <look.icon aria-hidden="true" className={cn("size-4", look.className)} />
+      <span className="sr-only">{text}</span>
+    </span>
   );
 }

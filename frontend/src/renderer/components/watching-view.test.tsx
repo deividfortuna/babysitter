@@ -2,7 +2,7 @@ import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { http, HttpResponse } from "msw";
-import { buildWatch } from "@test/fixtures";
+import { buildPullRequest, buildWatch } from "@test/fixtures";
 import { expectViewTitle, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { WatchingView } from "./watching-view";
@@ -146,4 +146,80 @@ test("a row names a watch that auto start began, its update type and merge when 
   const manual = screen.getByRole("button", { name: /Retry webhooks/ });
   expect(within(manual).queryByText("auto")).toBeNull();
   expect(within(manual).queryByText("merge when ready")).toBeNull();
+});
+
+test("a row shows the author, the labels and the changed lines of its pull request", async () => {
+  serveApi({
+    watches: [buildWatch({ id: 1, number: 12, title: "Add notifications", author: "dependabot[bot]" })],
+    pullRequests: [buildPullRequest({ number: 12, labels: ["billing", "bug"], additions: 42, deletions: 7 })],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const row = await screen.findByRole("button", { name: /Add notifications/ });
+  expect(await within(row).findByText("+42")).toBeVisible();
+  expect(within(row).getByText("−7")).toBeVisible();
+  expect(within(row).getByText("billing")).toBeVisible();
+  expect(within(row).getByText("bug")).toBeVisible();
+  expect(within(row).getByText("dependabot")).toBeVisible();
+});
+
+test("a row puts the state that matters most first and names the failing checks", async () => {
+  serveApi({
+    watches: [
+      buildWatch({
+        id: 1,
+        number: 1,
+        title: "Broken one",
+        lastError: "GitHub said 502",
+        checkStates: { lint: "failed", test: "passed" },
+      }),
+      buildWatch({ id: 2, number: 2, title: "Ready one", readySince: "2026-01-01T00:00:00Z" }),
+      buildWatch({ id: 3, number: 3, title: "Waiting one", pendingProposal: 4, lastError: "GitHub said 502" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const broken = await screen.findByRole("button", { name: /Broken one/ });
+  expect(within(broken).getByText("error")).toHaveAttribute("title", "GitHub said 502");
+  expect(within(broken).getByText("1 failing check: lint")).toBeInTheDocument();
+  const ready = screen.getByRole("button", { name: /Ready one/ });
+  expect(within(ready).getByText("ready to merge")).toBeVisible();
+  expect(within(ready).queryByText("agent idle")).toBeNull();
+  const waiting = screen.getByRole("button", { name: /Waiting one/ });
+  expect(within(waiting).getByText("approval needed")).toBeVisible();
+  expect(within(waiting).queryByText("error")).toBeNull();
+});
+
+test("a row shows conflicts but not a clean merge state", async () => {
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 1, title: "Conflicting", mergeableState: "dirty" }),
+      buildWatch({ id: 2, number: 2, title: "Clean one", mergeableState: "clean" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const conflicting = await screen.findByRole("button", { name: /Conflicting/ });
+  expect(within(conflicting).getByText("conflicts")).toHaveClass("text-destructive");
+  const clean = screen.getByRole("button", { name: /Clean one/ });
+  expect(within(clean).queryByText("clean")).toBeNull();
+});
+
+test("keeps the rows and names the failure when the pull requests do not load", async () => {
+  serveApi({ watches: [buildWatch({ id: 1, number: 12, title: "Add notifications" })] });
+  server.use(
+    http.get(apiUrl("/api/v1/prs"), () =>
+      HttpResponse.json({ error: { message: "pull request store gone" } }, { status: 500 }),
+    ),
+  );
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const alert = await screen.findByRole("alert");
+  expect(within(alert).getByText("Labels and changed lines did not load")).toBeVisible();
+  expect(within(alert).getByText("pull request store gone")).toBeVisible();
+  expect(screen.getByRole("button", { name: /Add notifications/ })).toBeVisible();
 });

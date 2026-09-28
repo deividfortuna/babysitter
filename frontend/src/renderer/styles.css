@@ -64,6 +64,14 @@
   --color-attention-foreground: var(--attention-foreground);
   --color-success: var(--success);
   --color-success-foreground: var(--success-foreground);
+  --color-label-1: var(--label-1);
+  --color-label-2: var(--label-2);
+  --color-label-3: var(--label-3);
+  --color-label-4: var(--label-4);
+  --color-label-5: var(--label-5);
+  --color-label-6: var(--label-6);
+  --color-label-7: var(--label-7);
+  --color-label-8: var(--label-8);
 }
 
 :root {
@@ -112,6 +120,14 @@
   --attention-foreground: #ffffff;
   --success: #1a7f37;
   --success-foreground: #ffffff;
+  --label-1: #0969da;
+  --label-2: #1a7f37;
+  --label-3: #8250df;
+  --label-4: #d1242f;
+  --label-5: #00add8;
+  --label-6: #bf3989;
+  --label-7: #9a6700;
+  --label-8: #bc4c00;
   --terminal-selection: #54aeff66;
   --diff-add-bar: #1a7f37;
   --diff-del-bar: #cf222e;
@@ -173,6 +189,14 @@
   --attention-foreground: #0d1117;
   --success: #5fed83;
   --success-foreground: #0d1117;
+  --label-1: #4493f8;
+  --label-2: #3fb950;
+  --label-3: #a371f7;
+  --label-4: #f85149;
+  --label-5: #39c5cf;
+  --label-6: #db61a2;
+  --label-7: #d29922;
+  --label-8: #db6d28;
   --terminal-selection: #2f5f9950;
   --diff-add-bar: #3fb950;
   --diff-del-bar: #f85149;

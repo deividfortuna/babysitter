@@ -1,72 +1,76 @@
+import { GitPullRequestDraftIcon, GitPullRequestIcon } from "lucide-react";
+import type { PullRequest } from "@/hooks/usePulls";
 import type { Watch } from "@/hooks/useWatches";
-import {
-  AttentionBadge,
-  AutoBadges,
-  ChecksBadge,
-  MergeableBadge,
-  MergeBadge,
-  Meta,
-  SessionBadge,
-  ToneBadge,
-} from "@/components/status-badges";
+import { AuthorName, DiffStat, InboxRow, LabelBadges } from "@/components/inbox-row";
+import { AttentionBadge, ChecksIcon, SessionBadge, TagBadges, ToneBadge } from "@/components/status-badges";
 import { Badge } from "@/components/ui/badge";
-import { duration, relativeTime, shortSha } from "@/lib/time";
-import { checksWord, isTakenOver, needsAttention, sessionWord } from "@/lib/watch-status";
-import { cn } from "@/lib/utils";
+import { duration, relativeTime } from "@/lib/time";
+import { autoTags, isTakenOver, mergeTroubleTags, needsAttention, sessionWord, watchLabel } from "@/lib/watch-status";
 
-function quietText(w: Watch): string {
-  if (isTakenOver(w)) return `with you · ${duration(w.takenOverAt ?? "")}`;
-  const checks = checksWord(w);
-  if (checks.tone === "bad") return `CI ${checks.label}`;
-  return `quiet · ${checks.label}`;
+function StateBadge({ watch: w }: { watch: Watch }) {
+  if (needsAttention(w)) {
+    return (
+      <AttentionBadge>{w.pendingProposal ? "approval needed" : sessionWord(w.session.state).label}</AttentionBadge>
+    );
+  }
+  if (isTakenOver(w)) {
+    return (
+      <ToneBadge tone="neutral" title={`With you for ${duration(w.takenOverAt ?? "")}`}>
+        with you
+      </ToneBadge>
+    );
+  }
+  if (w.lastError) {
+    return (
+      <Badge variant="destructive" title={w.lastError}>
+        error
+      </Badge>
+    );
+  }
+  if (w.readySince) return <ToneBadge tone="neutral">ready to merge</ToneBadge>;
+  if (w.session.state === "none") return null;
+  return <SessionBadge state={w.session.state} />;
+}
+
+function PullIcon({ draft }: { draft: boolean }) {
+  if (draft) return <GitPullRequestDraftIcon aria-hidden="true" className="text-muted-foreground" />;
+  return <GitPullRequestIcon aria-hidden="true" className="text-success" />;
 }
 
 type Props = {
   watch: Watch;
+  pull?: PullRequest;
   onOpen: () => void;
 };
 
-export function WatchRow({ watch: w, onOpen }: Props) {
-  const attention = needsAttention(w);
-  const session = sessionWord(w.session.state);
+export function WatchRow({ watch: w, pull, onOpen }: Props) {
+  const author = w.author || pull?.author;
+  const labels = pull?.labels ?? [];
+  const tags = [...mergeTroubleTags(w.mergeableState), ...autoTags(w)];
   return (
-    <button
-      type="button"
-      onClick={onOpen}
-      className={cn(
-        "flex w-full flex-col gap-1.5 border-b px-5 py-3 text-left transition-colors hover:bg-muted/60",
-        attention && "bg-attention/5",
-      )}
-    >
-      <div className="flex items-baseline gap-2">
-        <span className={cn("truncate text-title font-medium", !attention && "text-foreground/75")}>
-          {w.title || `${w.repo}#${w.number}`}
-        </span>
-        <Meta>#{w.number}</Meta>
-        {attention ? (
-          <AttentionBadge className="ml-auto shrink-0">
-            {w.pendingProposal ? "approval needed" : session.label}
-          </AttentionBadge>
-        ) : (
-          <Meta className="ml-auto shrink-0 text-muted-foreground/80">{quietText(w)}</Meta>
-        )}
-      </div>
-      <div className="flex flex-wrap items-center gap-2">
-        <Meta>{w.headRef}</Meta>
-        <Meta>{shortSha(w.headSha)}</Meta>
-        <ChecksBadge watch={w} />
-        <MergeableBadge state={w.mergeableState} />
-        <MergeBadge watch={w} />
-        {isTakenOver(w) ? <ToneBadge tone="neutral">with you</ToneBadge> : null}
-        {w.session.state !== "none" && !attention && !isTakenOver(w) ? <SessionBadge state={w.session.state} /> : null}
-        <AutoBadges watch={w} />
-        <Meta>{w.lastPollAt ? `checked ${relativeTime(w.lastPollAt)}` : "not checked yet"}</Meta>
-        {w.lastError ? (
-          <Badge variant="destructive" title={w.lastError}>
-            error
-          </Badge>
-        ) : null}
-      </div>
-    </button>
+    <InboxRow
+      icon={<PullIcon draft={pull?.draft ?? false} />}
+      title={w.title || watchLabel(w)}
+      attention={needsAttention(w)}
+      status={
+        <>
+          <StateBadge watch={w} />
+          <ChecksIcon watch={w} />
+          <DiffStat pull={pull} />
+        </>
+      }
+      details={[
+        <span key="number">#{w.number}</span>,
+        author ? <AuthorName key="author" login={author} /> : null,
+        labels.length > 0 ? <LabelBadges key="labels" labels={labels} /> : null,
+        tags.length > 0 ? (
+          <span key="tags" className="inline-flex flex-wrap gap-1.5">
+            <TagBadges tags={tags} />
+          </span>
+        ) : null,
+      ]}
+      time={w.lastPollAt ? `checked ${relativeTime(w.lastPollAt)}` : "not checked yet"}
+      onOpen={onOpen}
+    />
   );
 }

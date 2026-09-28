@@ -1,12 +1,30 @@
 import { ArchiveIcon, CircleAlertIcon } from "lucide-react";
-import { useWatches } from "@/hooks/useWatches";
-import { Meta, StopBadge } from "@/components/status-badges";
+import { usePullsByLabel } from "@/hooks/usePulls";
+import { useWatches, type Watch } from "@/hooks/useWatches";
+import { InboxGroup, PullsErrorAlert } from "@/components/inbox-row";
+import { Meta } from "@/components/status-badges";
+import { StoppedRow } from "@/components/stopped-row";
 import { ViewHeader } from "@/components/view-header";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Navigate } from "@/lib/navigation";
-import { duration, relativeTime } from "@/lib/time";
+import { watchLabel } from "@/lib/watch-status";
+
+function stoppedToday(w: Watch): boolean {
+  if (!w.stoppedAt) return false;
+  return new Date(w.stoppedAt).toDateString() === new Date().toDateString();
+}
+
+function byDay(stopped: Watch[]): [string, Watch[]][] {
+  const today = stopped.filter(stoppedToday);
+  const earlier = stopped.filter((w) => !stoppedToday(w));
+  const days: [string, Watch[]][] = [
+    ["Today", today],
+    ["Earlier", earlier],
+  ];
+  return days.filter(([, list]) => list.length > 0);
+}
 
 type Props = {
   enabled: boolean;
@@ -15,6 +33,7 @@ type Props = {
 
 export function StoppedView({ enabled, onNavigate }: Props) {
   const watches = useWatches(enabled, "all");
+  const pulls = usePullsByLabel(enabled, "all");
   const stopped = (watches.data ?? [])
     .filter((w) => w.status === "stopped")
     .sort((a, b) => (b.stoppedAt ?? "").localeCompare(a.stoppedAt ?? ""));
@@ -71,36 +90,21 @@ export function StoppedView({ enabled, onNavigate }: Props) {
         {title}
         <Meta>{stopped.length} archived</Meta>
       </ViewHeader>
-      {stopped.map((w) => {
-        const sum = w.summary;
-        return (
-          <button
-            key={w.id}
-            type="button"
-            onClick={() => onNavigate({ kind: "watch", id: w.id })}
-            className="flex w-full flex-col gap-1.5 border-b px-5 py-3 text-left transition-colors hover:bg-muted/60"
-          >
-            <div className="flex items-baseline gap-2">
-              <StopBadge watch={w} />
-              <span className="truncate text-title font-medium text-foreground/75">
-                {w.title || `${w.repo}#${w.number}`}
-              </span>
-              <Meta className="ml-auto shrink-0">
-                {w.repo}#{w.number}
-              </Meta>
-            </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Meta>watched {duration(w.startedAt, w.stoppedAt)}</Meta>
-              {w.stoppedAt ? <Meta>· stopped {relativeTime(w.stoppedAt)}</Meta> : null}
-              {sum ? (
-                <Meta>
-                  · {sum.messages} {sum.messages === 1 ? "message" : "messages"} to the agent
-                </Meta>
-              ) : null}
-            </div>
-          </button>
-        );
-      })}
+      <PullsErrorAlert error={pulls.error} />
+      <div className="flex flex-col gap-3 p-3">
+        {byDay(stopped).map(([day, list]) => (
+          <InboxGroup key={day} heading={day}>
+            {list.map((w) => (
+              <StoppedRow
+                key={w.id}
+                watch={w}
+                pull={pulls.byLabel.get(watchLabel(w))}
+                onOpen={() => onNavigate({ kind: "watch", id: w.id })}
+              />
+            ))}
+          </InboxGroup>
+        ))}
+      </div>
     </div>
   );
 }

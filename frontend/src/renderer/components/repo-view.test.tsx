@@ -2,7 +2,7 @@ import { act, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { http, HttpResponse } from "msw";
-import { buildPullRequest, buildQueuedPullRequest, buildRepo } from "@test/fixtures";
+import { buildPullRequest, buildQueuedPullRequest, buildRepo, buildWatch } from "@test/fixtures";
 import { expectViewTitle, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { RepoView } from "./repo-view";
@@ -65,6 +65,21 @@ test("shows an open pull request and selects it to start watching", async () => 
   await user.click(screen.getByRole("button", { name: "Watch" }));
 
   expect(onWatchPull).toHaveBeenCalledWith(pullRequest);
+});
+
+test("heads the watched and the open pull requests like the other lists", async () => {
+  serveApi({
+    repos: [buildRepo()],
+    watches: [buildWatch()],
+    pullRequests: [buildPullRequest(), buildPullRequest({ number: 13, title: "Fix the flaky test" })],
+  });
+
+  renderView();
+
+  const watching = await screen.findByRole("region", { name: "Watching · 1" });
+  expect(within(watching).getByRole("button", { name: /Add notifications/ })).toBeVisible();
+  const open = screen.getByRole("region", { name: "Open, not watched · 1" });
+  expect(within(open).getByText("Fix the flaky test")).toBeVisible();
 });
 
 test("keeps the title in the view header", async () => {
@@ -159,7 +174,7 @@ test("the panel icon in the header opens the repository settings, and the panel 
 });
 
 function rowOf(title: HTMLElement): HTMLElement {
-  const row = title.closest<HTMLElement>(".border-b");
+  const row = title.closest<HTMLElement>('[role="listitem"]');
   if (!row) throw new Error("the pull request has no row");
   return row;
 }

@@ -8,6 +8,10 @@ export function repoQueueQueryKey(id: number) {
   return ["repos", id, "queue"] as const;
 }
 export const pullsQueryKey = ["prs"] as const;
+
+export function pullListQueryKey(state: "open" | "all") {
+  return ["prs", state] as const;
+}
 export const watchesQueryKey = ["watches"] as const;
 
 export function watchListQueryKey(status: "active" | "all") {
