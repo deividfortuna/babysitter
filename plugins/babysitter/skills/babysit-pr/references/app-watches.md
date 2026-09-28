@@ -23,6 +23,7 @@ no message, and `watch send` is refused.
 babysitter watch proposals <watch>             # every proposal, newest first
 babysitter watch proposals <watch> <n> --diff  # the commits, the files, each reply with its comment, and the diff
 babysitter watch proposals <watch> <n> --diff --commit <sha>  # the files and the diff of one commit only
+babysitter watch proposals <watch> <n> --diff --file <path>   # the diff of one file only, also one after the one-megabyte cut
 babysitter watch approve <watch>               # push and post it under the account of the user
 babysitter watch approve <watch> --edit <reply id>=<text> --drop <reply id> --reject-push
 babysitter watch approve <watch> --stop-asking # release it and run the watch in auto from now on

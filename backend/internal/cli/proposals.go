@@ -64,6 +64,7 @@ type proposalOutput struct {
 	watch int64
 	httpd.ProposalDetail
 	diff bool
+	file string
 }
 
 func (p proposalOutput) writeText(out io.Writer) error {
@@ -84,7 +85,7 @@ func (p proposalOutput) writeText(out io.Writer) error {
 		fmt.Fprintf(out, "Commit:    %s only, for the files and the diff\n", textx.ShortSHA(p.Commit))
 	}
 	for i, f := range p.Files {
-		fmt.Fprintf(out, "%s%s %s +%d -%d\n", label(i, "Files:     "), f.Status, f.Path, f.Added, f.Deleted)
+		fmt.Fprintf(out, "%s%s %s %s\n", label(i, "Files:     "), f.Status, f.Path, lineCounts(f))
 	}
 	for _, r := range p.Replies {
 		fmt.Fprintf(out, "\n%s:\n%s\n", replyHeading(r), indent(replyText(r)))
@@ -98,8 +99,27 @@ func (p proposalOutput) writeText(out io.Writer) error {
 		}
 		return nil
 	}
-	_, err := fmt.Fprintf(out, "\n%s", p.Diff)
-	return err
+	if _, err := fmt.Fprintf(out, "\n%s", p.Diff); err != nil {
+		return err
+	}
+	if p.Truncated {
+		fmt.Fprintln(out, "\n"+p.cutNote())
+	}
+	return nil
+}
+
+func (p proposalOutput) cutNote() string {
+	if p.file != "" {
+		return "The diff of " + p.file + " is longer than one megabyte, so it is not shown."
+	}
+	return "The diff stops at the last whole file under one megabyte. Pass --file <path> to read a file after it."
+}
+
+func lineCounts(f httpd.ProposalFile) string {
+	if f.Binary {
+		return "binary"
+	}
+	return fmt.Sprintf("+%d -%d", f.Added, f.Deleted)
 }
 
 func heldBackWord(heldBack bool) string {
@@ -207,18 +227,26 @@ func isFailed(p httpd.Proposal) bool { return p.Status == store.ProposalFailed }
 
 func isRejectable(p httpd.Proposal) bool { return p.Status.Rejectable() }
 
-func proposalPathOf(watch int64, number int, commit string) string {
+func proposalPathOf(watch int64, number int, commit, file string) string {
 	path := fmt.Sprintf("/watches/%d/proposals/%d", watch, number)
-	if commit == "" {
+	query := url.Values{}
+	if commit != "" {
+		query.Set("commit", commit)
+	}
+	if file != "" {
+		query.Set("path", file)
+	}
+	if len(query) == 0 {
 		return path
 	}
-	return path + "?" + url.Values{"commit": {commit}}.Encode()
+	return path + "?" + query.Encode()
 }
 
 func newWatchProposalsCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	var (
 		diff   bool
 		commit string
+		file   string
 	)
 	cmd := &cobra.Command{
 		Use:   "proposals <watch> [proposal]",
@@ -229,7 +257,8 @@ for you. Without a number, the command lists the proposals, newest
 first. With one, it prints the commits, the files, and each reply with
 the comment it answers, which is what you read before you approve.
 --diff adds the plain unified diff. --commit shows the files and the
-diff of one commit of the proposal only.`,
+diff of one commit of the proposal only. --file shows one file only,
+which reads a file that a diff longer than one megabyte leaves out.`,
 		Args: cobra.RangeArgs(1, 2),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, args []string) error {
 			if len(args) == 0 {
@@ -244,14 +273,15 @@ diff of one commit of the proposal only.`,
 				return err
 			}
 			var d httpd.ProposalDetail
-			if err := c.get(cmd.Context(), proposalPathOf(w.ID, n, commit), &d); err != nil {
+			if err := c.get(cmd.Context(), proposalPathOf(w.ID, n, commit, file), &d); err != nil {
 				return err
 			}
-			return opts.print(cmd.OutOrStdout(), proposalOutput{watch: w.ID, ProposalDetail: d, diff: diff})
+			return opts.print(cmd.OutOrStdout(), proposalOutput{watch: w.ID, ProposalDetail: d, diff: diff, file: file})
 		}),
 	}
 	cmd.Flags().BoolVar(&diff, "diff", false, "also print the plain unified diff of the work")
 	cmd.Flags().StringVar(&commit, "commit", "", "only the files and the diff of this commit, as a SHA of 7 characters or more")
+	cmd.Flags().StringVar(&file, "file", "", "only the diff of this file, as the files list names it")
 	return cmd
 }
 

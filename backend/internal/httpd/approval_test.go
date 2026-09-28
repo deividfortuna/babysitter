@@ -48,19 +48,22 @@ func (f *fakeWatches) Proposals(ctx context.Context, id int64) ([]prwatch.Propos
 	return []prwatch.ProposalView{fakeProposal(id, store.ProposalPending)}, nil
 }
 
-func (f *fakeWatches) Proposal(ctx context.Context, id int64, number int, commit string) (prwatch.ProposalDetail, error) {
+func (f *fakeWatches) Proposal(ctx context.Context, id int64, number int, q prwatch.CodeQuery) (prwatch.ProposalDetail, error) {
 	if _, err := f.gated(ctx, id); err != nil {
 		return prwatch.ProposalDetail{}, err
 	}
 	switch number {
 	case 1:
-		if commit != "" && commit != "w1" {
+		if q.Commit != "" && q.Commit != "w1" {
 			return prwatch.ProposalDetail{}, prwatch.ErrUnknownCommit
+		}
+		if q.Path != "" && q.Path != "x.go" {
+			return prwatch.ProposalDetail{}, prwatch.ErrUnknownFile
 		}
 		return prwatch.ProposalDetail{
 			ProposalView: fakeProposal(id, store.ProposalPending),
 			Commits:      []gitrelease.Commit{{SHA: "w1", Subject: "Rename the thing"}},
-			Commit:       commit,
+			Commit:       q.Commit,
 			Files:        []gitrelease.File{{Path: "x.go", Status: "M", Added: 3, Deleted: 1}},
 			Diff:         "diff --git a/x.go b/x.go\n",
 		}, nil
@@ -230,6 +233,10 @@ func TestTheProposalRoutes(t *testing.T) {
 	if rec := call(t, h, http.MethodGet, "/watches/1/proposals/1?commit=w1", "", &one); rec.Code != http.StatusOK || one.Commit != "w1" {
 		t.Fatalf("proposal detail of one commit: %d %s", rec.Code, rec.Body)
 	}
+	var file ProposalDetail
+	if rec := call(t, h, http.MethodGet, "/watches/1/proposals/1?path=x.go", "", &file); rec.Code != http.StatusOK || len(file.Files) != 1 {
+		t.Fatalf("proposal detail of one file: %d %s", rec.Code, rec.Body)
+	}
 	var unread ProposalDetail
 	if rec := call(t, h, http.MethodGet, "/watches/1/proposals/3", "", &unread); rec.Code != http.StatusOK ||
 		unread.CodeError != "git log: exit status 128" || !strings.Contains(rec.Body.String(), `"codeError":"git log: exit status 128"`) ||
@@ -273,6 +280,7 @@ func TestTheProposalRoutes(t *testing.T) {
 		{http.MethodPost, "/watches/1/approval", `{"mode":"sometimes"}`, http.StatusBadRequest, "bad_approval_mode"},
 		{http.MethodGet, "/watches/1/proposals/9", "", http.StatusNotFound, "proposal_not_found"},
 		{http.MethodGet, "/watches/1/proposals/1?commit=zzz", "", http.StatusNotFound, "commit_not_found"},
+		{http.MethodGet, "/watches/1/proposals/1?path=nope.go", "", http.StatusNotFound, "file_not_found"},
 		{http.MethodGet, "/watches/9/proposals", "", http.StatusNotFound, "watch_not_found"},
 		{http.MethodGet, fmt.Sprintf("/watches/%d/proposals", self.ID), "", http.StatusBadRequest, "self_watch"},
 		{http.MethodPost, fmt.Sprintf("/watches/%d/proposals/1/reject", self.ID), "", http.StatusBadRequest, "self_watch"},

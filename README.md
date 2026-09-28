@@ -347,6 +347,7 @@ babysitter watch retry 1                          # push and post the proposal o
 babysitter watch proposals 1                      # the work of each turn of the agent of watch 1
 babysitter watch proposals 1 3 --diff             # read proposal 3: commits, files, replies, and the diff
 babysitter watch proposals 1 3 --diff --commit 1a2b3c4 # the files and the diff of one commit of proposal 3 only
+babysitter watch proposals 1 3 --diff --file go.sum    # the diff of one file of proposal 3 only
 babysitter watch approve 1                        # push and post the proposal that waits for you
 babysitter watch approve 1 --edit 5="Fixed, thanks." --drop 6   # rewrite reply 5 and take reply 6 out first
 babysitter watch approve 1 --stop-asking          # release it and run the watch in auto from now on
@@ -960,7 +961,9 @@ and the app, so the watch never calls the pull request ready before the
 work you are about to read. `watch proposals <watch> <n>` prints the
 commits, the changed files, and each reply with the comment it
 answers; `--diff` adds the plain unified diff, and `--commit <sha>`
-keeps the files and the diff to one commit of the proposal. Then:
+keeps the files and the diff to one commit of the proposal. A diff
+longer than one megabyte stops at the last whole file under that size;
+`--file <path>` reads one file, including a file after the cut. Then:
 
 - `watch approve <watch>` pushes and posts it, under your account.
 - `--edit <reply id>=<text>` rewrites a reply first, and `--drop <reply

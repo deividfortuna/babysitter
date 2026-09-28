@@ -22,7 +22,7 @@ type WatchController interface {
 	Reply(ctx context.Context, id int64, req prwatch.ReplyRequest) (prwatch.ReplyOutcome, error)
 	Retry(ctx context.Context, id int64, number int) (store.Proposal, error)
 	Proposals(ctx context.Context, id int64) ([]prwatch.ProposalView, error)
-	Proposal(ctx context.Context, id int64, number int, commit string) (prwatch.ProposalDetail, error)
+	Proposal(ctx context.Context, id int64, number int, q prwatch.CodeQuery) (prwatch.ProposalDetail, error)
 	Approve(ctx context.Context, id int64, number int, d prwatch.Decision) (store.Proposal, error)
 	Reject(ctx context.Context, id int64, number int, r prwatch.Rejection) (store.Proposal, error)
 	SetApproval(ctx context.Context, id int64, c prwatch.ApprovalChange) (store.Watch, error)
@@ -79,7 +79,7 @@ func (noopWatches) Proposals(context.Context, int64) ([]prwatch.ProposalView, er
 	return nil, errWatchUnavailable
 }
 
-func (noopWatches) Proposal(context.Context, int64, int, string) (prwatch.ProposalDetail, error) {
+func (noopWatches) Proposal(context.Context, int64, int, prwatch.CodeQuery) (prwatch.ProposalDetail, error) {
 	return prwatch.ProposalDetail{}, errWatchUnavailable
 }
 
@@ -191,6 +191,7 @@ var (
 		notFound("proposal_not_found", store.ErrProposalNotFound),
 		notFound("reply_not_found", store.ErrReplyNotFound),
 		notFound("commit_not_found", prwatch.ErrUnknownCommit),
+		notFound("file_not_found", prwatch.ErrUnknownFile),
 		conflict("watch_stopped", prwatch.ErrWatchStopped),
 		conflict("not_pending", prwatch.ErrNotPending),
 		conflict("proposal_pending", prwatch.ErrProposalPending),

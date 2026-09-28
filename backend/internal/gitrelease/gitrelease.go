@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -43,7 +44,7 @@ type Git interface {
 	Discard(ctx context.Context, dir, sha string) error
 	Log(ctx context.Context, dir, from, to string) ([]Commit, error)
 	Files(ctx context.Context, dir, from, to string) ([]File, error)
-	Diff(ctx context.Context, dir, from, to string, limit int) (string, bool, error)
+	Diff(ctx context.Context, dir, from, to string, limit int, paths ...string) (string, bool, error)
 	Dirty(ctx context.Context, dir string) ([]string, error)
 }
 
@@ -57,6 +58,7 @@ type File struct {
 	Status  string
 	Added   int
 	Deleted int
+	Binary  bool
 }
 
 type Push struct {
@@ -204,46 +206,66 @@ func (g *Runner) Dirty(ctx context.Context, dir string) ([]string, error) {
 	return files, nil
 }
 
+var diffFlags = []string{"--no-renames", "--no-color", "--no-ext-diff", "--no-textconv", "--src-prefix=a/", "--dst-prefix=b/"}
+
+func (g *Runner) diff(ctx context.Context, dir string, args ...string) (string, error) {
+	return g.raw(ctx, dir, slices.Concat([]string{"--literal-pathspecs", "diff"}, diffFlags, args)...)
+}
+
 func (g *Runner) Files(ctx context.Context, dir, from, to string) ([]File, error) {
-	statuses, err := g.git(ctx, dir, "diff", "--no-renames", "--name-status", from, to)
+	statuses, err := g.diff(ctx, dir, "-z", "--name-status", from, to)
 	if err != nil {
 		return nil, err
 	}
-	counts, err := g.git(ctx, dir, "diff", "--no-renames", "--numstat", from, to)
+	counts, err := g.diff(ctx, dir, "-z", "--numstat", from, to)
 	if err != nil {
 		return nil, err
 	}
-	lines := map[string][2]int{}
-	for line := range strings.Lines(counts) {
-		fields := strings.SplitN(strings.TrimRight(line, "\n"), "\t", 3)
-		if len(fields) != 3 {
-			continue
-		}
-		added, _ := strconv.Atoi(fields[0])
-		deleted, _ := strconv.Atoi(fields[1])
-		lines[fields[2]] = [2]int{added, deleted}
-	}
+	stats := numstat(counts)
+	fields := strings.Split(strings.TrimSuffix(statuses, "\x00"), "\x00")
 	var files []File
-	for line := range strings.Lines(statuses) {
-		status, path, ok := strings.Cut(strings.TrimRight(line, "\n"), "\t")
-		if !ok {
+	for pair := range slices.Chunk(fields, 2) {
+		if len(pair) != 2 {
 			continue
 		}
-		n := lines[path]
-		files = append(files, File{Path: path, Status: status, Added: n[0], Deleted: n[1]})
+		file := stats[pair[1]]
+		file.Path, file.Status = pair[1], pair[0]
+		files = append(files, file)
 	}
 	return files, nil
 }
 
-func (g *Runner) Diff(ctx context.Context, dir, from, to string, limit int) (string, bool, error) {
-	out, err := g.raw(ctx, dir, "diff", "--no-color", "--no-ext-diff", "--no-renames", from, to)
+func numstat(out string) map[string]File {
+	stats := map[string]File{}
+	for record := range strings.SplitSeq(out, "\x00") {
+		fields := strings.SplitN(record, "\t", 3)
+		if len(fields) != 3 {
+			continue
+		}
+		added, addedErr := strconv.Atoi(fields[0])
+		deleted, deletedErr := strconv.Atoi(fields[1])
+		binary := addedErr != nil && deletedErr != nil
+		stats[fields[2]] = File{Added: added, Deleted: deleted, Binary: binary}
+	}
+	return stats
+}
+
+func (g *Runner) Diff(ctx context.Context, dir, from, to string, limit int, paths ...string) (string, bool, error) {
+	out, err := g.diff(ctx, dir, slices.Concat([]string{from, to, "--"}, paths)...)
 	if err != nil {
 		return "", false, err
 	}
-	if len(out) > limit {
-		return out[:limit], true, nil
+	if len(out) <= limit {
+		return out, false, nil
 	}
-	return out, false, nil
+	return wholeFiles(out, limit), true, nil
+}
+
+const fileStart = "\ndiff --git "
+
+func wholeFiles(patch string, limit int) string {
+	window := patch[:min(len(patch), limit+len(fileStart)-1)]
+	return patch[:strings.LastIndex(window, fileStart)+1]
 }
 
 func (g *Runner) Rebase(ctx context.Context, dir, onto string) error {
