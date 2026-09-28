@@ -393,7 +393,7 @@ func TestResolveFork(t *testing.T) {
 	if got, err := resolve(ctx, c, want, Options{}); err != nil || got != want {
 		t.Fatalf("resolve full target without a checkout = %+v, %v, want %+v", got, err, want)
 	}
-	for _, partial := range []Target{{}, {Owner: "up", Name: "hello"}, {Number: 7}} {
+	for _, partial := range []Target{{}, {Owner: "up", Name: "hello"}, {Number: 7}, {Owner: "up", Number: 7}, {Owner: "up", Name: "hello", Number: -7}} {
 		if _, err := resolve(ctx, c, partial, Options{}); !errors.Is(err, ErrIncompleteTarget) {
 			t.Fatalf("resolve %+v without a checkout err = %v, want ErrIncompleteTarget", partial, err)
 		}
