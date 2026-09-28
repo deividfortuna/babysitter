@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/deividfortuna/babysitter/internal/execx"
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 var ErrBranchLeft = errors.New("the private branch of the worktree was not deleted")
@@ -20,20 +21,22 @@ type Manager interface {
 }
 
 type Git struct {
-	Run execx.Runner
+	Run execx.DirRunner
 }
 
 func New() *Git {
-	return &Git{Run: execx.Run}
+	return &Git{Run: execx.RunIn}
 }
 
 func (g *Git) git(ctx context.Context, dir string, args ...string) (string, error) {
 	run := g.Run
 	if run == nil {
-		run = execx.Run
+		run = execx.RunIn
 	}
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
+	defer cancel()
 	full := append([]string{"-C", dir}, args...)
-	out, err := run(ctx, "git", full...)
+	out, err := run(ctx, "", "", gitrepo.NoPromptEnv, "git", full...)
 	if err != nil {
 		return strings.TrimSpace(out), fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}

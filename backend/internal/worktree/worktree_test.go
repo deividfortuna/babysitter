@@ -2,11 +2,14 @@ package worktree
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -100,6 +103,27 @@ func TestFetchNeedsPushedBranch(t *testing.T) {
 	}
 	if err := g.Fetch(context.Background(), author, "nope"); err == nil {
 		t.Fatal("Fetch with a bare upstream expected an error")
+	}
+}
+
+func TestFetchFailsInsteadOfAskingForCredentials(t *testing.T) {
+	_, author, _ := repos(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("WWW-Authenticate", `Basic realm="git"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+	git(t, author, "remote", "set-url", "origin", srv.URL+"/octo/hello.git")
+	t.Setenv("GIT_CONFIG_GLOBAL", os.DevNull)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	t.Setenv("GIT_ASKPASS", "")
+	t.Setenv("SSH_ASKPASS", "")
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	err := New().Fetch(ctx, author, "origin/fix")
+	if err == nil || !strings.Contains(err.Error(), "terminal prompts disabled") {
+		t.Fatalf("Fetch() error = %v, want git to refuse the credential prompt", err)
 	}
 }
 

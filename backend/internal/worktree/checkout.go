@@ -16,7 +16,7 @@ import (
 
 const (
 	gitHubHelperConfig  = "credential.https://github.com.helper=!gh auth git-credential"
-	cloneTimeout        = 10 * time.Minute
+	gitTimeout          = 10 * time.Minute
 	gitConfigKeyMissing = 5
 )
 
@@ -75,7 +75,7 @@ func (c *Checkouts) clone(ctx context.Context, repo, dir string) error {
 		return fmt.Errorf("create checkout dir: %w", err)
 	}
 	defer func() { _ = os.RemoveAll(tmp) }()
-	ctx, cancel := context.WithTimeout(ctx, cloneTimeout)
+	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
 	url := c.url(repo)
 	if _, err := execx.RunIn(ctx, "", "", gitrepo.NoPromptEnv, "git", "clone", "-q", "--no-checkout", "--filter=blob:none",
