@@ -275,5 +275,7 @@ file headers are 40 px apart as they must be, but the first one starts
 about 20 px under the toolbar of the diff. Before the scroll, the first
 header touches the toolbar. The scroll position of the viewer of
 `@pierre/diffs` seems to stay above 0 when its content gets shorter
-than the panel. The page `docs/evidences/proposal-diff. Live run of the
-proposal diff redesign.md` shows it in `pd-16-collapse-all.png`.
+than the panel.
+
+To see it: open a proposal with three files or more, scroll the diff
+down, then press Collapse all.

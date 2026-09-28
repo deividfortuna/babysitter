@@ -221,7 +221,7 @@ function DiffCard({
           <FileTree
             diff={diff}
             viewed={reading.viewed}
-            current={current ?? firstOpen(diff.files, reading.collapsed)}
+            current={shownOrFirst(diff.files, current, reading.collapsed)}
             onJump={jump}
           />
         ) : null}
@@ -479,6 +479,11 @@ type Collapsed = Reading["collapsed"];
 
 function firstOpen(files: DiffFile[], collapsed: Collapsed): string | undefined {
   return (files.find((f) => !collapsed(f)) ?? files[0])?.path;
+}
+
+function shownOrFirst(files: DiffFile[], path: string | undefined, collapsed: Collapsed): string | undefined {
+  const shown = files.some((f) => f.path === path);
+  return shown ? path : firstOpen(files, collapsed);
 }
 
 function fileInView(

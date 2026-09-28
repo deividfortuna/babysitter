@@ -1,7 +1,8 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, onTestFinished, test, vi } from "vite-plus/test";
 import { delay, http, HttpResponse } from "msw";
+import { ITEM_HEIGHT } from "@test/diffs-react";
 import { buildActivity, buildProposal, buildProposalDetail, buildWatch } from "@test/fixtures";
 import { openMenu, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi, type Decision } from "@test/msw";
@@ -159,6 +160,36 @@ test("a file in the list scrolls the diff to it and is marked as the one in view
   expect(viewer(panel)).toHaveAttribute("data-scrolled-to", "internal/webhook/deliver_test.go");
   expect(within(tree).getByRole("button", { name: /^deliver_test.go/ })).toHaveAttribute("aria-current", "location");
   expect(within(tree).getByRole("button", { name: /^deliver.go/ })).not.toHaveAttribute("aria-current");
+});
+
+test("a scroll of the diff marks the file in view in the tree", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  const tree = await openTree(user, panel);
+  const view = viewer(panel);
+
+  fireEvent.scroll(view, { target: { scrollTop: ITEM_HEIGHT + 20 } });
+
+  expect(within(tree).getByRole("button", { name: /^deliver_test.go/ })).toHaveAttribute("aria-current", "location");
+  expect(within(tree).getByRole("button", { name: /^deliver.go/ })).not.toHaveAttribute("aria-current");
+
+  fireEvent.scroll(view, { target: { scrollTop: 0 } });
+
+  expect(within(tree).getByRole("button", { name: /^deliver.go/ })).toHaveAttribute("aria-current", "location");
+});
+
+test("a commit without the file in view marks its own first file", async () => {
+  const { api, user } = renderPending();
+  serveCommit(api, FIRST, buildProposal().headSha, "internal/webhook/deliver.go");
+  const panel = await section();
+  const tree = await openTree(user, panel);
+  await user.click(within(tree).getByRole("button", { name: /^deliver_test.go/ }));
+
+  await choose(user, panel, "Commits", /Move the retry into deliver/);
+
+  await within(panel).findByText("1 file");
+  const shown = within(panel).getByRole("navigation", { name: "Changed files" });
+  expect(within(shown).getByRole("button", { name: /^deliver.go/ })).toHaveAttribute("aria-current", "location");
 });
 
 test("the filter keeps the files whose path has the text", async () => {
