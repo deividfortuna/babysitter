@@ -50,6 +50,8 @@ type Book struct {
 	size    int64
 	next    int
 	subs    map[int]func(Record)
+
+	delivery sync.Mutex
 }
 
 func Open(o Options) (*Book, error) {
@@ -142,7 +144,9 @@ func (b *Book) add(r Record) {
 	for _, fn := range b.subs {
 		subs = append(subs, fn)
 	}
+	b.delivery.Lock()
 	b.mu.Unlock()
+	defer b.delivery.Unlock()
 	for _, fn := range subs {
 		fn(r)
 	}

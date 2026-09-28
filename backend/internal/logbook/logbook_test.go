@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"sync"
 	"testing"
 )
 
@@ -86,6 +87,29 @@ func TestSubscribersSeeEachNewRecord(t *testing.T) {
 
 	if !slices.Equal(seen, []int64{1}) {
 		t.Fatalf("seen = %v, want only the record before the unsubscribe", seen)
+	}
+}
+
+func TestSubscribersSeeTheRecordsInOrderWhenManyGoroutinesLog(t *testing.T) {
+	b := open(t, Options{})
+	var seen []int64
+	b.Subscribe(func(r Record) { seen = append(seen, r.Seq) })
+	log := slog.New(b.Handler())
+
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Go(func() {
+			for range 500 {
+				log.Info("busy")
+			}
+		})
+	}
+	wg.Wait()
+
+	for i, seq := range seen {
+		if seq != int64(i+1) {
+			t.Fatalf("record %d reached the subscriber as seq %d, want %d", i, seq, i+1)
+		}
 	}
 }
 
