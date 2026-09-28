@@ -63,6 +63,145 @@ paths:
                 $ref: '#/components/schemas/HttpdAPIError'
           description: Internal Server Error
       summary: Liveness of the daemon
+  /api/v1/logs:
+    get:
+      operationId: listLogs
+      parameters:
+      - description: Only records with a seq above this
+        in: query
+        name: after
+        schema:
+          description: Only records with a seq above this
+          format: int64
+          type: integer
+      - description: At most this many records from the end, default 500
+        in: query
+        name: limit
+        schema:
+          description: At most this many records from the end, default 500
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdLogList'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The last records the daemon logged in this run, oldest first
+  /api/v1/logs/level:
+    get:
+      operationId: getLogLevel
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdLogLevel'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The lowest level the daemon records
+    put:
+      operationId: putLogLevel
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HttpdLogLevel'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdLogLevel'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Change the lowest level the daemon records until it stops
+  /api/v1/logs/stream:
+    get:
+      operationId: streamLogs
+      parameters:
+      - description: Send the kept records with a seq above this first, then each
+          new one
+        in: query
+        name: after
+        schema:
+          description: Send the kept records with a seq above this first, then each
+            new one
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            text/event-stream:
+              schema:
+                type: string
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: 'The log of the daemon as server-sent events: a ready frame, the kept
+        records after the seq, then one log frame per new record'
   /api/v1/notifications:
     get:
       operationId: listNotifications
@@ -1878,6 +2017,78 @@ components:
       - version
       - pid
       - startedAt
+      type: object
+    HttpdLogAttr:
+      properties:
+        key:
+          type: string
+        value:
+          type: string
+      required:
+      - key
+      - value
+      type: object
+    HttpdLogLevel:
+      properties:
+        level:
+          description: The lowest level the daemon records. It holds until the daemon
+            stops.
+          enum:
+          - debug
+          - info
+          - warn
+          - error
+          type: string
+      required:
+      - level
+      type: object
+    HttpdLogList:
+      properties:
+        path:
+          description: The file the daemon writes its log to; empty when it writes
+            none
+          type: string
+        records:
+          description: Oldest first
+          items:
+            $ref: '#/components/schemas/HttpdLogRecord'
+          nullable: true
+          type: array
+      required:
+      - records
+      - path
+      type: object
+    HttpdLogRecord:
+      properties:
+        attrs:
+          description: The attributes of the record in the order the code gave them;
+            a group joins its keys with a dot
+          items:
+            $ref: '#/components/schemas/HttpdLogAttr'
+          nullable: true
+          type: array
+        level:
+          enum:
+          - debug
+          - info
+          - warn
+          - error
+          type: string
+        msg:
+          type: string
+        seq:
+          description: Order of the record in this run of the daemon, from 1
+          format: int64
+          type: integer
+        time:
+          format: date-time
+          type: string
+      required:
+      - seq
+      - time
+      - level
+      - msg
+      - attrs
       type: object
     HttpdNewNotificationRequest:
       properties:

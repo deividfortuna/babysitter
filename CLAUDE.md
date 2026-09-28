@@ -105,13 +105,18 @@ readiness. `internal/session` owns the pseudo terminal of the agent.
 `prompts/`, and one subpackage per provider (`claude`, `copilot`) that
 builds the command line and the hooks. `internal/worktree` makes and removes
 the worktree the agent works in. `internal/ghclient` wraps go-github with
-one shared conditional-request cache and `RateGuard`.
+one shared conditional-request cache and `RateGuard`. `internal/logbook` is
+the slog handler of the daemon: it keeps the last records in memory, writes
+`<dataDir>/logs/daemon.log` with rotation, and holds the level that
+`PUT /logs/level` changes while the daemon runs.
 
 **Frontend.** `src/main.ts` is the Electron main process and owns the daemon
 through `src/main/daemon-supervisor.ts`: it attaches to a live daemon found
 in `running.json` or spawns `babysitter daemon start --owner app`.
 `src/preload.ts` exposes `window.babysitter`, the only IPC bridge, and it
-carries little more than daemon status. The renderer talks to the daemon
+carries little more than daemon status and the app log.
+`src/main/app-log.ts` is the log of the main process, in
+`<dataDir>/logs/app.log`; log there, not with `console.log`. The renderer talks to the daemon
 directly over HTTP with openapi-fetch (`src/renderer/lib/api-client.ts`) and
 refetches TanStack Query caches on each SSE frame
 (`src/renderer/lib/event-transport.ts`). `src/api/schema.ts` is generated;

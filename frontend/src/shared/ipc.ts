@@ -17,3 +17,6 @@ export const UPDATES_DOWNLOAD_CHANNEL = "updates:download";
 export const UPDATES_INSTALL_CHANNEL = "updates:install";
 export const UPDATES_GET_SETTINGS_CHANNEL = "updates:get-settings";
 export const UPDATES_SET_SETTINGS_CHANNEL = "updates:set-settings";
+export const LOGS_APP_RECORDS_CHANNEL = "logs:app-records";
+export const LOGS_APP_RECORD_CHANNEL = "logs:app-record";
+export const LOGS_OPEN_FOLDER_CHANNEL = "logs:open-folder";

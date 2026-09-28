@@ -128,6 +128,7 @@ type operation struct {
 	req                       any
 	resp                      any
 	status                    int
+	stream                    bool
 	errors                    []int
 	errorBodies               map[int]any
 }
@@ -169,7 +170,7 @@ func build() ([]byte, error) {
 	ops := []operation{
 		{method: http.MethodGet, path: "/healthz", id: "getHealth", summary: "Liveness of the daemon", resp: httpd.Health{}, status: http.StatusOK},
 		{method: http.MethodGet, path: "/readyz", id: "getReady", summary: "Readiness of the daemon", resp: httpd.Health{}, status: http.StatusOK},
-		{method: http.MethodGet, path: "/events", id: "streamEvents", summary: "Change feed as server-sent events", status: http.StatusOK},
+		{method: http.MethodGet, path: "/events", id: "streamEvents", summary: "Change feed as server-sent events", status: http.StatusOK, stream: true},
 		{method: http.MethodGet, path: "/settings", id: "getSettings", summary: "The settings of the daemon", resp: httpd.Settings{}, status: http.StatusOK},
 		{method: http.MethodPut, path: "/settings", id: "putSettings", summary: "Write the settings of the daemon", req: httpd.Settings{}, resp: httpd.Settings{}, status: http.StatusOK, errors: []int{http.StatusBadRequest}},
 		{method: http.MethodGet, path: "/repos", id: "listRepos", summary: "List the watched repositories", resp: httpd.RepoList{}, status: http.StatusOK},
@@ -185,6 +186,10 @@ func build() ([]byte, error) {
 		{method: http.MethodGet, path: "/providers", id: "listProviders", summary: "The AI providers and the models they offer", resp: httpd.ProviderList{}, status: http.StatusOK},
 		{method: http.MethodGet, path: "/viewer", id: "getViewer", summary: "The GitHub account the daemon acts as", resp: httpd.Viewer{}, status: http.StatusOK, errors: []int{http.StatusServiceUnavailable}},
 		{method: http.MethodGet, path: "/ratelimit", id: "getRateLimit", summary: "The GitHub API budget the token of the daemon has left", resp: httpd.RateLimit{}, status: http.StatusOK},
+		{method: http.MethodGet, path: "/logs", id: "listLogs", summary: "The last records the daemon logged in this run, oldest first", req: httpd.LogQuery{}, resp: httpd.LogList{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable}},
+		{method: http.MethodGet, path: "/logs/stream", id: "streamLogs", summary: "The log of the daemon as server-sent events: a ready frame, the kept records after the seq, then one log frame per new record", req: httpd.LogStreamQuery{}, status: http.StatusOK, stream: true, errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable}},
+		{method: http.MethodGet, path: "/logs/level", id: "getLogLevel", summary: "The lowest level the daemon records", resp: httpd.LogLevel{}, status: http.StatusOK, errors: []int{http.StatusServiceUnavailable}},
+		{method: http.MethodPut, path: "/logs/level", id: "putLogLevel", summary: "Change the lowest level the daemon records until it stops", req: httpd.LogLevel{}, resp: httpd.LogLevel{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/sync", id: "requestSync", summary: "Ask the watcher for a sync pass now", resp: httpd.SyncAccepted{}, status: http.StatusAccepted},
 		{method: http.MethodGet, path: "/watches", id: "listWatches", summary: "List the watched pull requests", req: httpd.WatchQuery{}, resp: httpd.WatchList{}, status: http.StatusOK, errors: []int{http.StatusBadRequest}},
 		{method: http.MethodPost, path: "/watches", id: "startWatch", summary: "Watch a pull request", req: httpd.StartWatchRequest{}, resp: httpd.Watch{}, status: http.StatusCreated, errors: []int{http.StatusBadRequest, http.StatusConflict, http.StatusServiceUnavailable}},
@@ -224,7 +229,7 @@ func build() ([]byte, error) {
 		switch {
 		case op.resp != nil:
 			oc.AddRespStructure(op.resp, openapi.WithHTTPStatus(op.status))
-		case op.path == "/events":
+		case op.stream:
 			oc.AddRespStructure(nil, openapi.WithHTTPStatus(op.status), openapi.WithContentType("text/event-stream"))
 		default:
 			oc.AddRespStructure(nil, openapi.WithHTTPStatus(op.status))

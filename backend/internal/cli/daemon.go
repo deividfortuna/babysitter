@@ -16,6 +16,7 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/daemon"
 	"github.com/deividfortuna/babysitter/internal/httpd"
+	"github.com/deividfortuna/babysitter/internal/logbook"
 	"github.com/deividfortuna/babysitter/internal/processalive"
 	"github.com/deividfortuna/babysitter/internal/runfile"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -85,6 +86,8 @@ The data directory comes from, in this order:
 		newDaemonStartCmd(opts, &dataDirFlag),
 		newDaemonStopCmd(opts, &dataDirFlag),
 		newDaemonStatusCmd(opts, &dataDirFlag),
+		newDaemonLogsCmd(opts, &dataDirFlag),
+		newDaemonLogLevelCmd(opts, &dataDirFlag),
 	)
 	return cmd
 }
@@ -99,6 +102,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		copilotBin    string
 		copilotModel  string
 		owner         string
+		logLevel      string
 	)
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -116,7 +120,19 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			logger := slog.New(slog.NewTextHandler(cmd.ErrOrStderr(), nil))
+			level, err := logbook.ParseLevel(logLevel)
+			if err != nil {
+				return err
+			}
+			book, err := logbook.Open(logbook.Options{Path: daemonLogPath(dataDir), Level: level})
+			if err != nil {
+				return err
+			}
+			defer book.Close()
+			logger := slog.New(slog.NewMultiHandler(
+				slog.NewTextHandler(cmd.ErrOrStderr(), &slog.HandlerOptions{Level: book.Leveler()}),
+				book.Handler(),
+			))
 			err = daemon.Run(cmd.Context(), daemon.Config{
 				DataDir:       dataDir,
 				DBPath:        dbPath,
@@ -132,6 +148,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				NewClient:     opts.client,
 				Notifier:      opts.newNotifier(),
 				Log:           logger,
+				Logs:          book,
 			})
 			if errors.Is(err, context.Canceled) {
 				return nil
@@ -147,6 +164,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().StringVar(&copilotBin, "copilot-bin", "copilot", "Copilot CLI command that babysits watched pull requests")
 	cmd.Flags().StringVar(&copilotModel, "copilot-model", "", "model of Copilot CLI, empty for its default")
 	cmd.Flags().StringVar(&owner, "owner", runfile.OwnerCLI, "who started the daemon: cli or app")
+	cmd.Flags().StringVar(&logLevel, "log-level", "info", "lowest level the daemon logs: "+strings.Join(logbook.LevelNames, ", ")+"; 'daemon log-level' changes it while the daemon runs")
 	return cmd
 }
 

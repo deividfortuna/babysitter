@@ -13,6 +13,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/autostart"
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/httpd/apispec"
+	"github.com/deividfortuna/babysitter/internal/logbook"
 	"github.com/deividfortuna/babysitter/internal/notify"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
@@ -57,6 +58,7 @@ type Deps struct {
 	Shutdown      func()
 	Viewer        ViewerFunc
 	RateLimit     RateLimitFunc
+	Logs          *logbook.Book
 }
 
 type api struct {
@@ -75,6 +77,7 @@ type api struct {
 	shutdown      func()
 	viewer        *viewerCache
 	rateLimit     RateLimitFunc
+	logs          *logbook.Book
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -98,6 +101,7 @@ func NewRouter(d Deps) http.Handler {
 		shutdown:      d.Shutdown,
 		viewer:        &viewerCache{fn: d.Viewer},
 		rateLimit:     d.RateLimit,
+		logs:          d.Logs,
 	}
 	if a.ctx == nil {
 		a.ctx = context.Background()
@@ -137,6 +141,10 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/providers", a.handleListProviders)
 		r.Get("/viewer", a.handleViewer)
 		r.Get("/ratelimit", a.handleRateLimit)
+		r.Get("/logs", a.handleListLogs)
+		r.Get("/logs/stream", a.handleStreamLogs)
+		r.Get("/logs/level", a.handleGetLogLevel)
+		r.Put("/logs/level", a.handlePutLogLevel)
 		r.Post("/sync", a.handleSync)
 		r.Get("/watches", a.handleListWatches)
 		r.Post("/watches", a.handleStartWatch)
