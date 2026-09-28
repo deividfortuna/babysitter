@@ -24,6 +24,8 @@ func TestParseTarget(t *testing.T) {
 		{"octo/hello", "", Target{}, "want a number"},
 		{"octo/hello#x", "", Target{}, "invalid pull request number"},
 		{"https://github.com/octo/hello/issues/7", "", Target{}, "invalid pull request URL"},
+		{"https://github.com/octo//pull/7", "", Target{}, "invalid pull request URL"},
+		{"https://github.com//hello/pull/7", "", Target{}, "invalid pull request URL"},
 		{"7", "nope", Target{}, "want owner/name"},
 	}
 	for _, c := range cases {

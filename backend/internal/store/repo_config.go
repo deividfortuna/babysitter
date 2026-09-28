@@ -69,13 +69,11 @@ func (c RepoConfig) OwnOn() bool { return c.OwnSince != nil }
 
 func (c RepoConfig) DependabotOn() bool { return c.DependabotSince != nil }
 
-func (c RepoConfig) AutoStarts() bool { return c.CheckoutDir != "" && (c.OwnOn() || c.DependabotOn()) }
+func (c RepoConfig) AutoStarts() bool { return c.OwnOn() || c.DependabotOn() }
 
 func (c RepoConfig) Validate() error {
 	o := c.Overrides
 	switch {
-	case c.CheckoutDir == "" && (c.OwnOn() || c.DependabotOn()):
-		return fmt.Errorf("%w: set the checkout before you turn on auto start", ErrInvalidRepoConfig)
 	case !c.DependabotScope.Valid():
 		return fmt.Errorf("%w: unknown Dependabot merge scope %q: use patch, minor or major", ErrInvalidRepoConfig, c.DependabotScope)
 	case !c.DependabotApproval.Valid():

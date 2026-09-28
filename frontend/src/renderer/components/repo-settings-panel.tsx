@@ -117,8 +117,6 @@ function ConfigSections({ repo, config }: { repo: Repo; config: RepoConfig }) {
   const dependabot = useUpdateRepoConfig(repo.id);
   const overrides = useUpdateRepoConfig(repo.id);
   const failure = toggles.error ?? dependabot.error ?? overrides.error;
-  const hasCheckout = config.checkoutDir !== "";
-  const togglesLocked = !hasCheckout || toggles.isPending;
 
   return (
     <>
@@ -137,7 +135,7 @@ function ConfigSections({ repo, config }: { repo: Repo; config: RepoConfig }) {
           <Switch
             id="repo-auto-start-mine"
             checked={config.autoStartMine}
-            disabled={togglesLocked}
+            disabled={toggles.isPending}
             onCheckedChange={(autoStartMine) => toggles.mutate({ autoStartMine })}
           />
         </SettingRow>
@@ -149,7 +147,7 @@ function ConfigSections({ repo, config }: { repo: Repo; config: RepoConfig }) {
           <Switch
             id="repo-include-drafts"
             checked={config.includeDrafts}
-            disabled={togglesLocked}
+            disabled={toggles.isPending}
             onCheckedChange={(includeDrafts) => toggles.mutate({ includeDrafts })}
           />
         </SettingRow>
@@ -165,50 +163,48 @@ function ConfigSections({ repo, config }: { repo: Repo; config: RepoConfig }) {
           <Switch
             id="repo-auto-watch-dependabot"
             checked={config.autoWatchDependabot}
-            disabled={togglesLocked}
+            disabled={toggles.isPending}
             onCheckedChange={(autoWatchDependabot) => toggles.mutate({ autoWatchDependabot })}
           />
         </SettingRow>
       </Section>
 
-      {hasCheckout ? (
-        <Section title="Dependabot">
-          <SettingRow
-            label="Merge on its own up to"
-            htmlFor="repo-dependabot-scope"
-            description="Bigger updates stop at ready to merge."
-          >
-            <OptionSelect
-              id="repo-dependabot-scope"
-              className={NARROW_SELECT}
-              options={SCOPES}
-              value={config.dependabotScope}
-              disabled={dependabot.isPending}
-              onChange={(dependabotScope) => dependabot.mutate({ dependabotScope })}
-            />
-          </SettingRow>
-          <SettingRow
-            label="Approve for me"
-            htmlFor="repo-dependabot-approval"
-            description={APPROVAL_HELP[config.dependabotApproval]}
-          >
-            <OptionSelect
-              id="repo-dependabot-approval"
-              className={NARROW_SELECT}
-              options={APPROVALS}
-              value={config.dependabotApproval}
-              disabled={dependabot.isPending}
-              onChange={(dependabotApproval) => dependabot.mutate({ dependabotApproval })}
-            />
-          </SettingRow>
-          <LimitRow
-            key={config.dependabotLimit}
-            limit={config.dependabotLimit}
-            pending={dependabot.isPending}
-            onChange={(dependabotLimit) => dependabot.mutate({ dependabotLimit })}
+      <Section title="Dependabot">
+        <SettingRow
+          label="Merge on its own up to"
+          htmlFor="repo-dependabot-scope"
+          description="Bigger updates stop at ready to merge."
+        >
+          <OptionSelect
+            id="repo-dependabot-scope"
+            className={NARROW_SELECT}
+            options={SCOPES}
+            value={config.dependabotScope}
+            disabled={dependabot.isPending}
+            onChange={(dependabotScope) => dependabot.mutate({ dependabotScope })}
           />
-        </Section>
-      ) : null}
+        </SettingRow>
+        <SettingRow
+          label="Approve for me"
+          htmlFor="repo-dependabot-approval"
+          description={APPROVAL_HELP[config.dependabotApproval]}
+        >
+          <OptionSelect
+            id="repo-dependabot-approval"
+            className={NARROW_SELECT}
+            options={APPROVALS}
+            value={config.dependabotApproval}
+            disabled={dependabot.isPending}
+            onChange={(dependabotApproval) => dependabot.mutate({ dependabotApproval })}
+          />
+        </SettingRow>
+        <LimitRow
+          key={config.dependabotLimit}
+          limit={config.dependabotLimit}
+          pending={dependabot.isPending}
+          onChange={(dependabotLimit) => dependabot.mutate({ dependabotLimit })}
+        />
+      </Section>
 
       <WatchDefaults
         overrides={config.overrides}
@@ -233,6 +229,11 @@ function Section({ title, children }: { title: string; children: ReactNode }) {
       {children}
     </div>
   );
+}
+
+function checkoutHelp(repo: Repo, saved: string): string {
+  if (saved) return `Auto start makes each worktree from it. It must have a remote for ${repo.fullName}.`;
+  return `Empty: babysitter clones ${repo.fullName} once into its data folder and makes each worktree from that clone.`;
 }
 
 function CheckoutField({ repo, saved }: { repo: Repo; saved: string }) {
@@ -282,7 +283,7 @@ function CheckoutField({ repo, saved }: { repo: Repo; saved: string }) {
         id="repo-checkout-help"
         className={cn("text-body/4.5 wrap-anywhere text-muted-foreground", refusal && "text-destructive")}
       >
-        {refusal ?? `Auto start makes each worktree from it. It must have a remote for ${repo.fullName}.`}
+        {refusal ?? checkoutHelp(repo, saved)}
       </p>
     </div>
   );

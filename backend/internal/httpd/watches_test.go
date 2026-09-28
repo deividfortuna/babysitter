@@ -57,6 +57,9 @@ func (f *fakeWatches) Start(ctx context.Context, req prwatch.StartRequest) (stor
 	if req.Target.Number == 99 {
 		return store.Watch{}, prwatch.ErrNotOpen
 	}
+	if req.Target.Number == 98 {
+		return store.Watch{}, prwatch.ErrNoCheckout
+	}
 	w, err := f.st.CreateWatch(ctx, store.Watch{
 		Owner: req.Target.Owner, Name: req.Target.Name, Number: req.Target.Number,
 		HeadRef: "fix", SourceDir: req.SourceDir, Provider: req.Provider, Model: req.Model,
@@ -169,6 +172,21 @@ func call(t *testing.T, h http.Handler, method, path, body string, out any) *htt
 	return rec
 }
 
+func TestStartWatchWithoutASourceDirLeavesTheCheckoutToTheService(t *testing.T) {
+	t.Parallel()
+	h, _, fw := newTestAPI(t)
+
+	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#4"}`, nil); rec.Code != http.StatusCreated {
+		t.Fatalf("start without a source dir: %d %s", rec.Code, rec.Body)
+	}
+	if len(fw.starts) != 1 || fw.starts[0].SourceDir != "" {
+		t.Fatalf("starts = %+v", fw.starts)
+	}
+	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#98"}`, nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "watch_rejected") {
+		t.Fatalf("start that needs a checkout: %d %s", rec.Code, rec.Body)
+	}
+}
+
 func TestWatchRoutes(t *testing.T) {
 	t.Parallel()
 	h, st, fw := newTestAPI(t)
@@ -198,9 +216,6 @@ func TestWatchRoutes(t *testing.T) {
 	}
 	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"nonsense","repo":"","sourceDir":"/src","includeExisting":false}`, nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_target") {
 		t.Fatalf("bad target: %d %s", rec.Code, rec.Body)
-	}
-	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#4","repo":"","sourceDir":"","includeExisting":false}`, nil); rec.Code != http.StatusBadRequest {
-		t.Fatalf("no source dir: %d %s", rec.Code, rec.Body)
 	}
 
 	var got Watch

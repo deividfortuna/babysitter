@@ -70,13 +70,11 @@ func TestAnEmptyOverrideStaysUnset(t *testing.T) {
 func TestTheRepositoryConfigurationRefusesBadValues(t *testing.T) {
 	t.Parallel()
 	s, _ := openTemp(t)
-	now := time.Now()
 	bad := map[string]func(*RepoConfig){
-		"a toggle without a checkout": func(c *RepoConfig) { c.OwnSince = &now },
-		"a limit of 0":                func(c *RepoConfig) { c.DependabotLimit = 0 },
-		"an unknown scope":            func(c *RepoConfig) { c.DependabotScope = "huge" },
-		"an unknown approval":         func(c *RepoConfig) { c.DependabotApproval = "always" },
-		"an unknown merge method":     func(c *RepoConfig) { c.Overrides.MergeMethod = "octopus" },
+		"a limit of 0":            func(c *RepoConfig) { c.DependabotLimit = 0 },
+		"an unknown scope":        func(c *RepoConfig) { c.DependabotScope = "huge" },
+		"an unknown approval":     func(c *RepoConfig) { c.DependabotApproval = "always" },
+		"an unknown merge method": func(c *RepoConfig) { c.Overrides.MergeMethod = "octopus" },
 	}
 	for name, change := range bad {
 		c := DefaultRepoConfig(repoID(t, s))

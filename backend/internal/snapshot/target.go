@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -14,6 +15,12 @@ type Target struct {
 	Owner  string
 	Name   string
 	Number int
+}
+
+var ErrIncompleteTarget = errors.New("without a checkout, the target must name the repository and the number")
+
+func (t Target) Complete() bool {
+	return t.Owner != "" && t.Name != "" && t.Number > 0
 }
 
 var numberRE = regexp.MustCompile(`^\d+$`)
@@ -61,7 +68,8 @@ func parseURL(raw string) (Target, error) {
 		return Target{}, fmt.Errorf("invalid pull request URL %q: %w", raw, err)
 	}
 	parts := strings.Split(strings.Trim(u.Path, "/"), "/")
-	if len(parts) < 4 || parts[2] != "pull" {
+	namesRepo := len(parts) >= 4 && parts[0] != "" && parts[1] != ""
+	if !namesRepo || parts[2] != "pull" {
 		return Target{}, fmt.Errorf("invalid pull request URL %q, want https://github.com/owner/name/pull/number", raw)
 	}
 	n, err := strconv.Atoi(parts[3])

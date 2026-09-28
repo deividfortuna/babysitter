@@ -186,6 +186,7 @@ type fakeGit struct {
 	mu        sync.Mutex
 	fetches   []string
 	created   []string
+	sources   []string
 	removed   []string
 	removeErr error
 	fetchErr  error
@@ -213,6 +214,7 @@ func (g *fakeGit) fetched() []string {
 func (g *fakeGit) Create(_ context.Context, source, dir, branch, upstream string) error {
 	g.mu.Lock()
 	g.created = append(g.created, dir+" "+branch+" "+upstream)
+	g.sources = append(g.sources, source)
 	hook := g.onCreate
 	g.mu.Unlock()
 	if hook != nil {
@@ -754,6 +756,7 @@ type fixture struct {
 	st     *store.Store
 	dbPath string
 	git    *fakeGit
+	co     *fakeCheckouts
 	rel    *fakeRelease
 	notes  *fakeNotifier
 	host   *fakeHost
@@ -785,22 +788,16 @@ func newFixture(t *testing.T) *fixture {
 	t.Cleanup(func() { st.Close() })
 
 	dir := t.TempDir()
-	for _, a := range [][]string{
-		{"init", "-q", "-b", "fix"},
-		{"remote", "add", "origin", "git@github.com:octo/hello.git"},
-		{"config", "user.name", "Alice"},
-		{"config", "user.email", "alice@example.com"},
-		{"-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init"},
-	} {
-		cmd := exec.Command("git", a...)
-		cmd.Dir = dir
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", a, err, out)
-		}
-	}
+	gitIn(t, dir,
+		[]string{"init", "-q", "-b", "fix"},
+		[]string{"remote", "add", "origin", "git@github.com:octo/hello.git"},
+		[]string{"config", "user.name", "Alice"},
+		[]string{"config", "user.email", "alice@example.com"},
+		[]string{"-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init"},
+	)
 
 	fx := &fixture{
-		t: t, api: api, repo: repo, pr: pr, st: st, dbPath: dbPath, git: &fakeGit{}, rel: newFakeRelease("abc"), notes: &fakeNotifier{}, host: &fakeHost{}, dir: dir,
+		t: t, api: api, repo: repo, pr: pr, st: st, dbPath: dbPath, git: &fakeGit{}, co: &fakeCheckouts{dir: dir}, rel: newFakeRelease("abc"), notes: &fakeNotifier{}, host: &fakeHost{}, dir: dir,
 		data: filepath.Join(t.TempDir(), "data"), client: client,
 		now: time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC),
 	}
@@ -820,6 +817,7 @@ func (fx *fixture) newService() *Service {
 		Store:         fx.st,
 		NewClient:     func(context.Context) (*github.Client, error) { return fx.client, nil },
 		Git:           fx.git,
+		Checkouts:     fx.co,
 		Release:       fx.rel,
 		Notifications: fx.notes,
 		Agents:        map[string]agent.Runner{ProviderClaude: &fakeRunner{signals: true}, ProviderCopilot: &fakeRunner{}},
@@ -1076,13 +1074,7 @@ func TestStartRejections(t *testing.T) {
 		t.Fatalf("no repo Start() error = %v", err)
 	}
 	other := t.TempDir()
-	for _, a := range [][]string{{"init", "-q"}, {"remote", "add", "origin", "git@github.com:someone/else.git"}} {
-		cmd := exec.Command("git", a...)
-		cmd.Dir = other
-		if out, err := cmd.CombinedOutput(); err != nil {
-			t.Fatalf("git %v: %v\n%s", a, err, out)
-		}
-	}
+	gitIn(t, other, []string{"init", "-q"}, []string{"remote", "add", "origin", "git@github.com:someone/else.git"})
 	if _, err := fx.svc.Start(ctx, StartRequest{Target: target, SourceDir: other}); err == nil || !strings.Contains(err.Error(), ErrWrongRepo.Error()) {
 		t.Fatalf("wrong repo Start() error = %v", err)
 	}

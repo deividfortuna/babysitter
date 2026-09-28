@@ -66,6 +66,7 @@ type StartChoices = {
   approvalMode: ApprovalMode | null;
   autoRebase: boolean | null;
   mergeWhenReady: boolean;
+  noCheckout: boolean;
 };
 
 function startCommand(target: string, choices: StartChoices): string {
@@ -76,6 +77,7 @@ function startCommand(target: string, choices: StartChoices): string {
   if (choices.autoRebase !== null)
     words.push(choices.autoRebase ? "--auto-approve-rebase" : "--auto-approve-rebase=false");
   if (choices.mergeWhenReady) words.push("--merge-when-ready");
+  if (choices.noCheckout) words.push("--no-checkout");
   return words.join(" ");
 }
 
@@ -195,8 +197,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
     [pulls.data],
   );
 
-  const canStart =
-    Boolean((picked || byReference) && sourceDir.trim()) && !badApprovals && !start.isPending && defaultsLanded;
+  const checkout = sourceDir.trim();
+  const canStart = Boolean(picked || byReference) && !badApprovals && !start.isPending && defaultsLanded;
 
   const summary = settingsSummary({
     agent: catalog.find((item) => item.id === provider)?.label ?? provider,
@@ -225,7 +227,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   }
 
   async function choose() {
-    const dir = await bridge.dialog.pickDirectory(sourceDir.trim() || undefined);
+    const dir = await bridge.dialog.pickDirectory(checkout || undefined);
     if (dir) changeDir(dir);
   }
 
@@ -235,7 +237,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
       {
         target,
         repo: "",
-        sourceDir: sourceDir.trim(),
+        ...(checkout ? { sourceDir: checkout } : {}),
         ...(providerChoice ? { provider: providerChoice } : {}),
         ...(chosenModel ? { model: chosenModel } : {}),
         ...(includeExisting === null ? {} : { includeExisting }),
@@ -249,7 +251,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
       },
       {
         onSuccess: (watch) => {
-          storeDir(watch.repo, sourceDir.trim());
+          storeDir(watch.repo, checkout);
           onStarted(watch);
         },
       },
@@ -329,7 +331,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             <Input
               id="source-dir"
               className="font-mono text-xs"
-              placeholder="~/code/project"
+              placeholder="Optional, e.g. ~/code/project"
               autoComplete="off"
               value={sourceDir}
               onChange={(e) => changeDir(e.target.value)}
@@ -340,8 +342,10 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             </Button>
           </div>
           <FieldDescription>
-            {rememberedFor ? `Remembered for ${rememberedFor}. ` : null}A private worktree is made next to it; your
-            checkout is never touched.
+            {rememberedFor ? `Remembered for ${rememberedFor}. ` : null}
+            {checkout
+              ? "A private worktree is made next to it; your checkout is never touched."
+              : "Empty: babysitter clones the repository once into its data folder and makes the private worktree from that clone."}
           </FieldDescription>
         </Field>
 
@@ -575,6 +579,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               approvalMode: approvalMode || null,
               autoRebase: rebaseChosen ? autoRebaseValue : null,
               mergeWhenReady: mergeWhenReady ?? false,
+              noCheckout: !checkout,
             })}
           </Meta>
         ) : null}

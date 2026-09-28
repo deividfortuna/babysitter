@@ -259,6 +259,7 @@ func newWatchStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		autoRebase      bool
 		mergeWhenReady  bool
 		keepWorktree    bool
+		noCheckout      bool
 	)
 	cmd := &cobra.Command{
 		Use:   "start [target]",
@@ -267,6 +268,11 @@ func newWatchStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 --repo. Without a target, the pull request of the current branch is
 watched. Run the command in the checkout of the branch: the daemon makes
 a worktree from it and reads your git identity from it.
+
+With --no-checkout the current folder is not used. The daemon clones the
+head repository once into <data dir>/checkouts/<owner>/<name> and makes
+the worktree from that clone. The target must then name the repository
+and the number, and the provider must be claude or copilot.
 
 Only activity after the start goes to the agent, except that a branch
 already behind its base or in conflict with it, or a check that already
@@ -294,7 +300,7 @@ A flag you do not type takes the override of the repository
 			if _, err := snapshot.ParseTarget(target, repo); err != nil {
 				return err
 			}
-			dir, err := os.Getwd()
+			dir, err := sourceDirOf(noCheckout)
 			if err != nil {
 				return err
 			}
@@ -346,7 +352,15 @@ A flag you do not type takes the override of the repository
 	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&mergeWhenReady, "merge-when-ready", false, "the daemon merges with the method of the watch as soon as the watch is ready to merge; off without the flag")
 	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "a stop leaves the worktree of the watch on disk; without the flag the repository, then the daemon, decides")
+	cmd.Flags().BoolVar(&noCheckout, "no-checkout", false, "do not use the current folder: the daemon clones the head repository into its data directory and makes the worktree from that clone")
 	return cmd
+}
+
+func sourceDirOf(noCheckout bool) (string, error) {
+	if noCheckout {
+		return "", nil
+	}
+	return os.Getwd()
 }
 
 func newWatchListCmd(opts *options, dataDirFlag *string) *cobra.Command {

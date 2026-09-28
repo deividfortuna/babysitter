@@ -46,7 +46,7 @@ func (s *Service) authorBlocker(w store.Watch) string {
 }
 
 func (s *Service) Takeover(ctx context.Context, id int64, o TakeoverOptions) (Takeover, error) {
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {

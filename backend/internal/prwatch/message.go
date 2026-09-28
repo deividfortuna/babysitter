@@ -115,7 +115,7 @@ func (s *Service) Send(ctx context.Context, id int64, text string) (store.Activi
 	if !s.runs(w) {
 		return store.Activity{}, fmt.Errorf("%w: %s", ErrNoAgent, w.Provider)
 	}
-	unlock := s.locks.lock(w.ID)
+	unlock := s.locks.Lock(w.ID)
 	defer unlock()
 	if w, err = s.store.GetWatch(ctx, id); err != nil {
 		return store.Activity{}, err
@@ -172,7 +172,7 @@ func (s *Service) Resize(ctx context.Context, id int64, size TerminalSize) error
 	if !s.hosted(w) {
 		return ErrSelfWatch
 	}
-	unlock := s.sizeLocks.lock(id)
+	unlock := s.sizeLocks.Lock(id)
 	defer unlock()
 	s.sizes.set(id, size)
 	l := s.sessions.get(id)

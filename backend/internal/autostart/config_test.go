@@ -47,12 +47,15 @@ func TestTheCheckoutMustHaveARemoteForTheRepository(t *testing.T) {
 	}
 }
 
-func TestAToggleNeedsACheckout(t *testing.T) {
+func TestAToggleGoesOnWithoutACheckout(t *testing.T) {
 	fx := newFixture(t)
 	on := true
-	_, err := Configure(context.Background(), fx.st, fx.repo, Change{AutoStartMine: &on}, fx.now)
-	if !errors.Is(err, store.ErrInvalidRepoConfig) {
-		t.Fatalf("Configure() = %v, want ErrInvalidRepoConfig", err)
+	cfg, err := Configure(context.Background(), fx.st, fx.repo, Change{AutoStartMine: &on}, fx.now)
+	if err != nil {
+		t.Fatalf("Configure() = %v", err)
+	}
+	if !cfg.AutoStarts() || cfg.CheckoutDir != "" {
+		t.Fatalf("config = %+v, want auto start on with no checkout", cfg)
 	}
 }
 

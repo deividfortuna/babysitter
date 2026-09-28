@@ -355,7 +355,7 @@ func TestATakeoverWaitsForTheLockOfTheWatch(t *testing.T) {
 	fx := newFixture(t)
 	w := fx.start()
 
-	unlock := fx.svc.locks.lock(w.ID)
+	unlock := fx.svc.locks.Lock(w.ID)
 	done := make(chan error)
 	go func() {
 		_, err := fx.svc.Takeover(context.Background(), w.ID, TakeoverOptions{PID: 4242})

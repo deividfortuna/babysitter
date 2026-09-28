@@ -149,7 +149,9 @@ func newRepoConfigCmd(opts *options) *cobra.Command {
 field and keeps the others.
 
 --checkout names the git checkout that auto start makes each worktree
-from. Its origin must be the repository. A toggle cannot go on without it.
+from. Its origin must be the repository. Without it, the daemon clones
+the repository once into <data dir>/checkouts/<owner>/<name> and makes
+each worktree from that clone.
 
 --auto-start-mine starts a watch on each new pull request that you opened
 or that is assigned to you. --auto-watch-dependabot starts a watch on

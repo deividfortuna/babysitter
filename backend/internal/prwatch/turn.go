@@ -71,7 +71,7 @@ func (s *Service) workBranch(ctx context.Context, id int64) string {
 
 func (s *Service) startTurn(id int64, work string) {
 	ctx := context.WithoutCancel(s.background())
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	w, ok := s.gatedWatch(ctx, id)
 	if !ok {
@@ -165,7 +165,7 @@ func (s *Service) queueEndTurn(id int64, seq uint64) {
 
 func (s *Service) endTurn(id int64, seq uint64) {
 	ctx := context.WithoutCancel(s.background())
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	if !s.endsCurrentTurn(id, seq) {
 		return

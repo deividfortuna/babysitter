@@ -51,8 +51,8 @@ func TestRepoConfigChangesAndShowsTheConfiguration(t *testing.T) {
 		!strings.Contains(out, "Approval:          never") || !strings.Contains(out, "Watch defaults:    the settings of the daemon") {
 		t.Fatalf("repo config = %q, %v", out, err)
 	}
-	if _, err := run("repo", "config", "acme/billing", "--auto-start-mine"); err == nil || !strings.Contains(err.Error(), "set the checkout") {
-		t.Fatalf("a toggle without a checkout = %v", err)
+	if out, err := run("repo", "config", "acme/billing", "--auto-start-mine"); err != nil || !strings.Contains(out, "My pull requests:  on") {
+		t.Fatalf("a toggle without a checkout = %q, %v", out, err)
 	}
 	web := gitCheckoutOf(t, "https://github.com/acme/web.git")
 	if _, err := run("repo", "config", "acme/billing", "--checkout", web); err == nil || !strings.Contains(err.Error(), "has no remote for acme/billing") {

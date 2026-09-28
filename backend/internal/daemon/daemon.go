@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"os"
+	"path/filepath"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -109,6 +110,7 @@ func Run(ctx context.Context, cfg Config) error {
 		Store:         st,
 		NewClient:     cfg.NewClient,
 		Git:           worktree.New(),
+		Checkouts:     worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts")),
 		Release:       gitrelease.New(),
 		Agents:        buildAgents(ctx, cfg, log),
 		Host:          session.New(),

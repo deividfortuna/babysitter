@@ -1119,7 +1119,7 @@ export interface components {
              * @description When the toggle went on; only pull requests created from then on start
              */
             autoWatchDependabotSince?: string | null;
-            /** @description The checkout auto start makes each worktree from; the toggles stay off without it */
+            /** @description The checkout auto start makes each worktree from; empty makes the daemon clone the repository into its data directory and use that clone */
             checkoutDir: string;
             /**
              * @description never: the daemon submits no review; ask: a notification asks you to approve a green update in scope; green: the daemon approves a green update in scope in your name
@@ -1238,7 +1238,8 @@ export interface components {
              */
             provider?: "" | "claude" | "copilot" | "self";
             repo: string;
-            sourceDir: string;
+            /** @description A git checkout whose origin is the head repository of the pull request; absent makes the daemon clone the head repository into its data directory and use that clone, which needs a hosted provider and a target with the repository and the number */
+            sourceDir?: string;
             target: string;
         };
         HttpdSyncAccepted: {

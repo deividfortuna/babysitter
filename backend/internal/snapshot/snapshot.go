@@ -313,8 +313,11 @@ func (s *Snapshot) Commit(ctx context.Context, st SeenStore) error {
 }
 
 func resolve(ctx context.Context, c *github.Client, t Target, o Options) (Target, error) {
-	if t.Owner != "" && t.Number != 0 {
+	if t.Complete() {
 		return t, nil
+	}
+	if o.Dir == "" {
+		return Target{}, ErrIncompleteTarget
 	}
 	headOwner, err := resolveRepo(ctx, &t, o.Dir)
 	if err != nil {

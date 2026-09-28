@@ -10,6 +10,8 @@ import (
 
 var ErrDetachedHead = errors.New("HEAD is detached, check out a branch or name the pull request")
 
+var NoPromptEnv = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
+
 func CurrentBranch(ctx context.Context, dir string) (string, error) {
 	out, err := run(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
 	if err != nil {

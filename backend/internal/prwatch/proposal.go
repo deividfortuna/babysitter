@@ -249,7 +249,7 @@ func (s *Service) Approve(ctx context.Context, id int64, number int, d Decision)
 	if err != nil {
 		return store.Proposal{}, err
 	}
-	unlock := s.locks.lock(w.ID)
+	unlock := s.locks.Lock(w.ID)
 	defer unlock()
 	p, err := s.pendingNumber(ctx, w, number)
 	if err != nil {
@@ -369,7 +369,7 @@ func (s *Service) Reject(ctx context.Context, id int64, number int, r Rejection)
 	if err != nil {
 		return store.Proposal{}, err
 	}
-	unlock := s.locks.lock(w.ID)
+	unlock := s.locks.Lock(w.ID)
 	defer unlock()
 	p, err := s.store.GetProposal(ctx, w.ID, number)
 	if err != nil {
@@ -464,7 +464,7 @@ func (s *Service) SetApproval(ctx context.Context, id int64, c ApprovalChange) (
 	if err != nil {
 		return store.Watch{}, err
 	}
-	unlock := s.locks.lock(w.ID)
+	unlock := s.locks.Lock(w.ID)
 	defer unlock()
 	mode, autoRebase := w.ApprovalMode, w.AutoApproveRebase
 	if c.Mode != nil {

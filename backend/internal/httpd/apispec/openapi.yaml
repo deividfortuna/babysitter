@@ -2831,8 +2831,8 @@ components:
           nullable: true
           type: string
         checkoutDir:
-          description: The checkout auto start makes each worktree from; the toggles
-            stay off without it
+          description: The checkout auto start makes each worktree from; empty makes
+            the daemon clone the repository into its data directory and use that clone
           type: string
         dependabotApproval:
           description: 'never: the daemon submits no review; ask: a notification asks
@@ -3109,13 +3109,16 @@ components:
         repo:
           type: string
         sourceDir:
+          description: A git checkout whose origin is the head repository of the pull
+            request; absent makes the daemon clone the head repository into its data
+            directory and use that clone, which needs a hosted provider and a target
+            with the repository and the number
           type: string
         target:
           type: string
       required:
       - target
       - repo
-      - sourceDir
       type: object
     HttpdSyncAccepted:
       properties:

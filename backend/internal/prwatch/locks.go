@@ -62,53 +62,6 @@ func (r *registry[V]) store(id int64, v V) {
 	r.m[id] = v
 }
 
-type keyedLock struct {
-	mu    sync.Mutex
-	users int
-}
-
-type keyedLocks struct {
-	mu sync.Mutex
-	m  map[int64]*keyedLock
-}
-
-func (k *keyedLocks) lock(id int64) (unlock func()) {
-	l := k.claim(id)
-	l.mu.Lock()
-	return func() {
-		l.mu.Unlock()
-		k.release(id)
-	}
-}
-
-func (k *keyedLocks) claim(id int64) *keyedLock {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	if k.m == nil {
-		k.m = map[int64]*keyedLock{}
-	}
-	l, ok := k.m[id]
-	if !ok {
-		l = &keyedLock{}
-		k.m[id] = l
-	}
-	l.users++
-	return l
-}
-
-func (k *keyedLocks) release(id int64) {
-	k.mu.Lock()
-	defer k.mu.Unlock()
-	l, ok := k.m[id]
-	if !ok {
-		return
-	}
-	l.users--
-	if l.users == 0 {
-		delete(k.m, id)
-	}
-}
-
 type keyedQueues struct {
 	mu   sync.Mutex
 	tail map[int64]chan struct{}

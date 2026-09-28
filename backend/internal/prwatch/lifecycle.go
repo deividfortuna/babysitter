@@ -55,13 +55,17 @@ func ignoredAuthor(w store.Watch) string {
 	return w.BotLogin
 }
 
-type checkout struct {
+type source struct {
 	dir       string
 	headOwner string
 	headName  string
-	provider  string
-	model     string
-	method    string
+}
+
+type checkout struct {
+	source
+	provider string
+	model    string
+	method   string
 }
 
 type access struct {
@@ -71,20 +75,6 @@ type access struct {
 }
 
 func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout, error) {
-	if req.SourceDir == "" {
-		return checkout{}, errors.New("source directory is required")
-	}
-	if info, err := os.Stat(req.SourceDir); err != nil || !info.IsDir() {
-		return checkout{}, fmt.Errorf("source directory %q is not a directory", req.SourceDir)
-	}
-	origin, err := gitrepo.RemoteURL(ctx, req.SourceDir, "origin")
-	if err != nil {
-		return checkout{}, fmt.Errorf("%s is not a git checkout with an origin remote: %w", req.SourceDir, err)
-	}
-	headOwner, headName, err := store.ParseFullName(origin)
-	if err != nil {
-		return checkout{}, fmt.Errorf("origin of %s: %w", req.SourceDir, err)
-	}
 	provider, ok := normalizeProvider(req.Provider)
 	if !ok {
 		return checkout{}, providerError(req.Provider)
@@ -103,7 +93,54 @@ func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout
 	if !req.ApprovalMode.Valid() {
 		return checkout{}, fmt.Errorf("%w: %q", ErrBadApprovalMode, *req.ApprovalMode)
 	}
-	return checkout{dir: req.SourceDir, headOwner: headOwner, headName: headName, provider: provider, model: model, method: method}, nil
+	src, err := givenSource(ctx, req.SourceDir, provider)
+	if err != nil {
+		return checkout{}, err
+	}
+	return checkout{source: src, provider: provider, model: model, method: method}, nil
+}
+
+func givenSource(ctx context.Context, dir, provider string) (source, error) {
+	if dir != "" {
+		return readSource(ctx, dir)
+	}
+	if !hostedProvider(provider) {
+		return source{}, fmt.Errorf("%w: the %s provider works in the checkout of its session", ErrNoCheckout, provider)
+	}
+	return source{}, nil
+}
+
+func (s *Service) orManagedSource(ctx context.Context, src source, headRepo string) (source, error) {
+	if src.dir != "" {
+		return src, nil
+	}
+	if s.checkouts == nil {
+		return source{}, fmt.Errorf("%w: this daemon makes no checkout of its own", ErrNoCheckout)
+	}
+	headOwner, headName, err := store.ParseFullName(headRepo)
+	if err != nil {
+		return source{}, err
+	}
+	dir, err := s.checkouts.Ensure(ctx, headRepo)
+	if err != nil {
+		return source{}, err
+	}
+	return source{dir: dir, headOwner: headOwner, headName: headName}, nil
+}
+
+func readSource(ctx context.Context, dir string) (source, error) {
+	if info, err := os.Stat(dir); err != nil || !info.IsDir() {
+		return source{}, fmt.Errorf("source directory %q is not a directory", dir)
+	}
+	origin, err := gitrepo.RemoteURL(ctx, dir, "origin")
+	if err != nil {
+		return source{}, fmt.Errorf("%s is not a git checkout with an origin remote: %w", dir, err)
+	}
+	headOwner, headName, err := store.ParseFullName(origin)
+	if err != nil {
+		return source{}, fmt.Errorf("origin of %s: %w", dir, err)
+	}
+	return source{dir: dir, headOwner: headOwner, headName: headName}, nil
 }
 
 func (s *Service) lacksRunner(provider string) bool {
@@ -220,6 +257,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	} else if !errors.Is(err, store.ErrWatchNotFound) {
 		return store.Watch{}, err
 	}
+	if co.source, err = s.orManagedSource(ctx, co.source, snap.PR.HeadRepo); err != nil {
+		return store.Watch{}, err
+	}
 	if err := checkHeadRepo(snap.PR, co); err != nil {
 		return store.Watch{}, err
 	}
@@ -231,7 +271,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	headRef := snap.PR.HeadBranch
 	var dir, branch string
 	if hostedProvider(co.provider) {
-		dir, branch, err = s.makeWorktree(ctx, req.SourceDir, key, headRef)
+		dir, branch, err = s.makeWorktree(ctx, co.dir, key, headRef)
 		if err != nil {
 			return store.Watch{}, err
 		}
@@ -241,7 +281,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	w, err := s.store.CreateWatch(ctx, store.Watch{
 		Owner: owner, Name: name, Number: snap.PR.Number, URL: snap.PR.URL, Title: snap.PR.Title, Author: snap.PR.Author,
 		BotLogin: acc.botLogin, HeadRef: headRef, BaseRef: snap.PR.BaseBranch,
-		SourceDir: req.SourceDir, WorktreeDir: dir, WorkBranch: branch,
+		SourceDir: co.dir, WorktreeDir: dir, WorkBranch: branch,
 		GitUserName: acc.userName, GitUserEmail: acc.userEmail,
 		Provider: co.provider, Model: co.model,
 		IncludeExisting: *req.IncludeExisting, IncludeOwn: *req.IncludeOwn, StartedAt: now,
@@ -251,7 +291,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 		HeadSHA: base.HeadSHA, PRState: base.PRState, MergeableState: base.MergeableState, CheckStates: base.Checks, GreenSHA: base.GreenSHA,
 	})
 	if err != nil {
-		s.dropWorktree(ctx, req.SourceDir, dir, branch)
+		s.dropWorktree(ctx, co.dir, dir, branch)
 		return store.Watch{}, err
 	}
 	if err := s.finishStart(ctx, client, w, snap, baseline, *req.IncludeExisting); err != nil {
@@ -350,7 +390,7 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 			return err
 		}
 	}
-	unlock := s.locks.lock(w.ID)
+	unlock := s.locks.Lock(w.ID)
 	defer unlock()
 	if !s.runs(w) {
 		return nil
@@ -389,7 +429,7 @@ type StopOptions struct {
 }
 
 func (s *Service) Stop(ctx context.Context, id int64, o StopOptions) (store.Watch, error) {
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	return s.stop(ctx, id, store.StopUser, "", o)
 }
