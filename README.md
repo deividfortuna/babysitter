@@ -911,6 +911,16 @@ the order the agent made them. The replies describe the code, so a push
 that fails posts none of them. A push that landed says nothing to the
 agent.
 
+A second git hook adds this trailer to each commit of the session:
+
+```
+Co-authored-by: babysitter <335241182+babysitter-orchestrator@users.noreply.github.com>
+```
+
+The hook adds the trailer one time only, also when the agent amends a
+commit. The session of a takeover has no hooks, so your
+commits do not get the trailer.
+
 The daemon decides how to push. Before it types a message into an idle
 session, it fetches the pull request branch and fast-forwards the work
 branch to it, so a commit somebody else pushed is under the work of the
@@ -1349,7 +1359,7 @@ project for the desktop app. Paths below are relative to `backend/`.
 - `internal/checks`: reduces check runs, commit statuses and workflow runs to the states the app uses, and trims a failed job log to the lines that matter
 - `internal/prwatch`: the watch of one pull request: the poll, the activity diff, the messages to the agent session
 - `internal/session`: runs the agent in a pseudo terminal the daemon owns: types messages, keeps the output, reports the exit
-- `internal/agent`: the contract of an agent session, its state, the git hook, and the messages the daemon types; the prompts live in `prompts/`. `agent/claude` and `agent/copilot` build the command line of each CLI as an interactive session, with its hooks and its tool rules
+- `internal/agent`: the contract of an agent session, its state, the git hooks, and the messages the daemon types; the prompts live in `prompts/`. `agent/claude` and `agent/copilot` build the command line of each CLI as an interactive session, with its hooks and its tool rules
 - `internal/worktree`: the git write operations of a watch, in its own worktree
 - `internal/gitrepo`: reads the current branch, the remotes and git configuration values with git
 - `internal/gitrelease`: the git the daemon runs to release the work of the agent: reads the pull request branch, compares it with the work branch, and pushes with the credential helper of the author
