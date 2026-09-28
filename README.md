@@ -1358,7 +1358,7 @@ the Homebrew cask on three channels:
 | Channel | How it starts | What it publishes |
 | --- | --- | --- |
 | Nightly | A schedule runs every 30 minutes. It releases only when `main` has new commits and 6 hours have passed since the last nightly. You can also start it by hand with `channel=nightly` from `main` | A GitHub prerelease `vX.Y.Z-nightly.YYYYMMDD.<run>` with the `nightly-mac.yml` update feed |
-| Stable | Start it by hand with `channel=stable` from `main`, or push a `vX.Y.Z` tag | The GitHub "latest" release with the `latest-mac.yml` update feed, and the Homebrew cask |
+| Stable | Start it by hand with `channel=stable` from `main`, or push a `vX.Y.Z` tag on a commit of `main`. The version must be newer than the latest stable release | The GitHub "latest" release with the `latest-mac.yml` update feed, and the Homebrew cask |
 | Preview | Start it by hand with `channel=preview` from any branch. This is the default input | A test build for maintainers, `vX.Y.Z-preview.YYYYMMDD.<run>`. It has no update feed and no cask, and its notes tell users not to install it |
 
 A stable release that you start by hand ships the commit of the latest

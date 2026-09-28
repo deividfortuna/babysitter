@@ -70,9 +70,9 @@ function stableSource(releases, defaultBranch) {
 
 function stableRelease(releases, defaultBranch) {
   const { version, ref } = stableSource(releases, defaultBranch);
-  assertStableVersion(version);
-  if (releases.some((release) => release.tag === `v${version}`)) throw new Error(`v${version} is already released`);
-  return planRelease("stable", version, ref, latestRelease(releases, "stable"));
+  const latestStable = latestRelease(releases, "stable");
+  assertStableVersion(version, latestStable?.tag);
+  return planRelease("stable", version, ref, latestStable);
 }
 
 function nightlyWaitReason(releases) {

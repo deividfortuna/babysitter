@@ -29,6 +29,11 @@ test("a build of any other prerelease follows stable releases", () => {
   expect(defaultChannel("0.2.1-preview.20260928.42")).toBe("stable");
 });
 
+test("a prerelease that only ends like a nightly follows stable releases, because the updater reads its first name as the channel", () => {
+  expect(defaultChannel("0.2.1-rc.1-nightly.20260928.41")).toBe("stable");
+  expect(defaultChannel("0.2.1-beta-nightly.20260928.41")).toBe("stable");
+});
+
 test("a build with no saved choice downloads on its own and follows the channel of its version", () => {
   expect(resolveSettings({}, "0.2.1-nightly.20260928.41")).toEqual({ autoDownload: true, channel: "nightly" });
   expect(resolveSettings({}, "0.2.0")).toEqual({ autoDownload: true, channel: "stable" });

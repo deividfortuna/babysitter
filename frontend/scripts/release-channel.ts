@@ -74,10 +74,13 @@ function parts(version: string): number[] {
   return match.slice(1).map(Number);
 }
 
-function newer(a: string, b: string): string {
+function compare(a: string, b: string): number {
   const [left, right] = [parts(a), parts(b)];
-  const difference = left.map((part, index) => part - right[index]).find((part) => part !== 0) ?? 0;
-  return difference >= 0 ? a : b;
+  return left.map((part, index) => part - right[index]).find((part) => part !== 0) ?? 0;
+}
+
+function newer(a: string, b: string): string {
+  return compare(a, b) >= 0 ? a : b;
 }
 
 function nextPatch(version: string): string {
@@ -108,8 +111,11 @@ export function stableVersionOf(nightlyTag: string): string {
   return match[1];
 }
 
-export function assertStableVersion(version: string): void {
+export function assertStableVersion(version: string, latestStableTag?: string): void {
   if (!STABLE_VERSION.test(version)) throw new Error(`a stable version is X.Y.Z, not ${JSON.stringify(version)}`);
+  if (latestStableTag && compare(version, latestStableTag.slice(1)) <= 0) {
+    throw new Error(`v${version} is not newer than ${latestStableTag}, the latest stable release`);
+  }
 }
 
 export function planRelease(channel: Channel, version: string, ref: string, previous?: PublishedRelease): ReleasePlan {

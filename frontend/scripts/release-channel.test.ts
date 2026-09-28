@@ -119,6 +119,13 @@ test("a stable version has no prerelease", () => {
   expect(() => assertStableVersion("v1.2.3")).toThrow(/X.Y.Z/);
 });
 
+test("a stable version must be newer than the latest stable release, so the latest release never goes back", () => {
+  expect(() => assertStableVersion("0.1.0", "v0.2.0")).toThrow(/not newer than v0.2.0/);
+  expect(() => assertStableVersion("0.2.0", "v0.2.0")).toThrow(/not newer than v0.2.0/);
+  expect(() => assertStableVersion("0.2.1", "v0.2.0")).not.toThrow();
+  expect(() => assertStableVersion("0.10.0", "v0.9.9")).not.toThrow();
+});
+
 describe("planRelease", () => {
   const previous = { tag: "v0.1.0", publishedAt: "2026-09-26T08:00:00Z" };
 

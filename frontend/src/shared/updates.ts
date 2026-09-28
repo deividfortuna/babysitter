@@ -27,7 +27,7 @@ export type UpdateSettings = {
 
 export const RELEASES_URL = "https://github.com/deividfortuna/babysitter/releases";
 
-const NIGHTLY_VERSION = /-nightly\.\d{8}\.\d+$/;
+const NIGHTLY_VERSION = /^\d+\.\d+\.\d+-nightly\.\d{8}\.\d+$/;
 
 const BUSY_STATES: UpdateState[] = ["checking", "downloading", "downloaded", "installing"];
 
