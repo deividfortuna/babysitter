@@ -1576,7 +1576,7 @@ export interface operations {
             query?: {
                 /** @description Only records with a seq above this */
                 after?: number;
-                /** @description At most this many records from the end, default 500 */
+                /** @description At most this many records from the end, from 0 for all to 100000, default 500 */
                 limit?: number;
             };
             header?: never;

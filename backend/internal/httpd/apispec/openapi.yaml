@@ -74,11 +74,13 @@ paths:
           description: Only records with a seq above this
           format: int64
           type: integer
-      - description: At most this many records from the end, default 500
+      - description: At most this many records from the end, from 0 for all to 100000,
+          default 500
         in: query
         name: limit
         schema:
-          description: At most this many records from the end, default 500
+          description: At most this many records from the end, from 0 for all to 100000,
+            default 500
           type: integer
       responses:
         "200":

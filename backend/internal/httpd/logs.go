@@ -14,6 +14,7 @@ import (
 
 const (
 	logsDefaultLimit = 500
+	logsMaxLimit     = 100_000
 	logsBuffer       = 1024
 )
 
@@ -37,7 +38,7 @@ type LogList struct {
 
 type LogQuery struct {
 	After int64 `query:"after" description:"Only records with a seq above this"`
-	Limit int   `query:"limit" description:"At most this many records from the end, default 500"`
+	Limit int   `query:"limit" description:"At most this many records from the end, from 0 for all to 100000, default 500"`
 }
 
 type LogStreamQuery struct {
@@ -87,6 +88,10 @@ func (a *api) handleListLogs(w http.ResponseWriter, r *http.Request) {
 	}
 	if after < 0 || limit < 0 {
 		writeError(w, http.StatusBadRequest, "bad_request", "after and limit must not be negative")
+		return
+	}
+	if limit > logsMaxLimit {
+		writeError(w, http.StatusBadRequest, "bad_request", fmt.Sprintf("limit must be %d or less", logsMaxLimit))
 		return
 	}
 	writeJSON(w, http.StatusOK, LogList{Records: logRecords(book.Since(after, int(limit))), Path: book.Path()})

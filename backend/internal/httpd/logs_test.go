@@ -59,6 +59,16 @@ func TestLogsRefuseANegativeLimit(t *testing.T) {
 	}
 }
 
+func TestLogsRefuseALimitPastTheMaximum(t *testing.T) {
+	t.Parallel()
+	h, _, _ := newLogAPI(t)
+
+	rec := call(t, h, http.MethodGet, "/logs?limit=9223372036854775807", "", nil)
+	if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "limit must be 100000 or less") {
+		t.Fatalf("GET /logs with a huge limit = %d %s, want 400", rec.Code, rec.Body)
+	}
+}
+
 func TestLogsAreUnavailableWithoutABook(t *testing.T) {
 	t.Parallel()
 	h := NewRouter(Deps{Log: testutil.Logger(t), Bus: events.NewBus()})
