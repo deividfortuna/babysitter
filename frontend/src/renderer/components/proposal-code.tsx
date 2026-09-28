@@ -1,29 +1,37 @@
-import { useCallback, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   ChevronsDownUpIcon,
   ChevronsUpDownIcon,
   CircleXIcon,
   Columns2Icon,
+  CopyIcon,
   ListTreeIcon,
   Maximize2Icon,
   RotateCcwIcon,
   Rows2Icon,
-  ScissorsIcon,
   TriangleAlertIcon,
   WrapTextIcon,
   type LucideIcon,
 } from "lucide-react";
 import type { DiffLineAnnotation } from "@pierre/diffs";
-import { CodeView, WorkerPoolContextProvider, type CodeViewHandle, type CodeViewItem } from "@pierre/diffs/react";
+import { CodeView, WorkerPoolContext, type CodeViewHandle, type CodeViewItem } from "@pierre/diffs/react";
 import type { ProposalDetail, ProposalReply } from "@/hooks/useProposals";
 import { useDiffPreferences, type DiffPreferences, type DiffStyle } from "@/hooks/use-diff-preferences";
 import { useTheme } from "@/hooks/use-theme";
-import type { DiffFile, ProposalDiff, ReplyAnchor } from "@/lib/proposal-diff";
+import {
+  DIFF_THEMES,
+  PREFERRED_HIGHLIGHTER,
+  TOKENIZE_MAX_LINE_LENGTH,
+  useDiffWorkerPool,
+} from "@/lib/diff-worker-pool";
+import { contentKey, viewKey, type DiffFile, type ProposalDiff, type ReplyAnchor } from "@/lib/proposal-diff";
+import { readViewedFiles, storeViewedFiles, type ViewedFiles } from "@/lib/viewed-files";
 import { Meta } from "@/components/status-badges";
 import { count } from "@/components/proposal-dialogs";
-import { changeIcon, FileTree, LineCounts } from "@/components/proposal-file-tree";
+import { changeIcon, FileTree, LineCounts, type MissingLoad } from "@/components/proposal-file-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -53,60 +61,94 @@ export type ShownCode = {
   loading: boolean;
   error: string | null;
   reload: () => void;
+  loads: ReadonlyMap<string, MissingLoad>;
+  load: (path: string) => void;
 };
+
+type Fold = "folded" | "expanded" | null;
 
 type Reading = {
-  viewed: ReadonlySet<string>;
+  viewed: (file: DiffFile) => boolean;
+  changedSinceViewed: (file: DiffFile) => boolean;
   collapsed: (file: DiffFile) => boolean;
-  toggleViewed: (path: string) => void;
+  toggleViewed: (file: DiffFile) => void;
   toggleOpen: (file: DiffFile) => void;
-  foldAll: (files: DiffFile[], folded: boolean) => void;
+  foldAll: (folded: boolean) => void;
 };
 
-const THEMES = { light: "github-light-default", dark: "github-dark-default" } as const;
+const HEADER_HEIGHT = 40;
 
-const POOL = {
-  workerFactory: () => new Worker(new URL("@pierre/diffs/worker/worker.js", import.meta.url), { type: "module" }),
-  poolSize: 2,
-};
-const HIGHLIGHTER = { theme: THEMES, preferredHighlighter: "shiki-js" } as const;
-
-const HEADER_SLACK = 8;
+const ITEM_METRICS = { diffHeaderHeight: HEADER_HEIGHT, paddingTop: 0, paddingBottom: 8 };
 
 const FLUSH = { paddingTop: 0, paddingBottom: 0, gap: 0 };
 
-function useReading(): Reading {
-  const [viewed, setViewed] = useState<ReadonlySet<string>>(new Set());
-  const [open, setOpen] = useState<Record<string, boolean>>({});
+const HEADER_SLACK = 8;
 
-  const collapsed = useCallback((file: DiffFile) => !(open[file.path] ?? !file.noisy), [open]);
+const COPIED_MS = 1500;
+
+function flip(paths: ReadonlySet<string>, path: string): ReadonlySet<string> {
+  return withPath(paths, path, !paths.has(path));
+}
+
+function withPath(paths: ReadonlySet<string>, path: string, kept: boolean): ReadonlySet<string> {
+  if (paths.has(path) === kept) return paths;
+  const next = new Set(paths);
+  if (kept) next.add(path);
+  else next.delete(path);
+  return next;
+}
+
+function foldedByDefault(fold: Fold, file: DiffFile, viewed: boolean): boolean {
+  if (fold === null) return file.noisy || viewed;
+  return fold === "folded";
+}
+
+function without(files: ViewedFiles, path: string): ViewedFiles {
+  return Object.fromEntries(Object.entries(files).filter(([p]) => p !== path));
+}
+
+function useReading(viewedKey: string): Reading {
+  const [viewedFiles, setViewedFiles] = useState<ViewedFiles>(() => readViewedFiles(viewedKey));
+  const [fold, setFold] = useState<Fold>(null);
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set());
+
+  const viewed = useCallback((file: DiffFile) => viewedFiles[file.path] === viewKey(file), [viewedFiles]);
+
+  const changedSinceViewed = useCallback(
+    (file: DiffFile) => {
+      const seen = viewedFiles[file.path];
+      return seen !== undefined && seen !== viewKey(file);
+    },
+    [viewedFiles],
+  );
+
+  const collapsed = useCallback(
+    (file: DiffFile) => toggled.has(file.path) !== foldedByDefault(fold, file, viewed(file)),
+    [fold, toggled, viewed],
+  );
 
   const toggleViewed = useCallback(
-    (path: string) => {
-      const nowViewed = !viewed.has(path);
-      const next = new Set(viewed);
-      if (nowViewed) next.add(path);
-      else next.delete(path);
-      setViewed(next);
-      setOpen((o) => ({ ...o, [path]: !nowViewed }));
+    (file: DiffFile) => {
+      const nowViewed = !viewed(file);
+      const next = nowViewed ? { ...viewedFiles, [file.path]: viewKey(file) } : without(viewedFiles, file.path);
+      setViewedFiles(next);
+      storeViewedFiles(viewedKey, next);
+      const foldedAway = foldedByDefault(fold, file, nowViewed);
+      setToggled((t) => withPath(t, file.path, foldedAway !== nowViewed));
     },
-    [viewed],
+    [viewed, viewedFiles, viewedKey, fold],
   );
 
-  const toggleOpen = useCallback(
-    (file: DiffFile) => setOpen((o) => ({ ...o, [file.path]: !(o[file.path] ?? !file.noisy) })),
-    [],
-  );
+  const toggleOpen = useCallback((file: DiffFile) => setToggled((t) => flip(t, file.path)), []);
 
-  const foldAll = useCallback(
-    (files: DiffFile[], folded: boolean) =>
-      setOpen((o) => ({ ...o, ...Object.fromEntries(files.map((f) => [f.path, !folded])) })),
-    [],
-  );
+  const foldAll = useCallback((folded: boolean) => {
+    setFold(folded ? "folded" : "expanded");
+    setToggled(new Set());
+  }, []);
 
   return useMemo(
-    () => ({ viewed, collapsed, toggleViewed, toggleOpen, foldAll }),
-    [viewed, collapsed, toggleViewed, toggleOpen, foldAll],
+    () => ({ viewed, changedSinceViewed, collapsed, toggleViewed, toggleOpen, foldAll }),
+    [viewed, changedSinceViewed, collapsed, toggleViewed, toggleOpen, foldAll],
   );
 }
 
@@ -136,17 +178,20 @@ export function CodeArea({
   title,
   actions,
   notice,
+  viewedKey,
   ...card
 }: CardProps & {
   title: string;
   actions: ReactNode;
   notice: ReactNode;
+  viewedKey: string;
 }) {
-  const reading = useReading();
+  const reading = useReading(viewedKey);
   const [full, setFull] = useState(false);
+  const pool = useDiffWorkerPool();
 
   return (
-    <WorkerPoolContextProvider poolOptions={POOL} highlighterOptions={HIGHLIGHTER}>
+    <WorkerPoolContext.Provider value={pool}>
       {full ? (
         <p className="text-sm text-muted-foreground">The diff is open in the full window.</p>
       ) : (
@@ -164,7 +209,7 @@ export function CodeArea({
           <DiffCard {...card} reading={reading} fill />
         </DialogContent>
       </Dialog>
-    </WorkerPoolContextProvider>
+    </WorkerPoolContext.Provider>
   );
 }
 
@@ -190,6 +235,11 @@ function DiffCard({
   const [current, setCurrent] = useState<string>();
   const viewer = useRef<CodeViewHandle<ReplyAnchor, undefined>>(null);
   const { diff } = shown;
+  const viewedPaths = useMemo(
+    () => new Set((diff?.files ?? []).filter((f) => reading.viewed(f)).map((f) => f.path)),
+    [diff, reading],
+  );
+  const loadable = (diff?.missing ?? []).filter((f) => shown.loads.get(f.path) !== "too-large").length;
 
   const jump = useCallback((path: string) => {
     setCurrent(path);
@@ -210,6 +260,7 @@ function DiffCard({
         commit={commit}
         onCommit={onCommit}
         reading={reading}
+        viewedCount={viewedPaths.size}
         preferences={preferences}
         onPreferences={change}
         tree={tree}
@@ -220,13 +271,17 @@ function DiffCard({
         {tree && diff ? (
           <FileTree
             diff={diff}
-            viewed={reading.viewed}
+            viewed={viewedPaths}
             current={shownOrFirst(diff.files, current, reading.collapsed)}
             onJump={jump}
+            loads={shown.loads}
+            onLoad={shown.load}
           />
         ) : null}
         <div className="flex min-w-0 flex-1 flex-col">
-          {shown.truncated && diff ? <CutNotice missing={diff.missing.length} /> : null}
+          {shown.truncated && loadable > 0 ? (
+            <CutNotice missing={loadable} tree={tree} onTree={() => setTree(true)} />
+          ) : null}
           {diff ? (
             <DiffViewer
               ref={viewer}
@@ -320,6 +375,7 @@ function Toolbar({
   commit,
   onCommit,
   reading,
+  viewedCount,
   preferences,
   onPreferences,
   tree,
@@ -331,6 +387,7 @@ function Toolbar({
   commit: string | null;
   onCommit: (sha: string | null) => void;
   reading: Reading;
+  viewedCount: number;
   preferences: DiffPreferences;
   onPreferences: (next: Partial<DiffPreferences>) => void;
   tree: boolean;
@@ -338,10 +395,9 @@ function Toolbar({
   onFull?: () => void;
 }) {
   const files = diff?.files ?? [];
-  const listed = files.length + (diff?.missing.length ?? 0);
-  const seen = files.filter((f) => reading.viewed.has(f.path)).length;
-  const added = files.reduce((sum, f) => sum + f.added, 0);
-  const deleted = files.reduce((sum, f) => sum + f.deleted, 0);
+  const every = [...files, ...(diff?.missing ?? [])];
+  const added = every.reduce((sum, f) => sum + f.added, 0);
+  const deleted = every.reduce((sum, f) => sum + f.deleted, 0);
   const allFolded = files.length > 0 && files.every((f) => reading.collapsed(f));
   const FoldIcon = allFolded ? ChevronsUpDownIcon : ChevronsDownUpIcon;
   const foldLabel = allFolded ? "Expand all" : "Collapse all";
@@ -351,8 +407,8 @@ function Toolbar({
         <CommitMenu commits={commits} commit={commit} onCommit={onCommit} />
         {diff ? (
           <span className="shrink-0 text-sm text-muted-foreground">
-            {count(listed, "file")}
-            {seen > 0 ? ` · ${seen} viewed` : ""}
+            {count(every.length, "file")}
+            {viewedCount > 0 ? ` · ${viewedCount} viewed` : ""}
           </span>
         ) : null}
         <div className="ml-auto flex shrink-0 items-center gap-2">
@@ -363,7 +419,7 @@ function Toolbar({
               size="icon-sm"
               aria-label={foldLabel}
               disabled={!diff}
-              onClick={() => reading.foldAll(files, !allFolded)}
+              onClick={() => reading.foldAll(!allFolded)}
             >
               <FoldIcon />
             </Button>
@@ -461,15 +517,22 @@ function CommitItem({ current, onSelect, children }: { current: boolean; onSelec
   );
 }
 
-function CutNotice({ missing }: { missing: number }) {
+function CutNotice({ missing, tree, onTree }: { missing: number; tree: boolean; onTree: () => void }) {
   return (
     <Alert className="rounded-none border-x-0 border-t-0">
       <TriangleAlertIcon />
-      <AlertTitle>The diff is longer than one megabyte and was cut.</AlertTitle>
-      <AlertDescription>
-        {missing > 0
-          ? `The last file shown stops where the cut is, and ${count(missing, "file")} after it ${missing === 1 ? "is" : "are"} not in the diff.`
-          : "The last file shown stops where the cut is."}
+      <AlertTitle>The diff is longer than one megabyte.</AlertTitle>
+      <AlertDescription className="flex flex-wrap items-center gap-2">
+        <span>
+          It stops at the last whole file under that size. Load the {count(missing, "file")} after it one at a time from
+          the file tree.
+        </span>
+        {tree ? null : (
+          <Button size="xs" variant="outline" onClick={onTree}>
+            <ListTreeIcon data-icon="inline-start" />
+            Open the file tree
+          </Button>
+        )}
       </AlertDescription>
     </Alert>
   );
@@ -501,6 +564,50 @@ function fileInView(
   return shown?.path ?? firstOpen(files, collapsed);
 }
 
+type HeaderState = { byPath: ReadonlyMap<string, DiffFile>; reading: Reading };
+
+type ReplyState = { byId: ReadonlyMap<number, ProposalReply>; renderReply: RenderReply };
+
+const HeaderContext = createContext<HeaderState | null>(null);
+
+const ReplyContext = createContext<ReplyState | null>(null);
+
+function FileHeaderSlot({ path }: { path: string }) {
+  const state = useContext(HeaderContext);
+  const file = state?.byPath.get(path);
+  if (!state || !file) return null;
+  const { reading } = state;
+  return (
+    <FileHeader
+      file={file}
+      viewed={reading.viewed(file)}
+      changed={reading.changedSinceViewed(file)}
+      collapsed={reading.collapsed(file)}
+      onViewed={() => reading.toggleViewed(file)}
+      onToggle={() => reading.toggleOpen(file)}
+    />
+  );
+}
+
+function InlineReply({ anchor }: { anchor: ReplyAnchor | undefined }) {
+  const state = useContext(ReplyContext);
+  const reply = anchor ? state?.byId.get(anchor.replyId) : undefined;
+  if (!state || !anchor || !reply) return null;
+  return (
+    <div className="border-y bg-background px-3 py-2.5 font-sans text-foreground">
+      {state.renderReply(reply, anchor)}
+    </div>
+  );
+}
+
+function renderHeader(item: CodeViewItem<ReplyAnchor>) {
+  return <FileHeaderSlot path={item.id} />;
+}
+
+function renderInlineReply(annotation: DiffLineAnnotation<ReplyAnchor>) {
+  return <InlineReply anchor={annotation.metadata} />;
+}
+
 function DiffViewer({
   ref,
   diff,
@@ -525,14 +632,15 @@ function DiffViewer({
   const version = useVersions();
   const byPath = useMemo(() => new Map(diff.files.map((f) => [f.path, f])), [diff.files]);
   const byId = useMemo(() => new Map(replies.map((r) => [r.id, r])), [replies]);
+  const headerState = useMemo(() => ({ byPath, reading }), [byPath, reading]);
+  const replyState = useMemo(() => ({ byId, renderReply }), [byId, renderReply]);
 
   const items = useMemo(
     () =>
       diff.files.map((f): CodeViewItem<ReplyAnchor> => {
         const collapsed = reading.collapsed(f);
-        const viewed = reading.viewed.has(f.path);
         const notes = annotations.get(f.path) ?? [];
-        const key = `${collapsed}|${viewed}|${notes.map((a) => a.metadata.replyId).join(",")}`;
+        const key = `${contentKey(f.diff)}|${collapsed}|${notes.map((a) => a.metadata.replyId).join(",")}`;
         return {
           id: f.path,
           type: "diff",
@@ -547,66 +655,79 @@ function DiffViewer({
 
   const options = useMemo(
     () => ({
-      theme: THEMES,
+      theme: DIFF_THEMES,
       themeType: theme,
       diffStyle: style,
       overflow: wrap ? ("wrap" as const) : ("scroll" as const),
-      preferredHighlighter: "shiki-js" as const,
+      preferredHighlighter: PREFERRED_HIGHLIGHTER,
+      tokenizeMaxLineLength: TOKENIZE_MAX_LINE_LENGTH,
       lineDiffType: "word" as const,
       hunkSeparators: "line-info" as const,
       stickyHeaders: true,
+      itemMetrics: ITEM_METRICS,
       layout: FLUSH,
     }),
     [theme, style, wrap],
   );
 
+  const onScroll = useCallback(
+    (scrollTop: number, view: { getTopForItem: (id: string) => number | undefined }) =>
+      onCurrent(fileInView(diff.files, reading.collapsed, (id) => view.getTopForItem(id), scrollTop)),
+    [diff.files, reading.collapsed, onCurrent],
+  );
+
   return (
-    <div role="group" aria-label="Diff" className="flex min-h-0 flex-1 flex-col diff-colors">
-      <CodeView<ReplyAnchor, undefined>
-        ref={ref}
-        items={items}
-        options={options}
-        className="min-h-0 flex-1 overflow-auto"
-        onScroll={(scrollTop, view) =>
-          onCurrent(fileInView(diff.files, reading.collapsed, (id) => view.getTopForItem(id), scrollTop))
-        }
-        renderCustomHeader={(item) => {
-          const file = byPath.get(item.id);
-          if (!file) return null;
-          return (
-            <FileHeader
-              file={file}
-              viewed={reading.viewed.has(file.path)}
-              collapsed={reading.collapsed(file)}
-              onViewed={() => reading.toggleViewed(file.path)}
-              onToggle={() => reading.toggleOpen(file)}
-            />
-          );
-        }}
-        renderAnnotation={(annotation) => {
-          const anchor = annotation.metadata;
-          const reply = anchor ? byId.get(anchor.replyId) : undefined;
-          if (!anchor || !reply) return null;
-          return (
-            <div className="border-y bg-background px-3 py-2.5 font-sans text-foreground">
-              {renderReply(reply, anchor)}
-            </div>
-          );
-        }}
-      />
-    </div>
+    <HeaderContext.Provider value={headerState}>
+      <ReplyContext.Provider value={replyState}>
+        <div role="group" aria-label="Diff" className="flex min-h-0 flex-1 flex-col diff-colors">
+          <CodeView<ReplyAnchor, undefined>
+            ref={ref}
+            items={items}
+            options={options}
+            className="min-h-0 flex-1 overflow-auto"
+            onScroll={onScroll}
+            renderCustomHeader={renderHeader}
+            renderAnnotation={renderInlineReply}
+          />
+        </div>
+      </ReplyContext.Provider>
+    </HeaderContext.Provider>
+  );
+}
+
+function CopyPath({ path }: { path: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = () =>
+    void navigator.clipboard.writeText(path).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), COPIED_MS);
+    });
+  const Icon = copied ? CheckIcon : CopyIcon;
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label={copied ? `Copied ${path}` : `Copy the path of ${path}`}
+      title="Copy the path"
+      className="shrink-0 text-muted-foreground"
+      onClick={copy}
+    >
+      <Icon className={cn(copied && "text-success")} />
+    </Button>
   );
 }
 
 function FileHeader({
   file,
   viewed,
+  changed,
   collapsed,
   onViewed,
   onToggle,
 }: {
   file: DiffFile;
   viewed: boolean;
+  changed: boolean;
   collapsed: boolean;
   onViewed: () => void;
   onToggle: () => void;
@@ -628,10 +749,14 @@ function FileHeader({
         <Icon aria-hidden className={cn("size-4 shrink-0", tone)} />
         <span className={cn("truncate", viewed && "text-muted-foreground")}>{file.path}</span>
       </button>
-      {file.cut ? (
-        <Badge variant="outline" className="shrink-0 font-mono text-attention">
-          <ScissorsIcon data-icon="inline-start" />
-          cut here
+      <CopyPath path={file.path} />
+      {changed ? (
+        <Badge
+          variant="outline"
+          className="shrink-0 font-mono text-attention"
+          title="The file changed after you marked it viewed"
+        >
+          changed since viewed
         </Badge>
       ) : null}
       <span className="ml-auto flex shrink-0 items-center gap-3 text-xs text-muted-foreground">
@@ -647,7 +772,7 @@ function FileHeader({
           <Checkbox id={id} checked={viewed} onCheckedChange={onViewed} aria-label={`Viewed ${file.path}`} />
           <label htmlFor={id}>Viewed</label>
         </span>
-        <LineCounts added={file.added} deleted={file.deleted} className="text-xs" />
+        <LineCounts added={file.added} deleted={file.deleted} binary={file.binary} className="text-xs" />
       </span>
     </div>
   );

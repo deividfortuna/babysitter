@@ -280,12 +280,13 @@ type ProposalDetail struct {
 	Base      string           `json:"base,omitempty" description:"The commit the files and the diff start from: the head of the proposal, or the parent of commit"`
 	Files     []ProposalFile   `json:"files"`
 	Diff      string           `json:"diff" description:"The plain unified diff of the work, or of the commit when commit is set"`
-	Truncated bool             `json:"truncated" description:"The diff was cut at one megabyte"`
+	Truncated bool             `json:"truncated" description:"The diff was longer than one megabyte, so it stops at the last whole file under that size; the files after it are in files and not in diff"`
 	CodeError string           `json:"codeError,omitempty" description:"Why the commits, files and diff could not be read from the worktree; when set, they are empty and the work is unknown, not absent"`
 }
 
 type ProposalQuery struct {
 	Commit string `query:"commit" description:"Only the files and the diff of this commit of the proposal, as a full SHA or a prefix of 7 characters or more"`
+	Path   string `query:"path" description:"Only the file and the diff of this path, as the files list names it; with commit, of this path in that commit"`
 }
 
 type ProposalCommit struct {
@@ -299,6 +300,7 @@ type ProposalFile struct {
 	Status  string `json:"status" description:"The letter git gives the change: A, M, D or T"`
 	Added   int    `json:"added"`
 	Deleted int    `json:"deleted"`
+	Binary  bool   `json:"binary,omitempty" description:"Git reads the file as binary: the diff has no lines for it, and added and deleted are 0"`
 }
 
 type ApproveRequest struct {
@@ -358,7 +360,7 @@ func proposalDetailFrom(d prwatch.ProposalDetail) ProposalDetail {
 		out.Commits = append(out.Commits, ProposalCommit{SHA: c.SHA, Subject: c.Subject, HeldBack: slices.Contains(d.HeldBack, c.SHA)})
 	}
 	for _, f := range d.Files {
-		out.Files = append(out.Files, ProposalFile{Path: f.Path, Status: f.Status, Added: f.Added, Deleted: f.Deleted})
+		out.Files = append(out.Files, ProposalFile{Path: f.Path, Status: f.Status, Added: f.Added, Deleted: f.Deleted, Binary: f.Binary})
 	}
 	return out
 }

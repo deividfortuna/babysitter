@@ -1,5 +1,6 @@
 import { parsePatchFiles, type AnnotationSide, type DiffLineAnnotation, type FileDiffMetadata } from "@pierre/diffs";
 import type { ProposalDetail, ProposalReply } from "@/hooks/useProposals";
+import { isGenerated, readingOrder } from "@/lib/reading-order";
 
 export type ProposalFile = NonNullable<ProposalDetail["files"]>[number];
 
@@ -8,7 +9,7 @@ export type DiffFile = {
   diff: FileDiffMetadata;
   added: number;
   deleted: number;
-  cut: boolean;
+  binary: boolean;
   noisy: boolean;
 };
 
@@ -30,37 +31,66 @@ export type AnchoredReplies = {
 
 const NOISY_LINES = 500;
 
-const GENERATED = [
-  /(^|\/)(package-lock\.json|npm-shrinkwrap\.json|yarn\.lock|pnpm-lock\.yaml|bun\.lockb?|go\.sum|Cargo\.lock|poetry\.lock|uv\.lock|Gemfile\.lock|composer\.lock|Podfile\.lock|flake\.lock)$/,
-  /\.min\.(js|css)$/,
-  /\.(pb|gen|generated)\.[a-z]+$/,
-  /(^|\/)(__generated__|generated|vendor|dist|node_modules)\//,
-  /\.snap$/,
-];
-
 export function isNoisy(path: string, changedLines: number): boolean {
-  return changedLines > NOISY_LINES || GENERATED.some((pattern) => pattern.test(path));
+  return changedLines > NOISY_LINES || isGenerated(path);
 }
 
-export function readProposalDiff(patch: string, truncated: boolean, files: ProposalFile[]): ProposalDiff {
-  const parsed = parsePatchFiles(patch).flatMap((p) => p.files);
+export function readPatch(patch: string, files: ProposalFile[]): DiffFile[] {
   const stats = new Map(files.map((f) => [f.path, f]));
-  const last = parsed.length - 1;
-  const read = parsed.map((diff, i): DiffFile => {
-    const stat = stats.get(diff.name);
-    const added = stat?.added ?? 0;
-    const deleted = stat?.deleted ?? 0;
-    return {
-      path: diff.name,
-      diff,
-      added,
-      deleted,
-      cut: truncated && i === last,
-      noisy: isNoisy(diff.name, added + deleted),
-    };
-  });
+  return parsePatchFiles(patch)
+    .flatMap((p) => p.files)
+    .map((diff): DiffFile => {
+      const stat = stats.get(diff.name);
+      const added = stat?.added ?? 0;
+      const deleted = stat?.deleted ?? 0;
+      return {
+        path: diff.name,
+        diff,
+        added,
+        deleted,
+        binary: stat?.binary ?? false,
+        noisy: isNoisy(diff.name, added + deleted),
+      };
+    });
+}
+
+export function readProposalDiff(patch: string, files: ProposalFile[], loaded: DiffFile[] = []): ProposalDiff {
+  const read = [...readPatch(patch, files), ...loaded];
   const shown = new Set(read.map((f) => f.path));
-  return { files: read, missing: files.filter((f) => !shown.has(f.path)) };
+  return { files: readingOrder(read), missing: files.filter((f) => !shown.has(f.path)) };
+}
+
+const contentKeys = new WeakMap<FileDiffMetadata, string>();
+
+function fnv1a(text: string, hash: number): number {
+  let next = hash;
+  for (let i = 0; i < text.length; i++) {
+    next ^= text.charCodeAt(i);
+    next = Math.imul(next, 0x01000193);
+  }
+  return next >>> 0;
+}
+
+export function contentKey(diff: FileDiffMetadata): string {
+  const known = contentKeys.get(diff);
+  if (known) return known;
+  const parts = [
+    diff.type,
+    diff.prevName ?? "",
+    ...diff.hunks.map((h) => h.hunkSpecs ?? ""),
+    ...diff.deletionLines,
+    "\0",
+    ...diff.additionLines,
+  ];
+  let hash = 0x811c9dc5;
+  for (const part of parts) hash = fnv1a(`${part}\n`, hash);
+  const key = `${hash.toString(36)}:${parts.length}`;
+  contentKeys.set(diff, key);
+  return key;
+}
+
+export function viewKey(file: DiffFile): string {
+  return file.diff.newObjectId ?? contentKey(file.diff);
 }
 
 type Place = { side: AnnotationSide; lineNumber: number };

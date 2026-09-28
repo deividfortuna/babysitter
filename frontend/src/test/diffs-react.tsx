@@ -1,4 +1,4 @@
-import { useImperativeHandle, useState, type ReactNode, type Ref } from "react";
+import { createContext, useImperativeHandle, useLayoutEffect, useState, type ReactNode, type Ref } from "react";
 import type { CodeViewDiffItem, CodeViewScrollTarget, DiffLineAnnotation, FileDiffMetadata } from "@pierre/diffs";
 
 type Item = CodeViewDiffItem<unknown>;
@@ -6,7 +6,7 @@ type Item = CodeViewDiffItem<unknown>;
 type Props = {
   ref?: Ref<{ scrollTo: (target: CodeViewScrollTarget) => void }>;
   items: readonly Item[];
-  options?: { diffStyle?: string; overflow?: string };
+  options?: { diffStyle?: string; overflow?: string; itemMetrics?: unknown; preferredHighlighter?: string };
   className?: string;
   onScroll?: (scrollTop: number, viewer: { getTopForItem: (id: string) => number | undefined }) => void;
   renderCustomHeader?: (item: Item) => ReactNode;
@@ -14,6 +14,8 @@ type Props = {
 };
 
 export const ITEM_HEIGHT = 100;
+
+export const rendered = { renderers: new Set<unknown>(), options: undefined as unknown };
 
 function lines(diff: FileDiffMetadata): string[] {
   const out: string[] = [];
@@ -33,6 +35,11 @@ function lines(diff: FileDiffMetadata): string[] {
 
 export function CodeView({ ref, items, options, className, onScroll, ...render }: Props) {
   const [scrolledTo, setScrolledTo] = useState<string>();
+  useLayoutEffect(() => {
+    rendered.renderers.add(render.renderCustomHeader);
+    rendered.renderers.add(render.renderAnnotation);
+    rendered.options = options;
+  });
   useImperativeHandle(ref, () => ({
     scrollTo: (target) => setScrolledTo("id" in target ? target.id : undefined),
   }));
@@ -76,6 +83,4 @@ export function CodeView({ ref, items, options, className, onScroll, ...render }
   );
 }
 
-export function WorkerPoolContextProvider({ children }: { children: ReactNode }) {
-  return children;
-}
+export const WorkerPoolContext = createContext<unknown>(undefined);

@@ -1306,6 +1306,14 @@ paths:
           description: Only the files and the diff of this commit of the proposal,
             as a full SHA or a prefix of 7 characters or more
           type: string
+      - description: Only the file and the diff of this path, as the files list names
+          it; with commit, of this path in that commit
+        in: query
+        name: path
+        schema:
+          description: Only the file and the diff of this path, as the files list
+            names it; with commit, of this path in that commit
+          type: string
       - description: Watch id
         in: path
         name: id
@@ -2413,7 +2421,9 @@ components:
           - superseded
           type: string
         truncated:
-          description: The diff was cut at one megabyte
+          description: The diff was longer than one megabyte, so it stops at the last
+            whole file under that size; the files after it are in files and not in
+            diff
           type: boolean
         workSha:
           description: 'The work branch when the turn ended: what the daemon pushes'
@@ -2437,6 +2447,10 @@ components:
       properties:
         added:
           type: integer
+        binary:
+          description: 'Git reads the file as binary: the diff has no lines for it,
+            and added and deleted are 0'
+          type: boolean
         deleted:
           type: integer
         path:

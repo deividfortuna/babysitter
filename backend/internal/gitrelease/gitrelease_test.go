@@ -352,9 +352,87 @@ func TestTheAuthorReadsTheCommitsTheFilesAndTheDiff(t *testing.T) {
 			t.Errorf("the diff lacks %q:\n%s", line, diff)
 		}
 	}
-	cut, truncated, err := g.Diff(ctx, work, head, second, 40)
-	if err != nil || !truncated || len(cut) != 40 {
-		t.Fatalf("Diff() capped at 40 bytes = %d bytes, %v, %v", len(cut), truncated, err)
+}
+
+func TestTheDiffIsCutBetweenWholeFiles(t *testing.T) {
+	t.Parallel()
+	_, work, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	head, _ := g.Head(ctx, work)
+	commit(t, work, "c.txt", "three\n", "Add c")
+	last := commit(t, work, "d.txt", "four\n", "Add d")
+	whole, _, err := g.Diff(ctx, work, head, last, 1<<20)
+	if err != nil {
+		t.Fatalf("Diff() error = %v", err)
+	}
+	second := strings.Index(whole, "diff --git a/d.txt")
+
+	cut, truncated, err := g.Diff(ctx, work, head, last, second+10)
+	if err != nil || !truncated || cut != whole[:second] {
+		t.Fatalf("Diff() capped inside the second file = %q, %v, %v, want the first file only", cut, truncated, err)
+	}
+	none, truncated, err := g.Diff(ctx, work, head, last, 10)
+	if err != nil || !truncated || none != "" {
+		t.Fatalf("Diff() capped inside the first file = %q, %v, %v, want nothing", none, truncated, err)
+	}
+}
+
+func TestTheFilesKeepTheirNamesAndSayWhichAreBinary(t *testing.T) {
+	t.Parallel()
+	_, work, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	head, _ := g.Head(ctx, work)
+	commit(t, work, "café [1].txt", "one\ntwo\n", "Add an accented name")
+	last := commit(t, work, "logo.bin", "\x00\x01\x02", "Add a binary")
+
+	files, err := g.Files(ctx, work, head, last)
+	if err != nil {
+		t.Fatalf("Files() error = %v", err)
+	}
+	want := []File{
+		{Path: "café [1].txt", Status: "A", Added: 2},
+		{Path: "logo.bin", Status: "A", Binary: true},
+	}
+	if !slices.Equal(files, want) {
+		t.Fatalf("Files() = %+v, want %+v", files, want)
+	}
+	one, truncated, err := g.Diff(ctx, work, head, last, 1<<20, "café [1].txt")
+	if err != nil || truncated {
+		t.Fatalf("Diff() of one file = %v, %v", truncated, err)
+	}
+	if strings.Count(one, "diff --git ") != 1 || !strings.Contains(one, "+two") {
+		t.Fatalf("Diff() of one file =\n%s", one)
+	}
+}
+
+func TestTheDiffIgnoresTheDiffSettingsOfTheRepository(t *testing.T) {
+	t.Parallel()
+	_, work, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	head, _ := g.Head(ctx, work)
+	git(t, work, "config", "diff.noprefix", "true")
+	git(t, work, "config", "diff.mnemonicPrefix", "true")
+	git(t, work, "config", "diff.shout.textconv", "tr a-z A-Z <")
+	git(t, work, "config", "color.diff", "always")
+	if err := os.WriteFile(filepath.Join(work, ".git", "info", "attributes"), []byte("*.txt diff=shout\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	last := commit(t, work, "c.txt", "quiet\n", "Add c")
+
+	diff, _, err := g.Diff(ctx, work, head, last, 1<<20)
+	if err != nil {
+		t.Fatalf("Diff() error = %v", err)
+	}
+	for _, line := range []string{"diff --git a/c.txt b/c.txt", "+++ b/c.txt", "+quiet"} {
+		if !strings.Contains(diff, line) {
+			t.Errorf("the diff lacks %q:\n%s", line, diff)
+		}
+	}
+	if strings.Contains(diff, "QUIET") || strings.Contains(diff, "\x1b[") {
+		t.Errorf("the diff follows the settings of the repository:\n%s", diff)
 	}
 }
 

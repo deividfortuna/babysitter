@@ -19,6 +19,7 @@ var (
 	ErrNotPending      = errors.New("the proposal does not wait on a decision")
 	ErrBadApprovalMode = errors.New("invalid approval mode: use auto or manual")
 	ErrUnknownCommit   = errors.New("the proposal has no such commit")
+	ErrUnknownFile     = errors.New("the proposal does not change such a file")
 )
 
 const maxDiff = 1 << 20
@@ -49,6 +50,11 @@ type ProposalView struct {
 type ReplyView struct {
 	store.ProposalReply
 	Answers *store.Activity
+}
+
+type CodeQuery struct {
+	Commit string
+	Path   string
 }
 
 type ProposalDetail struct {
@@ -109,7 +115,7 @@ func (s *Service) Proposals(ctx context.Context, id int64) ([]ProposalView, erro
 	return out, nil
 }
 
-func (s *Service) Proposal(ctx context.Context, id int64, number int, commit string) (ProposalDetail, error) {
+func (s *Service) Proposal(ctx context.Context, id int64, number int, q CodeQuery) (ProposalDetail, error) {
 	w, err := s.hostedWatch(ctx, id)
 	if err != nil {
 		return ProposalDetail{}, err
@@ -123,8 +129,8 @@ func (s *Service) Proposal(ctx context.Context, id int64, number int, commit str
 		return ProposalDetail{}, err
 	}
 	d := ProposalDetail{ProposalView: v}
-	code, err := s.readCode(ctx, w, p, commit)
-	if errors.Is(err, ErrUnknownCommit) {
+	code, err := s.readCode(ctx, w, p, q)
+	if errors.Is(err, ErrUnknownCommit) || errors.Is(err, ErrUnknownFile) {
 		return ProposalDetail{}, err
 	}
 	if err != nil {
@@ -136,7 +142,7 @@ func (s *Service) Proposal(ctx context.Context, id int64, number int, commit str
 	return d, nil
 }
 
-func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal, commit string) (ProposalCode, error) {
+func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal, q CodeQuery) (ProposalCode, error) {
 	work := p.WorkSHA
 	if work == "" {
 		head, err := s.rel.Head(ctx, w.WorktreeDir)
@@ -145,7 +151,8 @@ func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal,
 		}
 		work = head
 	}
-	if work == p.HeadSHA && commit == "" {
+	onlyReplies := work == p.HeadSHA && q == CodeQuery{}
+	if onlyReplies {
 		return ProposalCode{}, nil
 	}
 	var c ProposalCode
@@ -158,8 +165,8 @@ func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal,
 	}
 	c.Base = p.HeadSHA
 	to := work
-	if commit != "" {
-		if to, err = commitOf(c.Commits, commit); err != nil {
+	if q.Commit != "" {
+		if to, err = commitOf(c.Commits, q.Commit); err != nil {
 			return ProposalCode{}, err
 		}
 		if c.Base, err = s.rel.Parent(ctx, w.WorktreeDir, to); err != nil {
@@ -170,10 +177,25 @@ func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal,
 	if c.Files, err = s.rel.Files(ctx, w.WorktreeDir, c.Base, to); err != nil {
 		return ProposalCode{}, err
 	}
-	if c.Diff, c.Truncated, err = s.rel.Diff(ctx, w.WorktreeDir, c.Base, to, maxDiff); err != nil {
+	var paths []string
+	if q.Path != "" {
+		if c.Files, err = fileOf(c.Files, q.Path); err != nil {
+			return ProposalCode{}, err
+		}
+		paths = []string{q.Path}
+	}
+	if c.Diff, c.Truncated, err = s.rel.Diff(ctx, w.WorktreeDir, c.Base, to, maxDiff, paths...); err != nil {
 		return ProposalCode{}, err
 	}
 	return c, nil
+}
+
+func fileOf(files []gitrelease.File, path string) ([]gitrelease.File, error) {
+	i := slices.IndexFunc(files, func(f gitrelease.File) bool { return f.Path == path })
+	if i < 0 {
+		return nil, fmt.Errorf("%w: %s", ErrUnknownFile, path)
+	}
+	return files[i : i+1], nil
 }
 
 func commitOf(commits []gitrelease.Commit, commit string) (string, error) {

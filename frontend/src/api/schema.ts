@@ -944,13 +944,15 @@ export interface components {
             replies: components["schemas"]["HttpdProposalReply"][] | null;
             /** @enum {string} */
             status: "open" | "pending" | "released" | "failed" | "rejected" | "declined" | "superseded";
-            /** @description The diff was cut at one megabyte */
+            /** @description The diff was longer than one megabyte, so it stops at the last whole file under that size; the files after it are in files and not in diff */
             truncated: boolean;
             /** @description The work branch when the turn ended: what the daemon pushes */
             workSha: string;
         };
         HttpdProposalFile: {
             added: number;
+            /** @description Git reads the file as binary: the diff has no lines for it, and added and deleted are 0 */
+            binary?: boolean;
             deleted: number;
             path: string;
             /** @description The letter git gives the change: A, M, D or T */
@@ -3245,6 +3247,8 @@ export interface operations {
             query?: {
                 /** @description Only the files and the diff of this commit of the proposal, as a full SHA or a prefix of 7 characters or more */
                 commit?: string;
+                /** @description Only the file and the diff of this path, as the files list names it; with commit, of this path in that commit */
+                path?: string;
             };
             header?: never;
             path: {

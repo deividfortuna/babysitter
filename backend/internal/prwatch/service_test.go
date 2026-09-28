@@ -313,6 +313,7 @@ type fakeRelease struct {
 	resets      []string
 	rebases     []string
 	discards    []string
+	diffPaths   [][]string
 }
 
 func newFakeRelease(head string) *fakeRelease {
@@ -486,9 +487,10 @@ func (f *fakeRelease) Files(context.Context, string, string, string) ([]gitrelea
 	return []gitrelease.File{{Path: "x.go", Status: "M", Added: 3, Deleted: 1}}, nil
 }
 
-func (f *fakeRelease) Diff(_ context.Context, _, from, to string, _ int) (string, bool, error) {
+func (f *fakeRelease) Diff(_ context.Context, _, from, to string, _ int, paths ...string) (string, bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.diffPaths = append(f.diffPaths, paths)
 	if f.diffErr != nil {
 		return "", false, f.diffErr
 	}

@@ -93,7 +93,7 @@ func TestApprovingReleasesTheProposal(t *testing.T) {
 	w := fx.startManual()
 	fx.propose(w)
 
-	d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
+	d, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{})
 	if err != nil {
 		t.Fatalf("Proposal() error = %v", err)
 	}
@@ -135,7 +135,7 @@ func TestTheCodeOfOneCommitOfAProposal(t *testing.T) {
 		{ask: "SECOND-", commit: "second-commit", base: "first-commit", diff: "-first-commit\n+second-commit\n"},
 		{ask: "", commit: "", base: "abc", diff: "-abc\n+second-commit\n"},
 	} {
-		d, err := fx.svc.Proposal(ctx, w.ID, 1, tc.ask)
+		d, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{Commit: tc.ask})
 		if err != nil {
 			t.Fatalf("Proposal(%q) error = %v", tc.ask, err)
 		}
@@ -145,9 +145,47 @@ func TestTheCodeOfOneCommitOfAProposal(t *testing.T) {
 		}
 	}
 	for _, ask := range []string{"second", "abc", "nothing"} {
-		if _, err := fx.svc.Proposal(ctx, w.ID, 1, ask); !errors.Is(err, ErrUnknownCommit) {
+		if _, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{Commit: ask}); !errors.Is(err, ErrUnknownCommit) {
 			t.Fatalf("Proposal(%q) error = %v, want ErrUnknownCommit", ask, err)
 		}
+	}
+}
+
+func TestTheCodeOfOneFileOfAProposal(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	ctx := context.Background()
+	w := fx.startManual()
+	fx.turn(w)
+	fx.rel.commit("abc", "first-commit")
+	fx.hook(w, agent.EventStop, `{}`)
+
+	d, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{Commit: "first-commit", Path: "x.go"})
+	if err != nil || len(d.Files) != 1 || d.Files[0].Path != "x.go" || d.Base != "abc" {
+		t.Fatalf("Proposal(x.go) = files %+v, base %q, %v", d.Files, d.Base, err)
+	}
+	fx.rel.mu.Lock()
+	asked := fx.rel.diffPaths[len(fx.rel.diffPaths)-1]
+	fx.rel.mu.Unlock()
+	if !slices.Equal(asked, []string{"x.go"}) {
+		t.Fatalf("the diff was read for %q, want x.go only", asked)
+	}
+	if _, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{Path: "nope.go"}); !errors.Is(err, ErrUnknownFile) {
+		t.Fatalf("Proposal(nope.go) error = %v, want ErrUnknownFile", err)
+	}
+}
+
+func TestAFileOfAProposalWithRepliesOnlyIsChecked(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	ctx := context.Background()
+	w := fx.startManual()
+	fx.turn(w)
+	fx.reply(w, 31, "noted")
+	fx.hook(w, agent.EventStop, `{}`)
+
+	if _, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{Path: "nope.go"}); !errors.Is(err, ErrUnknownFile) {
+		t.Fatalf("Proposal(nope.go) of a proposal with replies only, error = %v, want ErrUnknownFile", err)
 	}
 }
 
@@ -616,7 +654,7 @@ func TestARebasedProposalNamesItsNewCommits(t *testing.T) {
 	fx.rel.moveRemote("abc", "t1")
 	fx.poll(w)
 
-	d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
+	d, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -871,7 +909,7 @@ func TestADroppedAnswerToAConversationCommentBringsItBack(t *testing.T) {
 	w := fx.startManual()
 	fx.answerConversation(w, "abc", "w1", "added a README section")
 	p := fx.proposal(w, 1)
-	d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
+	d, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{})
 	if err != nil || len(d.Replies) != 1 || d.Replies[0].Answers == nil || d.Replies[0].Answers.Actor != "carol" {
 		t.Fatalf("the reply does not name the comment it answers: %+v, %v", d.Replies, err)
 	}
@@ -991,7 +1029,7 @@ func TestTheNextProposalMarksTheCommitTheAuthorKeptOff(t *testing.T) {
 	fx.rel.commit("w1", "w2")
 	fx.hook(w, agent.EventStop, `{}`)
 
-	d, err := fx.svc.Proposal(ctx, w.ID, 2, "")
+	d, err := fx.svc.Proposal(ctx, w.ID, 2, CodeQuery{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1016,7 +1054,7 @@ func TestAProposalWhoseCodeCannotBeReadSaysSo(t *testing.T) {
 			fx.propose(w)
 			fx.rel.set(func(f *fakeRelease) { set(f, errors.New("git: exit status 128")) })
 
-			d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
+			d, err := fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{})
 			if err != nil {
 				t.Fatalf("Proposal() error = %v", err)
 			}
@@ -1028,7 +1066,7 @@ func TestAProposalWhoseCodeCannotBeReadSaysSo(t *testing.T) {
 			}
 
 			fx.rel.set(func(f *fakeRelease) { set(f, nil) })
-			d, err = fx.svc.Proposal(ctx, w.ID, 1, "")
+			d, err = fx.svc.Proposal(ctx, w.ID, 1, CodeQuery{})
 			if err != nil {
 				t.Fatalf("Proposal() error = %v", err)
 			}

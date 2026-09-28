@@ -2,7 +2,7 @@ import { fireEvent, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, onTestFinished, test, vi } from "vite-plus/test";
 import { delay, http, HttpResponse } from "msw";
-import { ITEM_HEIGHT } from "@test/diffs-react";
+import { ITEM_HEIGHT, rendered } from "@test/diffs-react";
 import { buildActivity, buildProposal, buildProposalDetail, buildWatch } from "@test/fixtures";
 import { openMenu, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi, type Decision } from "@test/msw";
@@ -272,6 +272,98 @@ test("collapse all folds every file and expand all opens them again", async () =
 
   expect(file(panel, "internal/webhook/deliver.go")).toHaveAttribute("data-collapsed", "false");
   expect(file(panel, "internal/webhook/deliver_test.go")).toHaveAttribute("data-collapsed", "false");
+});
+
+test("collapse all also folds the files of another commit", async () => {
+  const { api, user } = renderPending();
+  api.proposalDetail[`42/3@${SECOND}`] = buildProposalDetail({
+    commit: SECOND,
+    base: FIRST,
+    files: [{ path: "internal/webhook/queue.go", status: "A", added: 1, deleted: 0 }],
+    diff: [
+      "diff --git a/internal/webhook/queue.go b/internal/webhook/queue.go",
+      "new file mode 100644",
+      "index 0000000..1212121",
+      "--- /dev/null",
+      "+++ b/internal/webhook/queue.go",
+      "@@ -0,0 +1 @@",
+      "+package webhook",
+      "",
+    ].join("\n"),
+  });
+  const panel = await section();
+  await codeShown(panel);
+
+  await user.click(within(panel).getByRole("button", { name: "Collapse all" }));
+  await choose(user, panel, "Commits", /Test the retry of a delivery/);
+
+  expect(await within(panel).findByRole("region", { name: "File internal/webhook/queue.go" })).toHaveAttribute(
+    "data-collapsed",
+    "true",
+  );
+});
+
+test("a file viewed on an earlier visit stays viewed until its content changes", async () => {
+  window.localStorage.setItem(
+    "proposal_viewed_files",
+    JSON.stringify({
+      "42:3": {
+        at: 1,
+        files: { "internal/webhook/deliver.go": "0000001", "internal/webhook/deliver_test.go": "9a8b7c6" },
+      },
+    }),
+  );
+  renderPending();
+  const panel = await section();
+  await codeShown(panel);
+
+  expect(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver_test.go" })).toBeChecked();
+  expect(file(panel, "internal/webhook/deliver_test.go")).toHaveAttribute("data-collapsed", "true");
+  expect(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver.go" })).not.toBeChecked();
+  expect(within(file(panel, "internal/webhook/deliver.go")).getByText("changed since viewed")).toBeVisible();
+  expect(within(panel).getByText("2 files · 1 viewed")).toBeVisible();
+});
+
+test("a file marked viewed is kept for the next visit", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await codeShown(panel);
+
+  await user.click(within(panel).getByRole("checkbox", { name: "Viewed internal/webhook/deliver.go" }));
+
+  const stored = JSON.parse(window.localStorage.getItem("proposal_viewed_files") ?? "{}");
+  expect(stored["42:3"].files).toEqual({ "internal/webhook/deliver.go": "5d6e7f8" });
+});
+
+test("typing a reply in the diff leaves the headers and the lines alone", async () => {
+  rendered.renderers.clear();
+  const { user } = renderPending();
+  const panel = await section();
+  const diff = await within(panel).findByLabelText("Diff");
+  const box = within(diff).getByLabelText("Reply to mhernandez");
+
+  await user.clear(box);
+  await user.type(box, "Moved it.");
+
+  expect(box).toHaveValue("Moved it.");
+  expect(rendered.renderers.size).toBe(2);
+  expect(rendered.options).toMatchObject({
+    preferredHighlighter: "shiki-wasm",
+    itemMetrics: { diffHeaderHeight: 40, paddingTop: 0, paddingBottom: 8 },
+  });
+});
+
+test("the header copies the path of its file and reads its counts aloud", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+  await codeShown(panel);
+  const deliver = file(panel, "internal/webhook/deliver.go");
+
+  await user.click(within(deliver).getByRole("button", { name: "Copy the path of internal/webhook/deliver.go" }));
+
+  expect(await navigator.clipboard.readText()).toBe("internal/webhook/deliver.go");
+  expect(within(deliver).getByRole("button", { name: "Copied internal/webhook/deliver.go" })).toBeVisible();
+  expect(within(deliver).getByRole("group", { name: "14 lines added, 3 lines deleted" })).toBeVisible();
 });
 
 test("approve releases the proposal and says what went out", async () => {
@@ -1024,27 +1116,89 @@ test("the split layout and the wrap stay for the next proposal", async () => {
   expect(JSON.parse(window.localStorage.getItem("diff_preferences") ?? "{}")).toEqual({ style: "split", wrap: true });
 });
 
-test("a cut diff says so and names the files it lost", async () => {
-  const { user } = renderPending({
-    detail: {
-      truncated: true,
-      files: [
-        { path: "internal/webhook/deliver.go", status: "M", added: 14, deleted: 3 },
-        { path: "internal/webhook/deliver_test.go", status: "A", added: 40, deleted: 0 },
-        { path: "internal/webhook/retry.go", status: "A", added: 90, deleted: 0 },
-      ],
-    },
+test("a cut diff stops at a whole file and reads the files after it one at a time", async () => {
+  const whole = buildProposalDetail();
+  const cutAt = whole.diff.indexOf("diff --git a/internal/webhook/deliver_test.go");
+  const [deliver, deliverTest] = whole.files ?? [];
+  const retry = { path: "internal/webhook/retry.go", status: "A", added: 90, deleted: 0 };
+  const handler = { path: "internal/webhook/handler.go", status: "M", added: 2, deleted: 2 };
+  const { api, user } = renderPending({
+    detail: { truncated: true, diff: whole.diff.slice(0, cutAt), files: [deliver, deliverTest, handler, retry] },
+  });
+  api.proposalDetail["42/3#internal/webhook/deliver_test.go"] = buildProposalDetail({
+    files: [deliverTest],
+    diff: whole.diff.slice(cutAt),
+  });
+  api.proposalDetail["42/3#internal/webhook/retry.go"] = buildProposalDetail({
+    files: [retry],
+    diff: "",
+    truncated: true,
   });
   const panel = await section();
 
-  expect(await within(panel).findByText("The diff is longer than one megabyte and was cut.")).toBeVisible();
-  expect(
-    within(panel).getByText("The last file shown stops where the cut is, and 1 file after it is not in the diff."),
-  ).toBeVisible();
-  expect(within(file(panel, "internal/webhook/deliver_test.go")).getByText("cut here")).toBeVisible();
-  expect(within(panel).getByText("3 files")).toBeVisible();
+  expect(await within(panel).findByText("The diff is longer than one megabyte.")).toBeVisible();
+  expect(within(panel).getByText(/Load the 3 files after it one at a time/)).toBeVisible();
+  const toolbar = await codeShown(panel);
+  expect(within(toolbar).getByText("4 files")).toBeVisible();
+  expect(within(toolbar).getByRole("group", { name: "146 lines added, 5 lines deleted" })).toBeVisible();
+  await user.click(within(panel).getByRole("button", { name: "Open the file tree" }));
+  const tree = within(panel).getByRole("navigation", { name: "Changed files" });
+
+  await user.click(within(tree).getByRole("button", { name: "Load internal/webhook/deliver_test.go" }));
+
+  expect(await within(panel).findByRole("region", { name: "File internal/webhook/deliver_test.go" })).toHaveTextContent(
+    "TestDeliverRetries",
+  );
+  expect(within(tree).getByRole("button", { name: /^deliver_test.go, added/ })).toBeVisible();
+  expect(within(panel).getByText(/Load the 2 files after it one at a time/)).toBeVisible();
+
+  await user.click(within(tree).getByRole("button", { name: "Load internal/webhook/retry.go" }));
+  expect(await within(tree).findByText("too large to show")).toBeVisible();
+  expect(within(panel).getByText(/Load the 1 file after it one at a time/)).toBeVisible();
+
+  await user.click(within(tree).getByRole("button", { name: "Load internal/webhook/handler.go" }));
+  const again = await within(tree).findByRole("button", { name: "Load internal/webhook/handler.go again" });
+
+  api.proposalDetail["42/3#internal/webhook/handler.go"] = buildProposalDetail({
+    files: [handler],
+    diff: [
+      "diff --git a/internal/webhook/handler.go b/internal/webhook/handler.go",
+      "index 1111111..2222222 100644",
+      "--- a/internal/webhook/handler.go",
+      "+++ b/internal/webhook/handler.go",
+      "@@ -1,2 +1,2 @@",
+      "-package old",
+      "+package webhook",
+      " ",
+      "",
+    ].join("\n"),
+  });
+  await user.click(again);
+
+  expect(await within(panel).findByRole("region", { name: "File internal/webhook/handler.go" })).toHaveTextContent(
+    "package webhook",
+  );
+  expect(within(panel).queryByText("The diff is longer than one megabyte.")).toBeNull();
+});
+
+test("a binary file says so in its header and in the tree", async () => {
+  const { user } = renderPending({
+    detail: {
+      files: [{ path: "assets/logo.png", status: "A", added: 0, deleted: 0, binary: true }],
+      diff: [
+        "diff --git a/assets/logo.png b/assets/logo.png",
+        "new file mode 100644",
+        "index 0000000..5555555",
+        "Binary files /dev/null and b/assets/logo.png differ",
+        "",
+      ].join("\n"),
+    },
+  });
+  const panel = await section();
   const tree = await openTree(user, panel);
-  expect(within(tree).getByText("not in the diff")).toBeVisible();
+
+  expect(within(file(panel, "assets/logo.png")).getByText("binary")).toBeVisible();
+  expect(within(tree).getByText("binary")).toBeVisible();
 });
 
 test("the full window opens the diff with its replies, the tree and the decision", async () => {

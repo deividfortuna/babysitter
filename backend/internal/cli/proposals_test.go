@@ -29,8 +29,12 @@ func (d *fakeDaemon) proposalRoutes() {
 		if r.URL.Query().Get("commit") == "1a2b3c4" {
 			commit = `"commit":"1a2b3c4d5e6f7",`
 		}
+		code := `"files":[{"path":"x.go","status":"M","added":3,"deleted":1}],"diff":"diff --git a/x.go b/x.go\n-old\n+new\n","truncated":false}`
+		if r.URL.Query().Get("path") == "logo.png" {
+			code = `"files":[{"path":"logo.png","status":"A","added":0,"deleted":0,"binary":true}],"diff":"","truncated":true}`
+		}
 		detail := strings.TrimSuffix(pendingProposalJSON, "}") +
-			`,"commits":[{"sha":"1a2b3c4d5e6f7","subject":"Rename the thing"}],` + commit + `"files":[{"path":"x.go","status":"M","added":3,"deleted":1}],"diff":"diff --git a/x.go b/x.go\n-old\n+new\n","truncated":false}`
+			`,"commits":[{"sha":"1a2b3c4d5e6f7","subject":"Rename the thing"}],` + commit + code
 		fmt.Fprint(w, detail)
 	})
 	record := func(kind string) http.HandlerFunc {
@@ -97,6 +101,10 @@ func TestWatchProposalsListsAndShowsOne(t *testing.T) {
 	}
 	if out, err = runWatch(t, d, "proposals", "1", "2", "--diff"); err != nil || !strings.Contains(out, "diff --git a/x.go b/x.go\n-old\n+new") {
 		t.Fatalf("proposal 2 with the diff = %q, %v", out, err)
+	}
+	out, err = runWatch(t, d, "proposals", "1", "2", "--diff", "--file", "logo.png")
+	if err != nil || !strings.Contains(out, "A logo.png binary") || !strings.Contains(out, "The diff of logo.png is longer than one megabyte") {
+		t.Fatalf("proposal 2 of one binary file = %q, %v", out, err)
 	}
 }
 
