@@ -74,16 +74,12 @@ func (a *api) handleListWatches(w http.ResponseWriter, r *http.Request) {
 func (a *api) handleStartWatch(w http.ResponseWriter, r *http.Request) {
 	var req StartWatchRequest
 	if err := readJSON(w, r, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with target, repo, sourceDir and includeExisting fields; provider and model are optional")
+		writeError(w, http.StatusBadRequest, "bad_request", "body must be JSON with target and repo fields; the other fields are optional")
 		return
 	}
 	target, err := snapshot.ParseTarget(req.Target, req.Repo)
 	if err != nil {
 		writeError(w, http.StatusBadRequest, "invalid_target", err.Error())
-		return
-	}
-	if req.SourceDir == "" {
-		writeError(w, http.StatusBadRequest, "bad_request", "sourceDir is required")
 		return
 	}
 	if badApprovals(req.ApprovalsRequired) {

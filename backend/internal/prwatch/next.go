@@ -175,7 +175,7 @@ func (s *Service) undeliver(ctx context.Context, out NextMessage) error {
 }
 
 func (s *Service) take(ctx context.Context, client *github.Client, id int64) (NextMessage, error) {
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {

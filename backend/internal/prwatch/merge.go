@@ -52,7 +52,7 @@ func (s *Service) Merge(ctx context.Context, id int64, o MergeOptions) (store.Wa
 	if !ok {
 		return store.Watch{}, fmt.Errorf("%w: %q", ErrBadMergeMethod, o.Method)
 	}
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 
 	w, err := s.store.GetWatch(ctx, id)

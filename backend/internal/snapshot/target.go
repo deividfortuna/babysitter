@@ -1,6 +1,7 @@
 package snapshot
 
 import (
+	"errors"
 	"fmt"
 	"net/url"
 	"regexp"
@@ -14,6 +15,12 @@ type Target struct {
 	Owner  string
 	Name   string
 	Number int
+}
+
+var ErrIncompleteTarget = errors.New("without a checkout, the target must name the repository and the number")
+
+func (t Target) Complete() bool {
+	return t.Owner != "" && t.Number != 0
 }
 
 var numberRE = regexp.MustCompile(`^\d+$`)

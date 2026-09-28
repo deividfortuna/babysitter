@@ -83,17 +83,24 @@ test("a switch saves its toggle and says since when it is on", async () => {
   expect(screen.getByText(/On since/)).toBeVisible();
 });
 
-test("every toggle waits on a checkout", async () => {
-  renderPanel();
+test("without a checkout every toggle works and babysitter clones the repository", async () => {
+  const { repoConfigBodies, user } = renderPanel();
 
-  expect(await screen.findByRole("switch", { name: "My pull requests" })).toBeDisabled();
-  expect(screen.getByRole("switch", { name: "Include drafts" })).toBeDisabled();
-  expect(screen.getByRole("switch", { name: "Dependabot" })).toBeDisabled();
+  const mine = await screen.findByRole("switch", { name: "My pull requests" });
+  expect(mine).toBeEnabled();
+  expect(screen.getByRole("switch", { name: "Include drafts" })).toBeEnabled();
+  expect(screen.getByRole("switch", { name: "Dependabot" })).toBeEnabled();
   expect(screen.getByLabelText("Checkout")).toHaveValue("");
   expect(
-    screen.getByText("Auto start makes each worktree from it. It must have a remote for octo/babysitter."),
+    screen.getByText(
+      "Empty: babysitter clones octo/babysitter once into its data folder and makes each worktree from that clone.",
+    ),
   ).toBeVisible();
-  expect(screen.queryByLabelText("Merge on its own up to")).toBeNull();
+  expect(screen.getByLabelText("Merge on its own up to")).toBeVisible();
+
+  await user.click(mine);
+
+  await waitFor(() => expect(repoConfigBodies).toEqual([{ autoStartMine: true }]));
 });
 
 test("a checkout the daemon refuses shows why under the field", async () => {
@@ -108,18 +115,21 @@ test("a checkout the daemon refuses shows why under the field", async () => {
   expect(checkout).toHaveAttribute("aria-invalid", "true");
   expect(checkout).toHaveValue("/home/me/code/web");
   expect(repoConfigBodies).toEqual([{ checkoutDir: "/home/me/code/web" }]);
-  expect(screen.getByRole("switch", { name: "My pull requests" })).toBeDisabled();
 });
 
-test("a folder from the picker is saved as the checkout, and the toggles open", async () => {
+test("a folder from the picker is saved as the checkout", async () => {
   bridge.dialog.pickDirectory.mockResolvedValueOnce("/home/me/code/babysitter");
   const { repoConfigBodies, user } = renderPanel();
 
   await user.click(await screen.findByRole("button", { name: "Choose…" }));
 
   await waitFor(() => expect(repoConfigBodies).toEqual([{ checkoutDir: "/home/me/code/babysitter" }]));
-  await waitFor(() => expect(screen.getByRole("switch", { name: "My pull requests" })).toBeEnabled());
   expect(screen.getByLabelText("Checkout")).toHaveValue("/home/me/code/babysitter");
+  await waitFor(() =>
+    expect(
+      screen.getByText("Auto start makes each worktree from it. It must have a remote for octo/babysitter."),
+    ).toBeVisible(),
+  );
 });
 
 test("the help of Approve for me follows the value, and a change is saved", async () => {

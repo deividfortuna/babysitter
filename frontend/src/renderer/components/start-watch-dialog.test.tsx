@@ -64,6 +64,28 @@ test("enables starting when a valid pull request target and checkout are entered
   await waitFor(() => expect(start).toBeEnabled());
 });
 
+test("starts without a checkout and leaves the clone to the daemon", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ startBodies });
+  renderDialog();
+  const user = userEvent.setup();
+
+  await user.type(screen.getByPlaceholderText("search your open PRs, or paste a URL"), "octo/babysitter#12");
+
+  expect(
+    screen.getByText(
+      "Empty: babysitter clones the repository once into its data folder and makes the private worktree from that clone.",
+    ),
+  ).toBeVisible();
+  expect(screen.getByText("babysitter watch start octo/babysitter#12 --no-checkout")).toBeVisible();
+  const start = screen.getByRole("button", { name: "Start watching" });
+  await waitFor(() => expect(start).toBeEnabled());
+  await user.click(start);
+
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).not.toHaveProperty("sourceDir");
+});
+
 test("opens again with an empty search after the author typed a target", async () => {
   serveApi();
   const user = userEvent.setup();
@@ -671,6 +693,7 @@ test("the command beside the start button carries the choices of the author", as
   await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
 
   await user.type(screen.getByPlaceholderText("search your open PRs, or paste a URL"), "octo/babysitter#12");
+  await user.type(screen.getByLabelText("Checkout to copy the worktree from"), "/Users/octo/code/babysitter");
   expect(screen.getByText("babysitter watch start octo/babysitter#12")).toBeVisible();
 
   await chooseOption(user, screen.getByLabelText("Model"), "Sonnet");

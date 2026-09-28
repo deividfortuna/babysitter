@@ -216,7 +216,7 @@ type StartWatchRequest struct {
 	Repo              string        `json:"repo"`
 	Provider          string        `json:"provider,omitempty" enum:",claude,copilot,self" description:"The AI provider that runs the agent session, or self when the caller's own session is the agent; empty takes the repository, then the daemon"`
 	Model             string        `json:"model,omitempty" description:"The model of the provider; empty takes the model of the layer that gives the provider"`
-	SourceDir         string        `json:"sourceDir"`
+	SourceDir         string        `json:"sourceDir,omitempty" description:"A git checkout whose origin is the head repository of the pull request; absent makes the daemon clone the head repository into its data directory and use that clone, which needs a hosted provider and a target with the repository and the number"`
 	IncludeExisting   *bool         `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the repository, then the daemon"`
 	IncludeOwn        *bool         `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the repository, then the daemon"`
 	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent takes the repository, then the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds"`

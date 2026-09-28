@@ -203,7 +203,7 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 }
 
 func (s *Service) catchUpSize(watchID int64, l *live, startSize TerminalSize) {
-	unlock := s.sizeLocks.lock(watchID)
+	unlock := s.sizeLocks.Lock(watchID)
 	defer unlock()
 	size := s.sizes.get(watchID)
 	if size == startSize {

@@ -387,7 +387,7 @@ func (s *Service) proposalCommand(sub string, w store.Watch, n int) string {
 }
 
 func (s *Service) Retry(ctx context.Context, id int64, number int) (store.Proposal, error) {
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	w, err := s.activeGatedWatch(ctx, id)
 	if err != nil {

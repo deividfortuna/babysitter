@@ -698,7 +698,7 @@ func TestTheEndOfATurnWaitsForItsStart(t *testing.T) {
 	w := fx.start()
 	fx.hook(w, agent.EventStop, `{}`)
 	for i := range 20 {
-		unlock := fx.svc.locks.lock(w.ID)
+		unlock := fx.svc.locks.Lock(w.ID)
 		if err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil {
 			t.Fatal(err)
 		}
@@ -806,7 +806,7 @@ func TestARetryThatRacesAStopSaysTheWatchStopped(t *testing.T) {
 	fx.hook(w, agent.EventStop, `{}`)
 	fx.rel.set(func(f *fakeRelease) { f.pushErr = nil })
 
-	unlock := fx.svc.locks.lock(w.ID)
+	unlock := fx.svc.locks.Lock(w.ID)
 	done := make(chan error)
 	go func() {
 		_, err := fx.svc.Retry(ctx, w.ID, 1)
@@ -827,10 +827,5 @@ func TestARetryThatRacesAStopSaysTheWatchStopped(t *testing.T) {
 }
 
 func (fx *fixture) lockUsers(id int64) int {
-	fx.svc.locks.mu.Lock()
-	defer fx.svc.locks.mu.Unlock()
-	if l, ok := fx.svc.locks.m[id]; ok {
-		return l.users
-	}
-	return 0
+	return fx.svc.locks.Users(id)
 }

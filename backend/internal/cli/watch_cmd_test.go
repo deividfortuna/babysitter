@@ -272,6 +272,12 @@ func TestWatchCommands(t *testing.T) {
 	if d.starts[1]["includeExisting"] != true {
 		t.Fatalf("include existing not sent: %v", d.starts[1])
 	}
+	if _, err := runWatch(t, d, "start", "octo/hello#3", "--no-checkout"); err != nil {
+		t.Fatalf("start --no-checkout = %v", err)
+	}
+	if _, ok := d.starts[2]["sourceDir"]; ok {
+		t.Fatalf("start --no-checkout sent the current folder: %v", d.starts[2])
+	}
 	if _, err := runWatch(t, d, "start", "nonsense"); err == nil {
 		t.Fatal("bad target expected an error before the daemon call")
 	}

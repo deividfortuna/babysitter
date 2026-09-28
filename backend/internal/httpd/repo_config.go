@@ -24,7 +24,7 @@ type WatchOverrides struct {
 type RepoConfig struct {
 	RepoID              int64          `json:"repoId"`
 	Repo                string         `json:"repo"`
-	CheckoutDir         string         `json:"checkoutDir" description:"The checkout auto start makes each worktree from; the toggles stay off without it"`
+	CheckoutDir         string         `json:"checkoutDir" description:"The checkout auto start makes each worktree from; empty makes the daemon clone the repository into its data directory and use that clone"`
 	AutoStartMine       bool           `json:"autoStartMine" description:"Start a watch on each new pull request that the author opened or that is assigned to the author"`
 	AutoStartMineSince  *time.Time     `json:"autoStartMineSince,omitempty" description:"When the toggle went on; only pull requests created from then on start"`
 	IncludeDrafts       bool           `json:"includeDrafts" description:"Auto start also takes a draft of the author"`

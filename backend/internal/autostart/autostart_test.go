@@ -249,6 +249,29 @@ func TestAPullRequestFromAForkIsSkippedAndLoggedOnce(t *testing.T) {
 	}
 }
 
+func TestWithoutACheckoutTheWatchServiceMakesOne(t *testing.T) {
+	fx := newFixture(t)
+	fx.configure(func(c *store.RepoConfig) {
+		c.CheckoutDir = ""
+		mineOn(c)
+		dependabotOn(c)
+	})
+	fx.pr(1, nil)
+	fx.pr(2, bump(dependabot.Patch))
+
+	fx.run()
+
+	fx.wantStarted(1, 2)
+	for _, req := range fx.reqs {
+		if req.SourceDir != "" {
+			t.Errorf("SourceDir of #%d = %q, want none so the watch service clones the repository", req.Target.Number, req.SourceDir)
+		}
+	}
+	if got := fx.queue(); len(got) != 0 {
+		t.Errorf("queue = %v, want the pull request of Dependabot started", got)
+	}
+}
+
 func TestNothingStartsWithoutAToggle(t *testing.T) {
 	fx := newFixture(t)
 	fx.configure(func(*store.RepoConfig) {})

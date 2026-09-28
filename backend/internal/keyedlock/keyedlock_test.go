@@ -1,4 +1,4 @@
-package prwatch
+package keyedlock
 
 import (
 	"sync"
@@ -8,31 +8,31 @@ import (
 	"github.com/deividfortuna/babysitter/internal/testutil"
 )
 
-func (k *keyedLocks) count() int {
+func (k *Locks[K]) count() int {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 	return len(k.m)
 }
 
-func TestKeyedLocksForgetTheMutexOfAWatchNobodyHolds(t *testing.T) {
+func TestLocksForgetTheMutexOfAKeyNobodyHolds(t *testing.T) {
 	t.Parallel()
-	var k keyedLocks
+	var k Locks[int64]
 	for id := range int64(500) {
-		unlock := k.lock(id)
+		unlock := k.Lock(id)
 		unlock()
 	}
 	if n := k.count(); n != 0 {
-		t.Fatalf("the registry holds %d mutexes of watches nobody works on, want 0", n)
+		t.Fatalf("the registry holds %d mutexes of keys nobody works on, want 0", n)
 	}
 }
 
-func TestKeyedLocksKeepTheMutexWhileACallerWaits(t *testing.T) {
+func TestLocksKeepTheMutexWhileACallerWaits(t *testing.T) {
 	t.Parallel()
-	var k keyedLocks
-	unlock := k.lock(7)
+	var k Locks[string]
+	unlock := k.Lock("octo/hello")
 	waiting := make(chan func())
-	go func() { waiting <- k.lock(7) }()
-	testutil.Eventually(t, func() bool { return k.count() == 1 }, "the second caller to wait on the lock")
+	go func() { waiting <- k.Lock("octo/hello") }()
+	testutil.Eventually(t, func() bool { return k.Users("octo/hello") == 2 }, "the second caller to wait on the lock")
 	unlock()
 	(<-waiting)()
 	if n := k.count(); n != 0 {
@@ -40,15 +40,15 @@ func TestKeyedLocksKeepTheMutexWhileACallerWaits(t *testing.T) {
 	}
 }
 
-func TestKeyedLocksLetOneCallerOfAWatchThroughAtATime(t *testing.T) {
+func TestLocksLetOneCallerOfAKeyThroughAtATime(t *testing.T) {
 	t.Parallel()
-	var k keyedLocks
+	var k Locks[int64]
 	var wg sync.WaitGroup
 	inside, most := 0, 0
 	var count sync.Mutex
 	for range 50 {
 		wg.Go(func() {
-			unlock := k.lock(3)
+			unlock := k.Lock(3)
 			defer unlock()
 			count.Lock()
 			inside++
@@ -62,7 +62,7 @@ func TestKeyedLocksLetOneCallerOfAWatchThroughAtATime(t *testing.T) {
 	}
 	wg.Wait()
 	if most != 1 {
-		t.Fatalf("%d callers of one watch worked at once, want 1", most)
+		t.Fatalf("%d callers of one key worked at once, want 1", most)
 	}
 	if n := k.count(); n != 0 {
 		t.Fatalf("the registry holds %d mutexes, want 0", n)

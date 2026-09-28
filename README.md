@@ -287,7 +287,7 @@ babysitter repo add owner/name                    # start to watch a repository
 babysitter repo list                              # list the watched repositories, or repo ls
 babysitter repo remove owner/name                 # stop to watch a repository, or repo rm
 babysitter repo config owner/name                 # what the repository does with new pull requests, see Auto watch
-babysitter repo config owner/name --checkout ~/code/name --auto-start-mine   # a watch on each new pull request of yours
+babysitter repo config owner/name --auto-start-mine   # a watch on each new pull request of yours
 babysitter repo queue owner/name                  # the Dependabot pull requests that wait for a place, oldest first
 
 babysitter sync                                   # poll every watched repository once
@@ -322,6 +322,7 @@ babysitter notifications read 12 13               # mark only these rows
 babysitter watch start                            # watch the pull request of the current branch, from its checkout
 babysitter watch start owner/name#42              # watch by number, still from the checkout of its branch
 babysitter watch start 42 --repo owner/name       # same
+babysitter watch start owner/name#42 --no-checkout   # from anywhere: the daemon clones the head repository and makes the worktree from that clone
 babysitter watch start --provider copilot         # choose the AI provider for this watch; without the flag the repository, then the daemon, decides
 babysitter watch start --model sonnet             # choose the model of that provider; alone it runs on the provider the repository or the daemon gives
 babysitter watch start --provider self            # no agent session in the daemon: your own coding agent session takes the messages
@@ -721,6 +722,18 @@ Requirements:
   subscription, depending on the provider you pick. A session stays open
   for the life of the watch and costs usage only when it gets a message.
 
+You do not need a checkout of your own. When the start has none
+(`watch start --no-checkout`, an empty checkout field in the app, or a
+repository with auto start and no `--checkout`), the daemon clones the
+head repository once into `<data dir>/checkouts/<owner>/<name>` and uses
+that clone as the checkout. The clone keeps no files of its own; each
+watch gets its worktree from it. The clone fetches and pushes on
+github.com with `gh auth git-credential`, so `gh` must be logged in. The
+agent commits with the `user.name` and `user.email` of your global git
+configuration. The target must name the repository and the number, and
+the provider must be `claude` or `copilot`: a `self` watch works in your
+own checkout.
+
 Run `watch start` in the checkout of the repository. The daemon fetches
 the head branch there and makes a git
 worktree of that checkout in `<data dir>/worktrees/<owner>-<name>-<n>`,
@@ -812,7 +825,7 @@ babysitter does with each new pull request. An empty configuration starts
 nothing, and the configuration goes when you remove the repository.
 
 ```sh
-babysitter repo config acme/billing --checkout ~/code/billing   # the checkout each worktree comes from
+babysitter repo config acme/billing --checkout ~/code/billing   # the checkout each worktree comes from; optional
 babysitter repo config acme/billing --auto-start-mine           # a watch on each new pull request you opened or that is assigned to you
 babysitter repo config acme/billing --include-drafts            # also your drafts
 babysitter repo config acme/billing --auto-watch-dependabot     # a watch on each new pull request of Dependabot
@@ -833,7 +846,9 @@ repository, which the panel icon in its header opens.
 The rules:
 
 - The checkout must be a git checkout whose `origin` is the repository.
-  A toggle cannot go on without it.
+  It is optional: without it, the daemon clones the repository into
+  `<data dir>/checkouts/<owner>/<name>` and makes each worktree from
+  that clone.
 - A toggle records when it went on. It takes only the pull requests that
   GitHub created from then on, also one that opened while the daemon was
   down. It starts no watch on the pull requests that were open before.

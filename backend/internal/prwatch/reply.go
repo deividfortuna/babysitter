@@ -41,7 +41,7 @@ func (s *Service) Reply(ctx context.Context, id int64, req ReplyRequest) (ReplyO
 	if err != nil {
 		return ReplyOutcome{}, err
 	}
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {

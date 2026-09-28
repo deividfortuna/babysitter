@@ -14,6 +14,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/gitrelease"
+	"github.com/deividfortuna/babysitter/internal/keyedlock"
 	"github.com/deividfortuna/babysitter/internal/notify"
 	"github.com/deividfortuna/babysitter/internal/processalive"
 	"github.com/deividfortuna/babysitter/internal/session"
@@ -30,16 +31,22 @@ var (
 	ErrWrongRepo    = errors.New("the origin of the checkout is not the head repository of the pull request")
 	ErrNoAgent      = errors.New("the provider of the watch is not available in this daemon")
 	ErrWrongBranch  = errors.New("the checkout is not on the head branch of the pull request")
+	ErrNoCheckout   = errors.New("the watch needs a checkout")
 )
 
 const lostAccessAfter = 3
 
 const passWidth = 4
 
+type Checkouts interface {
+	Ensure(ctx context.Context, repo string) (dir string, err error)
+}
+
 type Deps struct {
 	Store         *store.Store
 	NewClient     watcher.ClientFunc
 	Git           worktree.Manager
+	Checkouts     Checkouts
 	Release       gitrelease.Git
 	Agents        map[string]agent.Runner
 	Host          session.Host
@@ -73,6 +80,7 @@ type Service struct {
 	store         *store.Store
 	newClient     watcher.ClientFunc
 	git           worktree.Manager
+	checkouts     Checkouts
 	rel           gitrelease.Git
 	notifications notify.Poster
 	log           *slog.Logger
@@ -88,10 +96,10 @@ type Service struct {
 	alive         func(pid int) bool
 	kick          chan struct{}
 
-	locks         keyedLocks
+	locks         keyedlock.Locks[int64]
 	sessions      sessions
 	sizes         registry[TerminalSize]
-	sizeLocks     keyedLocks
+	sizeLocks     keyedlock.Locks[int64]
 	turns         keyedQueues
 	work          selfWork
 	waiting       waiting
@@ -107,6 +115,7 @@ func New(d Deps, opts ...Option) *Service {
 		store:         d.Store,
 		newClient:     d.NewClient,
 		git:           d.Git,
+		checkouts:     d.Checkouts,
 		rel:           d.Release,
 		notifications: d.Notifications,
 		log:           d.Log,
@@ -250,7 +259,7 @@ func (s *Service) recover(ctx context.Context) {
 			continue
 		}
 		s.spawn(func() {
-			unlock := s.locks.lock(w.ID)
+			unlock := s.locks.Lock(w.ID)
 			defer unlock()
 			s.closeCutTurn(s.background(), w)
 			if _, err := s.ensureSession(s.background(), w); err != nil {
@@ -289,7 +298,7 @@ func (s *Service) passOne(ctx context.Context, client *github.Client, w store.Wa
 	if ctx.Err() != nil || s.guard.Paused() {
 		return
 	}
-	unlock := s.locks.lock(w.ID)
+	unlock := s.locks.Lock(w.ID)
 	err := s.poll(ctx, client, w)
 	unlock()
 	if worthReporting(ctx, err) {
@@ -320,7 +329,7 @@ func (s *Service) pollWatch(ctx context.Context, client *github.Client, id int64
 	if w.Status != store.WatchActive {
 		return nil
 	}
-	unlock := s.locks.lock(w.ID)
+	unlock := s.locks.Lock(w.ID)
 	defer unlock()
 	return s.poll(ctx, client, w)
 }

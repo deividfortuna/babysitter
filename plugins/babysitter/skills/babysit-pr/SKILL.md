@@ -209,7 +209,7 @@ the user asks.
 
 ```bash
 babysitter repo config <owner/name>                                   # show it
-babysitter repo config <owner/name> --checkout ~/code/project         # the checkout each worktree comes from; needed before a toggle
+babysitter repo config <owner/name> --checkout ~/code/project         # the checkout each worktree comes from; without it the daemon clones the repository
 babysitter repo config <owner/name> --auto-start-mine                 # a watch on each new pull request the user opened or is assigned
 babysitter repo config <owner/name> --include-drafts                  # also the drafts of the user
 babysitter repo config <owner/name> --auto-watch-dependabot           # a watch on each new pull request of Dependabot

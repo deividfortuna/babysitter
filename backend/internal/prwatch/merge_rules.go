@@ -21,7 +21,7 @@ func (s *Service) SetMergeRules(ctx context.Context, id int64, c MergeRulesChang
 	if n := c.ApprovalsRequired.Count; n != nil && *n < 0 {
 		return store.Watch{}, fmt.Errorf("%w: %d", ErrBadApprovals, *n)
 	}
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {

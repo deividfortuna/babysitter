@@ -58,7 +58,7 @@ func workWord(commits []gitrelease.Commit, files []string) string {
 }
 
 func (s *Service) Handback(ctx context.Context, id int64, o HandbackOptions) (store.Watch, error) {
-	unlock := s.locks.lock(id)
+	unlock := s.locks.Lock(id)
 	defer unlock()
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {

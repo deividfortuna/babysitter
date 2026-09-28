@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/deividfortuna/babysitter/internal/execx"
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 var ErrConflict = errors.New("the rebase conflicts")
@@ -78,8 +79,6 @@ func New() *Runner {
 	return &Runner{Run: execx.RunIn, Timeout: defaultTimeout}
 }
 
-var noPrompt = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
-
 func (g *Runner) git(ctx context.Context, dir string, args ...string) (string, error) {
 	out, err := g.raw(ctx, dir, args...)
 	return strings.TrimSpace(out), err
@@ -92,7 +91,7 @@ func (g *Runner) raw(ctx context.Context, dir string, args ...string) (string, e
 	}
 	ctx, cancel := context.WithTimeout(ctx, cmp.Or(g.Timeout, defaultTimeout))
 	defer cancel()
-	out, err := run(ctx, dir, "", noPrompt, "git", args...)
+	out, err := run(ctx, dir, "", gitrepo.NoPromptEnv, "git", args...)
 	if err != nil {
 		return out, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}

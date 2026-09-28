@@ -42,7 +42,7 @@ func TestTheRepositoryConfigurationRoutes(t *testing.T) {
 	if rec := call(t, h, http.MethodGet, path, "", &cfg); rec.Code != http.StatusOK || cfg.AutoStartMine || cfg.DependabotScope != "patch" || cfg.DependabotApproval != "never" || cfg.DependabotLimit != 1 {
 		t.Fatalf("GET config: %d %s", rec.Code, rec.Body)
 	}
-	if rec := call(t, h, http.MethodPatch, path, `{"autoStartMine":true}`, nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "invalid_config") {
+	if rec := call(t, h, http.MethodPatch, path, `{"autoStartMine":true}`, &cfg); rec.Code != http.StatusOK || !cfg.AutoStartMine || cfg.CheckoutDir != "" {
 		t.Fatalf("a toggle without a checkout: %d %s", rec.Code, rec.Body)
 	}
 	web := checkoutOf(t, "https://github.com/acme/web.git")
