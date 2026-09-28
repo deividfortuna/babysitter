@@ -21,5 +21,6 @@ export function usePulls(enabled: boolean, state: "open" | "all" = "open") {
 
 export function usePullsByLabel(enabled: boolean, state: "open" | "all" = "open") {
   const pulls = usePulls(enabled, state);
-  return useMemo(() => new Map((pulls.data ?? []).map((pr) => [watchLabel(pr), pr])), [pulls.data]);
+  const byLabel = useMemo(() => new Map((pulls.data ?? []).map((pr) => [watchLabel(pr), pr])), [pulls.data]);
+  return { byLabel, error: pulls.error };
 }

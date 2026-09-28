@@ -1,6 +1,7 @@
 import { Children, Fragment, useId, type ReactNode } from "react";
-import { BotIcon } from "lucide-react";
+import { BotIcon, CircleAlertIcon } from "lucide-react";
 import type { PullRequest } from "@/hooks/usePulls";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
@@ -67,6 +68,17 @@ export function DiffStat({ pull }: { pull?: PullRequest }) {
       <span className="text-success">+{pull.additions}</span>{" "}
       <span className="text-destructive">−{pull.deletions}</span>
     </span>
+  );
+}
+
+export function PullsErrorAlert({ error }: { error: Error | null }) {
+  if (!error) return null;
+  return (
+    <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
+      <CircleAlertIcon />
+      <AlertTitle>Labels and changed lines did not load</AlertTitle>
+      <AlertDescription>{error.message}</AlertDescription>
+    </Alert>
   );
 }
 

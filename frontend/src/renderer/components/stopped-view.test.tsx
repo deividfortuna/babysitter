@@ -97,3 +97,19 @@ test("a stopped row reads the labels and changed lines of its merged pull reques
   expect(within(row).getByText("frontend")).toBeVisible();
   expect(within(row).getByText("watched 1h 0m · 3 messages to the agent")).toBeVisible();
 });
+
+test("keeps the rows and names the failure when the pull requests do not load", async () => {
+  serveApi({ watches: [buildStoppedWatch({ id: 1, number: 12, title: "Ship notifications" })] });
+  server.use(
+    http.get(apiUrl("/api/v1/prs"), () =>
+      HttpResponse.json({ error: { message: "pull request store gone" } }, { status: 500 }),
+    ),
+  );
+
+  renderWithProviders(<StoppedView enabled onNavigate={vi.fn()} />);
+
+  const alert = await screen.findByRole("alert");
+  expect(within(alert).getByText("Labels and changed lines did not load")).toBeVisible();
+  expect(within(alert).getByText("pull request store gone")).toBeVisible();
+  expect(screen.getByRole("button", { name: /Ship notifications/ })).toBeVisible();
+});

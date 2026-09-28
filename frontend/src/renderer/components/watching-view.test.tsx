@@ -207,3 +207,19 @@ test("a row shows conflicts but not a clean merge state", async () => {
   const clean = screen.getByRole("button", { name: /Clean one/ });
   expect(within(clean).queryByText("clean")).toBeNull();
 });
+
+test("keeps the rows and names the failure when the pull requests do not load", async () => {
+  serveApi({ watches: [buildWatch({ id: 1, number: 12, title: "Add notifications" })] });
+  server.use(
+    http.get(apiUrl("/api/v1/prs"), () =>
+      HttpResponse.json({ error: { message: "pull request store gone" } }, { status: 500 }),
+    ),
+  );
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const alert = await screen.findByRole("alert");
+  expect(within(alert).getByText("Labels and changed lines did not load")).toBeVisible();
+  expect(within(alert).getByText("pull request store gone")).toBeVisible();
+  expect(screen.getByRole("button", { name: /Add notifications/ })).toBeVisible();
+});

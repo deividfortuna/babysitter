@@ -3,7 +3,7 @@ import { CircleAlertIcon, EyeIcon } from "lucide-react";
 import { usePullsByLabel } from "@/hooks/usePulls";
 import { useWatches, type Watch } from "@/hooks/useWatches";
 import { FirstRun } from "@/components/first-run";
-import { InboxGroup } from "@/components/inbox-row";
+import { InboxGroup, PullsErrorAlert } from "@/components/inbox-row";
 import { Meta } from "@/components/status-badges";
 import { ViewHeader } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
@@ -110,6 +110,8 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
         </div>
       </ViewHeader>
 
+      <PullsErrorAlert error={pulls.error} />
+
       {groups.length === 0 ? (
         <Empty className="py-16">
           <EmptyHeader>
@@ -144,7 +146,7 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
                 <WatchRow
                   key={w.id}
                   watch={w}
-                  pull={pulls.get(watchLabel(w))}
+                  pull={pulls.byLabel.get(watchLabel(w))}
                   onOpen={() => onNavigate({ kind: "watch", id: w.id })}
                 />
               ))}

@@ -1,7 +1,7 @@
 import { ArchiveIcon, CircleAlertIcon } from "lucide-react";
 import { usePullsByLabel } from "@/hooks/usePulls";
 import { useWatches, type Watch } from "@/hooks/useWatches";
-import { InboxGroup } from "@/components/inbox-row";
+import { InboxGroup, PullsErrorAlert } from "@/components/inbox-row";
 import { Meta } from "@/components/status-badges";
 import { StoppedRow } from "@/components/stopped-row";
 import { ViewHeader } from "@/components/view-header";
@@ -90,6 +90,7 @@ export function StoppedView({ enabled, onNavigate }: Props) {
         {title}
         <Meta>{stopped.length} archived</Meta>
       </ViewHeader>
+      <PullsErrorAlert error={pulls.error} />
       <div className="flex flex-col gap-3 p-3">
         {byDay(stopped).map(([day, list]) => (
           <InboxGroup key={day} heading={day}>
@@ -97,7 +98,7 @@ export function StoppedView({ enabled, onNavigate }: Props) {
               <StoppedRow
                 key={w.id}
                 watch={w}
-                pull={pulls.get(watchLabel(w))}
+                pull={pulls.byLabel.get(watchLabel(w))}
                 onOpen={() => onNavigate({ kind: "watch", id: w.id })}
               />
             ))}
