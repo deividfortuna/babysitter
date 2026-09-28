@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"os/exec"
 	"path/filepath"
 	"slices"
@@ -64,6 +65,40 @@ func TestThePrePushHookRefusesEveryPush(t *testing.T) {
 		if !strings.Contains(string(out), "the daemon pushes this branch") || !strings.Contains(string(out), "let the turn end") {
 			t.Fatalf("the hook says %q", out)
 		}
+	}
+}
+
+func TestTheCommitMsgHookMakesBabysitterACoAuthorOnce(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	env, err := GitEnv(Launch{HooksDir: filepath.Join(t.TempDir(), "hooks")})
+	if err != nil {
+		t.Fatalf("GitEnv() error = %v", err)
+	}
+	repo := t.TempDir()
+	git := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo, "-c", "user.name=Octo", "-c", "user.email=octo@example.com"}, args...)...)
+		cmd.Env = append(os.Environ(), env...)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
+		return string(out)
+	}
+	git("init", "--quiet")
+	git("commit", "--quiet", "--allow-empty", "-m", "Fix the parser", "-m", "Signed-off-by: Octo <octo@example.com>")
+	git("commit", "--quiet", "--amend", "--allow-empty", "--no-edit")
+
+	message := git("log", "-1", "--format=%B")
+	if got := strings.Count(message, CoAuthorTrailer); got != 1 {
+		t.Fatalf("the message has %d co-author trailers, want 1:\n%s", got, message)
+	}
+	trailers := git("log", "-1", "--format=%(trailers:only,unfold)")
+	if !strings.Contains(trailers, "Signed-off-by: Octo") || !strings.Contains(trailers, CoAuthorTrailer) {
+		t.Fatalf("trailers = %q", trailers)
 	}
 }
 
