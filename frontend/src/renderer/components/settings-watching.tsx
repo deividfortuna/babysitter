@@ -4,6 +4,7 @@ import { useProviders, type Provider } from "@/hooks/useProviders";
 import { useSaveSettings, useSettings, type Settings } from "@/hooks/useSettings";
 import { AgentLogo } from "@/components/agent-logo";
 import { OptionSelect } from "@/components/option-select";
+import { EffortSelect } from "@/components/effort-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { ApprovalModeSelect } from "@/components/approval-mode-select";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -14,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
+import { effortsOf } from "@/lib/watch-defaults";
 
 type Draft = Omit<Settings, "pollIntervalSeconds" | "watchIntervalSeconds" | "approvalsRequired"> & {
   pollIntervalSeconds: string;
@@ -78,6 +80,7 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
   }
 
   const refused = refusal(draft);
+  const efforts = effortsOf(providers.data ?? [], draft.provider, draft.model);
 
   function submit() {
     if (refused) return;
@@ -133,7 +136,25 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
             catalog={providers.data ?? []}
             provider={draft.provider}
             model={draft.model}
-            onChange={(provider, model) => edit({ provider, model })}
+            onChange={(provider, model) => edit({ provider, model, effort: "" })}
+          />
+        </Field>
+
+        <Field orientation="horizontal" data-disabled={efforts.length === 0 || undefined}>
+          <FieldContent>
+            <FieldLabel htmlFor="effort">Effort</FieldLabel>
+            <FieldDescription>
+              How much the model reasons before it acts. More effort is slower and uses more tokens.
+            </FieldDescription>
+          </FieldContent>
+          <EffortSelect
+            id="effort"
+            size="default"
+            className="w-38"
+            efforts={efforts}
+            defaultLabel="Model default"
+            value={draft.effort}
+            onChange={(effort) => edit({ effort })}
           />
         </Field>
 

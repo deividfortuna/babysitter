@@ -52,7 +52,7 @@ func TestTheRepositoryConfigurationRoutes(t *testing.T) {
 
 	dir := checkoutOf(t, "git@github.com:acme/billing.git")
 	body := `{"checkoutDir":"` + dir + `","autoStartMine":true,"includeDrafts":true,"autoWatchDependabot":true,
-		"overrides":{"provider":"copilot","model":"auto","approvalMode":"manual","mergeMethod":"squash","approvalsRequired":null,"includeExisting":true,
+		"overrides":{"provider":"copilot","model":"gpt-5.3-codex","effort":"low","approvalMode":"manual","mergeMethod":"squash","approvalsRequired":null,"includeExisting":true,
 			"autoApproveRebase":true,"includeOwn":false,"keepWorktree":true},
 		"dependabotScope":"minor","dependabotApproval":"ask","dependabotLimit":2}`
 	if rec := call(t, h, http.MethodPatch, path, body, &cfg); rec.Code != http.StatusOK {
@@ -60,7 +60,7 @@ func TestTheRepositoryConfigurationRoutes(t *testing.T) {
 	}
 	o := cfg.Overrides
 	if cfg.CheckoutDir != dir || !cfg.AutoStartMine || cfg.AutoStartMineSince == nil || !cfg.AutoWatchDependabot || !cfg.IncludeDrafts ||
-		o.Provider != "copilot" || o.Model != "auto" || o.ApprovalMode != "manual" || o.MergeMethod != "squash" || !o.ApprovalsRequired.Set || o.ApprovalsRequired.Value != nil ||
+		o.Provider != "copilot" || o.Model != "gpt-5.3-codex" || o.Effort != "low" || o.ApprovalMode != "manual" || o.MergeMethod != "squash" || !o.ApprovalsRequired.Set || o.ApprovalsRequired.Value != nil ||
 		!*o.IncludeExisting || !*o.AutoApproveRebase || *o.IncludeOwn || !*o.KeepWorktree || cfg.DependabotScope != "minor" || cfg.DependabotApproval != "ask" || cfg.DependabotLimit != 2 {
 		t.Fatalf("config = %+v", cfg)
 	}

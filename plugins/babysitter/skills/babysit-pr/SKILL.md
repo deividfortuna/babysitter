@@ -219,7 +219,7 @@ babysitter repo config <owner/name> --dependabot-limit 1              # Dependab
 babysitter repo queue <owner/name>                                    # the Dependabot pull requests that wait, oldest first
 ```
 
-The override flags of `repo config` (`--provider`, `--model`,
+The override flags of `repo config` (`--provider`, `--model`, `--effort`,
 `--approval-mode`, `--merge-method`, `--approvals`, `--include-existing`,
 `--auto-approve-rebase`, `--include-own`, `--keep-worktree`) set the
 overrides of each watch on the repository, by hand or by auto start. The

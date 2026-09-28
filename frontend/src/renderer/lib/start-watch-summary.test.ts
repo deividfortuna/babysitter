@@ -13,6 +13,12 @@ test("names the model after the agent when it is not the default", () => {
   );
 });
 
+test("names the effort after the model when it is not the default", () => {
+  expect(settingsSummary({ ...defaults, model: "Opus", effort: "Extra high" })).toBe(
+    "Claude Opus · extra high effort · manual · rule of the base branch · repository default",
+  );
+});
+
 test("counts the approvals", () => {
   expect(settingsSummary({ ...defaults, approvals: "1" })).toBe("Claude · manual · 1 approval · repository default");
   expect(settingsSummary({ ...defaults, approvals: "2" })).toBe("Claude · manual · 2 approvals · repository default");

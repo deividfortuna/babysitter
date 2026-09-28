@@ -6,6 +6,7 @@ import { approvalsInvalid, approvalsRequired } from "@/lib/approvals";
 type SummaryChoices = {
   agent: string;
   model: string;
+  effort?: string;
   approvalMode: ApprovalMode;
   approvals: string;
   mergeMethod: MergeMethod;
@@ -19,11 +20,21 @@ function approvalsSummary(field: string): string {
   return count === 1 ? "1 approval" : `${count} approvals`;
 }
 
-export function settingsSummary({ agent, model, approvalMode, approvals, mergeMethod }: SummaryChoices): string {
+export function settingsSummary({
+  agent,
+  model,
+  effort,
+  approvalMode,
+  approvals,
+  mergeMethod,
+}: SummaryChoices): string {
   return [
     model ? `${agent} ${model}` : agent,
+    effort ? `${effort.toLowerCase()} effort` : "",
     approvalMode,
     approvalsSummary(approvals),
     mergeMethodLabel(mergeMethod).toLowerCase(),
-  ].join(" · ");
+  ]
+    .filter(Boolean)
+    .join(" · ");
 }

@@ -21,6 +21,7 @@ const approvalsDefault = "default"
 type overridesOutput struct {
 	Provider          string `json:"provider,omitempty"`
 	Model             string `json:"model,omitempty"`
+	Effort            string `json:"effort,omitempty"`
 	ApprovalMode      string `json:"approval_mode,omitempty"`
 	MergeMethod       string `json:"merge_method,omitempty"`
 	ApprovalsRequired string `json:"approvals_required,omitempty"`
@@ -51,7 +52,7 @@ func configOutput(repo store.Repo, c store.RepoConfig) repoConfigOutput {
 		AutoStartMine: c.OwnOn(), AutoStartMineSince: c.OwnSince, IncludeDrafts: c.IncludeDrafts,
 		AutoWatchDependabot: c.DependabotOn(), AutoWatchSince: c.DependabotSince,
 		Overrides: overridesOutput{
-			Provider: o.Provider, Model: o.Model, ApprovalMode: string(o.ApprovalMode), MergeMethod: o.MergeMethod,
+			Provider: o.Provider, Model: o.Model, Effort: o.Effort, ApprovalMode: string(o.ApprovalMode), MergeMethod: o.MergeMethod,
 			IncludeExisting: o.IncludeExisting, AutoApproveRebase: o.AutoApproveRebase, IncludeOwn: o.IncludeOwn, KeepWorktree: o.KeepWorktree,
 		},
 		DependabotScope: string(c.DependabotScope), DependabotApproval: string(c.DependabotApproval), DependabotLimit: c.DependabotLimit,
@@ -102,6 +103,7 @@ func (o overridesOutput) words() string {
 	}
 	add("provider", o.Provider)
 	add("model", o.Model)
+	add("effort", o.Effort)
 	add("approval mode", o.ApprovalMode)
 	add("merge method", o.MergeMethod)
 	add("approvals", o.ApprovalsRequired)
@@ -127,6 +129,7 @@ type repoConfigFlags struct {
 	dependabot      bool
 	provider        string
 	model           string
+	effort          string
 	approvalMode    string
 	mergeMethod     string
 	approvals       string
@@ -160,7 +163,7 @@ time; the rest wait in the queue ('babysitter repo queue'). A toggle
 takes only the pull requests created after it went on. Turn one off with
 --auto-start-mine=false. The watches that run go on.
 
-The override flags (--provider, --model, --approval-mode, --merge-method,
+The override flags (--provider, --model, --effort, --approval-mode, --merge-method,
 --approvals, --include-existing, --auto-approve-rebase, --include-own,
 --keep-worktree) set the overrides of each watch that starts on the
 repository, by hand or by auto start. A field that 'watch start' does
@@ -213,7 +216,8 @@ The daemon starts nothing with 'babysitter serve'; auto start runs in
 	fl.BoolVar(&f.drafts, "include-drafts", false, "auto start also takes your drafts")
 	fl.BoolVar(&f.dependabot, "auto-watch-dependabot", false, "start a watch on each new pull request of Dependabot")
 	fl.StringVar(&f.provider, "provider", "", "AI provider of the watches on the repository: claude or copilot; empty takes the provider of the daemon")
-	fl.StringVar(&f.model, "model", "", "model of that provider, empty for its default")
+	fl.StringVar(&f.model, "model", "", "model of that provider, empty for its default; a new model takes its default effort unless --effort names one")
+	fl.StringVar(&f.effort, "effort", "", "effort level of that model, empty for its default, for example low, medium or high")
 	fl.StringVar(&f.approvalMode, "approval-mode", "", "manual or auto for the watches on the repository; empty takes the setting of the daemon")
 	fl.StringVar(&f.mergeMethod, "merge-method", "", "merge method of the watches on the repository: squash, merge or rebase; empty takes the setting of the daemon")
 	fl.StringVar(&f.approvals, "approvals", "", "approvals the watches on the repository need: a number, 0 for none, 'branch' for the rule of the base branch, or 'default' for the setting of the daemon")
@@ -273,10 +277,13 @@ func (f repoConfigFlags) overrides(cmd *cobra.Command, o store.WatchOverrides) (
 		o = store.WatchOverrides{}
 	}
 	if flags.Changed("provider") {
-		o.Provider, o.Model = f.provider, ""
+		o.Provider, o.Model, o.Effort = f.provider, "", ""
 	}
 	if flags.Changed("model") {
-		o.Model = f.model
+		o.Model, o.Effort = f.model, ""
+	}
+	if flags.Changed("effort") {
+		o.Effort = f.effort
 	}
 	if flags.Changed("approval-mode") {
 		o.ApprovalMode = store.ApprovalMode(f.approvalMode)
@@ -307,7 +314,7 @@ func (f repoConfigFlags) overrides(cmd *cobra.Command, o store.WatchOverrides) (
 }
 
 var overrideFlags = []string{
-	"provider", "model", "approval-mode", "merge-method", "include-existing", "approvals",
+	"provider", "model", "effort", "approval-mode", "merge-method", "include-existing", "approvals",
 	"auto-approve-rebase", "include-own", "keep-worktree",
 }
 

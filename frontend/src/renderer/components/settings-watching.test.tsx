@@ -54,6 +54,27 @@ test("the agent of a new watch takes a provider and one of its models", async ()
   expect(savedSettings[0]).toMatchObject({ provider: "copilot", model: "gpt-5.3-codex" });
 });
 
+test("the effort of a new watch is one the model takes, and a new model starts from its default", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings({ model: "opus", effort: "high" }), savedSettings });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openWatching();
+
+  const effort = await screen.findByLabelText("Effort");
+  await waitFor(() => expect(effort).toHaveTextContent("High"));
+  await chooseOption(user, screen.getByLabelText("Model"), "Haiku");
+  expect(effort).toHaveTextContent("Model default");
+  expect(effort).toBeDisabled();
+
+  await chooseOption(user, screen.getByLabelText("Model"), "Sonnet");
+  await chooseOption(user, effort, "Extra high");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0]).toMatchObject({ model: "sonnet", effort: "xhigh" });
+});
+
 test("the agent of a new watch does not offer a provider whose command the daemon did not find", async () => {
   serveApi({ settings: buildSettings(), providers: buildProviders([{}, { available: false }]) });
 

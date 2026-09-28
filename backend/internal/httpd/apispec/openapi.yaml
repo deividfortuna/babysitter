@@ -2539,6 +2539,16 @@ components:
       - models
       - available
       type: object
+    HttpdProviderEffort:
+      properties:
+        id:
+          type: string
+        label:
+          type: string
+      required:
+      - id
+      - label
+      type: object
     HttpdProviderList:
       properties:
         providers:
@@ -2551,6 +2561,13 @@ components:
       type: object
     HttpdProviderModel:
       properties:
+        efforts:
+          description: The effort levels the model takes; empty when the model takes
+            none
+          items:
+            $ref: '#/components/schemas/HttpdProviderEffort'
+          nullable: true
+          type: array
         id:
           type: string
         label:
@@ -2558,6 +2575,7 @@ components:
       required:
       - id
       - label
+      - efforts
       type: object
     HttpdPullRequest:
       properties:
@@ -2963,6 +2981,10 @@ components:
           description: Approved work goes out after a clean rebase without asking
             again
           type: boolean
+        effort:
+          description: The effort level of that model, one the providers route lists
+            for it; empty takes the default of the model
+          type: string
         includeExisting:
           description: A new watch reports the review items the pull request has already
           type: boolean
@@ -3037,6 +3059,7 @@ components:
       - autoApproveRebase
       - provider
       - model
+      - effort
       type: object
     HttpdStartWatchRequest:
       properties:
@@ -3061,6 +3084,10 @@ components:
             again; absent takes the repository, then the daemon
           nullable: true
           type: boolean
+        effort:
+          description: The effort level of that model, one the providers route lists
+            for it; empty takes the effort of the layer that gives the model
+          type: string
         includeExisting:
           description: Report the review items the pull request has already; absent
             takes the repository, then the daemon
@@ -3222,6 +3249,10 @@ components:
           description: Dependabot owns the branch of the pull request, so the daemon
             never pushes it and the agent only replies
           type: boolean
+        effort:
+          description: The effort level the agent works at; empty takes the default
+            of the model
+          type: string
         greenSha:
           type: string
         headRef:
@@ -3360,6 +3391,7 @@ components:
       - baseRef
       - provider
       - model
+      - effort
       - sourceDir
       - worktreeDir
       - workBranch
@@ -3416,6 +3448,10 @@ components:
             again; absent takes the setting of the daemon
           nullable: true
           type: boolean
+        effort:
+          description: The effort level of that model, one the providers route lists
+            for it; empty takes the default of the model. Needs a provider
+          type: string
         includeExisting:
           description: Report the review items the pull request has already; absent
             takes the setting of the daemon
@@ -3455,6 +3491,7 @@ components:
       required:
       - provider
       - model
+      - effort
       - approvalMode
       - mergeMethod
       type: object

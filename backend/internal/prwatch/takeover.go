@@ -86,7 +86,7 @@ func authorCommand(runner agent.Runner, w store.Watch, session string, fresh boo
 		return []string{}, nil
 	}
 	return runner.AuthorCommand(agent.Launch{
-		WorktreeDir: w.WorktreeDir, Model: w.Model, SessionID: session, Resume: !fresh,
+		WorktreeDir: w.WorktreeDir, Model: w.Model, Effort: w.Effort, SessionID: session, Resume: !fresh,
 	})
 }
 

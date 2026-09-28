@@ -246,6 +246,56 @@ func TestAModelWithoutAProviderRunsOnTheProviderOfTheChain(t *testing.T) {
 	}
 }
 
+func TestTheEffortComesFromTheLayerThatGivesTheModel(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name  string
+		asked StartRequest
+		model string
+		want  string
+	}{
+		{"nothing asked takes the effort of the repository", StartRequest{}, "opus", "max"},
+		{"an effort alone keeps the model of the repository", StartRequest{Effort: "low"}, "opus", "low"},
+		{"a new model takes its own default effort", StartRequest{Model: "sonnet"}, "sonnet", ""},
+		{"a new model takes the effort of the request", StartRequest{Model: "sonnet", Effort: "medium"}, "sonnet", "medium"},
+		{"a new provider takes nothing of the repository", StartRequest{Provider: ProviderClaude}, "", ""},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			fx.settings(store.Settings{Model: "sonnet", Effort: "high"})
+			fx.repoOverrides(store.WatchOverrides{Provider: ProviderClaude, Model: "opus", Effort: "max"})
+
+			req := tc.asked
+			req.Target, req.SourceDir = snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, fx.dir
+			w, err := fx.svc.Start(context.Background(), req)
+			if err != nil {
+				t.Fatalf("Start() error = %v", err)
+			}
+			if w.Model != tc.model || w.Effort != tc.want {
+				t.Fatalf("agent = %q at %q effort, want %q at %q", w.Model, w.Effort, tc.model, tc.want)
+			}
+		})
+	}
+}
+
+func TestTheSettingsGiveTheEffortWithoutARepositoryAgent(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.settings(store.Settings{Model: "sonnet", Effort: "high"})
+
+	w, err := fx.svc.Start(context.Background(), StartRequest{
+		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if w.Model != "sonnet" || w.Effort != "high" {
+		t.Fatalf("agent = %q at %q effort, want the sonnet at high effort of the settings", w.Model, w.Effort)
+	}
+}
+
 func TestAStoppedWatchKeepsTheWorktreeRuleItStartedWith(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

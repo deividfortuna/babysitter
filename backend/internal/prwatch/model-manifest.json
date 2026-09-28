@@ -1,0 +1,101 @@
+{
+  "effortSets": {
+    "low-max": [
+      { "id": "low", "label": "Low" },
+      { "id": "medium", "label": "Medium" },
+      { "id": "high", "label": "High" },
+      { "id": "xhigh", "label": "Extra high" },
+      { "id": "max", "label": "Max" }
+    ],
+    "none-max": [
+      { "id": "none", "label": "None" },
+      { "id": "low", "label": "Low" },
+      { "id": "medium", "label": "Medium" },
+      { "id": "high", "label": "High" },
+      { "id": "xhigh", "label": "Extra high" },
+      { "id": "max", "label": "Max" }
+    ],
+    "none-xhigh": [
+      { "id": "none", "label": "None" },
+      { "id": "low", "label": "Low" },
+      { "id": "medium", "label": "Medium" },
+      { "id": "high", "label": "High" },
+      { "id": "xhigh", "label": "Extra high" }
+    ],
+    "low-xhigh": [
+      { "id": "low", "label": "Low" },
+      { "id": "medium", "label": "Medium" },
+      { "id": "high", "label": "High" },
+      { "id": "xhigh", "label": "Extra high" }
+    ],
+    "low-high": [
+      { "id": "low", "label": "Low" },
+      { "id": "medium", "label": "Medium" },
+      { "id": "high", "label": "High" }
+    ],
+    "minimal-high": [
+      { "id": "minimal", "label": "Minimal" },
+      { "id": "low", "label": "Low" },
+      { "id": "medium", "label": "Medium" },
+      { "id": "high", "label": "High" }
+    ],
+    "low-high-max": [
+      { "id": "low", "label": "Low" },
+      { "id": "high", "label": "High" },
+      { "id": "max", "label": "Max" }
+    ],
+    "medium": [{ "id": "medium", "label": "Medium" }]
+  },
+  "providers": [
+    {
+      "id": "claude",
+      "label": "Claude",
+      "models": [
+        { "id": "", "label": "Provider default", "efforts": "low-max" },
+        { "id": "fable", "label": "Fable", "efforts": "low-max" },
+        { "id": "opus", "label": "Opus", "efforts": "low-max" },
+        { "id": "sonnet", "label": "Sonnet", "efforts": "low-max" },
+        { "id": "haiku", "label": "Haiku" }
+      ]
+    },
+    {
+      "id": "copilot",
+      "label": "Copilot",
+      "models": [
+        { "id": "", "label": "Provider default" },
+        { "id": "auto", "label": "Auto" },
+        { "id": "claude-opus-5.5", "label": "Claude Opus 5.5", "efforts": "low-max" },
+        { "id": "claude-sonnet-5.5", "label": "Claude Sonnet 5.5", "efforts": "low-max" },
+        { "id": "claude-fable-5.1", "label": "Claude Fable 5.1", "efforts": "low-max" },
+        { "id": "claude-fable-5", "label": "Claude Fable 5", "efforts": "low-max" },
+        { "id": "claude-opus-5", "label": "Claude Opus 5", "efforts": "low-max" },
+        { "id": "claude-sonnet-5", "label": "Claude Sonnet 5", "efforts": "low-max" },
+        { "id": "claude-opus-4.8", "label": "Claude Opus 4.8", "efforts": "low-max" },
+        { "id": "claude-opus-4.8-fast", "label": "Claude Opus 4.8 (fast mode)", "efforts": "low-max" },
+        { "id": "claude-opus-4.7", "label": "Claude Opus 4.7", "efforts": "medium" },
+        { "id": "claude-haiku-4.5", "label": "Claude Haiku 4.5" },
+        { "id": "gpt-6-sol", "label": "GPT-6 Sol", "efforts": "none-max" },
+        { "id": "gpt-6-astra", "label": "GPT-6 Astra", "efforts": "low-max" },
+        { "id": "gpt-6-luna", "label": "GPT-6 Luna", "efforts": "none-max" },
+        { "id": "gpt-5.6-sol", "label": "GPT-5.6 Sol", "efforts": "none-max" },
+        { "id": "gpt-5.6-terra", "label": "GPT-5.6 Terra", "efforts": "none-max" },
+        { "id": "gpt-5.6-luna", "label": "GPT-5.6 Luna", "efforts": "none-max" },
+        { "id": "gpt-5.5", "label": "GPT-5.5", "efforts": "none-xhigh" },
+        { "id": "gpt-5.4", "label": "GPT-5.4", "efforts": "none-xhigh" },
+        { "id": "gpt-5.4-mini", "label": "GPT-5.4 mini", "efforts": "none-xhigh" },
+        { "id": "gpt-5.3-codex", "label": "GPT-5.3-Codex", "efforts": "low-xhigh" },
+        { "id": "gpt-5-mini", "label": "GPT-5 mini", "efforts": "low-high" },
+        { "id": "gemini-3.8-flash", "label": "Gemini 3.8 Flash", "efforts": "low-high" },
+        { "id": "gemini-3.7-flash", "label": "Gemini 3.7 Flash", "efforts": "low-high" },
+        { "id": "gemini-3.6-flash", "label": "Gemini 3.6 Flash", "efforts": "minimal-high" },
+        { "id": "gemini-3.5-flash", "label": "Gemini 3.5 Flash", "efforts": "minimal-high" },
+        { "id": "grok-4.7", "label": "Grok 4.7", "efforts": "low-high" },
+        { "id": "grok-4.6", "label": "Grok 4.6", "efforts": "low-xhigh" },
+        { "id": "grok-4.5", "label": "Grok 4.5", "efforts": "low-high" },
+        { "id": "kimi-k3", "label": "Kimi K3", "efforts": "low-high-max" },
+        { "id": "kimi-k2.7-code", "label": "Kimi K2.7 Code" },
+        { "id": "mai-code-1.1-flash", "label": "MAI-Code-1.1-Flash", "efforts": "low-high" }
+      ]
+    }
+  ]
+}

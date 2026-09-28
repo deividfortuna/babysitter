@@ -28,6 +28,7 @@ type StartRequest struct {
 	Target            snapshot.Target
 	Provider          string
 	Model             string
+	Effort            string
 	SourceDir         string
 	IncludeExisting   *bool
 	IncludeOwn        *bool
@@ -65,6 +66,7 @@ type checkout struct {
 	source
 	provider string
 	model    string
+	effort   string
 	method   string
 }
 
@@ -83,6 +85,10 @@ func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout
 	if !ok {
 		return checkout{}, modelError(provider, req.Model)
 	}
+	effort, ok := normalizeEffort(provider, model, req.Effort)
+	if !ok {
+		return checkout{}, effortError(provider, model, req.Effort)
+	}
 	if hostedProvider(provider) && s.lacksRunner(provider) {
 		return checkout{}, fmt.Errorf("%w: %s", ErrNoAgent, provider)
 	}
@@ -97,7 +103,7 @@ func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout
 	if err != nil {
 		return checkout{}, err
 	}
-	return checkout{source: src, provider: provider, model: model, method: method}, nil
+	return checkout{source: src, provider: provider, model: model, effort: effort, method: method}, nil
 }
 
 func givenSource(ctx context.Context, dir, provider string) (source, error) {
@@ -283,7 +289,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 		BotLogin: acc.botLogin, HeadRef: headRef, BaseRef: snap.PR.BaseBranch,
 		SourceDir: co.dir, WorktreeDir: dir, WorkBranch: branch,
 		GitUserName: acc.userName, GitUserEmail: acc.userEmail,
-		Provider: co.provider, Model: co.model,
+		Provider: co.provider, Model: co.model, Effort: co.effort,
 		IncludeExisting: *req.IncludeExisting, IncludeOwn: *req.IncludeOwn, StartedAt: now,
 		ApprovalsRequired: approvals, MergeMethod: co.method,
 		ApprovalMode: req.approvalMode(co.provider), AutoApproveRebase: *req.AutoApproveRebase,

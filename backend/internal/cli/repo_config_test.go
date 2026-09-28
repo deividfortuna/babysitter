@@ -121,6 +121,17 @@ func TestRepoConfigProviderGivesTheNewProviderItsDefaultModel(t *testing.T) {
 	if err != nil || cfg.Overrides.Provider != "claude" || cfg.Overrides.Model != "sonnet" {
 		t.Fatalf("repo config --provider claude --model sonnet = %+v, %v", cfg.Overrides, err)
 	}
+	cfg, err = run("repo", "config", "acme/billing", "--effort", "max")
+	if err != nil || cfg.Overrides.Model != "sonnet" || cfg.Overrides.Effort != "max" {
+		t.Fatalf("repo config --effort max = %+v, %v; want sonnet at max effort", cfg.Overrides, err)
+	}
+	cfg, err = run("repo", "config", "acme/billing", "--model", "haiku")
+	if err != nil || cfg.Overrides.Model != "haiku" || cfg.Overrides.Effort != "" {
+		t.Fatalf("repo config --model haiku = %+v, %v; want haiku at its default effort", cfg.Overrides, err)
+	}
+	if _, err := run("repo", "config", "acme/billing", "--effort", "high"); err == nil {
+		t.Fatal("repo config took an effort that haiku does not take")
+	}
 }
 
 func TestRepoConfigHelpNamesTheOverridesAsFlagsOfTheCommand(t *testing.T) {

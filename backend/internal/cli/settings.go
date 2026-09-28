@@ -33,7 +33,7 @@ func (s settingsOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(tw, "Muted notification kinds\t%s\n", mutedKindsWord(s.MutedNotificationKinds))
 	fmt.Fprintf(tw, "Approval mode\t%s\n", s.ApprovalMode)
 	fmt.Fprintf(tw, "Approve a clean rebase on its own\t%s\n", yesNo(s.AutoApproveRebase))
-	fmt.Fprintf(tw, "Agent\t%s\n", providerLabel(s.Provider, s.Model))
+	fmt.Fprintf(tw, "Agent\t%s\n", providerLabel(s.Provider, s.Model, s.Effort))
 	return tw.Flush()
 }
 
@@ -117,6 +117,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		autoRebase      bool
 		provider        string
 		model           string
+		effort          string
 	)
 	cmd := &cobra.Command{
 		Use:   "set",
@@ -147,8 +148,9 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				{"mute-notifications", func(s *httpd.Settings) { s.MutedNotificationKinds = muted }},
 				{"approval-mode", func(s *httpd.Settings) { s.ApprovalMode = approvalMode }},
 				{"auto-approve-rebase", func(s *httpd.Settings) { s.AutoApproveRebase = autoRebase }},
-				{"provider", func(s *httpd.Settings) { s.Provider, s.Model = provider, "" }},
-				{"model", func(s *httpd.Settings) { s.Model = model }},
+				{"provider", func(s *httpd.Settings) { s.Provider, s.Model, s.Effort = provider, "", "" }},
+				{"model", func(s *httpd.Settings) { s.Model, s.Effort = model, "" }},
+				{"effort", func(s *httpd.Settings) { s.Effort = effort }},
 			}
 
 			var asked []func(*httpd.Settings)
@@ -190,8 +192,9 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().BoolVar(&sound, "notification-sound", true, "let a notification make a sound")
 	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "who releases the work of a turn of the agent of a new watch: manual waits for you, auto pushes and posts when the turn ends")
 	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "a new watch lets approved work go out after a clean rebase without asking again")
-	cmd.Flags().StringVar(&provider, "provider", "", "AI provider of a new watch: claude or copilot; a new provider takes its default model unless --model names one")
-	cmd.Flags().StringVar(&model, "model", "", "model of the provider of a new watch, empty for its default")
+	cmd.Flags().StringVar(&provider, "provider", "", "AI provider of a new watch: claude or copilot; a new provider takes its default model and effort unless --model and --effort name them")
+	cmd.Flags().StringVar(&model, "model", "", "model of the provider of a new watch, empty for its default; a new model takes its default effort unless --effort names one")
+	cmd.Flags().StringVar(&effort, "effort", "", "effort level of that model, empty for its default, for example low, medium or high")
 	cmd.Flags().StringVar(&mutedKinds, "mute-notifications", "", "notification kinds that reach nobody, separated by commas: "+store.JoinKinds()+". An empty list shows them all again")
 	return cmd
 }

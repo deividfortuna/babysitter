@@ -13,6 +13,7 @@ import (
 type Launch struct {
 	WorktreeDir string
 	Model       string
+	Effort      string
 	SessionID   string
 	Resume      bool
 	Name        string
@@ -89,4 +90,11 @@ func PickModel(runner, launch string) string {
 		return launch
 	}
 	return runner
+}
+
+func EffortArgs(flag string, l Launch) []string {
+	if l.Effort == "" {
+		return nil
+	}
+	return []string{flag, l.Effort}
 }

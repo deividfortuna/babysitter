@@ -28,6 +28,7 @@ type Settings struct {
 	AutoApproveRebase      bool
 	Provider               string
 	Model                  string
+	Effort                 string
 }
 
 type ApprovalMode string
@@ -127,7 +128,7 @@ func parseMutedKinds(value string) []NotificationKind {
 	return out
 }
 
-const settingsColumns = "poll_interval_ms, watch_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notification_sound, muted_notification_kinds, approval_mode, auto_approve_rebase, provider, model"
+const settingsColumns = "poll_interval_ms, watch_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notification_sound, muted_notification_kinds, approval_mode, auto_approve_rebase, provider, model, effort"
 
 func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	var (
@@ -140,7 +141,7 @@ func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	err := s.db.QueryRowContext(ctx, "SELECT "+settingsColumns+" FROM settings WHERE id = 1").
 		Scan(&pollMS, &watchMS, &approvals, &out.MergeMethod, &out.IncludeExisting, &out.IncludeOwn, &out.KeepWorktree,
 			&out.NotificationsEnabled, &out.NotificationSound, &muted, &out.ApprovalMode, &out.AutoApproveRebase,
-			&out.Provider, &out.Model)
+			&out.Provider, &out.Model, &out.Effort)
 	if err != nil {
 		return Settings{}, fmt.Errorf("read settings: %w", err)
 	}
@@ -189,12 +190,13 @@ UPDATE settings SET
     approval_mode       = ?,
     auto_approve_rebase = ?,
     provider            = ?,
-    model               = ?
+    model               = ?,
+    effort              = ?
 WHERE id = 1`,
 		next.PollInterval.Milliseconds(), next.WatchInterval.Milliseconds(), approvals,
 		next.MergeMethod, next.IncludeExisting, next.IncludeOwn, next.KeepWorktree,
 		next.NotificationsEnabled, next.NotificationSound, muted, next.ApprovalMode, next.AutoApproveRebase,
-		next.Provider, next.Model)
+		next.Provider, next.Model, next.Effort)
 	if err != nil {
 		return Settings{}, fmt.Errorf("save settings: %w", err)
 	}

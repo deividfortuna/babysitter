@@ -9,6 +9,8 @@ import (
 	"github.com/deividfortuna/babysitter/internal/execx"
 )
 
+const effortFlag = "--reasoning-effort"
+
 type Runner struct {
 	Bin   string
 	Model string
@@ -40,7 +42,7 @@ func (c *Runner) Signals() bool { return true }
 func (c *Runner) Prelude() string { return agent.SystemPrompt() }
 
 func (c *Runner) AuthorCommand(l agent.Launch) ([]string, error) {
-	return agent.AuthorArgs(c.bin(), c.Model, l)
+	return agent.AuthorArgs(c.bin(), c.Model, l, agent.EffortArgs(effortFlag, l)...)
 }
 
 func (c *Runner) Command(l agent.Launch) ([]string, []string, error) {
@@ -62,6 +64,7 @@ func (c *Runner) Command(l agent.Launch) ([]string, []string, error) {
 	if model := agent.PickModel(c.Model, l.Model); model != "" {
 		args = append(args, "--model", model)
 	}
+	args = append(args, agent.EffortArgs(effortFlag, l)...)
 	env, err := agent.GitEnv(l)
 	if err != nil {
 		return nil, nil, err

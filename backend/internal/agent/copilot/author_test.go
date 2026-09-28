@@ -12,12 +12,13 @@ func TestTheCommandOfTheAuthorContinuesTheConversationWithNoRules(t *testing.T) 
 	c := New("", "gpt-5")
 	l := launch(t)
 	l.Resume = true
+	l.Effort = "high"
 
 	argv, err := c.AuthorCommand(l)
 	if err != nil {
 		t.Fatalf("AuthorCommand() error = %v", err)
 	}
-	want := []string{"copilot", "--resume", l.SessionID, "--model", "gpt-5"}
+	want := []string{"copilot", "--resume", l.SessionID, "--reasoning-effort", "high", "--model", "gpt-5"}
 	if !slices.Equal(argv, want) {
 		t.Fatalf("argv = %v, want %v", argv, want)
 	}

@@ -198,6 +198,7 @@ test("folds the additional settings, and names what the watch will use", async (
   for (const label of [
     "Agent",
     "Model",
+    "Effort",
     "Approval mode",
     "Approve a clean rebase on its own",
     "Approvals before ready to merge",
@@ -213,6 +214,7 @@ test("folds the additional settings, and names what the watch will use", async (
 const INHERITED_FIELDS = [
   "provider",
   "model",
+  "effort",
   "approvalsRequired",
   "mergeMethod",
   "includeExisting",
@@ -283,6 +285,7 @@ test("the override of the repository beats the daemon", async () => {
       overrides: {
         provider: "copilot",
         model: "",
+        effort: "",
         approvalMode: "auto",
         mergeMethod: "squash",
         approvalsRequired: null,
@@ -410,7 +413,7 @@ test("offers the models of the selected provider and sends the one picked", asyn
   await waitForCatalog(user);
 
   const models = screen.getByLabelText("Model");
-  expect(await optionLabels(user, models)).toEqual(["Default (Provider default)", "Opus", "Sonnet"]);
+  expect(await optionLabels(user, models)).toEqual(["Default (Provider default)", "Opus", "Sonnet", "Haiku"]);
 
   await chooseOption(user, screen.getByLabelText("Agent"), /Copilot/);
   expect(await optionLabels(user, models)).toEqual(["Provider default", "GPT-5.3 Codex"]);
@@ -437,6 +440,40 @@ test("a model without an agent runs on the agent of the defaults", async () => {
   await waitFor(() => expect(startBodies).toHaveLength(1));
   expect(startBodies[0]).toMatchObject({ model: "sonnet" });
   expect(startBodies[0]).not.toHaveProperty("provider");
+});
+
+test("offers the efforts of the model and sends the one picked", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ startBodies, settings: buildSettings({ model: "opus", effort: "high" }) });
+  renderDialog();
+  const user = userEvent.setup();
+  await waitForCatalog(user);
+
+  const effort = screen.getByLabelText("Effort");
+  await waitFor(() => expect(effort).toHaveTextContent("Default (High)"));
+  await chooseOption(user, effort, "Extra high");
+  await fillTarget(user);
+  expect(screen.getByText("babysitter watch start octo/babysitter#12 --effort xhigh")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).toMatchObject({ effort: "xhigh" });
+  expect(startBodies[0]).not.toHaveProperty("model");
+});
+
+test("a new model starts from its own default effort", async () => {
+  serveApi({ settings: buildSettings({ model: "opus", effort: "high" }) });
+  renderDialog();
+  const user = userEvent.setup();
+  await waitForCatalog(user);
+
+  const effort = screen.getByLabelText("Effort");
+  await chooseOption(user, effort, "Max");
+  await chooseOption(user, screen.getByLabelText("Model"), "Sonnet");
+  expect(effort).toHaveTextContent("Model default");
+
+  await chooseOption(user, screen.getByLabelText("Model"), "Haiku");
+  expect(effort).toBeDisabled();
 });
 
 test("resets the model when the provider changes", async () => {

@@ -51,10 +51,11 @@ func (c Change) checksCheckout(current store.RepoConfig) bool {
 func isOn(toggle *bool) bool { return toggle != nil && *toggle }
 
 func checkAgent(o store.WatchOverrides) error {
-	if o.Provider == "" && o.Model == "" {
+	inheritsAgent := o.Provider == "" && o.Model == "" && o.Effort == ""
+	if inheritsAgent {
 		return nil
 	}
-	if err := prwatch.CheckHostedAgent(o.Provider, o.Model); err != nil {
+	if err := prwatch.CheckHostedAgent(o.Provider, o.Model, o.Effort); err != nil {
 		return fmt.Errorf("%w: %w", store.ErrInvalidRepoConfig, err)
 	}
 	return nil

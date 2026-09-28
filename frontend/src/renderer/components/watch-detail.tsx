@@ -497,6 +497,7 @@ function SessionPanel({ watch, enabled }: { watch: Watch; enabled: boolean }) {
         <Meta>
           {watch.provider}
           {watch.model ? ` · ${watch.model}` : ""}
+          {watch.effort ? ` · ${watch.effort} effort` : ""}
         </Meta>
         {withYou ? <Meta>taken over {relativeTime(watch.takenOverAt ?? "")}</Meta> : null}
         {!withYou && watch.session.pid > 0 ? <Meta>pid {watch.session.pid}</Meta> : null}

@@ -8,6 +8,7 @@ import { useRepoConfig, useRepos } from "@/hooks/useRepos";
 import { useStartWatch, useWatches, type MergeMethod, type Watch } from "@/hooks/useWatches";
 import { AgentLogo } from "@/components/agent-logo";
 import { OptionSelect, type Option } from "@/components/option-select";
+import { EffortSelect } from "@/components/effort-select";
 import { SettingRow } from "@/components/setting-row";
 import { Meta } from "@/components/status-badges";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -33,7 +34,14 @@ import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/appro
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
-import { defaultLabel, mergeMethodDefaultLabel, modelLabel, repositoryDefaults } from "@/lib/watch-defaults";
+import {
+  defaultLabel,
+  effortLabel,
+  effortsOf,
+  mergeMethodDefaultLabel,
+  modelLabel,
+  repositoryDefaults,
+} from "@/lib/watch-defaults";
 
 const DIR_KEY_PREFIX = "checkout_dir:";
 const DIR_KEY_LAST = "checkout_dir";
@@ -63,6 +71,7 @@ function storeDir(repo: string, dir: string): void {
 type StartChoices = {
   provider: Provider["id"] | null;
   model: string | null;
+  effort: string | null;
   approvalMode: ApprovalMode | null;
   autoRebase: boolean | null;
   mergeWhenReady: boolean;
@@ -73,6 +82,7 @@ function startCommand(target: string, choices: StartChoices): string {
   const words = ["babysitter watch start", target];
   if (choices.provider) words.push(`--provider ${choices.provider}`);
   if (choices.model) words.push(`--model ${choices.model}`);
+  if (choices.effort) words.push(`--effort ${choices.effort}`);
   if (choices.approvalMode) words.push(`--approval-mode ${choices.approvalMode}`);
   if (choices.autoRebase !== null)
     words.push(choices.autoRebase ? "--auto-approve-rebase" : "--auto-approve-rebase=false");
@@ -146,6 +156,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const [moreOpen, setMoreOpen] = useState(false);
   const [chosenProvider, setProvider] = useState<Provider["id"] | null>(null);
   const [chosenModel, setModel] = useState<string | null>(null);
+  const [chosenEffort, setEffort] = useState<string | null>(null);
   const [includeExisting, setIncludeExisting] = useState<boolean | null>(null);
   const [includeOwn, setIncludeOwn] = useState<boolean | null>(null);
   const [keepWorktree, setKeepWorktree] = useState<boolean | null>(null);
@@ -179,6 +190,12 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         { value: "", label: defaultLabel(defaults && modelLabel(catalog, defaults.provider, defaults.model)) },
         ...models.filter((item) => item.id !== "").map((item) => ({ value: item.id, label: item.label })),
       ];
+  const modelFromDialog = providerChoice !== null || chosenModel !== null;
+  const effort = chosenEffort ?? (modelFromDialog ? "" : (defaults?.effort ?? ""));
+  const efforts = effortsOf(catalog, provider, model);
+  const effortDefault = modelFromDialog
+    ? "Model default"
+    : defaultLabel(defaults && effortLabel(catalog, defaults.provider, defaults.model, defaults.effort));
 
   const approvalModeValue = approvalMode || defaults?.approvalMode || "manual";
   const asks = approvalModeValue === "manual";
@@ -203,6 +220,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const summary = settingsSummary({
     agent: catalog.find((item) => item.id === provider)?.label ?? provider,
     model: model ? (models.find((item) => item.id === model)?.label ?? model) : "",
+    effort: effort ? effortLabel(catalog, provider, model, effort) : "",
     approvalMode: approvalModeValue,
     approvals: approvalsValue,
     mergeMethod: mergeMethodValue,
@@ -240,6 +258,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         ...(checkout ? { sourceDir: checkout } : {}),
         ...(providerChoice ? { provider: providerChoice } : {}),
         ...(chosenModel ? { model: chosenModel } : {}),
+        ...(chosenEffort ? { effort: chosenEffort } : {}),
         ...(includeExisting === null ? {} : { includeExisting }),
         ...(includeOwn === null ? {} : { includeOwn }),
         ...(keepWorktree === null ? {} : { keepWorktree }),
@@ -381,6 +400,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
                   onValueChange={(next) => {
                     setProvider((fromSelectValue(next) || null) as Provider["id"] | null);
                     setModel(null);
+                    setEffort(null);
                   }}
                 >
                   <SelectTrigger id="provider" className="min-w-0 flex-1">
@@ -407,7 +427,29 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
                   options={modelOptions}
                   value={chosenModel ?? ""}
                   disabled={modelOptions.length <= 1}
-                  onChange={(next) => setModel(providerChoice || next ? next : null)}
+                  onChange={(next) => {
+                    setModel(providerChoice || next ? next : null);
+                    setEffort(null);
+                  }}
+                />
+              </div>
+            </SettingRow>
+
+            <SettingRow
+              label="Effort"
+              htmlFor="effort"
+              description="How much the model reasons before it acts. More effort is slower and uses more tokens."
+              className={ROW}
+            >
+              <div className={CONTROL}>
+                <EffortSelect
+                  id="effort"
+                  size="default"
+                  className="w-full"
+                  efforts={efforts}
+                  defaultLabel={effortDefault}
+                  value={chosenEffort ?? ""}
+                  onChange={(next) => setEffort(next || null)}
                 />
               </div>
             </SettingRow>
@@ -576,6 +618,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             {startCommand(target, {
               provider: providerChoice,
               model: chosenModel,
+              effort: chosenEffort,
               approvalMode: approvalMode || null,
               autoRebase: rebaseChosen ? autoRebaseValue : null,
               mergeWhenReady: mergeWhenReady ?? false,

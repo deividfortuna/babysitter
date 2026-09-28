@@ -59,6 +59,21 @@ func TestTheAgentCannotDecideForTheAuthorWithAnotherSpelling(t *testing.T) {
 	}
 }
 
+func TestCommandPassesTheReasoningEffortOfTheWatch(t *testing.T) {
+	t.Parallel()
+	c := New("", "")
+	l := launch(t)
+	l.WorktreeDir, _ = linkedWorktree(t)
+	l.Effort = "xhigh"
+	argv, _, err := c.Command(l)
+	if err != nil {
+		t.Fatalf("Command() error = %v", err)
+	}
+	if v, _ := flag(argv, "--reasoning-effort"); v != "xhigh" {
+		t.Fatalf("reasoning effort = %q in %v", v, argv)
+	}
+}
+
 func TestCommand(t *testing.T) {
 	t.Parallel()
 	c := New("", "")
@@ -76,6 +91,9 @@ func TestCommand(t *testing.T) {
 	}
 	if _, ok := flag(argv, "--model"); ok {
 		t.Fatalf("a model without a choice: %v", argv)
+	}
+	if _, ok := flag(argv, "--reasoning-effort"); ok {
+		t.Fatalf("an effort without a choice: %v", argv)
 	}
 	if !slices.Contains(argv, "--screen-reader") {
 		t.Fatalf("the output is drawn for a terminal nobody reads: %v", argv)

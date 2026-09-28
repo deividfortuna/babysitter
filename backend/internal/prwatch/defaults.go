@@ -22,7 +22,8 @@ func (s *Service) withDefaults(ctx context.Context, req StartRequest) (StartRequ
 	if err != nil {
 		return req, err
 	}
-	req.Provider, req.Model = agentOf(req, repo, set)
+	chosen := agentOf(req, repo, set)
+	req.Provider, req.Model, req.Effort = chosen.provider, chosen.model, chosen.effort
 	req.IncludeExisting = cmp.Or(req.IncludeExisting, repo.IncludeExisting, &set.IncludeExisting)
 	req.IncludeOwn = cmp.Or(req.IncludeOwn, repo.IncludeOwn, &set.IncludeOwn)
 	req.MergeMethod = cmp.Or(req.MergeMethod, setOrNil(repo.MergeMethod), &set.MergeMethod)
@@ -48,15 +49,29 @@ func (s *Service) repoOverrides(ctx context.Context, req StartRequest) (store.Wa
 	return cfg.Overrides, nil
 }
 
-func agentOf(req StartRequest, repo store.WatchOverrides, set store.Settings) (provider, model string) {
+type agentChoice struct {
+	provider string
+	model    string
+	effort   string
+}
+
+func agentOf(req StartRequest, repo store.WatchOverrides, set store.Settings) agentChoice {
+	asked := agentChoice{provider: req.Provider, model: req.Model, effort: req.Effort}
 	switch {
 	case req.Provider != "":
-		return req.Provider, req.Model
+		return asked
 	case repo.Provider != "":
-		return repo.Provider, cmp.Or(req.Model, repo.Model)
+		return asked.over(agentChoice{provider: repo.Provider, model: repo.Model, effort: repo.Effort})
 	default:
-		return set.Provider, cmp.Or(req.Model, set.Model)
+		return asked.over(agentChoice{provider: set.Provider, model: set.Model, effort: set.Effort})
 	}
+}
+
+func (a agentChoice) over(layer agentChoice) agentChoice {
+	if a.model != "" {
+		return agentChoice{provider: layer.provider, model: a.model, effort: a.effort}
+	}
+	return agentChoice{provider: layer.provider, model: layer.model, effort: cmp.Or(a.effort, layer.effort)}
 }
 
 func approvalsOf(asked Approvals, repo store.WatchOverrides, set store.Settings) Approvals {

@@ -163,9 +163,13 @@ func TestCommand(t *testing.T) {
 
 	l.Resume = true
 	l.Model = "opus"
+	l.Effort = "xhigh"
 	argv, _, err = c.Command(l)
 	if err != nil {
 		t.Fatalf("Command() error = %v", err)
+	}
+	if v, _ := flag(argv, "--effort"); v != "xhigh" {
+		t.Fatalf("effort of the launch = %q in %v", v, argv)
 	}
 	if v, _ := flag(argv, "--resume"); v != l.SessionID {
 		t.Fatalf("resume flag = %q in %v", v, argv)
