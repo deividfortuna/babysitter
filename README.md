@@ -728,7 +728,10 @@ repository with auto start and no `--checkout`), the daemon clones the
 head repository once into `<data dir>/checkouts/<owner>/<name>` and uses
 that clone as the checkout. The clone keeps no files of its own; each
 watch gets its worktree from it. The clone fetches and pushes on
-github.com with `gh auth git-credential`, so `gh` must be logged in. The
+github.com with `gh auth git-credential`, so `gh` must be logged in.
+If your git configuration has
+`url.git@github.com:.insteadOf https://github.com/`, the clone uses SSH
+with your keys instead, and `gh` does not need to be logged in. The
 agent commits with the `user.name` and `user.email` of your global git
 configuration. The target must name the repository and the number, and
 the provider must be `claude` or `copilot`: a `self` watch works in your
