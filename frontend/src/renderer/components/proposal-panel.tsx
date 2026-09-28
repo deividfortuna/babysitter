@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ComponentProps } from "react";
 import {
   CheckIcon,
   ChevronDownIcon,
@@ -35,8 +35,8 @@ import {
   type Outgoing,
 } from "@/components/proposal-dialogs";
 import { outgoing, useProposalDecision, type Preview } from "@/components/proposal-decision";
-import { CodeArea, type Commit, type RenderReply, type ShownCode } from "@/components/proposal-code";
-import { anchorReplies, readProposalDiff, type AnchoredReplies, type ProposalDiff } from "@/lib/proposal-diff";
+import { CodeArea, type RenderReply, type ShownCode } from "@/components/proposal-code";
+import { anchorReplies, readProposalDiff, type AnchoredReplies } from "@/lib/proposal-diff";
 import { relativeTime, shortSha } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -95,11 +95,11 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
   const replies = useMemo(() => detail?.replies ?? proposal.replies ?? [], [detail?.replies, proposal.replies]);
   const code = preview.ready ? preview.detail : undefined;
   const commits = useMemo(() => code?.commits ?? [], [code?.commits]);
-  const diff = useMemo(() => (code ? readProposalDiff(code.diff, code.truncated, code.files ?? []) : null), [code]);
   const [picked, setPicked] = useState<{ work: string; sha: string } | null>(null);
   const commit = picked?.work === proposal.workSha ? picked.sha : null;
-  const shown = useShownCode(watch, proposal, code, diff, commit);
-  const inline = proposal.hasPush && !pushRejected && startsOnHead(commits, commit);
+  const shown = useShownCode(watch.id, proposal, code, commit);
+  const pushes = proposal.hasPush && !pushRejected;
+  const inline = pushes && shown.base === proposal.headSha;
   const anchored = useMemo(
     (): AnchoredReplies =>
       shown.diff && inline
@@ -110,7 +110,6 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
   const inDiff = [...anchored.annotations.values()].flat().filter((a) => !dropped.includes(a.metadata.replyId)).length;
   const placing = inline && !shown.diff && !preview.error && !shown.error;
   const bot = watch.dependabot;
-  const pushes = proposal.hasPush && !pushRejected;
   const out = decision.out ?? outgoing(watch, proposal, detail, draft);
   const heldBack = commits.filter((c) => c.heldBack).length;
 
@@ -224,7 +223,7 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
           commits={commits}
           commit={commit}
           onCommit={(sha) => setPicked(sha ? { work: proposal.workSha, sha } : null)}
-          anchored={anchored}
+          annotations={anchored.annotations}
           replies={replies}
           renderReply={renderReply}
           dimmed={pushRejected}
@@ -297,29 +296,56 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
 }
 
 function useShownCode(
-  watch: Watch,
+  watchId: number,
   proposal: Proposal,
   code: ProposalDetail | undefined,
-  whole: ProposalDiff | null,
   commit: string | null,
 ): ShownCode {
-  const query = useProposal(commit ? watch.id : null, commit ? proposal.number : null, proposal, commit ?? undefined);
-  const one = commit ? query.data : undefined;
-  const diff = useMemo(() => (one ? readProposalDiff(one.diff, one.truncated, one.files ?? []) : null), [one]);
-  if (!commit) {
-    return { diff: whole, truncated: code?.truncated ?? false, loading: false, error: null, reload: () => {} };
-  }
+  const query = useProposal(commit ? watchId : null, commit ? proposal.number : null, proposal, commit ?? undefined);
+  const source = commit ? query.data : code;
+  const diff = useMemo(
+    () => (source ? readProposalDiff(source.diff, source.truncated, source.files ?? []) : null),
+    [source],
+  );
   return {
     diff,
-    truncated: one?.truncated ?? false,
+    base: commit ? source?.base : proposal.headSha,
+    truncated: source?.truncated ?? false,
     loading: query.isFetching,
-    error: query.error?.message ?? one?.codeError ?? null,
+    error: commit ? (query.error?.message ?? source?.codeError ?? null) : null,
     reload: () => void query.refetch(),
   };
 }
 
-function startsOnHead(commits: Commit[], commit: string | null): boolean {
-  return commit === null || commits[0]?.sha === commit;
+function SplitButton({
+  variant,
+  label,
+  more,
+  children,
+}: {
+  variant: "default" | "outline";
+  label: string;
+  more: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <ButtonGroup>
+      {children}
+      {more ? (
+        <>
+          {variant === "default" ? <ButtonGroupSeparator className="bg-primary-foreground/30" /> : null}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button size="icon-sm" variant={variant} className="w-7" aria-label={label}>
+                <ChevronDownIcon />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">{more}</DropdownMenuContent>
+          </DropdownMenu>
+        </>
+      ) : null}
+    </ButtonGroup>
+  );
 }
 
 function DecisionButtons({
@@ -343,44 +369,35 @@ function DecisionButtons({
 }) {
   return (
     <div className="flex items-center gap-2">
-      <ButtonGroup>
+      <SplitButton
+        variant="default"
+        label="More ways to approve"
+        more={
+          <DropdownMenuItem disabled={codeUnread} onSelect={onStopAsking}>
+            Approve and stop asking
+          </DropdownMenuItem>
+        }
+      >
         <Button size="sm" disabled={approving || codeUnread} onClick={onApprove}>
           {approving ? <Spinner data-icon="inline-start" /> : <CheckIcon data-icon="inline-start" />}
           {hasPush ? "Approve" : "Approve and post"}
         </Button>
-        <ButtonGroupSeparator className="bg-primary-foreground/30" />
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button size="icon-sm" className="w-7" aria-label="More ways to approve">
-              <ChevronDownIcon />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end">
-            <DropdownMenuItem disabled={codeUnread} onSelect={onStopAsking}>
-              Approve and stop asking
+      </SplitButton>
+      <SplitButton
+        variant="outline"
+        label="More ways to reject"
+        more={
+          pushes ? (
+            <DropdownMenuItem variant="destructive" onSelect={onRejectPush}>
+              Reject push
             </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </ButtonGroup>
-      <ButtonGroup>
+          ) : null
+        }
+      >
         <Button size="sm" variant="outline" onClick={onReject}>
           Reject
         </Button>
-        {pushes ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button size="icon-sm" variant="outline" className="w-7" aria-label="More ways to reject">
-                <ChevronDownIcon />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem variant="destructive" onSelect={onRejectPush}>
-                Reject push
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : null}
-      </ButtonGroup>
+      </SplitButton>
     </div>
   );
 }
@@ -479,50 +496,10 @@ function CodeUnread({ preview }: { preview: Preview }) {
   );
 }
 
-function ProposalCode({
-  preview,
-  shown,
-  commits,
-  commit,
-  onCommit,
-  anchored,
-  replies,
-  renderReply,
-  dimmed,
-  title,
-  actions,
-  notice,
-}: {
-  preview: Preview;
-  shown: ShownCode;
-  commits: Commit[];
-  commit: string | null;
-  onCommit: (sha: string | null) => void;
-  anchored: AnchoredReplies;
-  replies: ProposalReply[];
-  renderReply: RenderReply;
-  dimmed: boolean;
-  title: string;
-  actions: React.ReactNode;
-  notice: React.ReactNode;
-}) {
+function ProposalCode({ preview, ...area }: { preview: Preview } & ComponentProps<typeof CodeArea>) {
   if (preview.error) return <CodeUnread preview={preview} />;
   if (!preview.ready || !preview.detail) return <Spinner />;
-  return (
-    <CodeArea
-      shown={shown}
-      commits={commits}
-      commit={commit}
-      onCommit={onCommit}
-      annotations={anchored.annotations}
-      replies={replies}
-      renderReply={renderReply}
-      dimmed={dimmed}
-      title={title}
-      actions={actions}
-      notice={notice}
-    />
-  );
+  return <CodeArea {...area} />;
 }
 
 function FailedSection({ watch, proposal }: { watch: Watch; proposal: Proposal }) {

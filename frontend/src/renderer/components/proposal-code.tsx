@@ -13,16 +13,17 @@ import {
   ScissorsIcon,
   TriangleAlertIcon,
   WrapTextIcon,
+  type LucideIcon,
 } from "lucide-react";
 import type { DiffLineAnnotation } from "@pierre/diffs";
 import { CodeView, WorkerPoolContextProvider, type CodeViewHandle, type CodeViewItem } from "@pierre/diffs/react";
 import type { ProposalDetail, ProposalReply } from "@/hooks/useProposals";
-import { useDiffPreferences, type DiffStyle } from "@/hooks/use-diff-preferences";
+import { useDiffPreferences, type DiffPreferences, type DiffStyle } from "@/hooks/use-diff-preferences";
 import { useTheme } from "@/hooks/use-theme";
 import type { DiffFile, ProposalDiff, ReplyAnchor } from "@/lib/proposal-diff";
 import { Meta } from "@/components/status-badges";
 import { count } from "@/components/proposal-dialogs";
-import { CHANGE_ICONS, changeOf, FileTree, LineCounts } from "@/components/proposal-file-tree";
+import { changeIcon, FileTree, LineCounts } from "@/components/proposal-file-tree";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -47,6 +48,7 @@ export type RenderReply = (reply: ProposalReply, anchor?: ReplyAnchor) => ReactN
 
 export type ShownCode = {
   diff: ProposalDiff | null;
+  base: string | undefined;
   truncated: boolean;
   loading: boolean;
   error: string | null;
@@ -102,7 +104,10 @@ function useReading(): Reading {
     [],
   );
 
-  return { viewed, collapsed, toggleViewed, toggleOpen, foldAll };
+  return useMemo(
+    () => ({ viewed, collapsed, toggleViewed, toggleOpen, foldAll }),
+    [viewed, collapsed, toggleViewed, toggleOpen, foldAll],
+  );
 }
 
 function useVersions() {
@@ -138,19 +143,17 @@ export function CodeArea({
   notice: ReactNode;
 }) {
   const reading = useReading();
-  const { preferences, change } = useDiffPreferences();
   const [full, setFull] = useState(false);
-  const shared = { ...card, reading, layout: preferences.style, wrap: preferences.wrap, onPreferences: change };
 
   return (
     <WorkerPoolContextProvider poolOptions={POOL} highlighterOptions={HIGHLIGHTER}>
       {full ? (
         <p className="text-sm text-muted-foreground">The diff is open in the full window.</p>
       ) : (
-        <DiffCard {...shared} onFull={() => setFull(true)} />
+        <DiffCard {...card} reading={reading} onFull={() => setFull(true)} />
       )}
       <Dialog open={full} onOpenChange={setFull}>
-        <DialogContent className="flex h-[calc(100svh-2rem)] max-h-[calc(100svh-2rem)] w-[calc(100vw-2rem)] max-w-none flex-col gap-4 overflow-hidden p-4 sm:max-w-none">
+        <DialogContent className="flex h-[calc(100svh-var(--size-dialog-gutter))] max-h-[calc(100svh-var(--size-dialog-gutter))] w-[calc(100vw-var(--size-dialog-gutter))] max-w-none flex-col gap-4 overflow-hidden p-4 sm:max-w-none">
           <div className="flex min-w-0 items-center gap-2 pr-8">
             <DialogTitle className="shrink-0 text-title font-medium">Files changed</DialogTitle>
             <Meta className="truncate">{title}</Meta>
@@ -158,7 +161,7 @@ export function CodeArea({
           </div>
           <DialogDescription className="sr-only">The diff of the proposal in the full window.</DialogDescription>
           {notice}
-          <DiffCard {...shared} fill />
+          <DiffCard {...card} reading={reading} fill />
         </DialogContent>
       </Dialog>
     </WorkerPoolContextProvider>
@@ -175,19 +178,14 @@ function DiffCard({
   renderReply,
   dimmed,
   reading,
-  layout,
-  wrap,
-  onPreferences,
   fill = false,
   onFull,
 }: CardProps & {
   reading: Reading;
-  layout: DiffStyle;
-  wrap: boolean;
-  onPreferences: (next: { style?: DiffStyle; wrap?: boolean }) => void;
   fill?: boolean;
   onFull?: () => void;
 }) {
+  const { preferences, change } = useDiffPreferences();
   const [tree, setTree] = useState(fill);
   const [current, setCurrent] = useState<string>();
   const viewer = useRef<CodeViewHandle<ReplyAnchor, undefined>>(null);
@@ -211,14 +209,10 @@ function DiffCard({
         commits={commits}
         commit={commit}
         onCommit={onCommit}
-        viewed={reading.viewed}
-        allFolded={diff !== null && diff.files.length > 0 && diff.files.every(reading.collapsed)}
-        onFoldAll={(folded) => diff && reading.foldAll(diff.files, folded)}
-        layout={layout}
-        wrap={wrap}
+        reading={reading}
+        preferences={preferences}
+        onPreferences={change}
         tree={tree}
-        onLayout={(style) => onPreferences({ style })}
-        onWrap={(next) => onPreferences({ wrap: next })}
         onTree={setTree}
         onFull={onFull}
       />
@@ -227,7 +221,7 @@ function DiffCard({
           <FileTree
             diff={diff}
             viewed={reading.viewed}
-            current={current ?? firstOpen(diff.files, reading)}
+            current={current ?? firstOpen(diff.files, reading.collapsed)}
             onJump={jump}
           />
         ) : null}
@@ -241,8 +235,7 @@ function DiffCard({
               replies={replies}
               renderReply={renderReply}
               reading={reading}
-              layout={layout}
-              wrap={wrap}
+              preferences={preferences}
               onCurrent={setCurrent}
             />
           ) : (
@@ -286,21 +279,50 @@ function Tip({ label, children }: { label: string; children: ReactNode }) {
   );
 }
 
-const TOOL = "size-8 data-[state=on]:bg-muted data-[state=on]:text-foreground";
+const LAYOUTS: { value: DiffStyle; label: string; icon: LucideIcon }[] = [
+  { value: "unified", label: "Unified", icon: Rows2Icon },
+  { value: "split", label: "Split", icon: Columns2Icon },
+];
+
+function ToolToggle({
+  label,
+  icon: Icon,
+  pressed,
+  onPressedChange,
+}: {
+  label: string;
+  icon: LucideIcon;
+  pressed: boolean;
+  onPressedChange: (pressed: boolean) => void;
+}) {
+  return (
+    <Tip label={label}>
+      <Toggle
+        size="sm"
+        aria-label={label}
+        className="size-8 data-[state=on]:bg-muted data-[state=on]:text-foreground"
+        pressed={pressed}
+        onPressedChange={onPressedChange}
+      >
+        <Icon />
+      </Toggle>
+    </Tip>
+  );
+}
+
+function isStyle(value: string): value is DiffStyle {
+  return LAYOUTS.some((l) => l.value === value);
+}
 
 function Toolbar({
   diff,
   commits,
   commit,
   onCommit,
-  viewed,
-  allFolded,
-  onFoldAll,
-  layout,
-  wrap,
+  reading,
+  preferences,
+  onPreferences,
   tree,
-  onLayout,
-  onWrap,
   onTree,
   onFull,
 }: {
@@ -308,21 +330,19 @@ function Toolbar({
   commits: Commit[];
   commit: string | null;
   onCommit: (sha: string | null) => void;
-  viewed: ReadonlySet<string>;
-  allFolded: boolean;
-  onFoldAll: (folded: boolean) => void;
-  layout: DiffStyle;
-  wrap: boolean;
+  reading: Reading;
+  preferences: DiffPreferences;
+  onPreferences: (next: Partial<DiffPreferences>) => void;
   tree: boolean;
-  onLayout: (layout: DiffStyle) => void;
-  onWrap: (wrap: boolean) => void;
   onTree: (tree: boolean) => void;
   onFull?: () => void;
 }) {
-  const files = diff ? diff.files.length + diff.missing.length : 0;
-  const seen = diff ? diff.files.filter((f) => viewed.has(f.path)).length : 0;
-  const added = diff?.files.reduce((sum, f) => sum + f.added, 0) ?? 0;
-  const deleted = diff?.files.reduce((sum, f) => sum + f.deleted, 0) ?? 0;
+  const files = diff?.files ?? [];
+  const listed = files.length + (diff?.missing.length ?? 0);
+  const seen = files.filter((f) => reading.viewed.has(f.path)).length;
+  const added = files.reduce((sum, f) => sum + f.added, 0);
+  const deleted = files.reduce((sum, f) => sum + f.deleted, 0);
+  const allFolded = files.length > 0 && files.every((f) => reading.collapsed(f));
   const FoldIcon = allFolded ? ChevronsUpDownIcon : ChevronsDownUpIcon;
   const foldLabel = allFolded ? "Expand all" : "Collapse all";
   return (
@@ -331,7 +351,7 @@ function Toolbar({
         <CommitMenu commits={commits} commit={commit} onCommit={onCommit} />
         {diff ? (
           <span className="shrink-0 text-sm text-muted-foreground">
-            {count(files, "file")}
+            {count(listed, "file")}
             {seen > 0 ? ` · ${seen} viewed` : ""}
           </span>
         ) : null}
@@ -343,7 +363,7 @@ function Toolbar({
               size="icon-sm"
               aria-label={foldLabel}
               disabled={!diff}
-              onClick={() => onFoldAll(!allFolded)}
+              onClick={() => reading.foldAll(files, !allFolded)}
             >
               <FoldIcon />
             </Button>
@@ -353,40 +373,30 @@ function Toolbar({
             size="sm"
             className="gap-0.5 rounded-lg bg-muted p-0.5"
             aria-label="Diff layout"
-            value={layout}
+            value={preferences.style}
             onValueChange={(value) => {
-              if (value === "unified" || value === "split") onLayout(value);
+              if (isStyle(value)) onPreferences({ style: value });
             }}
           >
-            <Tip label="Unified">
-              <ToggleGroupItem
-                value="unified"
-                aria-label="Unified"
-                className="size-8 rounded-md! data-[state=on]:bg-background data-[state=on]:shadow-xs"
-              >
-                <Rows2Icon />
-              </ToggleGroupItem>
-            </Tip>
-            <Tip label="Split">
-              <ToggleGroupItem
-                value="split"
-                aria-label="Split"
-                className="size-8 rounded-md! data-[state=on]:bg-background data-[state=on]:shadow-xs"
-              >
-                <Columns2Icon />
-              </ToggleGroupItem>
-            </Tip>
+            {LAYOUTS.map(({ value, label, icon: Icon }) => (
+              <Tip key={value} label={label}>
+                <ToggleGroupItem
+                  value={value}
+                  aria-label={label}
+                  className="size-8 rounded-md! data-[state=on]:bg-background data-[state=on]:shadow-xs"
+                >
+                  <Icon />
+                </ToggleGroupItem>
+              </Tip>
+            ))}
           </ToggleGroup>
-          <Tip label="Wrap lines">
-            <Toggle size="sm" aria-label="Wrap lines" className={TOOL} pressed={wrap} onPressedChange={onWrap}>
-              <WrapTextIcon />
-            </Toggle>
-          </Tip>
-          <Tip label="File tree">
-            <Toggle size="sm" aria-label="File tree" className={TOOL} pressed={tree} onPressedChange={onTree}>
-              <ListTreeIcon />
-            </Toggle>
-          </Tip>
+          <ToolToggle
+            label="Wrap lines"
+            icon={WrapTextIcon}
+            pressed={preferences.wrap}
+            onPressedChange={(wrap) => onPreferences({ wrap })}
+          />
+          <ToolToggle label="File tree" icon={ListTreeIcon} pressed={tree} onPressedChange={onTree} />
           {onFull ? (
             <Tip label="Full window">
               <Button variant="ghost" size="icon-sm" aria-label="Full window" onClick={onFull}>
@@ -465,13 +475,15 @@ function CutNotice({ missing }: { missing: number }) {
   );
 }
 
-function firstOpen(files: DiffFile[], reading: Reading): string | undefined {
-  return (files.find((f) => !reading.collapsed(f)) ?? files[0])?.path;
+type Collapsed = Reading["collapsed"];
+
+function firstOpen(files: DiffFile[], collapsed: Collapsed): string | undefined {
+  return (files.find((f) => !collapsed(f)) ?? files[0])?.path;
 }
 
 function fileInView(
   files: DiffFile[],
-  reading: Reading,
+  collapsed: Collapsed,
   top: (id: string) => number | undefined,
   scrollTop: number,
 ): string | undefined {
@@ -479,9 +491,9 @@ function fileInView(
   const shown = files.find((f, i) => {
     const next = files[i + 1];
     const bottom = next ? (top(next.path) ?? Infinity) : Infinity;
-    return !reading.collapsed(f) && bottom > edge;
+    return !collapsed(f) && bottom > edge;
   });
-  return shown?.path ?? firstOpen(files, reading);
+  return shown?.path ?? firstOpen(files, collapsed);
 }
 
 function DiffViewer({
@@ -491,8 +503,7 @@ function DiffViewer({
   replies,
   renderReply,
   reading,
-  layout,
-  wrap,
+  preferences,
   onCurrent,
 }: {
   ref: React.Ref<CodeViewHandle<ReplyAnchor, undefined>>;
@@ -501,10 +512,10 @@ function DiffViewer({
   replies: ProposalReply[];
   renderReply: RenderReply;
   reading: Reading;
-  layout: DiffStyle;
-  wrap: boolean;
+  preferences: DiffPreferences;
   onCurrent: (path: string | undefined) => void;
 }) {
+  const { style, wrap } = preferences;
   const { theme } = useTheme();
   const version = useVersions();
   const byPath = useMemo(() => new Map(diff.files.map((f) => [f.path, f])), [diff.files]);
@@ -533,7 +544,7 @@ function DiffViewer({
     () => ({
       theme: THEMES,
       themeType: theme,
-      diffStyle: layout,
+      diffStyle: style,
       overflow: wrap ? ("wrap" as const) : ("scroll" as const),
       preferredHighlighter: "shiki-js" as const,
       lineDiffType: "word" as const,
@@ -541,7 +552,7 @@ function DiffViewer({
       stickyHeaders: true,
       layout: FLUSH,
     }),
-    [theme, layout, wrap],
+    [theme, style, wrap],
   );
 
   return (
@@ -552,7 +563,7 @@ function DiffViewer({
         options={options}
         className="min-h-0 flex-1 overflow-auto"
         onScroll={(scrollTop, view) =>
-          onCurrent(fileInView(diff.files, reading, (id) => view.getTopForItem(id), scrollTop))
+          onCurrent(fileInView(diff.files, reading.collapsed, (id) => view.getTopForItem(id), scrollTop))
         }
         renderCustomHeader={(item) => {
           const file = byPath.get(item.id);
@@ -595,7 +606,7 @@ function FileHeader({
   onViewed: () => void;
   onToggle: () => void;
 }) {
-  const { icon: Icon, tone } = CHANGE_ICONS[changeOf(file.diff.type)];
+  const { icon: Icon, tone } = changeIcon(file.diff.type);
   const Chevron = collapsed ? ChevronRightIcon : ChevronDownIcon;
   const id = `viewed-${file.path}`;
   const waiting = collapsed && file.noisy && !viewed;

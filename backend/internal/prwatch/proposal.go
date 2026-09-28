@@ -61,6 +61,7 @@ type ProposalCode struct {
 	Commits   []gitrelease.Commit
 	HeldBack  []string
 	Commit    string
+	Base      string
 	Files     []gitrelease.File
 	Diff      string
 	Truncated bool
@@ -155,36 +156,33 @@ func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal,
 	if c.HeldBack, err = s.heldBack(ctx, w, p); err != nil {
 		return ProposalCode{}, err
 	}
-	from, to := p.HeadSHA, work
+	c.Base = p.HeadSHA
+	to := work
 	if commit != "" {
-		if from, to, err = commitRange(c.Commits, p.HeadSHA, commit); err != nil {
+		if to, err = commitOf(c.Commits, commit); err != nil {
+			return ProposalCode{}, err
+		}
+		if c.Base, err = s.rel.Parent(ctx, w.WorktreeDir, to); err != nil {
 			return ProposalCode{}, err
 		}
 		c.Commit = to
 	}
-	if c.Files, err = s.rel.Files(ctx, w.WorktreeDir, from, to); err != nil {
+	if c.Files, err = s.rel.Files(ctx, w.WorktreeDir, c.Base, to); err != nil {
 		return ProposalCode{}, err
 	}
-	if c.Diff, c.Truncated, err = s.rel.Diff(ctx, w.WorktreeDir, from, to, maxDiff); err != nil {
+	if c.Diff, c.Truncated, err = s.rel.Diff(ctx, w.WorktreeDir, c.Base, to, maxDiff); err != nil {
 		return ProposalCode{}, err
 	}
 	return c, nil
 }
 
-const minShortSHA = 7
-
-func commitRange(commits []gitrelease.Commit, head, commit string) (string, string, error) {
-	names := func(c gitrelease.Commit) bool {
-		return c.SHA == commit || len(commit) >= minShortSHA && strings.HasPrefix(c.SHA, commit)
-	}
+func commitOf(commits []gitrelease.Commit, commit string) (string, error) {
+	names := func(c gitrelease.Commit) bool { return c.SHA == commit || abbreviates(commit, c.SHA) }
 	i := slices.IndexFunc(commits, names)
 	if i < 0 {
-		return "", "", fmt.Errorf("%w: %s", ErrUnknownCommit, commit)
+		return "", fmt.Errorf("%w: %s", ErrUnknownCommit, commit)
 	}
-	if i == 0 {
-		return head, commits[0].SHA, nil
-	}
-	return commits[i-1].SHA, commits[i].SHA, nil
+	return commits[i].SHA, nil
 }
 
 func (s *Service) heldBack(ctx context.Context, w store.Watch, p store.Proposal) ([]string, error) {

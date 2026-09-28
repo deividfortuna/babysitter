@@ -17,20 +17,24 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/component
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
-export type Change = "new" | "deleted" | "change" | "missing";
+type Change = "new" | "deleted" | "change" | "missing";
 
 type Listed = { path: string; added: number; deleted: number; change: Change };
 
-export const CHANGE_ICONS: Record<Change, { icon: LucideIcon; tone: string; label: string }> = {
+const CHANGE_ICONS: Record<Change, { icon: LucideIcon; tone: string; label: string }> = {
   new: { icon: SquarePlusIcon, tone: "text-success", label: "added" },
   deleted: { icon: SquareMinusIcon, tone: "text-destructive", label: "deleted" },
   change: { icon: SquareDotIcon, tone: "text-attention", label: "changed" },
   missing: { icon: SquareIcon, tone: "text-muted-foreground", label: "not in the diff" },
 };
 
-export function changeOf(type: string): Change {
+function changeOf(type: string): Change {
   if (type === "new" || type === "deleted") return type;
   return "change";
+}
+
+export function changeIcon(type: string) {
+  return CHANGE_ICONS[changeOf(type)];
 }
 
 export function LineCounts({ added, deleted, className }: { added: number; deleted: number; className?: string }) {

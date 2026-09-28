@@ -1,9 +1,9 @@
-import { act, screen, waitFor, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, onTestFinished, test, vi } from "vite-plus/test";
 import { delay, http, HttpResponse } from "msw";
 import { buildActivity, buildProposal, buildProposalDetail, buildWatch } from "@test/fixtures";
-import { renderWithProviders } from "@test/test-utils";
+import { openMenu, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi, type Decision } from "@test/msw";
 import type { Proposal, ProposalDetail, ProposalReply } from "@/hooks/useProposals";
 import type { Watch } from "@/hooks/useWatches";
@@ -70,15 +70,12 @@ async function codeShown(panel: HTMLElement): Promise<HTMLElement> {
   return within(panel).findByRole("toolbar", { name: "Diff tools" });
 }
 
-async function openMenu(user: User, panel: HTMLElement, trigger: string): Promise<HTMLElement> {
-  const button = await within(panel).findByRole("button", { name: trigger });
-  act(() => button.focus());
-  await user.click(button);
-  return screen.findByRole("menu");
+async function menuOf(user: User, panel: HTMLElement, trigger: string): Promise<HTMLElement> {
+  return openMenu(user, await within(panel).findByRole("button", { name: trigger }));
 }
 
 async function choose(user: User, panel: HTMLElement, trigger: string, item: string | RegExp) {
-  const menu = await openMenu(user, panel, trigger);
+  const menu = await menuOf(user, panel, trigger);
   await user.click(within(menu).getByRole("menuitem", { name: item }));
 }
 
@@ -87,8 +84,23 @@ async function rejectPush(user: User, panel: HTMLElement) {
 }
 
 async function stopAskingItem(user: User, panel: HTMLElement): Promise<HTMLElement> {
-  const menu = await openMenu(user, panel, "More ways to approve");
+  const menu = await menuOf(user, panel, "More ways to approve");
   return within(menu).getByRole("menuitem", { name: "Approve and stop asking" });
+}
+
+const FIRST = "3b1e9c4cccccccccccccccccccccccccccccccc";
+const SECOND = "7a20d55ddddddddddddddddddddddddddddddddd";
+
+function serveCommit(api: { proposalDetail: Record<string, ProposalDetail> }, sha: string, base: string, path: string) {
+  const whole = buildProposalDetail();
+  const start = whole.diff.indexOf(`diff --git a/${path}`);
+  const end = whole.diff.indexOf("diff --git", start + 1);
+  api.proposalDetail[`42/3@${sha}`] = buildProposalDetail({
+    commit: sha,
+    base,
+    files: (whole.files ?? []).filter((f) => f.path === path),
+    diff: whole.diff.slice(start, end < 0 ? undefined : end),
+  });
 }
 
 async function openTree(user: User, panel: HTMLElement): Promise<HTMLElement> {
@@ -116,7 +128,7 @@ test("a proposal that waits shows what goes out", async () => {
   expect(within(toolbar).getByText("2 files")).toBeVisible();
   expect(within(toolbar).getByText("+54")).toBeVisible();
   expect(within(panel).queryByRole("navigation", { name: "Changed files" })).toBeNull();
-  const menu = await openMenu(user, panel, "Commits");
+  const menu = await menuOf(user, panel, "Commits");
   expect(within(menu).getByRole("menuitem", { name: /All commits\s*2 commits/ })).toHaveAttribute(
     "aria-current",
     "true",
@@ -165,14 +177,8 @@ test("the filter keeps the files whose path has the text", async () => {
 });
 
 test("one commit shows its own files and diff, and all commits come back", async () => {
-  const detail = buildProposalDetail();
   const { api, user } = renderPending();
-  api.proposalDetail["42/3@7a20d55ddddddddddddddddddddddddddddddddd"] = buildProposalDetail({
-    ...detail,
-    commit: "7a20d55ddddddddddddddddddddddddddddddddd",
-    files: [{ path: "internal/webhook/deliver_test.go", status: "A", added: 40, deleted: 0 }],
-    diff: detail.diff.slice(detail.diff.indexOf("diff --git a/internal/webhook/deliver_test.go")),
-  });
+  serveCommit(api, SECOND, FIRST, "internal/webhook/deliver_test.go");
   const panel = await section();
   await codeShown(panel);
 
@@ -195,14 +201,8 @@ test("one commit shows its own files and diff, and all commits come back", async
 });
 
 test("the first commit keeps the replies on its lines", async () => {
-  const detail = buildProposalDetail();
   const { api, user } = renderPending();
-  api.proposalDetail["42/3@3b1e9c4cccccccccccccccccccccccccccccccc"] = buildProposalDetail({
-    ...detail,
-    commit: "3b1e9c4cccccccccccccccccccccccccccccccc",
-    files: [{ path: "internal/webhook/deliver.go", status: "M", added: 14, deleted: 3 }],
-    diff: detail.diff.slice(0, detail.diff.indexOf("diff --git a/internal/webhook/deliver_test.go")),
-  });
+  serveCommit(api, FIRST, buildProposal().headSha, "internal/webhook/deliver.go");
   const panel = await section();
   await codeShown(panel);
 
@@ -221,9 +221,7 @@ test("a commit whose code cannot be read says so and reads it again", async () =
 
   expect(await within(panel).findByText("The code of this commit could not be read.")).toBeVisible();
   expect(within(panel).getByText("commit not found")).toBeVisible();
-  api.proposalDetail["42/3@7a20d55ddddddddddddddddddddddddddddddddd"] = buildProposalDetail({
-    commit: "7a20d55ddddddddddddddddddddddddddddddddd",
-  });
+  serveCommit(api, SECOND, FIRST, "internal/webhook/deliver_test.go");
   await user.click(within(panel).getByRole("button", { name: "Read it again" }));
 
   expect(await within(panel).findByLabelText("Diff")).toHaveTextContent("TestDeliverRetries");
@@ -301,7 +299,7 @@ test("an event of the stream does not fetch the code of the proposal again", asy
 test("a proposal on new work shows its new code, with all its commits", async () => {
   const { api, queryClient, user } = renderPending();
   const panel = await section();
-  expect(within(await openMenu(user, panel, "Commits")).getByText("Move the retry into deliver")).toBeVisible();
+  expect(within(await menuOf(user, panel, "Commits")).getByText("Move the retry into deliver")).toBeVisible();
   await user.click(screen.getByRole("menuitem", { name: /Move the retry into deliver/ }));
   expect(within(panel).getByRole("button", { name: "Commits" })).toHaveTextContent("Move the retry into deliver");
 
@@ -314,7 +312,7 @@ test("a proposal on new work shows its new code, with all its commits", async ()
   await queryClient.invalidateQueries({ queryKey: watchesQueryKey });
 
   await waitFor(() => expect(within(panel).getByRole("button", { name: "Commits" })).toHaveTextContent("All commits"));
-  expect(within(await openMenu(user, panel, "Commits")).getByText("Move the retry, on the new head")).toBeVisible();
+  expect(within(await menuOf(user, panel, "Commits")).getByText("Move the retry, on the new head")).toBeVisible();
 });
 
 test("a dropped reply asks first and is not sent", async () => {
@@ -379,7 +377,7 @@ test("a commit the author kept off before is marked", async () => {
   });
   const panel = await section();
 
-  const menu = await openMenu(user, panel, "Commits");
+  const menu = await menuOf(user, panel, "Commits");
   expect(within(menu).getByRole("menuitem", { name: /Strip punctuation in slug/ })).toHaveTextContent(
     "kept off before",
   );

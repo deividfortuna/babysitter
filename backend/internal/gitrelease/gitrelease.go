@@ -31,6 +31,7 @@ var ErrLeaseRefused = errors.New("the pull request branch moved, so the lease re
 type Git interface {
 	Fetch(ctx context.Context, dir, branch string) (string, error)
 	Head(ctx context.Context, dir string) (string, error)
+	Parent(ctx context.Context, dir, sha string) (string, error)
 	Contains(ctx context.Context, dir, sha, ancestor string) (bool, error)
 	MergeBase(ctx context.Context, dir, a, b string) (string, error)
 	FastForward(ctx context.Context, dir, sha string) error
@@ -106,6 +107,10 @@ func (g *Runner) Fetch(ctx context.Context, dir, branch string) (string, error) 
 
 func (g *Runner) Head(ctx context.Context, dir string) (string, error) {
 	return g.git(ctx, dir, "rev-parse", "--verify", "-q", "HEAD^{commit}")
+}
+
+func (g *Runner) Parent(ctx context.Context, dir, sha string) (string, error) {
+	return g.git(ctx, dir, "rev-parse", "--verify", "-q", sha+"^1^{commit}")
 }
 
 func (g *Runner) Contains(ctx context.Context, dir, sha, ancestor string) (bool, error) {

@@ -112,7 +112,6 @@
   --terminal-selection: #54aeff66;
   --diff-add-bar: #1a7f37;
   --diff-del-bar: #cf222e;
-  --diff-sep: #f6f8fa;
   --ansi-black: #24292f;
   --ansi-red: #cf222e;
   --ansi-green: #116329;
@@ -174,7 +173,6 @@
   --terminal-selection: #2f5f9950;
   --diff-add-bar: #3fb950;
   --diff-del-bar: #f85149;
-  --diff-sep: #151b23;
   --ansi-black: #0d1117;
   --ansi-red: #ff7b72;
   --ansi-green: #3fb950;
@@ -233,7 +231,7 @@
   --diffs-gap-block: 0px;
   --diffs-addition-color-override: var(--diff-add-bar);
   --diffs-deletion-color-override: var(--diff-del-bar);
-  --diffs-bg-separator-override: var(--diff-sep);
+  --diffs-bg-separator-override: var(--muted);
 }
 
 @utility eyebrow {

@@ -130,17 +130,18 @@ func TestTheCodeOfOneCommitOfAProposal(t *testing.T) {
 	fx.rel.commit("first-commit", "second-commit")
 	fx.hook(w, agent.EventStop, `{}`)
 
-	for _, tc := range []struct{ ask, commit, diff string }{
-		{ask: "first-commit", commit: "first-commit", diff: "-abc\n+first-commit\n"},
-		{ask: "second-", commit: "second-commit", diff: "-first-commit\n+second-commit\n"},
-		{ask: "", commit: "", diff: "-abc\n+second-commit\n"},
+	for _, tc := range []struct{ ask, commit, base, diff string }{
+		{ask: "first-commit", commit: "first-commit", base: "abc", diff: "-abc\n+first-commit\n"},
+		{ask: "SECOND-", commit: "second-commit", base: "first-commit", diff: "-first-commit\n+second-commit\n"},
+		{ask: "", commit: "", base: "abc", diff: "-abc\n+second-commit\n"},
 	} {
 		d, err := fx.svc.Proposal(ctx, w.ID, 1, tc.ask)
 		if err != nil {
 			t.Fatalf("Proposal(%q) error = %v", tc.ask, err)
 		}
-		if d.Commit != tc.commit || !strings.HasSuffix(d.Diff, tc.diff) || len(d.Commits) != 2 || d.CodeError != "" {
-			t.Fatalf("Proposal(%q) = commit %q, %d commits, diff %q, code error %q", tc.ask, d.Commit, len(d.Commits), d.Diff, d.CodeError)
+		shows := d.Commit == tc.commit && d.Base == tc.base && strings.HasSuffix(d.Diff, tc.diff)
+		if !shows || len(d.Commits) != 2 || d.CodeError != "" {
+			t.Fatalf("Proposal(%q) = commit %q, base %q, %d commits, diff %q, code error %q", tc.ask, d.Commit, d.Base, len(d.Commits), d.Diff, d.CodeError)
 		}
 	}
 	for _, ask := range []string{"second", "abc", "nothing"} {

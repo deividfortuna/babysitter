@@ -1,6 +1,6 @@
 import type { ReactElement, ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, type RenderOptions as TestingLibraryRenderOptions } from "@testing-library/react";
+import { act, render, screen, type RenderOptions as TestingLibraryRenderOptions } from "@testing-library/react";
 import { expect, vi } from "vite-plus/test";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -77,19 +77,24 @@ export function expectViewTitle(name: string) {
 
 type User = { click: (element: Element) => Promise<void>; keyboard: (text: string) => Promise<void> };
 
-async function openSelect(user: User, select: HTMLElement) {
-  select.focus();
-  await user.click(select);
+async function openPopup(user: User, trigger: HTMLElement) {
+  act(() => trigger.focus());
+  await user.click(trigger);
+}
+
+export async function openMenu(user: User, trigger: HTMLElement): Promise<HTMLElement> {
+  await openPopup(user, trigger);
+  return screen.findByRole("menu");
 }
 
 export async function chooseOption(user: User, select: HTMLElement, name: string | RegExp) {
   expect(select).toHaveAttribute("data-slot", "select-trigger");
-  await openSelect(user, select);
+  await openPopup(user, select);
   await user.click(await screen.findByRole("option", { name }));
 }
 
 export async function optionLabels(user: User, select: HTMLElement) {
-  await openSelect(user, select);
+  await openPopup(user, select);
   const labels = (await screen.findAllByRole("option")).map((option) => option.textContent);
   await user.keyboard("{Escape}");
   return labels;

@@ -362,6 +362,16 @@ func (f *fakeRelease) Head(context.Context, string) (string, error) {
 	return f.work, nil
 }
 
+func (f *fakeRelease) Parent(_ context.Context, _, sha string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	parents := f.history[sha]
+	if len(parents) == 0 {
+		return "", fmt.Errorf("no parent of %s", sha)
+	}
+	return parents[0], nil
+}
+
 func (f *fakeRelease) Contains(_ context.Context, _, sha, ancestor string) (bool, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()

@@ -2329,6 +2329,10 @@ components:
           format: date-time
           nullable: true
           type: string
+        base:
+          description: 'The commit the files and the diff start from: the head of
+            the proposal, or the parent of commit'
+          type: string
         baseSha:
           description: Where the work branch met that head when the turn started
           type: string

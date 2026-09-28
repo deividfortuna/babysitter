@@ -904,6 +904,8 @@ export interface components {
              * @description When the author approved it
              */
             approvedAt?: string | null;
+            /** @description The commit the files and the diff start from: the head of the proposal, or the parent of commit */
+            base?: string;
             /** @description Where the work branch met that head when the turn started */
             baseSha: string;
             /** @description Why the commits, files and diff could not be read from the worktree; when set, they are empty and the work is unknown, not absent */

@@ -277,6 +277,7 @@ type ProposalDetail struct {
 	Proposal
 	Commits   []ProposalCommit `json:"commits"`
 	Commit    string           `json:"commit,omitempty" description:"The commit the files and the diff are of; absent when they are of the whole work"`
+	Base      string           `json:"base,omitempty" description:"The commit the files and the diff start from: the head of the proposal, or the parent of commit"`
 	Files     []ProposalFile   `json:"files"`
 	Diff      string           `json:"diff" description:"The plain unified diff of the work, or of the commit when commit is set"`
 	Truncated bool             `json:"truncated" description:"The diff was cut at one megabyte"`
@@ -350,7 +351,7 @@ func proposalFromView(v prwatch.ProposalView) Proposal {
 
 func proposalDetailFrom(d prwatch.ProposalDetail) ProposalDetail {
 	out := ProposalDetail{
-		Proposal: proposalFromView(d.ProposalView), Commit: d.Commit, Diff: d.Diff, Truncated: d.Truncated, CodeError: d.CodeError,
+		Proposal: proposalFromView(d.ProposalView), Commit: d.Commit, Base: d.Base, Diff: d.Diff, Truncated: d.Truncated, CodeError: d.CodeError,
 		Commits: make([]ProposalCommit, 0, len(d.Commits)), Files: make([]ProposalFile, 0, len(d.Files)),
 	}
 	for _, c := range d.Commits {
