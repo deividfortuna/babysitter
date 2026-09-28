@@ -64,10 +64,8 @@ type source struct {
 
 type checkout struct {
 	source
-	provider string
-	model    string
-	effort   string
-	method   string
+	method string
+	agentChoice
 }
 
 type access struct {
@@ -77,20 +75,12 @@ type access struct {
 }
 
 func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout, error) {
-	provider, ok := normalizeProvider(req.Provider)
-	if !ok {
-		return checkout{}, providerError(req.Provider)
+	chosen, err := normalizeAgent(req.Provider, req.Model, req.Effort)
+	if err != nil {
+		return checkout{}, err
 	}
-	model, ok := normalizeModel(provider, req.Model)
-	if !ok {
-		return checkout{}, modelError(provider, req.Model)
-	}
-	effort, ok := normalizeEffort(provider, model, req.Effort)
-	if !ok {
-		return checkout{}, effortError(provider, model, req.Effort)
-	}
-	if hostedProvider(provider) && s.lacksRunner(provider) {
-		return checkout{}, fmt.Errorf("%w: %s", ErrNoAgent, provider)
+	if hostedProvider(chosen.provider) && s.lacksRunner(chosen.provider) {
+		return checkout{}, fmt.Errorf("%w: %s", ErrNoAgent, chosen.provider)
 	}
 	method, ok := normalizeMergeMethod(*req.MergeMethod)
 	if !ok {
@@ -99,11 +89,11 @@ func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout
 	if !req.ApprovalMode.Valid() {
 		return checkout{}, fmt.Errorf("%w: %q", ErrBadApprovalMode, *req.ApprovalMode)
 	}
-	src, err := givenSource(ctx, req.SourceDir, provider)
+	src, err := givenSource(ctx, req.SourceDir, chosen.provider)
 	if err != nil {
 		return checkout{}, err
 	}
-	return checkout{source: src, provider: provider, model: model, effort: effort, method: method}, nil
+	return checkout{source: src, method: method, agentChoice: chosen}, nil
 }
 
 func givenSource(ctx context.Context, dir, provider string) (source, error) {

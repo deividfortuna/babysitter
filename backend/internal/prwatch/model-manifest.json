@@ -1,50 +1,22 @@
 {
+  "effortLabels": {
+    "none": "None",
+    "minimal": "Minimal",
+    "low": "Low",
+    "medium": "Medium",
+    "high": "High",
+    "xhigh": "Extra high",
+    "max": "Max"
+  },
   "effortSets": {
-    "low-max": [
-      { "id": "low", "label": "Low" },
-      { "id": "medium", "label": "Medium" },
-      { "id": "high", "label": "High" },
-      { "id": "xhigh", "label": "Extra high" },
-      { "id": "max", "label": "Max" }
-    ],
-    "none-max": [
-      { "id": "none", "label": "None" },
-      { "id": "low", "label": "Low" },
-      { "id": "medium", "label": "Medium" },
-      { "id": "high", "label": "High" },
-      { "id": "xhigh", "label": "Extra high" },
-      { "id": "max", "label": "Max" }
-    ],
-    "none-xhigh": [
-      { "id": "none", "label": "None" },
-      { "id": "low", "label": "Low" },
-      { "id": "medium", "label": "Medium" },
-      { "id": "high", "label": "High" },
-      { "id": "xhigh", "label": "Extra high" }
-    ],
-    "low-xhigh": [
-      { "id": "low", "label": "Low" },
-      { "id": "medium", "label": "Medium" },
-      { "id": "high", "label": "High" },
-      { "id": "xhigh", "label": "Extra high" }
-    ],
-    "low-high": [
-      { "id": "low", "label": "Low" },
-      { "id": "medium", "label": "Medium" },
-      { "id": "high", "label": "High" }
-    ],
-    "minimal-high": [
-      { "id": "minimal", "label": "Minimal" },
-      { "id": "low", "label": "Low" },
-      { "id": "medium", "label": "Medium" },
-      { "id": "high", "label": "High" }
-    ],
-    "low-high-max": [
-      { "id": "low", "label": "Low" },
-      { "id": "high", "label": "High" },
-      { "id": "max", "label": "Max" }
-    ],
-    "medium": [{ "id": "medium", "label": "Medium" }]
+    "low-max": ["low", "medium", "high", "xhigh", "max"],
+    "none-max": ["none", "low", "medium", "high", "xhigh", "max"],
+    "none-xhigh": ["none", "low", "medium", "high", "xhigh"],
+    "low-xhigh": ["low", "medium", "high", "xhigh"],
+    "low-high": ["low", "medium", "high"],
+    "minimal-high": ["minimal", "low", "medium", "high"],
+    "low-high-max": ["low", "high", "max"],
+    "medium": ["medium"]
   },
   "providers": [
     {

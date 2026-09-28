@@ -31,10 +31,7 @@ func providerLabel(provider, model, effort string) string {
 	if effort != "" {
 		details = append(details, effort+" effort")
 	}
-	if len(details) == 0 {
-		return provider
-	}
-	return provider + " (" + strings.Join(details, ", ") + ")"
+	return provider + suffix(" (", strings.Join(details, ", "), ")")
 }
 
 type watchOutput httpd.Watch

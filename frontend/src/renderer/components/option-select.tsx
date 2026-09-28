@@ -4,6 +4,10 @@ import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 
 export type Option<T extends string> = { value: T; label: string };
 
+export function toOptions(items: { id: string; label: string }[]): Option<string>[] {
+  return items.map((item) => ({ value: item.id, label: item.label }));
+}
+
 type Props<T extends string> = {
   id?: string;
   className?: string;

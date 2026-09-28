@@ -13,7 +13,7 @@ import {
 import { useSettings } from "@/hooks/useSettings";
 import { AgentLogo } from "@/components/agent-logo";
 import { mergeMethodLabel } from "@/components/merge-method-select";
-import { OptionSelect, type Option } from "@/components/option-select";
+import { OptionSelect, toOptions, type Option } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
 import { SettingRow } from "@/components/setting-row";
 import { Meta } from "@/components/status-badges";
@@ -29,7 +29,7 @@ import {
   agentLabel,
   daemonDefaults,
   defaultLabel,
-  effortLabel,
+  effortDefaultLabel,
   effortsOf,
   mergeMethodDefaultLabel,
   modelLabel,
@@ -364,12 +364,10 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
   const inherited = <T,>(format: (defaults: Defaults) => T) => (daemon ? format(daemon) : undefined);
   const daemonProvider = inherited((d) => catalog.find((item) => item.id === d.provider)?.label ?? d.provider);
   const modelOptions: Option<string>[] = overrides.provider
-    ? models.map((item) => ({ value: item.id, label: item.label }))
+    ? toOptions(models)
     : [{ value: "", label: defaultLabel(inherited((d) => modelLabel(catalog, d.provider, d.model))) }];
   const efforts = overrides.provider ? effortsOf(catalog, provider, overrides.model) : [];
-  const effortDefault = overrides.provider
-    ? "Model default"
-    : defaultLabel(inherited((d) => effortLabel(catalog, d.provider, d.model, d.effort)));
+  const effortDefault = effortDefaultLabel(catalog, overrides.provider ? null : daemon);
 
   return (
     <Collapsible className="border-t pt-2">

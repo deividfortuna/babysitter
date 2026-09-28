@@ -3,7 +3,7 @@ import { CircleAlertIcon } from "lucide-react";
 import { useProviders, type Provider } from "@/hooks/useProviders";
 import { useSaveSettings, useSettings, type Settings } from "@/hooks/useSettings";
 import { AgentLogo } from "@/components/agent-logo";
-import { OptionSelect } from "@/components/option-select";
+import { OptionSelect, toOptions } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { ApprovalModeSelect } from "@/components/approval-mode-select";
@@ -15,7 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
-import { effortsOf } from "@/lib/watch-defaults";
+import { effortDefaultLabel, effortsOf } from "@/lib/watch-defaults";
 
 type Draft = Omit<Settings, "pollIntervalSeconds" | "watchIntervalSeconds" | "approvalsRequired"> & {
   pollIntervalSeconds: string;
@@ -152,7 +152,7 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
             size="default"
             className="w-38"
             efforts={efforts}
-            defaultLabel="Model default"
+            defaultLabel={effortDefaultLabel(providers.data ?? [], null)}
             value={draft.effort}
             onChange={(effort) => edit({ effort })}
           />
@@ -295,7 +295,7 @@ function AgentFields({ catalog, provider, model, onChange }: AgentFieldsProps) {
         label="Model"
         size="default"
         className="min-w-0 flex-1"
-        options={models.map((item) => ({ value: item.id, label: item.label }))}
+        options={toOptions(models)}
         value={model}
         disabled={models.length === 0}
         onChange={(next) => onChange(provider, next)}

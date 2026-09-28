@@ -7,7 +7,7 @@ import { useSettings } from "@/hooks/useSettings";
 import { useRepoConfig, useRepos } from "@/hooks/useRepos";
 import { useStartWatch, useWatches, type MergeMethod, type Watch } from "@/hooks/useWatches";
 import { AgentLogo } from "@/components/agent-logo";
-import { OptionSelect, type Option } from "@/components/option-select";
+import { OptionSelect, toOptions, type Option } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
 import { SettingRow } from "@/components/setting-row";
 import { Meta } from "@/components/status-badges";
@@ -35,12 +35,14 @@ import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
 import {
+  agentLabel,
   defaultLabel,
-  effortLabel,
+  effortDefaultLabel,
   effortsOf,
   mergeMethodDefaultLabel,
   modelLabel,
   repositoryDefaults,
+  resolveAgent,
 } from "@/lib/watch-defaults";
 
 const DIR_KEY_PREFIX = "checkout_dir:";
@@ -181,21 +183,20 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const inheritedProvider = defaults?.provider ?? "claude";
   const installedFallback = installedProvider(catalog, inheritedProvider);
   const providerChoice = chosenProvider ?? (installedFallback === inheritedProvider ? null : installedFallback);
-  const provider = providerChoice ?? inheritedProvider;
-  const model = chosenModel ?? (providerChoice ? "" : (defaults?.model ?? ""));
+  const { provider, model, effort } = resolveAgent(
+    { provider: providerChoice ?? "", model: chosenModel ?? "", effort: chosenEffort ?? "" },
+    { provider: inheritedProvider, model: defaults?.model ?? "", effort: defaults?.effort ?? "" },
+  );
   const models = catalog.find((item) => item.id === provider)?.models ?? [];
   const modelOptions: Option<string>[] = providerChoice
-    ? models.map((item) => ({ value: item.id, label: item.label }))
+    ? toOptions(models)
     : [
         { value: "", label: defaultLabel(defaults && modelLabel(catalog, defaults.provider, defaults.model)) },
-        ...models.filter((item) => item.id !== "").map((item) => ({ value: item.id, label: item.label })),
+        ...toOptions(models.filter((item) => item.id !== "")),
       ];
-  const modelFromDialog = providerChoice !== null || chosenModel !== null;
-  const effort = chosenEffort ?? (modelFromDialog ? "" : (defaults?.effort ?? ""));
+  const inheritsModel = !providerChoice && !chosenModel;
   const efforts = effortsOf(catalog, provider, model);
-  const effortDefault = modelFromDialog
-    ? "Model default"
-    : defaultLabel(defaults && effortLabel(catalog, defaults.provider, defaults.model, defaults.effort));
+  const effortDefault = effortDefaultLabel(catalog, inheritsModel ? defaults : null);
 
   const approvalModeValue = approvalMode || defaults?.approvalMode || "manual";
   const asks = approvalModeValue === "manual";
@@ -218,9 +219,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const canStart = Boolean(picked || byReference) && !badApprovals && !start.isPending && defaultsLanded;
 
   const summary = settingsSummary({
-    agent: catalog.find((item) => item.id === provider)?.label ?? provider,
-    model: model ? (models.find((item) => item.id === model)?.label ?? model) : "",
-    effort: effort ? effortLabel(catalog, provider, model, effort) : "",
+    agent: agentLabel(catalog, provider, model, effort),
     approvalMode: approvalModeValue,
     approvals: approvalsValue,
     mergeMethod: mergeMethodValue,

@@ -59,7 +59,8 @@ func TestNormalizeModel(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, ok := normalizeModel(tc.provider, tc.model)
+			got, err := normalizeModel(tc.provider, tc.model)
+			ok := err == nil
 			if got != tc.want || ok != tc.ok {
 				t.Fatalf("normalizeModel(%q, %q) = %q, %v; want %q, %v", tc.provider, tc.model, got, ok, tc.want, tc.ok)
 			}
@@ -118,7 +119,8 @@ func TestNormalizeEffort(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, ok := normalizeEffort(tc.provider, tc.model, tc.effort)
+			got, err := normalizeEffort(tc.provider, tc.model, tc.effort)
+			ok := err == nil
 			if got != tc.want || ok != tc.ok {
 				t.Fatalf("normalizeEffort(%q, %q, %q) = %q, %v; want %q, %v", tc.provider, tc.model, tc.effort, got, ok, tc.want, tc.ok)
 			}
@@ -192,5 +194,13 @@ func TestAManifestThatNamesAnUnknownEffortSetIsRefused(t *testing.T) {
 	raw := `{"effortSets":{},"providers":[{"id":"claude","label":"Claude","models":[{"id":"","label":"Default","efforts":"missing"}]}]}`
 	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"missing"`) {
 		t.Fatalf("parseManifest() error = %v, want the unknown set named", err)
+	}
+}
+
+func TestAManifestThatNamesAnUnknownEffortLevelIsRefused(t *testing.T) {
+	t.Parallel()
+	raw := `{"effortLabels":{"low":"Low"},"effortSets":{"some":["low","ultra"]},"providers":[]}`
+	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"ultra"`) {
+		t.Fatalf("parseManifest() error = %v, want the unknown level named", err)
 	}
 }
