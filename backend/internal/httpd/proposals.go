@@ -36,7 +36,7 @@ func (a *api) handleGetProposal(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	d, err := a.watches.Proposal(r.Context(), id, number)
+	d, err := a.watches.Proposal(r.Context(), id, number, r.URL.Query().Get("commit"))
 	if proposalErrors.write(w, err) {
 		return
 	}

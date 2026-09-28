@@ -18,6 +18,7 @@ var (
 	ErrProposalPending = errors.New("a proposal waits on your approval")
 	ErrNotPending      = errors.New("the proposal does not wait on a decision")
 	ErrBadApprovalMode = errors.New("invalid approval mode: use auto or manual")
+	ErrUnknownCommit   = errors.New("the proposal has no such commit")
 )
 
 const maxDiff = 1 << 20
@@ -59,6 +60,8 @@ type ProposalDetail struct {
 type ProposalCode struct {
 	Commits   []gitrelease.Commit
 	HeldBack  []string
+	Commit    string
+	Base      string
 	Files     []gitrelease.File
 	Diff      string
 	Truncated bool
@@ -106,7 +109,7 @@ func (s *Service) Proposals(ctx context.Context, id int64) ([]ProposalView, erro
 	return out, nil
 }
 
-func (s *Service) Proposal(ctx context.Context, id int64, number int) (ProposalDetail, error) {
+func (s *Service) Proposal(ctx context.Context, id int64, number int, commit string) (ProposalDetail, error) {
 	w, err := s.hostedWatch(ctx, id)
 	if err != nil {
 		return ProposalDetail{}, err
@@ -120,7 +123,10 @@ func (s *Service) Proposal(ctx context.Context, id int64, number int) (ProposalD
 		return ProposalDetail{}, err
 	}
 	d := ProposalDetail{ProposalView: v}
-	code, err := s.readCode(ctx, w, p)
+	code, err := s.readCode(ctx, w, p, commit)
+	if errors.Is(err, ErrUnknownCommit) {
+		return ProposalDetail{}, err
+	}
 	if err != nil {
 		s.log.Warn("read the code of a proposal", "watch", w.ID, "proposal", number, "err", err)
 		d.CodeError = err.Error()
@@ -130,7 +136,7 @@ func (s *Service) Proposal(ctx context.Context, id int64, number int) (ProposalD
 	return d, nil
 }
 
-func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal) (ProposalCode, error) {
+func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal, commit string) (ProposalCode, error) {
 	work := p.WorkSHA
 	if work == "" {
 		head, err := s.rel.Head(ctx, w.WorktreeDir)
@@ -139,7 +145,7 @@ func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal)
 		}
 		work = head
 	}
-	if work == p.HeadSHA {
+	if work == p.HeadSHA && commit == "" {
 		return ProposalCode{}, nil
 	}
 	var c ProposalCode
@@ -150,13 +156,33 @@ func (s *Service) readCode(ctx context.Context, w store.Watch, p store.Proposal)
 	if c.HeldBack, err = s.heldBack(ctx, w, p); err != nil {
 		return ProposalCode{}, err
 	}
-	if c.Files, err = s.rel.Files(ctx, w.WorktreeDir, p.HeadSHA, work); err != nil {
+	c.Base = p.HeadSHA
+	to := work
+	if commit != "" {
+		if to, err = commitOf(c.Commits, commit); err != nil {
+			return ProposalCode{}, err
+		}
+		if c.Base, err = s.rel.Parent(ctx, w.WorktreeDir, to); err != nil {
+			return ProposalCode{}, err
+		}
+		c.Commit = to
+	}
+	if c.Files, err = s.rel.Files(ctx, w.WorktreeDir, c.Base, to); err != nil {
 		return ProposalCode{}, err
 	}
-	if c.Diff, c.Truncated, err = s.rel.Diff(ctx, w.WorktreeDir, p.HeadSHA, work, maxDiff); err != nil {
+	if c.Diff, c.Truncated, err = s.rel.Diff(ctx, w.WorktreeDir, c.Base, to, maxDiff); err != nil {
 		return ProposalCode{}, err
 	}
 	return c, nil
+}
+
+func commitOf(commits []gitrelease.Commit, commit string) (string, error) {
+	names := func(c gitrelease.Commit) bool { return c.SHA == commit || abbreviates(commit, c.SHA) }
+	i := slices.IndexFunc(commits, names)
+	if i < 0 {
+		return "", fmt.Errorf("%w: %s", ErrUnknownCommit, commit)
+	}
+	return commits[i].SHA, nil
 }
 
 func (s *Service) heldBack(ctx context.Context, w store.Watch, p store.Proposal) ([]string, error) {

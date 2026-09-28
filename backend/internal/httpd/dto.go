@@ -276,10 +276,16 @@ type ProposalList struct {
 type ProposalDetail struct {
 	Proposal
 	Commits   []ProposalCommit `json:"commits"`
+	Commit    string           `json:"commit,omitempty" description:"The commit the files and the diff are of; absent when they are of the whole work"`
+	Base      string           `json:"base,omitempty" description:"The commit the files and the diff start from: the head of the proposal, or the parent of commit"`
 	Files     []ProposalFile   `json:"files"`
-	Diff      string           `json:"diff" description:"The plain unified diff of the work"`
+	Diff      string           `json:"diff" description:"The plain unified diff of the work, or of the commit when commit is set"`
 	Truncated bool             `json:"truncated" description:"The diff was cut at one megabyte"`
 	CodeError string           `json:"codeError,omitempty" description:"Why the commits, files and diff could not be read from the worktree; when set, they are empty and the work is unknown, not absent"`
+}
+
+type ProposalQuery struct {
+	Commit string `query:"commit" description:"Only the files and the diff of this commit of the proposal, as a full SHA or a prefix of 7 characters or more"`
 }
 
 type ProposalCommit struct {
@@ -345,7 +351,7 @@ func proposalFromView(v prwatch.ProposalView) Proposal {
 
 func proposalDetailFrom(d prwatch.ProposalDetail) ProposalDetail {
 	out := ProposalDetail{
-		Proposal: proposalFromView(d.ProposalView), Diff: d.Diff, Truncated: d.Truncated, CodeError: d.CodeError,
+		Proposal: proposalFromView(d.ProposalView), Commit: d.Commit, Base: d.Base, Diff: d.Diff, Truncated: d.Truncated, CodeError: d.CodeError,
 		Commits: make([]ProposalCommit, 0, len(d.Commits)), Files: make([]ProposalFile, 0, len(d.Files)),
 	}
 	for _, c := range d.Commits {

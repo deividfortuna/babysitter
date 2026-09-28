@@ -396,3 +396,24 @@ func TestGitNeverPromptsAndPushesWithoutTheHooks(t *testing.T) {
 		t.Fatalf("push = %v, want %v", calls[0], want)
 	}
 }
+
+func TestTheParentOfAMergeIsItsFirstParent(t *testing.T) {
+	t.Parallel()
+	_, work, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+
+	first := git(t, work, "rev-parse", "HEAD")
+	git(t, work, "checkout", "-q", "-b", "side", "main")
+	side := commit(t, work, "s.txt", "side\n", "add s")
+	git(t, work, "checkout", "-q", "fix")
+	git(t, work, "merge", "-q", "--no-ff", "-m", "merge side", "side")
+	merge := git(t, work, "rev-parse", "HEAD")
+
+	if got, err := g.Parent(ctx, work, merge); err != nil || got != first {
+		t.Fatalf("Parent(merge) = %q, %v, want %q", got, err, first)
+	}
+	if got, err := g.Parent(ctx, work, side); err != nil || got == side || got == "" {
+		t.Fatalf("Parent(side) = %q, %v", got, err)
+	}
+}

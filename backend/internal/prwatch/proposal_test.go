@@ -93,7 +93,7 @@ func TestApprovingReleasesTheProposal(t *testing.T) {
 	w := fx.startManual()
 	fx.propose(w)
 
-	d, err := fx.svc.Proposal(ctx, w.ID, 1)
+	d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
 	if err != nil {
 		t.Fatalf("Proposal() error = %v", err)
 	}
@@ -117,6 +117,37 @@ func TestApprovingReleasesTheProposal(t *testing.T) {
 	}
 	if _, err := fx.svc.Approve(ctx, w.ID, 1, Decision{}); !errors.Is(err, ErrNotPending) {
 		t.Fatalf("a second Approve() error = %v", err)
+	}
+}
+
+func TestTheCodeOfOneCommitOfAProposal(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	ctx := context.Background()
+	w := fx.startManual()
+	fx.turn(w)
+	fx.rel.commit("abc", "first-commit")
+	fx.rel.commit("first-commit", "second-commit")
+	fx.hook(w, agent.EventStop, `{}`)
+
+	for _, tc := range []struct{ ask, commit, base, diff string }{
+		{ask: "first-commit", commit: "first-commit", base: "abc", diff: "-abc\n+first-commit\n"},
+		{ask: "SECOND-", commit: "second-commit", base: "first-commit", diff: "-first-commit\n+second-commit\n"},
+		{ask: "", commit: "", base: "abc", diff: "-abc\n+second-commit\n"},
+	} {
+		d, err := fx.svc.Proposal(ctx, w.ID, 1, tc.ask)
+		if err != nil {
+			t.Fatalf("Proposal(%q) error = %v", tc.ask, err)
+		}
+		shows := d.Commit == tc.commit && d.Base == tc.base && strings.HasSuffix(d.Diff, tc.diff)
+		if !shows || len(d.Commits) != 2 || d.CodeError != "" {
+			t.Fatalf("Proposal(%q) = commit %q, base %q, %d commits, diff %q, code error %q", tc.ask, d.Commit, d.Base, len(d.Commits), d.Diff, d.CodeError)
+		}
+	}
+	for _, ask := range []string{"second", "abc", "nothing"} {
+		if _, err := fx.svc.Proposal(ctx, w.ID, 1, ask); !errors.Is(err, ErrUnknownCommit) {
+			t.Fatalf("Proposal(%q) error = %v, want ErrUnknownCommit", ask, err)
+		}
 	}
 }
 
@@ -585,7 +616,7 @@ func TestARebasedProposalNamesItsNewCommits(t *testing.T) {
 	fx.rel.moveRemote("abc", "t1")
 	fx.poll(w)
 
-	d, err := fx.svc.Proposal(ctx, w.ID, 1)
+	d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -840,7 +871,7 @@ func TestADroppedAnswerToAConversationCommentBringsItBack(t *testing.T) {
 	w := fx.startManual()
 	fx.answerConversation(w, "abc", "w1", "added a README section")
 	p := fx.proposal(w, 1)
-	d, err := fx.svc.Proposal(ctx, w.ID, 1)
+	d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
 	if err != nil || len(d.Replies) != 1 || d.Replies[0].Answers == nil || d.Replies[0].Answers.Actor != "carol" {
 		t.Fatalf("the reply does not name the comment it answers: %+v, %v", d.Replies, err)
 	}
@@ -960,7 +991,7 @@ func TestTheNextProposalMarksTheCommitTheAuthorKeptOff(t *testing.T) {
 	fx.rel.commit("w1", "w2")
 	fx.hook(w, agent.EventStop, `{}`)
 
-	d, err := fx.svc.Proposal(ctx, w.ID, 2)
+	d, err := fx.svc.Proposal(ctx, w.ID, 2, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -985,7 +1016,7 @@ func TestAProposalWhoseCodeCannotBeReadSaysSo(t *testing.T) {
 			fx.propose(w)
 			fx.rel.set(func(f *fakeRelease) { set(f, errors.New("git: exit status 128")) })
 
-			d, err := fx.svc.Proposal(ctx, w.ID, 1)
+			d, err := fx.svc.Proposal(ctx, w.ID, 1, "")
 			if err != nil {
 				t.Fatalf("Proposal() error = %v", err)
 			}
@@ -997,7 +1028,7 @@ func TestAProposalWhoseCodeCannotBeReadSaysSo(t *testing.T) {
 			}
 
 			fx.rel.set(func(f *fakeRelease) { set(f, nil) })
-			d, err = fx.svc.Proposal(ctx, w.ID, 1)
+			d, err = fx.svc.Proposal(ctx, w.ID, 1, "")
 			if err != nil {
 				t.Fatalf("Proposal() error = %v", err)
 			}

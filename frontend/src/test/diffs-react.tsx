@@ -8,11 +8,12 @@ type Props = {
   items: readonly Item[];
   options?: { diffStyle?: string; overflow?: string };
   className?: string;
-  renderHeaderPrefix?: (item: Item) => ReactNode;
-  renderHeaderFilenameSuffix?: (item: Item) => ReactNode;
-  renderHeaderMetadata?: (item: Item) => ReactNode;
+  onScroll?: (scrollTop: number, viewer: { getTopForItem: (id: string) => number | undefined }) => void;
+  renderCustomHeader?: (item: Item) => ReactNode;
   renderAnnotation?: (annotation: DiffLineAnnotation<unknown>, item: Item) => ReactNode;
 };
+
+export const ITEM_HEIGHT = 100;
 
 function lines(diff: FileDiffMetadata): string[] {
   const out: string[] = [];
@@ -30,26 +31,28 @@ function lines(diff: FileDiffMetadata): string[] {
   return out;
 }
 
-export function CodeView({ ref, items, options, className, ...render }: Props) {
+export function CodeView({ ref, items, options, className, onScroll, ...render }: Props) {
   const [scrolledTo, setScrolledTo] = useState<string>();
   useImperativeHandle(ref, () => ({
     scrollTo: (target) => setScrolledTo("id" in target ? target.id : undefined),
   }));
+  const viewer = {
+    getTopForItem: (id: string) => {
+      const index = items.findIndex((item) => item.id === id);
+      return index < 0 ? undefined : index * ITEM_HEIGHT;
+    },
+  };
   return (
     <div
       className={className}
+      onScroll={(event) => onScroll?.(event.currentTarget.scrollTop, viewer)}
       data-scrolled-to={scrolledTo}
       data-diff-style={options?.diffStyle}
       data-overflow={options?.overflow}
     >
       {items.map((item) => (
         <section key={item.id} aria-label={`File ${item.id}`} data-collapsed={item.collapsed ? "true" : "false"}>
-          <header>
-            {render.renderHeaderPrefix?.(item)}
-            <span>{item.fileDiff.name}</span>
-            {render.renderHeaderFilenameSuffix?.(item)}
-            {render.renderHeaderMetadata?.(item)}
-          </header>
+          <header>{render.renderCustomHeader?.(item) ?? <span>{item.fileDiff.name}</span>}</header>
           {item.collapsed ? null : (
             <>
               {(item.annotations ?? [])

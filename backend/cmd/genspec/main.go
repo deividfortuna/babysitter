@@ -53,6 +53,11 @@ type proposalParams struct {
 	Number int `path:"number" description:"Proposal number, counted per watch from 1"`
 }
 
+type proposalDetailParams struct {
+	proposalParams
+	httpd.ProposalQuery
+}
+
 type approveParams struct {
 	proposalParams
 	httpd.ApproveRequest
@@ -205,7 +210,7 @@ func build() ([]byte, error) {
 		{method: http.MethodPost, path: "/watches/{id}/next", id: "nextWatchMessage", summary: "Hand the agent of a self watch its next message, after a wait when there is none", req: nextParams{}, resp: httpd.NextMessage{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/reply", id: "replyOnWatch", summary: "Take a reply of the agent on a watched pull request; the daemon posts it when the turn ends, or at once for a self watch", req: replyParams{}, resp: httpd.ReplyResult{}, status: http.StatusCreated, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusUnprocessableEntity, http.StatusServiceUnavailable}},
 		{method: http.MethodGet, path: "/watches/{id}/proposals", id: "listProposals", summary: "The proposals of a watch, newest first", req: watchIDParam{}, resp: httpd.ProposalList{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable}},
-		{method: http.MethodGet, path: "/watches/{id}/proposals/{number}", id: "getProposal", summary: "One proposal with its commits, files, diff and replies", req: proposalParams{}, resp: httpd.ProposalDetail{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable}},
+		{method: http.MethodGet, path: "/watches/{id}/proposals/{number}", id: "getProposal", summary: "One proposal with its commits, files, diff and replies", req: proposalDetailParams{}, resp: httpd.ProposalDetail{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/proposals/{number}/approve", id: "approveProposal", summary: "Release a proposal that waits on the author, with the replies they changed", req: approveParams{}, resp: httpd.Proposal{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/proposals/{number}/reject", id: "rejectProposal", summary: "Reject a proposal: nothing of it goes out, and the reason goes to the agent", req: rejectParams{}, resp: httpd.Proposal{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},
 		{method: http.MethodPost, path: "/watches/{id}/approval", id: "setWatchApproval", summary: "Change who releases the turns of a watch while it runs", req: approvalParams{}, resp: httpd.Watch{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusNotFound, http.StatusConflict, http.StatusServiceUnavailable}},

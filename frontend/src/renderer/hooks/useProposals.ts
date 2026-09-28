@@ -20,15 +20,20 @@ export function useProposals(id: number | null) {
   });
 }
 
-export function useProposal(id: number | null, number: number | null, code?: Pick<Proposal, "headSha" | "workSha">) {
+export function useProposal(
+  id: number | null,
+  number: number | null,
+  code?: Pick<Proposal, "headSha" | "workSha">,
+  commit?: string,
+) {
   return useQuery({
-    queryKey: proposalCodeQueryKey(id ?? 0, number ?? 0, code?.headSha ?? "", code?.workSha ?? ""),
+    queryKey: proposalCodeQueryKey(id ?? 0, number ?? 0, code?.headSha ?? "", code?.workSha ?? "", commit),
     enabled: id !== null && number !== null,
     staleTime: Infinity,
     refetchInterval: false,
     queryFn: async () => {
       const { data, error } = await api().GET("/api/v1/watches/{id}/proposals/{number}", {
-        params: { path: { id: id ?? 0, number: number ?? 0 } },
+        params: { path: { id: id ?? 0, number: number ?? 0 }, query: commit ? { commit } : undefined },
       });
       if (error) throw new Error(apiErrorMessage(error, "Could not load the proposal."));
       return data;
