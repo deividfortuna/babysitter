@@ -48,8 +48,10 @@ type Book struct {
 	records []Record
 	file    *os.File
 	size    int64
-	next    int
-	subs    map[int]func(Record)
+
+	subsMu sync.Mutex
+	next   int
+	subs   map[int]func(Record)
 
 	delivery sync.Mutex
 }
@@ -119,16 +121,26 @@ func (b *Book) Since(after int64, limit int) []Record {
 }
 
 func (b *Book) Subscribe(fn func(Record)) func() {
-	b.mu.Lock()
-	defer b.mu.Unlock()
+	b.subsMu.Lock()
+	defer b.subsMu.Unlock()
 	id := b.next
 	b.next++
 	b.subs[id] = fn
 	return func() {
-		b.mu.Lock()
-		defer b.mu.Unlock()
+		b.subsMu.Lock()
+		defer b.subsMu.Unlock()
 		delete(b.subs, id)
 	}
+}
+
+func (b *Book) subscribers() []func(Record) {
+	b.subsMu.Lock()
+	defer b.subsMu.Unlock()
+	subs := make([]func(Record), 0, len(b.subs))
+	for _, fn := range b.subs {
+		subs = append(subs, fn)
+	}
+	return subs
 }
 
 func (b *Book) add(r Record) {
@@ -140,10 +152,7 @@ func (b *Book) add(r Record) {
 		b.records = append([]Record(nil), b.kept()...)
 	}
 	b.write(r)
-	subs := make([]func(Record), 0, len(b.subs))
-	for _, fn := range b.subs {
-		subs = append(subs, fn)
-	}
+	subs := b.subscribers()
 	b.delivery.Lock()
 	b.mu.Unlock()
 	defer b.delivery.Unlock()

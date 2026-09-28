@@ -8,6 +8,7 @@ import (
 	"slices"
 	"sync"
 	"testing"
+	"time"
 )
 
 func open(t *testing.T, o Options) *Book {
@@ -110,6 +111,39 @@ func TestSubscribersSeeTheRecordsInOrderWhenManyGoroutinesLog(t *testing.T) {
 		if seq != int64(i+1) {
 			t.Fatalf("record %d reached the subscriber as seq %d, want %d", i, seq, i+1)
 		}
+	}
+}
+
+func TestASubscriberCanUnsubscribeFromItsCallbackWhileOthersLog(t *testing.T) {
+	b, err := Open(Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := slog.New(b.Handler())
+	for range 50 {
+		var once sync.Once
+		var unsubscribe func()
+		unsubscribe = b.Subscribe(func(Record) { once.Do(func() { unsubscribe() }) })
+	}
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		var wg sync.WaitGroup
+		for range 8 {
+			wg.Go(func() {
+				for range 200 {
+					log.Info("busy")
+				}
+			})
+		}
+		wg.Wait()
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("logging stopped: a subscriber that unsubscribed from its callback deadlocked the book")
 	}
 }
 
