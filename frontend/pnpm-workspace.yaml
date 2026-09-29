@@ -1,0 +1,16 @@
+nodeLinker: hoisted
+
+overrides:
+  vite: npm:@voidzero-dev/vite-plus-core@1.0.0-rc.1
+  vitest: 5.0.1
+
+allowBuilds:
+  electron-winstaller: true
+  fs-xattr: true
+  fsevents: true
+  macos-alias: true
+  msw: true
+
+peerDependencyRules:
+  allowedVersions:
+    vite: 1.0.0-rc.1

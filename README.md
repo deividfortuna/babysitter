@@ -64,6 +64,8 @@ To build from source:
   install the Xcode command line tools. On Linux, install `gcc`.
 - Node 26 or later for the desktop app and for `codegen/`. See
   `.node-version`.
+- pnpm 12 or later. Each `package.json` sets the exact version in
+  `devEngines.packageManager`, and pnpm switches to it.
 
 To run:
 
@@ -81,17 +83,17 @@ open pull requests live. See [docs/architecture.md](docs/architecture.md)
 for how the two processes talk.
 
 ```sh
-npm start            # at the root: go install the CLI, then open the app
+pnpm start           # at the root: go install the CLI, then open the app
 
 cd frontend
-npm ci
-npm start            # compiles the daemon, then opens the app
-npm run package      # builds a distributable app in frontend/out
-npm run make         # also makes the DMG and the zip in frontend/out/make
+pnpm install
+pnpm start           # compiles the daemon, then opens the app
+pnpm run package     # builds a distributable app in frontend/out
+pnpm run make        # also makes the DMG and the zip in frontend/out/make
 ```
 
-`npm start`, `npm run package` and `npm run make` compile the daemon first with
-`scripts/build-daemon.mjs` into `frontend/daemon/`. The script calls
+`pnpm start`, `pnpm run package` and `pnpm run make` compile the daemon first
+with `scripts/build-daemon.mjs` into `frontend/daemon/`. The script calls
 `go build`, so Go and a C compiler are required, as for the CLI. Set
 `BABYSITTER_DAEMON_BINARY` to make the app start another binary.
 
@@ -129,7 +131,7 @@ A notification of macOS carries no icon of its own: the system shows the
 one of the bundle, and a second picture only lands beside the text.
 
 To check the screens in a plain browser, open the Vite dev server that
-`npm start` prints with `?daemon=http://127.0.0.1:<port>/api/v1`, the port
+`pnpm start` prints with `?daemon=http://127.0.0.1:<port>/api/v1`, the port
 of a daemon started from the terminal. Without that parameter the page
 shows the daemon-down screen.
 
@@ -258,10 +260,10 @@ in its log at start. Saving from the app wins over the flag. An interval
 outside the bounds stops the start.
 
 After a change to a route or a DTO in `backend/internal/httpd`, run
-`npm run api` at the repository root. It regenerates `openapi.yaml` from
+`pnpm run api` at the repository root. It regenerates `openapi.yaml` from
 the Go types and `frontend/src/api/schema.ts` from the document. The
-second step runs openapi-typescript from `codegen/`, so run `npm ci` in
-`codegen/` once before.
+second step runs openapi-typescript from `codegen/`, so run `pnpm install`
+in `codegen/` once before.
 
 On macOS, if `go build` fails while linking with `tapi error: malformed
 file` and `unknown architecture`, the command line tools are older than
@@ -1248,7 +1250,7 @@ The service runs `babysitter serve` in the background with the installed
 binary. Install the binary first:
 
 ```sh
-cd backend && go install ./cmd/babysitter   # or npm run backend:install at the root
+cd backend && go install ./cmd/babysitter   # or pnpm run backend:install at the root
 babysitter service install                  # install and start
 babysitter service status
 babysitter service stop
@@ -1363,7 +1365,7 @@ the level at `/api/v1/logs/level`.
 
 ## Layout
 
-The repository is a Go workspace with the backend module and an npm
+The repository is a Go workspace with the backend module and a pnpm
 project for the desktop app. Paths below are relative to `backend/`.
 
 - `cmd/babysitter/main.go`: the entry point
@@ -1412,25 +1414,25 @@ At the root, one command runs the same checks as CI: golangci-lint,
 `go test`, tsc, `vp fmt`, `vp lint`, `vp test`, actionlint and zizmor:
 
 ```sh
-npm run check
+pnpm run check
 ```
 
 Or one part at a time:
 
 ```sh
-npm run backend:lint
-npm run backend:test
-npm run frontend:typecheck
-npm run frontend:format:check
-npm run frontend:lint
-npm run frontend:test
-npm run actions:lint
+pnpm run backend:lint
+pnpm run backend:test
+pnpm run frontend:typecheck
+pnpm run frontend:format:check
+pnpm run frontend:lint
+pnpm run frontend:test
+pnpm run actions:lint
 ```
 
 CI (`.github/workflows/pr.yaml`) also runs the Go tests with `-race` and
 coverage, the Vitest coverage thresholds of `frontend/vite.config.ts`,
 govulncheck, and a check of the GoReleaser configuration. It fails when
-`go mod tidy`, `go generate` for the OpenAPI document, or `npm run api:ts`
+`go mod tidy`, `go generate` for the OpenAPI document, or `pnpm run api:ts`
 change a file.
 
 ## Release

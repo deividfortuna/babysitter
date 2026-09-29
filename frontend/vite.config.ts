@@ -102,7 +102,7 @@ export default defineConfig({
       "coverage/",
       "daemon/",
       "out/",
-      "package-lock.json",
+      "pnpm-lock.yaml",
       "src/api/schema.ts",
       "src/renderer/components/ui/",
     ],

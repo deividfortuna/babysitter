@@ -2,20 +2,27 @@
   "name": "babysitter-workspace",
   "private": true,
   "scripts": {
-    "start": "npm run backend:install && cd frontend && npm run start",
+    "start": "pnpm run backend:install && pnpm --dir frontend run start",
     "api:spec": "cd backend && go generate ./internal/httpd/apispec/",
-    "api:ts": "npm --prefix codegen run api:ts",
-    "api": "npm run api:spec && npm run api:ts",
+    "api:ts": "pnpm --dir codegen run api:ts",
+    "api": "pnpm run api:spec && pnpm run api:ts",
     "backend:install": "cd backend && go install ./cmd/babysitter",
     "backend:test": "cd backend && go test ./...",
     "backend:lint": "cd backend && golangci-lint run ./...",
-    "frontend:typecheck": "npm --prefix frontend run typecheck",
-    "frontend:lint": "npm --prefix frontend run lint",
-    "frontend:format": "npm --prefix frontend run format",
-    "frontend:format:check": "npm --prefix frontend run format:check",
-    "frontend:test": "npm --prefix frontend run test",
+    "frontend:typecheck": "pnpm --dir frontend run typecheck",
+    "frontend:lint": "pnpm --dir frontend run lint",
+    "frontend:format": "pnpm --dir frontend run format",
+    "frontend:format:check": "pnpm --dir frontend run format:check",
+    "frontend:test": "pnpm --dir frontend run test",
     "actions:lint": "go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 && zizmor .github/workflows",
-    "dev": "npm --prefix frontend start",
-    "check": "npm run backend:lint && npm run backend:test && npm run frontend:typecheck && npm run frontend:format:check && npm run frontend:lint && npm run frontend:test && npm run actions:lint"
+    "dev": "pnpm --dir frontend run start",
+    "check": "pnpm run backend:lint && pnpm run backend:test && pnpm run frontend:typecheck && pnpm run frontend:format:check && pnpm run frontend:lint && pnpm run frontend:test && pnpm run actions:lint"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.6.0",
+      "onFail": "download"
+    }
   }
 }
