@@ -273,7 +273,7 @@ func (g *Runner) Rebase(ctx context.Context, dir, onto string) error {
 }
 
 func (g *Runner) Merge(ctx context.Context, dir, sha string) error {
-	return g.bringIn(ctx, dir, "merge", g.merging, "-q", "--no-edit", "--no-verify", sha)
+	return g.bringIn(ctx, dir, "merge", g.merging, "-q", "--no-edit", "--no-verify", "--no-ff", sha)
 }
 
 func (g *Runner) bringIn(ctx context.Context, dir, command string, inProgress func(context.Context, string) bool, args ...string) error {

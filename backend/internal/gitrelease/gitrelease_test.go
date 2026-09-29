@@ -337,6 +337,33 @@ func TestAMergeSkipsTheHooksOfTheRepository(t *testing.T) {
 	}
 }
 
+func TestAMergeMakesAMergeCommitWhenTheCheckoutOnlyFastForwards(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	work := t.TempDir()
+	git(t, work, "init", "-q", "-b", "fix")
+	commit(t, work, "a.txt", "one\n", "add a")
+	git(t, work, "checkout", "-q", "-b", "moved")
+	theirs := commit(t, work, "c.txt", "theirs\n", "their c")
+	git(t, work, "checkout", "-q", "fix")
+	mine := commit(t, work, "d.txt", "mine\n", "my d")
+	git(t, work, "config", "merge.ff", "only")
+	ctx := context.Background()
+	g := New()
+
+	if err := g.Merge(ctx, work, theirs); err != nil {
+		t.Fatalf("Merge() error = %v, want a merge commit whatever merge.ff says", err)
+	}
+	head, _ := g.Head(ctx, work)
+	for _, want := range []string{mine, theirs} {
+		if kept, err := g.Contains(ctx, work, head, want); err != nil || !kept {
+			t.Fatalf("the merge %s lost %s: %v, %v", head, want, kept, err)
+		}
+	}
+}
+
 func TestAMergeThatConflictsIsAborted(t *testing.T) {
 	t.Parallel()
 	_, work, other := repos(t)
