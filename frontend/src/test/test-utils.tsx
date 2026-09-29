@@ -99,3 +99,13 @@ export async function optionLabels(user: User, select: HTMLElement) {
   await user.keyboard("{Escape}");
   return labels;
 }
+
+export type Deferred = { resolve: () => void; promise: Promise<void> };
+
+export function deferred(): Deferred {
+  let resolve = () => undefined as void;
+  const promise = new Promise<void>((done) => {
+    resolve = done;
+  });
+  return { resolve, promise };
+}

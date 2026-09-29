@@ -3,7 +3,6 @@ import {
   DaemonSettings,
   DraftNumberRow,
   SettingsCard,
-  SettingsError,
   SettingsRow,
   SettingsSection,
   useTrackedWrite,
@@ -23,7 +22,7 @@ export function ReviewPanel() {
 }
 
 function ReviewForm({ settings }: { settings: Settings }) {
-  const { save, error } = useTrackedWrite();
+  const save = useTrackedWrite();
   const approvals = useDraftField<number | null>({
     value: settings.approvalsRequired ?? null,
     format: approvalsField,
@@ -80,8 +79,6 @@ function ReviewForm({ settings }: { settings: Settings }) {
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
-
-      <SettingsError message={error} />
     </div>
   );
 }

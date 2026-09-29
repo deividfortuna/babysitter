@@ -200,7 +200,7 @@ app.on("browser-window-focus", cancelBounce);
 
 ipcMain.handle(NOTIFICATIONS_SHOW_CHANNEL, (_event, notification: DesktopNotification) => {
   const win = BrowserWindow.getAllWindows()[0];
-  const shows = presentation(notification, Notification.isSupported(), process.platform);
+  const shows = presentation(notification, Notification.isSupported(), process.platform, win?.isFocused());
   if (shows.toast) {
     const toast = new Notification({
       title: notification.title,
@@ -211,8 +211,7 @@ ipcMain.handle(NOTIFICATIONS_SHOW_CHANNEL, (_event, notification: DesktopNotific
     toast.on("click", () => openFromToast(notification));
     toast.show();
   }
-  const inFront = win?.isFocused() ?? false;
-  if (!inFront) signalAttention(win, shows);
+  signalAttention(win, shows);
 });
 
 function openFromToast(notification: DesktopNotification) {

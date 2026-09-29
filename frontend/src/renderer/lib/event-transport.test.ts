@@ -15,6 +15,7 @@ import {
   viewerQueryKey,
   watchesQueryKey,
 } from "./query-keys";
+import { deferred } from "@test/test-utils";
 
 afterEach(() => {
   FakeEventSource.instances = [];
@@ -63,22 +64,29 @@ describe("connectEventTransport", () => {
     dispose();
   });
 
-  it("leaves the settings alone while a save of the settings is running", () => {
+  it("holds the settings while a save of them runs, then reads them once", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     setApiBaseUrl("http://localhost:1234");
     const queryClient = new QueryClient();
     const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const held = deferred();
     const saving = queryClient.getMutationCache().build(queryClient, {
       mutationKey: settingsMutationKey,
-      mutationFn: () => new Promise<void>(() => undefined),
+      mutationFn: () => held.promise,
     });
-    void saving.execute(undefined);
+    const saved = saving.execute(undefined);
 
     const dispose = connectEventTransport(queryClient);
-    FakeEventSource.instances.at(-1)!.dispatch("settings_changed");
+    const es = FakeEventSource.instances.at(-1)!;
+    es.dispatch("settings_changed");
+    es.dispatch("settings_changed");
+    const settingsReads = () =>
+      invalidateQueries.mock.calls.filter(([filters]) => filters?.queryKey === settingsQueryKey).length;
 
-    expect(queryClient.isMutating({ mutationKey: settingsMutationKey })).toBe(1);
-    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: settingsQueryKey });
+    expect(settingsReads()).toBe(0);
+    held.resolve();
+    await saved;
+    expect(settingsReads()).toBe(1);
 
     dispose();
   });

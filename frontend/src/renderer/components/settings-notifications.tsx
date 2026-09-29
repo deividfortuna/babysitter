@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BellIcon } from "lucide-react";
-import { DaemonSettings, SettingsCard, SettingsError, SettingsRow, useTrackedWrite } from "@/components/settings-page";
+import { DaemonSettings, SettingsCard, SettingsRow, useTrackedWrite } from "@/components/settings-page";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useNotificationsPresent } from "@/hooks/useNotificationsPresent";
@@ -63,7 +63,7 @@ export function NotificationsPanel() {
 }
 
 function NotificationsForm({ settings }: { settings: Settings }) {
-  const { save, error } = useTrackedWrite();
+  const save = useTrackedWrite();
   const supported = useNotificationsPresent() === true;
   const muted = settings.mutedNotificationKinds ?? [];
   const silent = settings.silentNotificationKinds ?? [];
@@ -165,8 +165,6 @@ function NotificationsForm({ settings }: { settings: Settings }) {
           />
         </SettingsRow>
       </SettingsCard>
-
-      <SettingsError message={error} />
     </div>
   );
 }

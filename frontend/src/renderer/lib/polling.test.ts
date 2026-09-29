@@ -8,6 +8,7 @@ import {
   roughCount,
   shareOf,
   shortInterval,
+  watchIntervalPatch,
 } from "./polling";
 
 const balanced = {
@@ -59,4 +60,13 @@ test("the count is rounded to a step that fits its size", () => {
 test("the share of the limit stops at the whole", () => {
   expect(shareOf(500, 5000)).toBe(0.1);
   expect(shareOf(9000, 5000)).toBe(1);
+});
+
+test("a watch poll interval above the longest raises the longest to the same value", () => {
+  expect(watchIntervalPatch(1200, balanced)).toEqual({ watchIntervalSeconds: 1200, watchMaxIntervalSeconds: 1200 });
+});
+
+test("a watch poll interval up to the longest leaves the longest alone", () => {
+  expect(watchIntervalPatch(900, balanced)).toEqual({ watchIntervalSeconds: 900 });
+  expect(watchIntervalPatch(60, balanced)).toEqual({ watchIntervalSeconds: 60 });
 });

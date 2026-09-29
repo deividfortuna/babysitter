@@ -1,4 +1,13 @@
-import { createContext, useCallback, useContext, useRef, useState, type ComponentProps, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useMemo,
+  useRef,
+  useState,
+  type ComponentProps,
+  type ReactNode,
+} from "react";
 import { CheckIcon, CircleAlertIcon } from "lucide-react";
 import { SettingRow } from "@/components/setting-row";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -6,16 +15,20 @@ import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import type { DraftField } from "@/hooks/use-draft-field";
 import { useSettings, useWriteSettings, type Settings } from "@/hooks/useSettings";
+import { apiErrorMessage } from "@/lib/api-client";
 import { cn } from "@/lib/utils";
 
-export type SaveState = {
-  page: string;
-  label: string;
-  status: "saving" | "saved" | "failed";
-  message?: string;
-} | null;
+type Mark = { page: string; label: string; status: "saving" | "saved" } | null;
+
+type Failure = { label: string; message: string; at: number };
+
+export type SaveState = { mark: Mark; failures: Record<string, Failure> };
+
+const NOTHING_SAVED: SaveState = { mark: null, failures: {} };
 
 type Track = (work: Promise<unknown>) => void;
+
+type PageTrack = (page: string, label: string, work: Promise<unknown>) => void;
 
 const TrackContext = createContext<Track>((work) => {
   work.catch(() => undefined);
@@ -25,46 +38,60 @@ export function useTrackSave(): Track {
   return useContext(TrackContext);
 }
 
-function keepSaving(state: SaveState): SaveState {
-  return state?.status === "saving" ? state : null;
-}
-
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : "Could not save the change.";
+function withoutFailureBefore(failures: Record<string, Failure>, page: string, started: number) {
+  const failure = failures[page];
+  if (!failure || failure.at > started) return failures;
+  const { [page]: _cleared, ...rest } = failures;
+  return rest;
 }
 
 export function useSaveState() {
-  const [state, setState] = useState<SaveState>(null);
-  const latest = useRef(0);
-  const tracks = useRef(new Map<string, Track>());
+  const [state, setState] = useState<SaveState>(NOTHING_SAVED);
+  const clock = useRef(0);
+  const newest = useRef(0);
 
-  const trackFor = useCallback((page: string, label: string): Track => {
-    const known = tracks.current.get(page);
-    if (known) return known;
-    const track: Track = (work) => {
-      const turn = ++latest.current;
-      setState({ page, label, status: "saving" });
-      work.then(
-        () => {
-          if (turn === latest.current) setState({ page, label, status: "saved" });
-        },
-        (error: unknown) => {
-          if (turn === latest.current) setState({ page, label, status: "failed", message: messageOf(error) });
-        },
-      );
-    };
-    tracks.current.set(page, track);
-    return track;
+  const track = useCallback<PageTrack>((page, label, work) => {
+    const started = ++clock.current;
+    newest.current = started;
+    setState((current) => ({ ...current, mark: { page, label, status: "saving" } }));
+    work.then(
+      () => {
+        const isNewest = newest.current === started;
+        setState((current) => ({
+          mark: isNewest ? { page, label, status: "saved" } : current.mark,
+          failures: withoutFailureBefore(current.failures, page, started),
+        }));
+      },
+      (error: unknown) => {
+        const isNewest = newest.current === started;
+        const failure = { label, message: apiErrorMessage(error, "Could not save the change."), at: ++clock.current };
+        setState((current) => ({
+          mark: isNewest ? null : current.mark,
+          failures: { ...current.failures, [page]: failure },
+        }));
+      },
+    );
   }, []);
 
-  const settle = useCallback(() => setState(keepSaving), []);
-  const clear = useCallback(() => setState(null), []);
+  const settle = useCallback(
+    () => setState((current) => ({ ...current, mark: current.mark?.status === "saving" ? current.mark : null })),
+    [],
+  );
+  const clear = useCallback(() => setState(NOTHING_SAVED), []);
 
-  return { state, trackFor, settle, clear };
+  return { state, track, settle, clear };
 }
 
-export function SaveTracker({ track, children }: { track: Track; children: ReactNode }) {
-  return <TrackContext.Provider value={track}>{children}</TrackContext.Provider>;
+type SaveTrackerProps = {
+  page: string;
+  label: string;
+  track: PageTrack;
+  children: ReactNode;
+};
+
+export function SaveTracker({ page, label, track, children }: SaveTrackerProps) {
+  const bound = useMemo<Track>(() => (work) => track(page, label, work), [track, page, label]);
+  return <TrackContext.Provider value={bound}>{children}</TrackContext.Provider>;
 }
 
 const MARKS = {
@@ -73,9 +100,9 @@ const MARKS = {
 };
 
 export function SaveMark({ state, page }: { state: SaveState; page: string }) {
-  const onThisPage = state?.page === page;
-  if (!onThisPage || state.status === "failed") return null;
-  const { icon, word } = MARKS[state.status];
+  const { mark } = state;
+  if (mark?.page !== page) return null;
+  const { icon, word } = MARKS[mark.status];
   return (
     <span
       role="status"
@@ -87,21 +114,30 @@ export function SaveMark({ state, page }: { state: SaveState; page: string }) {
   );
 }
 
-function elsewhereText({ label, status, message }: NonNullable<SaveState>): string {
-  if (status === "failed") return `${label}: ${message}`;
-  return `${label} ${status}`;
+export function SaveFailure({ state, page }: { state: SaveState; page: string }) {
+  return <SettingsError message={state.failures[page]?.message} />;
 }
 
 export function SaveElsewhere({ state, page }: { state: SaveState; page: string }) {
-  const elsewhere = state !== null && state.page !== page;
-  if (!elsewhere) return null;
+  const { mark } = state;
+  const markElsewhere = mark !== null && mark.page !== page;
+  const failures = Object.entries(state.failures)
+    .filter(([failedPage]) => failedPage !== page)
+    .map(([, failure]) => failure)
+    .sort((a, b) => b.at - a.at);
   return (
-    <p
-      role="status"
-      className={cn("px-2.5 text-2xs/snug text-muted-foreground", state.status === "failed" && "text-destructive")}
-    >
-      {elsewhereText(state)}
-    </p>
+    <>
+      {markElsewhere ? (
+        <p role="status" className="px-2.5 text-2xs/snug text-muted-foreground">
+          {mark.label} {mark.status}
+        </p>
+      ) : null}
+      {failures.map((failure) => (
+        <p key={failure.label} role="status" className="px-2.5 text-2xs/snug text-destructive">
+          {failure.label}: {failure.message}
+        </p>
+      ))}
+    </>
   );
 }
 
@@ -156,20 +192,14 @@ export function DraftNumberRow({ id, label, description, error, min, max, field 
 }
 
 export function useTrackedWrite() {
-  const { write, error } = useWriteSettings();
+  const write = useWriteSettings();
   const track = useTrackSave();
-  const save = useCallback(
-    (patch: Partial<Settings>) => {
-      track(write(patch));
-    },
-    [write, track],
-  );
-  return { save, error: error?.message };
+  return useCallback((patch: Partial<Settings>) => track(write(patch)), [write, track]);
 }
 
 export function DaemonSettings({ children }: { children: (settings: Settings) => ReactNode }) {
   const settings = useSettings();
-  if (settings.isError) return <SettingsError message={settings.error.message} />;
+  if (settings.error) return <SettingsError message={settings.error.message} />;
   if (!settings.data) return <Spinner />;
   return children(settings.data);
 }

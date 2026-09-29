@@ -1,4 +1,4 @@
-import { useState, type ComponentType } from "react";
+import { useMemo, useState, type ComponentType } from "react";
 import {
   ActivityIcon,
   BellIcon,
@@ -13,7 +13,7 @@ import { AppearancePanel } from "@/components/settings-appearance";
 import { AgentPanel } from "@/components/settings-agent";
 import { LogsPanel } from "@/components/settings-logs";
 import { NotificationsPanel } from "@/components/settings-notifications";
-import { SaveElsewhere, SaveMark, SaveTracker, useSaveState } from "@/components/settings-page";
+import { SaveElsewhere, SaveFailure, SaveMark, SaveTracker, useSaveState } from "@/components/settings-page";
 import { PollingPanel } from "@/components/settings-polling";
 import { ReviewPanel } from "@/components/settings-review";
 import { UpdatesPanel } from "@/components/settings-updates";
@@ -113,18 +113,15 @@ export function SettingsDialog({ open, onOpenChange, category = "appearance" }: 
     }
   }
 
+  const panel = useMemo(() => <active.Panel key={active.id} />, [active]);
+
   function show(page: Page) {
     setActive(page);
     save.settle();
   }
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(next) => {
-        onOpenChange(next);
-      }}
-    >
+    <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-(--size-dialog-height) w-(--size-dialog-wide) gap-0 overflow-hidden p-0 sm:max-w-(--size-dialog-max)">
         <DialogTitle className="sr-only">Settings</DialogTitle>
         <DialogDescription className="sr-only">Preferences for the app.</DialogDescription>
@@ -173,11 +170,10 @@ export function SettingsDialog({ open, onOpenChange, category = "appearance" }: 
             </div>
             <SaveMark state={save.state} page={active.id} />
           </header>
-          <SaveTracker track={save.trackFor(active.id, active.label)}>
-            <div className={cn("flex flex-col", active.fill && "min-h-0 flex-1")}>
-              <active.Panel key={active.id} />
-            </div>
+          <SaveTracker page={active.id} label={active.label} track={save.track}>
+            <div className={cn("flex flex-col", active.fill && "min-h-0 flex-1")}>{panel}</div>
           </SaveTracker>
+          <SaveFailure state={save.state} page={active.id} />
         </section>
       </DialogContent>
     </Dialog>

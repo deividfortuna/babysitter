@@ -5,7 +5,6 @@ import { OptionSelect, toOptions } from "@/components/option-select";
 import {
   DaemonSettings,
   SettingsCard,
-  SettingsError,
   SettingsRow,
   SettingsSection,
   useTrackedWrite,
@@ -44,7 +43,7 @@ export function AgentPanel() {
 }
 
 function AgentForm({ settings }: { settings: Settings }) {
-  const { save, error } = useTrackedWrite();
+  const save = useTrackedWrite();
   const providers = useProviders(true);
   const catalog = providers.data ?? [];
   const efforts = effortsOf(catalog, settings.provider, settings.model);
@@ -120,8 +119,6 @@ function AgentForm({ settings }: { settings: Settings }) {
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
-
-      <SettingsError message={error} />
     </div>
   );
 }

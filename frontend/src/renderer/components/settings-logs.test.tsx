@@ -54,11 +54,11 @@ test("a level the daemon refuses shows what the daemon answered", async () => {
     ),
   );
   const user = userEvent.setup();
-  renderWithProviders(<LogsPanel />);
+  renderWithProviders(<SettingsDialog open category="logs" onOpenChange={vi.fn()} />);
 
-  const toggle = screen.getByRole("switch", { name: "Debug logs" });
+  const toggle = await screen.findByRole("switch", { name: "Debug logs" });
   await waitFor(() => expect(toggle).toBeEnabled());
   await user.click(toggle);
 
-  expect(await screen.findByText(/the level is locked/)).toBeVisible();
+  expect(await screen.findByText("the level is locked")).toBeVisible();
 });

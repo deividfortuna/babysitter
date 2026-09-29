@@ -28,13 +28,7 @@ function DebugLogsRow() {
     <SettingsRow
       label="Debug logs"
       htmlFor="debug-logs"
-      description={
-        setLevel.error ? (
-          <span className="text-destructive">{setLevel.error.message}</span>
-        ) : (
-          "The daemon also records what only a developer needs, such as each HTTP request. It goes back to info when the daemon stops."
-        )
-      }
+      description="The daemon also records what only a developer needs, such as each HTTP request. It goes back to info when the daemon stops."
     >
       <Switch
         id="debug-logs"

@@ -4,7 +4,6 @@ import {
   DaemonSettings,
   DraftNumberRow,
   SettingsCard,
-  SettingsError,
   SettingsSection,
   useTrackedWrite,
 } from "@/components/settings-page";
@@ -26,6 +25,7 @@ import {
   roughCount,
   shareOf,
   shortInterval,
+  watchIntervalPatch,
   type Intervals,
   type Preset,
 } from "@/lib/polling";
@@ -44,6 +44,8 @@ function secondsFrom(min: number) {
   };
 }
 
+const WATCH_INTERVAL_TEXT = "Seconds between polls of a pull request under watch.";
+
 const PACE_ROWS: { label: string; seconds: (intervals: Intervals) => number; suffix: string }[] = [
   { label: "Pass over the repositories you watch", seconds: (i) => i.pollIntervalSeconds, suffix: "" },
   { label: "Poll a pull request under watch", seconds: (i) => i.watchIntervalSeconds, suffix: "" },
@@ -55,16 +57,18 @@ export function PollingPanel() {
 }
 
 function PollingForm({ settings }: { settings: Settings }) {
-  const { save, error } = useTrackedWrite();
+  const save = useTrackedWrite();
   const intervals: Intervals = settings;
   const preset = presetOf(intervals);
   const [byHand, setByHand] = useState(!preset);
   const [raisedTo, setRaisedTo] = useState<number | null>(null);
 
+  const longestRaised = raisedTo !== null && raisedTo === intervals.watchMaxIntervalSeconds;
+
   function saveWatchInterval(watchIntervalSeconds: number) {
-    const raises = watchIntervalSeconds > intervals.watchMaxIntervalSeconds;
-    setRaisedTo(raises ? watchIntervalSeconds : null);
-    save(raises ? { watchIntervalSeconds, watchMaxIntervalSeconds: watchIntervalSeconds } : { watchIntervalSeconds });
+    const patch = watchIntervalPatch(watchIntervalSeconds, intervals);
+    setRaisedTo(patch.watchMaxIntervalSeconds ?? null);
+    save(patch);
   }
 
   function savePreset(choice: Preset) {
@@ -130,9 +134,9 @@ function PollingForm({ settings }: { settings: Settings }) {
               id="watch-interval"
               label="Watch poll interval"
               description={
-                raisedTo === null
-                  ? "Seconds between polls of a pull request under watch."
-                  : `Seconds between polls of a pull request under watch. The longest watch poll interval moved to ${shortInterval(raisedTo)} too.`
+                longestRaised
+                  ? `${WATCH_INTERVAL_TEXT} The longest watch poll interval moved to ${shortInterval(raisedTo)} too.`
+                  : WATCH_INTERVAL_TEXT
               }
               value={intervals.watchIntervalSeconds}
               onCommit={saveWatchInterval}
@@ -148,8 +152,6 @@ function PollingForm({ settings }: { settings: Settings }) {
           </SettingsCard>
         </CollapsibleContent>
       </Collapsible>
-
-      <SettingsError message={error} />
     </div>
   );
 }

@@ -116,6 +116,19 @@ test("a switch keeps a muted kind this build does not know", () => {
   expect(withKind(["checks", "rumour"], "checks", false)).toEqual(["rumour"]);
 });
 
+test("a window with the focus gets the banner and no call back", () => {
+  expect(presentation({ title: "PR #42", kind: "agent" }, true, "darwin", true)).toEqual({
+    toast: true,
+    bounce: null,
+    flash: false,
+  });
+  expect(presentation({ title: "PR #42", kind: "merge" }, true, "win32", true)).toEqual({
+    toast: true,
+    bounce: null,
+    flash: false,
+  });
+});
+
 test("a platform that shows no banner bounces nothing and flashes nothing", () => {
   expect(presentation({ title: "PR #42", kind: "agent" }, false, "darwin")).toEqual({
     toast: false,

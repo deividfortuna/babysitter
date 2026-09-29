@@ -2,7 +2,8 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { buildRateLimit, buildRepo, buildSettings, buildWatch } from "@test/fixtures";
-import { serveApi } from "@test/msw";
+import { http, HttpResponse } from "msw";
+import { apiUrl, server, serveApi } from "@test/msw";
 import { renderWithProviders } from "@test/test-utils";
 import type { RateLimit } from "@/hooks/useRateLimit";
 import type { Settings } from "@/hooks/useSettings";
@@ -104,6 +105,25 @@ test("a watch poll interval above the longest raises the longest in the same sav
   expect(savedSettings[0]).toMatchObject({ watchIntervalSeconds: 1200, watchMaxIntervalSeconds: 1200 });
   expect(await screen.findByText(/The longest watch poll interval moved to 20m too\./)).toBeVisible();
   await waitFor(() => expect(screen.getByLabelText("Longest watch poll interval")).toHaveValue(1200));
+});
+
+test("a raise the daemon refuses takes its note away", async () => {
+  const { user } = renderPolling();
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), () =>
+      HttpResponse.json({ error: { code: "bad_request", message: "the store is read only" } }, { status: 400 }),
+    ),
+  );
+  await user.click(await screen.findByRole("button", { name: "Set the intervals by hand" }));
+
+  const field = screen.getByLabelText("Watch poll interval", { exact: true });
+  await user.clear(field);
+  await user.type(field, "1200");
+  await user.tab();
+
+  expect(await screen.findByText("the store is read only")).toBeVisible();
+  await waitFor(() => expect(screen.getByLabelText("Longest watch poll interval")).toHaveValue(900));
+  expect(screen.queryByText(/moved to 20m too/)).toBeNull();
 });
 
 test("a longest watch poll interval below the watch poll interval is refused before it is sent", async () => {

@@ -11,6 +11,10 @@ const queryClient = new QueryClient({
       staleTime: 30_000,
       refetchInterval: 60_000,
       retry: 1,
+      networkMode: "always",
+    },
+    mutations: {
+      networkMode: "always",
     },
   },
 });

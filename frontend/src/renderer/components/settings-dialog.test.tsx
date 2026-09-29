@@ -1,10 +1,10 @@
-import { screen, within } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { buildSettings } from "@test/fixtures";
 import { http, HttpResponse } from "msw";
 import { apiUrl, server, serveApi } from "@test/msw";
-import { renderWithProviders } from "@test/test-utils";
+import { deferred, renderWithProviders } from "@test/test-utils";
 import type { Settings } from "@/hooks/useSettings";
 import { SettingsDialog } from "./settings-dialog";
 
@@ -156,14 +156,11 @@ test("a number the daemon refuses after you left its page shows why under the na
 
 test("a save still running when you leave its page keeps its line until it ends", async () => {
   serveApi({ settings: buildSettings() });
-  let release = () => undefined as void;
-  const held = new Promise<void>((resolve) => {
-    release = resolve;
-  });
+  const held = deferred();
   server.use(
     http.put(apiUrl("/api/v1/settings"), async ({ request }) => {
       const body = await request.json();
-      await held;
+      await held.promise;
       return HttpResponse.json(body as Settings);
     }),
   );
@@ -174,8 +171,69 @@ test("a save still running when you leave its page keeps its line until it ends"
   await user.click(pageButton("Agent"));
 
   expect(await within(navigation()).findByText("Review and merge saving")).toBeVisible();
-  release();
+  held.resolve();
   expect(await within(navigation()).findByText("Review and merge saved")).toBeVisible();
+});
+
+function refuseWhen(refused: (body: Settings) => boolean, message: string) {
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), async ({ request }) => {
+      const body = (await request.json()) as Settings;
+      if (refused(body)) return HttpResponse.json({ error: { code: "bad_request", message } }, { status: 400 });
+      return HttpResponse.json(body);
+    }),
+  );
+}
+
+test("a refused save stays on its page when a save queued behind it goes through", async () => {
+  serveApi({ settings: buildSettings() });
+  const held = deferred();
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), async ({ request }) => {
+      const body = (await request.json()) as Settings;
+      if (!body.includeOwn) return HttpResponse.json(body);
+      await held.promise;
+      return HttpResponse.json({ error: { code: "bad_request", message: "own comments are locked" } }, { status: 400 });
+    }),
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<SettingsDialog open category="review" onOpenChange={vi.fn()} />);
+
+  await user.click(await screen.findByRole("switch", { name: "Report my own comments" }));
+  await user.click(screen.getByRole("switch", { name: "Report the review items that already exist" }));
+  held.resolve();
+
+  expect(await screen.findByText("own comments are locked")).toBeVisible();
+  expect(await screen.findByText("saved")).toBeVisible();
+  expect(screen.getByText("own comments are locked")).toBeVisible();
+});
+
+test("a refused save of another page stays under the navigation after a save here goes through", async () => {
+  serveApi({ settings: buildSettings() });
+  refuseWhen((body) => body.includeOwn, "own comments are locked");
+  const user = userEvent.setup();
+  renderWithProviders(<SettingsDialog open category="review" onOpenChange={vi.fn()} />);
+
+  await user.click(await screen.findByRole("switch", { name: "Report my own comments" }));
+  expect(await screen.findByText("own comments are locked")).toBeVisible();
+  await user.click(pageButton("Agent"));
+  await user.click(await screen.findByRole("switch", { name: "Keep the worktree when a watch stops" }));
+
+  expect(await screen.findByText("saved")).toBeVisible();
+  expect(within(navigation()).getByText("Review and merge: own comments are locked")).toBeVisible();
+});
+
+test("a save that goes through after the refusal clears it from the page", async () => {
+  serveApi({ settings: buildSettings() });
+  refuseWhen((body) => body.includeOwn, "own comments are locked");
+  const user = userEvent.setup();
+  renderWithProviders(<SettingsDialog open category="review" onOpenChange={vi.fn()} />);
+
+  await user.click(await screen.findByRole("switch", { name: "Report my own comments" }));
+  expect(await screen.findByText("own comments are locked")).toBeVisible();
+  await user.click(screen.getByRole("switch", { name: "Report the review items that already exist" }));
+
+  await waitFor(() => expect(screen.queryByText("own comments are locked")).toBeNull());
 });
 
 test("closing the dialog tells the owner", async () => {

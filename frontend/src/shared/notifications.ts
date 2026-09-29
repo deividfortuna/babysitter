@@ -74,8 +74,10 @@ export function presentation(
   notification: { title?: string; kind?: string },
   supported: boolean,
   platform: string,
+  focused = false,
 ): Presentation {
   if (!shouldToast(notification, supported)) return { toast: false, bounce: null, flash: false };
+  if (focused) return { toast: true, bounce: null, flash: false };
   if (platform === "darwin") return { toast: true, bounce: bounceType(notification.kind), flash: false };
   return { toast: true, bounce: null, flash: shouldSignalAttention(notification.kind) };
 }

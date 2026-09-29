@@ -98,3 +98,11 @@ export function roughCount(requests: number): number {
 export function shareOf(requests: number, limit: number): number {
   return Math.min(1, requests / limit);
 }
+
+export function watchIntervalPatch(
+  watchIntervalSeconds: number,
+  current: Intervals,
+): Pick<Intervals, "watchIntervalSeconds"> & Partial<Pick<Intervals, "watchMaxIntervalSeconds">> {
+  if (watchIntervalSeconds <= current.watchMaxIntervalSeconds) return { watchIntervalSeconds };
+  return { watchIntervalSeconds, watchMaxIntervalSeconds: watchIntervalSeconds };
+}

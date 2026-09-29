@@ -74,7 +74,7 @@ func newSettingsCmd(opts *options) *cobra.Command {
 		Use:   "settings",
 		Short: "Read and write the settings of the running daemon",
 		Long: `The settings of the daemon: how often it polls, and what a new watch
-takes when you do not say. They are the same settings the Watching pane
+takes when you do not say. They are the same settings the Settings dialog
 of the desktop app shows, and a change takes effect at once.
 
 'settings set' writes only the flags you type; the rest keep the value
