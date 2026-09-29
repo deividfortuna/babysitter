@@ -1030,8 +1030,11 @@ reason and the command that retries it, and a notification of kind
 again. In `auto`, or with **Approve a clean rebase or merge on its own**, it
 rebases a turn that only added commits onto a pull request branch that
 moved; otherwise the next poll rebases it and asks you again. Each
-reply that names one of the old commits then names the rebased one. In
-`manual`, a retry of work you never approved is refused. Work the daemon cannot rebase goes to the agent: a rebase
+reply that names one of the old commits then names the rebased one.
+With the branch update `merge`, the daemon merges the pull request
+branch into the work instead: no commit is rewritten, the replies stay
+as they were, and a merge that conflicts goes to the agent the same
+way. In `manual`, a retry of work you never approved is refused. Work the daemon cannot rebase goes to the agent: a rebase
 that conflicts, at once, and a rewrite that lacks commits of the pull
 request branch, on a retry. These are the only failed pushes the agent
 hears about. The row of a rebase that conflicts names no retry, because
@@ -1090,8 +1093,10 @@ When the pull request branch moves while you read, the daemon rebases
 the proposal itself. A clean rebase comes back to you marked rebased,
 with the commits it now names, and a reply that named an old commit
 names the new one; with **Approve a clean rebase or merge on its own**, work you
-approved goes out without asking again. A rebase that conflicts goes to
-the agent, and in `manual` its resolution asks you, because nobody read
+approved goes out without asking again. With the branch update `merge`,
+the daemon merges the branch into the proposal instead: it comes back
+marked merged, and its commits and replies stay as they were. A rebase
+or a merge that conflicts goes to the agent, and in `manual` its resolution asks you, because nobody read
 it. Work that rewrote the branch is not rebased: its release fails, and
 its retry goes to the agent. Stop declines what waits. A watch started
 with `--provider self` has no gate: your own session pushes and posts,
