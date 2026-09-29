@@ -256,6 +256,30 @@ func TestTheRewriteMessageNamesTheCommitsTheWorkLacks(t *testing.T) {
 	}
 }
 
+func TestTheRewriteMessageMergesWhenTheWatchMerges(t *testing.T) {
+	t.Parallel()
+	merging := pr
+	merging.DaemonPushes, merging.MergesBase = true, true
+	msg, err := ConflictMessage(Conflict{PR: merging, Proposal: 3, Remote: "1d8e4f2", Missing: "1d8e4f2, 9c0b7a1"})
+	if err != nil {
+		t.Fatalf("ConflictMessage() error = %v", err)
+	}
+	for _, want := range []string{
+		"commits your work lacks: 1d8e4f2, 9c0b7a1",
+		"git merge origin/fix",
+		"Do not rebase.",
+	} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("rewrite message of a merging watch lacks %q:\n%s", want, msg)
+		}
+	}
+	for _, unwanted := range []string{"did not rebase", "git rebase", "git push"} {
+		if strings.Contains(msg, unwanted) {
+			t.Errorf("rewrite message of a merging watch has %q:\n%s", unwanted, msg)
+		}
+	}
+}
+
 func TestNudgeMessage(t *testing.T) {
 	t.Parallel()
 	items := []Item{
