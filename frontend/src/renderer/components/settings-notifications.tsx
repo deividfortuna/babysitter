@@ -47,7 +47,7 @@ function unknownKinds(kinds: readonly string[]): NotificationKind[] {
 
 function useSeenUnknownKinds(kinds: readonly string[]): NotificationKind[] {
   const [seen, setSeen] = useState<NotificationKind[]>([]);
-  const fresh = unknownKinds(kinds).filter((kind) => !seen.includes(kind));
+  const fresh = [...new Set(unknownKinds(kinds))].filter((kind) => !seen.includes(kind));
   if (fresh.length === 0) return seen;
   const all = [...seen, ...fresh];
   setSeen(all);

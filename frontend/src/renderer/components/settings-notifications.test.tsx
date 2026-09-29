@@ -165,6 +165,18 @@ test("a silent kind only a newer daemon knows has a row of its own", async () =>
   expect(screen.getByRole("switch", { name: "Notify: deploy" })).toBeChecked();
 });
 
+test("a kind only a newer daemon knows that is muted and silent has one row", async () => {
+  renderNotifications(
+    buildSettings({
+      mutedNotificationKinds: ["review", "deploy"] as Settings["mutedNotificationKinds"],
+      silentNotificationKinds: ["checks", "deploy"] as Settings["silentNotificationKinds"],
+    }),
+  );
+
+  expect(await screen.findAllByRole("switch", { name: "Notify: deploy" })).toHaveLength(1);
+  expect(screen.getAllByRole("switch", { name: "Sound: deploy" })).toHaveLength(1);
+});
+
 test("Send a test shows a notification of the system", async () => {
   vi.spyOn(bridge.notifications, "supported").mockResolvedValue(true);
   const show = vi.spyOn(bridge.notifications, "show").mockResolvedValue(undefined);
