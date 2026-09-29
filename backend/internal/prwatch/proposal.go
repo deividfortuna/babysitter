@@ -295,7 +295,7 @@ func (s *Service) approve(ctx context.Context, w store.Watch, p store.Proposal, 
 	if told.changed() {
 		s.tellDecision(ctx, w, p, told)
 	}
-	s.Kick()
+	s.Kick(w.ID)
 	return s.store.GetProposal(ctx, w.ID, p.Number)
 }
 
@@ -399,7 +399,7 @@ func (s *Service) Reject(ctx context.Context, id int64, number int, r Rejection)
 		}
 	}
 	s.tellRejection(ctx, w, p, reason, discarded)
-	s.Kick()
+	s.Kick(w.ID)
 	return s.store.GetProposal(ctx, w.ID, number)
 }
 

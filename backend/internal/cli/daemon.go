@@ -97,6 +97,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		port          int
 		interval      time.Duration
 		watchInterval time.Duration
+		watchMax      time.Duration
 		agentBin      string
 		agentModel    string
 		copilotBin    string
@@ -134,21 +135,22 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				book.Handler(),
 			))
 			err = daemon.Run(cmd.Context(), daemon.Config{
-				DataDir:       dataDir,
-				DBPath:        dbPath,
-				Port:          port,
-				Interval:      interval,
-				WatchInterval: watchInterval,
-				AgentBin:      agentBin,
-				AgentModel:    agentModel,
-				CopilotBin:    copilotBin,
-				CopilotModel:  copilotModel,
-				Owner:         owner,
-				Version:       opts.version,
-				NewClient:     opts.client,
-				Notifier:      opts.newNotifier(),
-				Log:           logger,
-				Logs:          book,
+				DataDir:          dataDir,
+				DBPath:           dbPath,
+				Port:             port,
+				Interval:         interval,
+				WatchInterval:    watchInterval,
+				WatchMaxInterval: watchMax,
+				AgentBin:         agentBin,
+				AgentModel:       agentModel,
+				CopilotBin:       copilotBin,
+				CopilotModel:     copilotModel,
+				Owner:            owner,
+				Version:          opts.version,
+				NewClient:        opts.client,
+				Notifier:         opts.newNotifier(),
+				Log:              logger,
+				Logs:             book,
 			})
 			if errors.Is(err, context.Canceled) {
 				return nil
@@ -159,6 +161,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().IntVar(&port, "port", 0, "loopback port to bind, 0 picks a free one")
 	cmd.Flags().DurationVar(&interval, "interval", 0, "time between polls of the watched repositories, for this run only; unset takes the setting of the daemon")
 	cmd.Flags().DurationVar(&watchInterval, "watch-interval", 0, "time between polls of a watched pull request, for this run only; unset takes the setting of the daemon")
+	cmd.Flags().DurationVar(&watchMax, "watch-max-interval", 0, "longest time between polls of a watched pull request where nothing happens, for this run only; unset takes the setting of the daemon")
 	cmd.Flags().StringVar(&agentBin, "agent-bin", "claude", "Claude Code command that babysits watched pull requests, or none")
 	cmd.Flags().StringVar(&agentModel, "agent-model", "", "model of the agent, empty for its default")
 	cmd.Flags().StringVar(&copilotBin, "copilot-bin", "copilot", "Copilot CLI command that babysits watched pull requests")

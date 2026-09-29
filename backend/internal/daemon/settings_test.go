@@ -11,7 +11,7 @@ import (
 
 func TestRunningSettingsKeepTheStoredOnesWithoutAFlag(t *testing.T) {
 	t.Parallel()
-	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto, Provider: "claude"}
+	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, WatchMaxInterval: 15 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto, Provider: "claude"}
 
 	got, err := runningSettings(stored, Config{})
 	if err != nil {
@@ -24,7 +24,7 @@ func TestRunningSettingsKeepTheStoredOnesWithoutAFlag(t *testing.T) {
 
 func TestRunningSettingsTakeTheIntervalsOfTheFlags(t *testing.T) {
 	t.Parallel()
-	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto, Provider: "claude"}
+	stored := store.Settings{PollInterval: 2 * time.Minute, WatchInterval: 5 * time.Minute, WatchMaxInterval: 15 * time.Minute, KeepWorktree: true, ApprovalMode: store.ApprovalAuto, Provider: "claude"}
 
 	got, err := runningSettings(stored, Config{Interval: 30 * time.Second, WatchInterval: time.Minute})
 	if err != nil {
@@ -38,6 +38,32 @@ func TestRunningSettingsTakeTheIntervalsOfTheFlags(t *testing.T) {
 	}
 }
 
+func TestRunningSettingsTakeTheLongestIntervalOfTheFlag(t *testing.T) {
+	t.Parallel()
+	stored := store.DefaultSettings()
+
+	got, err := runningSettings(stored, Config{WatchMaxInterval: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.WatchInterval != stored.WatchInterval || got.WatchMaxInterval != time.Hour {
+		t.Fatalf("intervals = %s/%s, want the stored watch interval and the longest of the flag", got.WatchInterval, got.WatchMaxInterval)
+	}
+}
+
+func TestRunningSettingsRaiseTheLongestIntervalToAWatchIntervalAboveIt(t *testing.T) {
+	t.Parallel()
+	stored := store.DefaultSettings()
+
+	got, err := runningSettings(stored, Config{WatchInterval: time.Hour})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.WatchMaxInterval != time.Hour {
+		t.Fatalf("WatchMaxInterval = %s, want the watch interval of the flag, 1h0m0s", got.WatchMaxInterval)
+	}
+}
+
 func TestRunningSettingsSayNoToAnIntervalTheDaemonCannotRun(t *testing.T) {
 	t.Parallel()
 	stored := store.DefaultSettings()
@@ -45,6 +71,8 @@ func TestRunningSettingsSayNoToAnIntervalTheDaemonCannotRun(t *testing.T) {
 		"below the floor":     {Interval: time.Millisecond},
 		"a negative interval": {Interval: -30 * time.Second},
 		"a negative watch":    {WatchInterval: -time.Second},
+		"a negative longest":  {WatchMaxInterval: -time.Second},
+		"a longest too short": {WatchInterval: 10 * time.Minute, WatchMaxInterval: 5 * time.Minute},
 	}
 	for name, cfg := range cases {
 		t.Run(name, func(t *testing.T) {

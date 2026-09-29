@@ -47,7 +47,7 @@ func (s *Service) SetMergeRules(ctx context.Context, id int64, c MergeRulesChang
 		return store.Watch{}, err
 	}
 	if needsPoll {
-		s.Kick()
+		s.Kick(w.ID)
 	}
 	return w, nil
 }

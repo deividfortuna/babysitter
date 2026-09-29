@@ -17,9 +17,13 @@ import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
 import { effortDefaultLabel, effortsOf } from "@/lib/watch-defaults";
 
-type Draft = Omit<Settings, "pollIntervalSeconds" | "watchIntervalSeconds" | "approvalsRequired"> & {
+type Draft = Omit<
+  Settings,
+  "pollIntervalSeconds" | "watchIntervalSeconds" | "watchMaxIntervalSeconds" | "approvalsRequired"
+> & {
   pollIntervalSeconds: string;
   watchIntervalSeconds: string;
+  watchMaxIntervalSeconds: string;
   approvalsRequired: string;
 };
 
@@ -28,6 +32,7 @@ function toDraft(settings: Settings): Draft {
     ...settings,
     pollIntervalSeconds: String(settings.pollIntervalSeconds),
     watchIntervalSeconds: String(settings.watchIntervalSeconds),
+    watchMaxIntervalSeconds: String(settings.watchMaxIntervalSeconds),
     approvalsRequired: approvalsField(settings.approvalsRequired),
   };
 }
@@ -37,14 +42,18 @@ function toSettings(draft: Draft): Settings {
     ...draft,
     pollIntervalSeconds: Number(draft.pollIntervalSeconds),
     watchIntervalSeconds: Number(draft.watchIntervalSeconds),
+    watchMaxIntervalSeconds: Number(draft.watchMaxIntervalSeconds),
     approvalsRequired: approvalsRequired(draft.approvalsRequired) ?? null,
   };
 }
 
 function refusal(draft: Draft): string | null {
-  const intervals = [draft.pollIntervalSeconds, draft.watchIntervalSeconds];
+  const intervals = [draft.pollIntervalSeconds, draft.watchIntervalSeconds, draft.watchMaxIntervalSeconds];
   if (intervals.some((field) => wholeNumber(field) === undefined)) {
     return "The poll intervals take a whole number of seconds.";
+  }
+  if (Number(draft.watchMaxIntervalSeconds) < Number(draft.watchIntervalSeconds)) {
+    return "The longest watch poll interval takes at least the watch poll interval.";
   }
   if (approvalsInvalid(draft.approvalsRequired)) {
     return "The approvals take a whole number, 0 or more.";
@@ -117,6 +126,24 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
             className="w-24"
             value={draft.watchIntervalSeconds}
             onChange={(e) => edit({ watchIntervalSeconds: e.target.value })}
+          />
+        </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="watch-max-interval">Longest watch poll interval</FieldLabel>
+            <FieldDescription>
+              Seconds a quiet pull request waits between polls at most. The wait doubles after each poll where nothing
+              happens. The same value as the watch poll interval keeps one fixed interval.
+            </FieldDescription>
+          </FieldContent>
+          <Input
+            id="watch-max-interval"
+            type="number"
+            inputMode="numeric"
+            className="w-24"
+            value={draft.watchMaxIntervalSeconds}
+            onChange={(e) => edit({ watchMaxIntervalSeconds: e.target.value })}
           />
         </Field>
       </FieldGroup>

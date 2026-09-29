@@ -200,6 +200,7 @@ func (s *Service) take(ctx context.Context, client *github.Client, id int64) (Ne
 		return NextMessage{}, err
 	}
 	s.work.start(id, s.now().Add(selfWorkDeadline))
+	s.schedule.stir(id)
 	return NextMessage{Watch: w, Message: &row}, nil
 }
 

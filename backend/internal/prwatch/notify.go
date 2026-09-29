@@ -4,7 +4,6 @@ import (
 	"cmp"
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/deividfortuna/babysitter/internal/notify"
 	"github.com/deividfortuna/babysitter/internal/redact"
@@ -60,7 +59,7 @@ func (s *Service) notification(w store.Watch, a store.Activity) (notify.Item, bo
 	}
 	switch a.Kind {
 	case store.ActivityWatchStarted:
-		item.Message = fmt.Sprintf("Watching %s, checks every %s", w.HeadRef, s.Interval().Round(time.Second))
+		item.Message = fmt.Sprintf("Watching %s, checks %s", w.HeadRef, s.cadence())
 	case store.ActivityAutoStarted:
 		item.Message = fmt.Sprintf("A watch started on its own: %s. It uses the settings of %s.", w.AutoReason.Word(), w.Repo())
 	case store.ActivityApprovalAsked:

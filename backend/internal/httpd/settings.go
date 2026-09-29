@@ -34,6 +34,7 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 	saved, err := a.store.SaveSettings(r.Context(), store.Settings{
 		PollInterval:      time.Duration(req.PollIntervalSeconds) * time.Second,
 		WatchInterval:     time.Duration(req.WatchIntervalSeconds) * time.Second,
+		WatchMaxInterval:  time.Duration(req.WatchMaxIntervalSeconds) * time.Second,
 		ApprovalsRequired: req.ApprovalsRequired,
 		MergeMethod:       req.MergeMethod,
 		IncludeExisting:   req.IncludeExisting,
@@ -60,21 +61,22 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 
 func settingsOut(s store.Settings) Settings {
 	return Settings{
-		PollIntervalSeconds:    int(s.PollInterval.Seconds()),
-		WatchIntervalSeconds:   int(s.WatchInterval.Seconds()),
-		ApprovalsRequired:      s.ApprovalsRequired,
-		MergeMethod:            s.MergeMethod,
-		IncludeExisting:        s.IncludeExisting,
-		IncludeOwn:             s.IncludeOwn,
-		KeepWorktree:           s.KeepWorktree,
-		NotificationsEnabled:   s.NotificationsEnabled,
-		NotificationSound:      s.NotificationSound,
-		MutedNotificationKinds: mutedKindsOut(s.MutedNotificationKinds),
-		ApprovalMode:           string(s.ApprovalMode),
-		AutoApproveRebase:      s.AutoApproveRebase,
-		Provider:               s.Provider,
-		Model:                  s.Model,
-		Effort:                 s.Effort,
+		PollIntervalSeconds:     int(s.PollInterval.Seconds()),
+		WatchIntervalSeconds:    int(s.WatchInterval.Seconds()),
+		WatchMaxIntervalSeconds: int(s.WatchMaxInterval.Seconds()),
+		ApprovalsRequired:       s.ApprovalsRequired,
+		MergeMethod:             s.MergeMethod,
+		IncludeExisting:         s.IncludeExisting,
+		IncludeOwn:              s.IncludeOwn,
+		KeepWorktree:            s.KeepWorktree,
+		NotificationsEnabled:    s.NotificationsEnabled,
+		NotificationSound:       s.NotificationSound,
+		MutedNotificationKinds:  mutedKindsOut(s.MutedNotificationKinds),
+		ApprovalMode:            string(s.ApprovalMode),
+		AutoApproveRebase:       s.AutoApproveRebase,
+		Provider:                s.Provider,
+		Model:                   s.Model,
+		Effort:                  s.Effort,
 	}
 }
 

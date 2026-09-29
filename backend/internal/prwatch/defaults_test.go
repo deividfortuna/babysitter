@@ -16,7 +16,7 @@ func ApprovalsOf(n int) Approvals { return Approvals{Set: true, Count: &n} }
 
 func (fx *fixture) settings(s store.Settings) {
 	fx.t.Helper()
-	s.PollInterval, s.WatchInterval = time.Minute, time.Minute
+	s.PollInterval, s.WatchInterval, s.WatchMaxInterval = time.Minute, time.Minute, time.Minute
 	s.ApprovalMode = cmp.Or(s.ApprovalMode, store.ApprovalAuto)
 	s.Provider = cmp.Or(s.Provider, ProviderClaude)
 	if _, err := fx.st.SaveSettings(context.Background(), s); err != nil {

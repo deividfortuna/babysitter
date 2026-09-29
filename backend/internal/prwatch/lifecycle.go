@@ -313,7 +313,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	if fresh, err := s.store.GetWatch(ctx, w.ID); err == nil {
 		w = fresh
 	}
-	s.Kick()
+	s.Kick(w.ID)
 	return w, nil
 }
 
@@ -401,7 +401,7 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 	}
 	if _, err := s.record(ctx, w, store.Activity{
 		Kind: store.ActivityWatchStarted, Ref: "start", At: w.StartedAt,
-		Summary: fmt.Sprintf("watching %s#%d (%s) from %s, checks every %s", w.Repo(), w.Number, w.HeadRef, w.SourceDir, s.Interval()),
+		Summary: fmt.Sprintf("watching %s#%d (%s) from %s, checks %s", w.Repo(), w.Number, w.HeadRef, w.SourceDir, s.cadence()),
 		Payload: mustJSON(map[string]any{"head_sha": w.HeadSHA, "source_dir": w.SourceDir, "worktree_dir": w.WorktreeDir}),
 	}); err != nil {
 		return err

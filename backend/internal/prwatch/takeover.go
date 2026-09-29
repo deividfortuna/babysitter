@@ -74,7 +74,7 @@ func (s *Service) Takeover(ctx context.Context, id int64, o TakeoverOptions) (Ta
 	if err != nil {
 		return Takeover{}, errors.Join(err, s.undoTakeover(ctx, id, fresh))
 	}
-	s.Kick()
+	s.Kick(w.ID)
 	return Takeover{
 		Watch: w, WorktreeDir: w.WorktreeDir, WorkBranch: w.WorkBranch, HeadRef: w.HeadRef,
 		Argv: argv, Declined: declined, NewConversation: fresh,

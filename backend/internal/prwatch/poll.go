@@ -56,6 +56,9 @@ func (a agentStatus) done() bool {
 }
 
 func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch) error {
+	id, started, paced := w.ID, s.now(), keepPace
+	s.schedule.calm(id)
+	defer func() { s.schedule.polled(id, started, paced, s.cadence()) }()
 	w, err := s.store.GetWatch(ctx, w.ID)
 	if err != nil || w.Status != store.WatchActive {
 		return err
@@ -109,8 +112,11 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		return err
 	}
 	if len(p.inserted) == 0 {
-		return s.maybeHeartbeat(ctx, w, p.next, now)
+		if err := s.maybeHeartbeat(ctx, w, p.next, now); err != nil {
+			return err
+		}
 	}
+	paced = p.pace(snap, state)
 	return nil
 }
 
@@ -133,6 +139,14 @@ func (p pass) ended() (store.StopReason, bool) {
 }
 
 func (p pass) newHead() bool { return hasKind(p.inserted, store.ActivityCommit) }
+
+func (p pass) pace(snap *snapshot.Snapshot, state agentStatus) pace {
+	quiet := len(p.inserted) == 0 && snap.Checks.AllTerminal && !state.session.State.Working()
+	if quiet {
+		return slowDown
+	}
+	return speedUp
+}
 
 func (s *Service) refresh(ctx context.Context, w store.Watch, snap *snapshot.Snapshot, now time.Time) (pass, error) {
 	inserted, next, err := s.recordDiff(ctx, w, snap, now)

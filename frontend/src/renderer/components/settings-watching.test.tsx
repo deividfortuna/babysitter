@@ -19,6 +19,7 @@ test("the Watching panel shows the settings of the daemon", async () => {
     settings: buildSettings({
       pollIntervalSeconds: 120,
       watchIntervalSeconds: 45,
+      watchMaxIntervalSeconds: 600,
       approvalsRequired: 2,
       mergeMethod: "rebase",
       includeOwn: true,
@@ -30,6 +31,7 @@ test("the Watching panel shows the settings of the daemon", async () => {
 
   expect(await screen.findByLabelText("Repository poll interval")).toHaveValue(120);
   expect(screen.getByLabelText("Watch poll interval")).toHaveValue(45);
+  expect(screen.getByLabelText("Longest watch poll interval")).toHaveValue(600);
   expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2);
   expect(screen.getByRole("switch", { name: "Report my own comments" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Report the review items that already exist" })).not.toBeChecked();
@@ -103,6 +105,39 @@ test("a change to an interval is saved to the daemon", async () => {
   await waitFor(() => expect(savedSettings).toHaveLength(1));
   expect(savedSettings[0].watchIntervalSeconds).toBe(45);
   expect(savedSettings[0].pollIntervalSeconds).toBe(60);
+});
+
+test("the longest watch poll interval is saved to the daemon", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings(), savedSettings });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openWatching();
+
+  const field = await screen.findByLabelText("Longest watch poll interval");
+  await user.clear(field);
+  await user.type(field, "1800");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0].watchMaxIntervalSeconds).toBe(1800);
+  expect(savedSettings[0].watchIntervalSeconds).toBe(180);
+});
+
+test("a longest watch poll interval below the watch poll interval is refused before it is sent", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings(), savedSettings });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openWatching();
+
+  const field = await screen.findByLabelText("Longest watch poll interval");
+  await user.clear(field);
+  await user.type(field, "60");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+
+  expect(await screen.findByText(/takes at least the watch poll interval/i)).toBeVisible();
+  expect(savedSettings).toHaveLength(0);
 });
 
 test("the dialog closes once the daemon took the settings", async () => {

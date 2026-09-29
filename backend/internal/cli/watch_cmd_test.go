@@ -61,7 +61,7 @@ func newFakeDaemon() *fakeDaemon {
 	d.activity = `[{"id":1,"watchId":1,"kind":"watch_started","ref":"start","at":"2026-09-07T12:00:00Z","actor":"","summary":"watching octo/hello#3","url":"","payload":{},"reported":true},
 		{"id":2,"watchId":1,"kind":"comment","ref":"11","at":"2026-09-07T12:03:00Z","actor":"bob","summary":"bob commented: hi","url":"","payload":{},"reported":true}]`
 	d.settings = map[string]any{
-		"pollIntervalSeconds": 60, "watchIntervalSeconds": 180, "mergeMethod": "",
+		"pollIntervalSeconds": 60, "watchIntervalSeconds": 180, "watchMaxIntervalSeconds": 900, "mergeMethod": "",
 		"includeExisting": false, "includeOwn": false, "keepWorktree": false,
 	}
 	d.mux.HandleFunc("/api/v1/healthz", func(w http.ResponseWriter, r *http.Request) { fmt.Fprint(w, `{"status":"ok"}`) })

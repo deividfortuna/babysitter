@@ -64,6 +64,10 @@ func WithInterval(d time.Duration) Option {
 	return func(s *Service) { s.interval.Set(d) }
 }
 
+func WithMaxInterval(d time.Duration) Option {
+	return func(s *Service) { s.maxInterval.Set(d) }
+}
+
 func WithHeartbeat(d time.Duration) Option {
 	return func(s *Service) { s.heartbeat = d }
 }
@@ -91,6 +95,8 @@ type Service struct {
 	agents        map[string]agent.Runner
 	host          session.Host
 	interval      *timex.Interval
+	maxInterval   *timex.Interval
+	schedule      *schedule
 	heartbeat     time.Duration
 	now           func() time.Time
 	alive         func(pid int) bool
@@ -111,6 +117,7 @@ type Service struct {
 }
 
 func New(d Deps, opts ...Option) *Service {
+	defaults := store.DefaultSettings()
 	s := &Service{
 		store:         d.Store,
 		newClient:     d.NewClient,
@@ -124,7 +131,9 @@ func New(d Deps, opts ...Option) *Service {
 		bus:           d.Bus,
 		agents:        map[string]agent.Runner{},
 		host:          d.Host,
-		interval:      timex.NewInterval(3 * time.Minute),
+		interval:      timex.NewInterval(defaults.WatchInterval),
+		maxInterval:   timex.NewInterval(defaults.WatchMaxInterval),
+		schedule:      newSchedule(),
 		heartbeat:     time.Hour,
 		now:           time.Now,
 		alive:         processalive.Alive,
@@ -203,31 +212,61 @@ func (s *Service) Run(ctx context.Context) error {
 	s.bg = ctx
 	s.bgMu.Unlock()
 	s.recover(ctx)
-	s.pass(ctx)
-	ticker := time.NewTicker(s.Interval())
-	defer ticker.Stop()
+	tuned := s.cadence()
+	reached := s.pass(ctx)
+	timer := time.NewTimer(s.untilNextPoll(reached))
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			s.wg.Wait()
 			s.stopSessions()
 			return ctx.Err()
-		case <-ticker.C:
-			s.pass(ctx)
+		case <-timer.C:
+			reached = s.pass(ctx)
 		case <-s.kick:
-			s.pass(ctx)
-			ticker.Reset(s.Interval())
+			reached = s.pass(ctx)
 		case <-s.interval.Retuned():
-			ticker.Reset(s.Interval())
+			tuned = s.retune(tuned)
+		case <-s.maxInterval.Retuned():
+			tuned = s.retune(tuned)
 		}
+		timer.Reset(s.untilNextPoll(reached))
 	}
+}
+
+func (s *Service) retune(tuned cadence) cadence {
+	c := s.cadence()
+	if c != tuned {
+		s.schedule.restart()
+	}
+	return c
 }
 
 func (s *Service) Interval() time.Duration { return s.interval.Duration() }
 
 func (s *Service) SetInterval(d time.Duration) { s.interval.Set(d) }
 
-func (s *Service) Kick() {
+func (s *Service) MaxInterval() time.Duration { return s.maxInterval.Duration() }
+
+func (s *Service) SetMaxInterval(d time.Duration) { s.maxInterval.Set(d) }
+
+func (s *Service) cadence() cadence {
+	shortest := s.Interval()
+	return cadence{shortest: shortest, longest: max(s.MaxInterval(), shortest)}
+}
+
+func (s *Service) untilNextPoll(reached bool) time.Duration {
+	c := s.cadence()
+	stalled := !reached || s.guard.Paused()
+	if stalled {
+		return c.shortest
+	}
+	return s.schedule.untilNext(s.now(), c)
+}
+
+func (s *Service) Kick(id int64) {
+	s.schedule.wake(id)
 	select {
 	case s.kick <- struct{}{}:
 	default:
@@ -269,20 +308,25 @@ func (s *Service) recover(ctx context.Context) {
 	}
 }
 
-func (s *Service) pass(ctx context.Context) {
+func (s *Service) pass(ctx context.Context) bool {
 	watches, err := s.store.ListWatches(ctx, store.ListWatchesOptions{Status: store.WatchActive})
 	if err != nil {
 		s.log.Error("list watches", "err", err)
-		return
+		return false
+	}
+	s.schedule.keep(watchIDs(watches))
+	due := s.dueWatches(watches)
+	if len(due) == 0 {
+		return true
 	}
 	client, err := s.newClient(ctx)
 	if err != nil {
 		s.log.Error("github client", "err", err)
-		return
+		return false
 	}
 	var g errgroup.Group
 	g.SetLimit(passWidth)
-	for _, w := range watches {
+	for _, w := range due {
 		if ctx.Err() != nil || s.guard.Paused() {
 			break
 		}
@@ -292,6 +336,26 @@ func (s *Service) pass(ctx context.Context) {
 		})
 	}
 	_ = g.Wait()
+	return true
+}
+
+func (s *Service) dueWatches(watches []store.Watch) []store.Watch {
+	now, c := s.now(), s.cadence()
+	var due []store.Watch
+	for _, w := range watches {
+		if s.schedule.due(w.ID, now, c) {
+			due = append(due, w)
+		}
+	}
+	return due
+}
+
+func watchIDs(watches []store.Watch) map[int64]bool {
+	out := make(map[int64]bool, len(watches))
+	for _, w := range watches {
+		out[w.ID] = true
+	}
+	return out
 }
 
 func (s *Service) passOne(ctx context.Context, client *github.Client, w store.Watch) {

@@ -16,6 +16,7 @@ func TestSetIntervalRetunesARunningService(t *testing.T) {
 	go func() { _ = fx.svc.Run(t.Context()) }()
 
 	before := testutil.Settle(t, fx.api.Total, "the requests to GitHub")
+	fx.advance(time.Minute)
 	fx.svc.SetInterval(50 * time.Millisecond)
 
 	testutil.Eventually(t, func() bool { return fx.api.Total() > before }, "a poll on the interval the setting changed")
