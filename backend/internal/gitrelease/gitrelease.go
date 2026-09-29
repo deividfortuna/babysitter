@@ -269,15 +269,15 @@ func wholeFiles(patch string, limit int) string {
 }
 
 func (g *Runner) Rebase(ctx context.Context, dir, onto string) error {
-	return g.bringIn(ctx, dir, "rebase", g.rebasing, "-q", onto)
+	return g.bringIn(ctx, dir, "rebase", g.rebasing, "rebase", "-q", onto)
 }
 
 func (g *Runner) Merge(ctx context.Context, dir, sha string) error {
-	return g.bringIn(ctx, dir, "merge", g.merging, "-q", "--no-edit", "--no-verify", "--no-ff", sha)
+	return g.bringIn(ctx, dir, "merge", g.merging, "-c", "core.hooksPath="+os.DevNull, "merge", "-q", "--no-edit", "--no-ff", sha)
 }
 
 func (g *Runner) bringIn(ctx context.Context, dir, command string, inProgress func(context.Context, string) bool, args ...string) error {
-	_, err := g.git(ctx, dir, append([]string{command}, args...)...)
+	_, err := g.git(ctx, dir, args...)
 	if err == nil || !inProgress(ctx, dir) {
 		return err
 	}
