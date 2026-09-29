@@ -1162,6 +1162,9 @@ func TestPollTellsTheAgentOnce(t *testing.T) {
 		t.Fatalf("watch = %+v", got)
 	}
 
+	if _, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{UpdateOnGitHub: new(false)}); err != nil {
+		t.Fatal(err)
+	}
 	fx.update(func() { fx.pr.MergeableState = "behind" })
 	fx.poll(w)
 	msgs = h.messages()

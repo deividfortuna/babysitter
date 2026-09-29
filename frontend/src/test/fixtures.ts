@@ -28,6 +28,8 @@ export function buildSettings(overrides: Partial<Settings> = {}): Settings {
     provider: "claude",
     model: "",
     effort: "",
+    branchUpdate: "rebase",
+    updateOnGitHub: true,
     ...overrides,
   };
 }
@@ -75,6 +77,8 @@ export function buildWatch(overrides: Partial<Watch> = {}): Watch {
     mergeMethod: "",
     mergeWhenReady: false,
     keepWorktree: false,
+    branchUpdate: "rebase",
+    updateOnGitHub: true,
     number: 12,
     prState: "open",
     readyBlockers: [],
@@ -140,7 +144,7 @@ export function buildRepoConfig(overrides: Partial<RepoConfig> = {}): RepoConfig
     includeDrafts: false,
     autoWatchDependabot: false,
     autoWatchDependabotSince: null,
-    overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "" },
+    overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "", branchUpdate: "" },
     dependabotScope: "patch",
     dependabotApproval: "never",
     dependabotLimit: 1,

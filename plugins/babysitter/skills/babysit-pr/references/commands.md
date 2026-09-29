@@ -20,7 +20,7 @@ babysitter watch poll <watch>          # ask the daemon to look now, for example
 `session_started`, `session_exited`, `nudged`, `replied`,
 `agent_failed`, `merge_ready`, `merge_failed`, `review_requested`,
 `proposal`, `taken_over`, `handed_back`, `auto_started`, `approved`,
-`approval_asked`.
+`approval_asked`, `branch_updated`, `branch_update_failed`.
 
 `taken_over` and `handed_back` say that the user moved the session of a
 watch of the app to their terminal and gave it back. Read
@@ -44,6 +44,14 @@ Six of them are easy to read wrong:
 - `merge_ready`: checks green, enough approvals, nobody requesting
   changes, every review thread resolved, and nothing pending from the
   agent.
+
+Two come from a branch that fell behind its base, on a watch of the app:
+
+- `branch_updated`: GitHub updated the branch with the method of the
+  watch, and the agent got no message. A `commit` with the new head
+  follows.
+- `branch_update_failed`: GitHub refused the update. The payload holds
+  the reason, and the agent updates the branch.
 
 Three come from auto watch (`babysitter repo config`):
 

@@ -2,7 +2,8 @@ import type { Provider, ProviderEffort, ProviderModel } from "@/hooks/useProvide
 import type { ApprovalMode } from "@/hooks/useProposals";
 import type { WatchOverrides } from "@/hooks/useRepos";
 import type { Settings } from "@/hooks/useSettings";
-import type { MergeMethod } from "@/hooks/useWatches";
+import type { BranchUpdate, MergeMethod } from "@/hooks/useWatches";
+import { branchUpdateLabel } from "@/components/branch-update-select";
 import { mergeMethodLabel } from "@/components/merge-method-select";
 
 export type WatchDefaults = {
@@ -16,6 +17,8 @@ export type WatchDefaults = {
   includeExisting: boolean;
   includeOwn: boolean;
   keepWorktree: boolean;
+  branchUpdate: BranchUpdate;
+  updateOnGitHub: boolean;
 };
 
 export function daemonDefaults(settings: Settings): WatchDefaults {
@@ -30,6 +33,8 @@ export function daemonDefaults(settings: Settings): WatchDefaults {
     includeExisting: settings.includeExisting,
     includeOwn: settings.includeOwn,
     keepWorktree: settings.keepWorktree,
+    branchUpdate: settings.branchUpdate,
+    updateOnGitHub: settings.updateOnGitHub,
   };
 }
 
@@ -56,6 +61,8 @@ export function repositoryDefaults(settings: Settings, overrides: WatchOverrides
     includeExisting: overrides.includeExisting ?? daemon.includeExisting,
     includeOwn: overrides.includeOwn ?? daemon.includeOwn,
     keepWorktree: overrides.keepWorktree ?? daemon.keepWorktree,
+    branchUpdate: overrides.branchUpdate || daemon.branchUpdate,
+    updateOnGitHub: overrides.updateOnGitHub ?? daemon.updateOnGitHub,
   };
 }
 
@@ -65,6 +72,10 @@ export function defaultLabel(value: string | undefined): string {
 
 export function mergeMethodDefaultLabel(method: MergeMethod): string {
   return mergeMethodLabel(method).toLowerCase();
+}
+
+export function branchUpdateDefaultLabel(update: BranchUpdate): string {
+  return branchUpdateLabel(update).toLowerCase();
 }
 
 function modelOf(catalog: Provider[], provider: string, model: string): ProviderModel | undefined {

@@ -5,6 +5,7 @@ import { useUpdateWatch, type Watch } from "@/hooks/useWatches";
 import { useProposalDecision } from "@/components/proposal-decision";
 import { SwitchToAutoDialog } from "@/components/proposal-dialogs";
 import { ApprovalModeSelect } from "@/components/approval-mode-select";
+import { BranchUpdateSelect } from "@/components/branch-update-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { SettingRow } from "@/components/setting-row";
 import { ToneBadge } from "@/components/status-badges";
@@ -22,7 +23,9 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
   const approvalsRules = useUpdateWatch();
   const methodRules = useUpdateWatch();
   const readyRules = useUpdateWatch();
-  const failure = setApproval.error ?? approvalsRules.error ?? methodRules.error ?? readyRules.error;
+  const branchRules = useUpdateWatch();
+  const failure =
+    setApproval.error ?? approvalsRules.error ?? methodRules.error ?? readyRules.error ?? branchRules.error;
 
   return (
     <aside
@@ -88,6 +91,34 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
         />
       </SettingRow>
 
+      <SettingRow
+        label="Branch behind its base"
+        htmlFor="watch-branch-update"
+        description="The agent solves a conflict the same way."
+      >
+        <BranchUpdateSelect
+          id="watch-branch-update"
+          size="sm"
+          className="w-32 shrink-0"
+          value={watch.branchUpdate}
+          disabled={branchRules.isPending}
+          onChange={(branchUpdate) => branchRules.mutate({ id: watch.id, branchUpdate })}
+        />
+      </SettingRow>
+
+      <SettingRow
+        label="Update the branch on GitHub first"
+        htmlFor="watch-update-on-github"
+        description={updateOnGitHubText(watch)}
+      >
+        <Switch
+          id="watch-update-on-github"
+          checked={watch.updateOnGitHub}
+          disabled={branchRules.isPending || !githubUpdates(watch)}
+          onCheckedChange={(updateOnGitHub) => branchRules.mutate({ id: watch.id, updateOnGitHub })}
+        />
+      </SettingRow>
+
       {failure ? (
         <Alert variant="destructive">
           <CircleAlertIcon />
@@ -96,6 +127,17 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       ) : null}
     </aside>
   );
+}
+
+function githubUpdates(watch: Watch): boolean {
+  const branchOfSomeoneElse = watch.dependabot || isSelfWatch(watch);
+  return !branchOfSomeoneElse;
+}
+
+function updateOnGitHubText(watch: Watch): string {
+  if (watch.dependabot) return "Dependabot owns the branch, so only the bot updates it.";
+  if (isSelfWatch(watch)) return "Your own coding session pushes the branch, so it updates the branch itself.";
+  return "The agent does it only when GitHub refuses.";
 }
 
 function mergeWhenReadyText(watch: Watch): string {

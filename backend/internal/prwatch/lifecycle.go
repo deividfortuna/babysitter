@@ -40,6 +40,8 @@ type StartRequest struct {
 	AutoApproveRebase *bool
 	MergeWhenReady    *bool
 	KeepWorktree      *bool
+	BranchUpdate      *store.BranchUpdate
+	UpdateOnGitHub    *bool
 	AutoReason        store.AutoReason
 	UpdateType        dependabot.Level
 }
@@ -93,6 +95,9 @@ func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout
 	}
 	if !req.ApprovalMode.Valid() {
 		return checkout{}, fmt.Errorf("%w: %q", ErrBadApprovalMode, *req.ApprovalMode)
+	}
+	if !req.BranchUpdate.Valid() {
+		return checkout{}, fmt.Errorf("%w: %q", ErrBadBranchUpdate, *req.BranchUpdate)
 	}
 	src, err := givenSource(ctx, req.SourceDir, chosen.provider)
 	if err != nil {
@@ -301,6 +306,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 		ApprovalsRequired: approvals, MergeMethod: co.method,
 		ApprovalMode: req.approvalMode(co.provider), AutoApproveRebase: *req.AutoApproveRebase,
 		MergeWhenReady: req.MergeWhenReady != nil && *req.MergeWhenReady, KeepWorktree: *req.KeepWorktree, AutoReason: req.AutoReason, UpdateType: cmp.Or(req.UpdateType, snap.PR.UpdateType),
+		BranchUpdate: *req.BranchUpdate, UpdateOnGitHub: *req.UpdateOnGitHub,
 		HeadSHA: base.HeadSHA, PRState: base.PRState, MergeableState: base.MergeableState, CheckStates: base.Checks, GreenSHA: base.GreenSHA,
 	})
 	if err != nil {
@@ -419,6 +425,9 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 	}
 	unlock := s.locks.Lock(w.ID)
 	defer unlock()
+	if err := s.updateBehind(ctx, client, w); err != nil {
+		s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
+	}
 	if !s.runs(w) {
 		return nil
 	}

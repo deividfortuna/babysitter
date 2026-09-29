@@ -80,6 +80,7 @@ type PullRequest struct {
 	HeadSHA      string
 	Dependabot   bool
 	DaemonPushes bool
+	MergesBase   bool
 }
 
 func (p PullRequest) Identity() string {

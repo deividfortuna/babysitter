@@ -213,6 +213,8 @@ export function serveApi(fixtures: ApiFixtures = {}) {
         approvalsRequired?: number | null;
         mergeMethod?: string;
         mergeWhenReady?: boolean;
+        branchUpdate?: "rebase" | "merge";
+        updateOnGitHub?: boolean;
       };
       const watch = Number(params.id);
       fixtures.decisions?.push({ route: "update", watch, body });
@@ -224,6 +226,8 @@ export function serveApi(fixtures: ApiFixtures = {}) {
         approvalsRequired,
         mergeMethod: body.mergeMethod ?? current.mergeMethod,
         mergeWhenReady: body.mergeWhenReady ?? current.mergeWhenReady,
+        branchUpdate: body.branchUpdate ?? current.branchUpdate,
+        updateOnGitHub: body.updateOnGitHub ?? current.updateOnGitHub,
       });
     }),
     http.post(apiUrl("/api/v1/watches/:id/merge"), async ({ params, request }) => {

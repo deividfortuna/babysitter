@@ -121,6 +121,28 @@ test("the merge method of the watch changes", async () => {
   expect(decisions[0]).toEqual({ route: "update", watch: 42, body: { mergeMethod: "rebase" } });
 });
 
+test("the branch update of the watch changes", async () => {
+  const { decisions, user } = renderDetail({ branchUpdate: "rebase", updateOnGitHub: true });
+
+  const panel = await openSettings(user);
+  expect(within(panel).getByLabelText("Branch behind its base")).toHaveTextContent("Rebase");
+  await chooseOption(user, within(panel).getByLabelText("Branch behind its base"), "Merge");
+  await waitFor(() => expect(decisions).toHaveLength(1));
+  expect(decisions[0]).toEqual({ route: "update", watch: 42, body: { branchUpdate: "merge" } });
+
+  await user.click(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" }));
+  await waitFor(() => expect(decisions).toHaveLength(2));
+  expect(decisions[1].body).toEqual({ updateOnGitHub: false });
+});
+
+test("a Dependabot watch says the bot updates its branch", async () => {
+  const { user } = renderDetail({ author: "dependabot[bot]", dependabot: true });
+
+  const panel = await openSettings(user);
+  expect(within(panel).getByText("Dependabot owns the branch, so only the bot updates it.")).toBeVisible();
+  expect(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" })).toBeDisabled();
+});
+
 test("a self watch shows a fixed auto badge", async () => {
   const { decisions, user } = renderDetail({
     provider: "self",

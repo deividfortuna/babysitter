@@ -12,6 +12,7 @@ import {
 } from "@/hooks/useRepos";
 import { useSettings } from "@/hooks/useSettings";
 import { AgentLogo } from "@/components/agent-logo";
+import { BRANCH_UPDATES } from "@/components/branch-update-select";
 import { mergeMethodLabel } from "@/components/merge-method-select";
 import { OptionSelect, toOptions, type Option } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
@@ -27,6 +28,7 @@ import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
 import {
   agentLabel,
+  branchUpdateDefaultLabel,
   daemonDefaults,
   defaultLabel,
   effortDefaultLabel,
@@ -492,6 +494,31 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
             onChange={(mergeMethod) => save({ mergeMethod })}
           />
         </SettingRow>
+        <SettingRow
+          label="Branch behind its base"
+          htmlFor="repo-override-branch-update"
+          description="The agent solves a conflict the same way."
+        >
+          <OptionSelect
+            id="repo-override-branch-update"
+            className={OVERRIDE_SELECT}
+            options={[
+              { value: "", label: defaultLabel(inherited((d) => branchUpdateDefaultLabel(d.branchUpdate))) },
+              ...BRANCH_UPDATES,
+            ]}
+            value={overrides.branchUpdate}
+            disabled={pending}
+            onChange={(branchUpdate) => save({ branchUpdate })}
+          />
+        </SettingRow>
+        <SwitchOverride
+          id="repo-override-update-on-github"
+          label="Update the branch on GitHub first"
+          description="The agent does it only when GitHub refuses."
+          checked={effective?.updateOnGitHub}
+          disabled={pending || !daemon}
+          onChange={(on) => save({ updateOnGitHub: overrideOf(on, daemon?.updateOnGitHub) })}
+        />
         {effective && daemon ? (
           <ApprovalsOverride
             key={String(effective.approvalsRequired)}

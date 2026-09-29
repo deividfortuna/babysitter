@@ -186,6 +186,21 @@ test("a switch is saved with the rest of the panel", async () => {
   expect(savedSettings[0].keepWorktree).toBe(true);
 });
 
+test("the branch update of a new watch is saved to the daemon", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings(), savedSettings });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openWatching();
+
+  await chooseOption(user, await screen.findByLabelText("Branch behind its base"), "Merge");
+  await user.click(screen.getByRole("switch", { name: "Update the branch on GitHub first" }));
+  await user.click(screen.getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0]).toMatchObject({ branchUpdate: "merge", updateOnGitHub: false });
+});
+
 test("an empty approvals field asks for the rule of the base branch", async () => {
   const savedSettings: Settings[] = [];
   serveApi({ settings: buildSettings({ approvalsRequired: 2 }), savedSettings });

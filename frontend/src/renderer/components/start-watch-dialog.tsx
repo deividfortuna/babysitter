@@ -5,7 +5,7 @@ import { useProviders, type Provider } from "@/hooks/useProviders";
 import type { ApprovalMode } from "@/hooks/useProposals";
 import { useSettings } from "@/hooks/useSettings";
 import { useRepoConfig, useRepos } from "@/hooks/useRepos";
-import { useStartWatch, useWatches, type MergeMethod, type Watch } from "@/hooks/useWatches";
+import { useStartWatch, useWatches, type BranchUpdate, type MergeMethod, type Watch } from "@/hooks/useWatches";
 import { AgentLogo } from "@/components/agent-logo";
 import { OptionSelect, toOptions, type Option } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
@@ -29,6 +29,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { BRANCH_UPDATES } from "@/components/branch-update-select";
 import { mergeMethodLabel } from "@/components/merge-method-select";
 import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/approvals";
 import { bridge } from "@/lib/bridge";
@@ -36,6 +37,7 @@ import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
 import {
   agentLabel,
+  branchUpdateDefaultLabel,
   defaultLabel,
   effortDefaultLabel,
   effortsOf,
@@ -77,6 +79,8 @@ type StartChoices = {
   approvalMode: ApprovalMode | null;
   autoRebase: boolean | null;
   mergeWhenReady: boolean;
+  branchUpdate: BranchUpdate | null;
+  updateOnGitHub: boolean | null;
   noCheckout: boolean;
 };
 
@@ -89,6 +93,9 @@ function startCommand(target: string, choices: StartChoices): string {
   if (choices.autoRebase !== null)
     words.push(choices.autoRebase ? "--auto-approve-rebase" : "--auto-approve-rebase=false");
   if (choices.mergeWhenReady) words.push("--merge-when-ready");
+  if (choices.branchUpdate) words.push(`--branch-update ${choices.branchUpdate}`);
+  if (choices.updateOnGitHub !== null)
+    words.push(choices.updateOnGitHub ? "--update-on-github" : "--update-on-github=false");
   if (choices.noCheckout) words.push("--no-checkout");
   return words.join(" ");
 }
@@ -167,6 +174,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const [approvalMode, setApprovalMode] = useState<ApprovalMode | "">("");
   const [autoRebase, setAutoRebase] = useState<boolean | null>(null);
   const [mergeWhenReady, setMergeWhenReady] = useState<boolean | null>(null);
+  const [branchUpdate, setBranchUpdate] = useState<BranchUpdate | "">("");
+  const [updateOnGitHub, setUpdateOnGitHub] = useState<boolean | null>(null);
 
   const typed = query.trim();
   const byReference = !picked && TARGET_RE.test(typed);
@@ -206,6 +215,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const includeOwnValue = includeOwn ?? defaults?.includeOwn ?? false;
   const keepWorktreeValue = keepWorktree ?? defaults?.keepWorktree ?? false;
   const mergeMethodValue = mergeMethod ? mergeMethodOf(mergeMethod) : (defaults?.mergeMethod ?? "");
+  const updateOnGitHubValue = updateOnGitHub ?? defaults?.updateOnGitHub ?? true;
   const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
   const badApprovals = approvalsInvalid(approvalsValue);
 
@@ -266,6 +276,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         ...(approvalMode ? { approvalMode } : {}),
         ...(rebaseChosen ? { autoApproveRebase: autoRebase } : {}),
         ...(mergeWhenReady === null ? {} : { mergeWhenReady }),
+        ...(branchUpdate ? { branchUpdate } : {}),
+        ...(updateOnGitHub === null ? {} : { updateOnGitHub }),
       },
       {
         onSuccess: (watch) => {
@@ -550,6 +562,35 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               </div>
             </SettingRow>
 
+            <SettingRow
+              label="Branch behind its base"
+              htmlFor="branch-update"
+              description="The agent solves a conflict the same way."
+              className={ROW}
+            >
+              <div className={CONTROL}>
+                <OptionSelect
+                  id="branch-update"
+                  size="default"
+                  className="w-full"
+                  options={[
+                    { value: "", label: defaultLabel(defaults && branchUpdateDefaultLabel(defaults.branchUpdate)) },
+                    ...BRANCH_UPDATES,
+                  ]}
+                  value={branchUpdate}
+                  onChange={setBranchUpdate}
+                />
+              </div>
+            </SettingRow>
+
+            <SwitchRow
+              id="update-on-github"
+              label="Update the branch on GitHub first"
+              description="The agent does it only when GitHub refuses."
+              checked={updateOnGitHubValue}
+              onChange={setUpdateOnGitHub}
+            />
+
             <SwitchRow
               id="include-existing"
               label="Report existing review items"
@@ -621,6 +662,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               approvalMode: approvalMode || null,
               autoRebase: rebaseChosen ? autoRebaseValue : null,
               mergeWhenReady: mergeWhenReady ?? false,
+              branchUpdate: branchUpdate || null,
+              updateOnGitHub,
               noCheckout: !checkout,
             })}
           </Meta>

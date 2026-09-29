@@ -1937,6 +1937,8 @@ components:
           - auto_started
           - approved
           - approval_asked
+          - branch_updated
+          - branch_update_failed
           type: string
         nudgedAt:
           description: When the row reached the agent
@@ -2981,6 +2983,14 @@ components:
           description: Approved work goes out after a clean rebase without asking
             again
           type: boolean
+        branchUpdate:
+          description: 'How a new watch updates a branch that fell behind its base.
+            rebase: the branch is rebased onto its base; merge: the base is merged
+            into the branch. The agent solves a conflict the same way'
+          enum:
+          - rebase
+          - merge
+          type: string
         checkMaxIntervalSeconds:
           description: Longest time between two reads of the pending checks of an
             open pull request by the repository watcher. The wait starts at one minute,
@@ -3048,6 +3058,10 @@ components:
           - claude
           - copilot
           type: string
+        updateOnGitHub:
+          description: A new watch asks GitHub to update a branch that fell behind
+            its base, and the agent does it only when GitHub refuses
+          type: boolean
         watchIntervalSeconds:
           description: Time between polls of a watched pull request
           maximum: 86400
@@ -3079,6 +3093,8 @@ components:
       - provider
       - model
       - effort
+      - branchUpdate
+      - updateOnGitHub
       type: object
     HttpdStartWatchRequest:
       properties:
@@ -3103,6 +3119,15 @@ components:
             again; absent takes the repository, then the daemon
           nullable: true
           type: boolean
+        branchUpdate:
+          description: 'rebase: the branch is rebased onto its base; merge: the base
+            is merged into the branch. The agent solves a conflict the same way; absent
+            takes the repository, then the daemon'
+          enum:
+          - rebase
+          - merge
+          nullable: true
+          type: string
         effort:
           description: The effort level of that model, one the providers route lists
             for it; empty takes the effort of the layer that gives the model
@@ -3162,6 +3187,12 @@ components:
           type: string
         target:
           type: string
+        updateOnGitHub:
+          description: When the branch falls behind its base, GitHub updates it first
+            with the branch update, and the agent does it only when GitHub refuses;
+            absent takes the repository, then the daemon
+          nullable: true
+          type: boolean
       required:
       - target
       - repo
@@ -3258,6 +3289,13 @@ components:
           - dependabot
           type: string
         baseRef:
+          type: string
+        branchUpdate:
+          description: 'rebase: the branch is rebased onto its base; merge: the base
+            is merged into the branch. The agent solves a conflict the same way'
+          enum:
+          - rebase
+          - merge
           type: string
         checkStates:
           additionalProperties:
@@ -3382,6 +3420,10 @@ components:
           type: string
         title:
           type: string
+        updateOnGitHub:
+          description: When the branch falls behind its base, GitHub updates it first
+            with the branch update, and the agent does it only when GitHub refuses
+          type: boolean
         updateType:
           description: The highest update of a Dependabot pull request; a type the
             daemon cannot read counts as major
@@ -3433,6 +3475,8 @@ components:
       - autoApproveRebase
       - mergeWhenReady
       - keepWorktree
+      - branchUpdate
+      - updateOnGitHub
       - session
       type: object
     HttpdWatchList:
@@ -3467,6 +3511,14 @@ components:
             again; absent takes the setting of the daemon
           nullable: true
           type: boolean
+        branchUpdate:
+          description: 'How a watch updates a branch that fell behind its base: rebase
+            or merge; empty takes the setting of the daemon'
+          enum:
+          - ""
+          - rebase
+          - merge
+          type: string
         effort:
           description: The effort level of that model, one the providers route lists
             for it; empty takes the default of the model. Needs a provider
@@ -3507,12 +3559,18 @@ components:
           - claude
           - copilot
           type: string
+        updateOnGitHub:
+          description: GitHub updates a branch that fell behind its base before the
+            agent does; absent takes the setting of the daemon
+          nullable: true
+          type: boolean
       required:
       - provider
       - model
       - effort
       - approvalMode
       - mergeMethod
+      - branchUpdate
       type: object
     HttpdWatchSummary:
       properties:
@@ -3693,6 +3751,15 @@ components:
           minimum: 0
           nullable: true
           type: integer
+        branchUpdate:
+          description: 'rebase: the branch is rebased onto its base; merge: the base
+            is merged into the branch. The agent solves a conflict the same way; absent
+            keeps what the watch has'
+          enum:
+          - rebase
+          - merge
+          nullable: true
+          type: string
         mergeMethod:
           description: 'The merge method of the watch: squash, merge, rebase, or empty
             for the first method the repository allows; absent keeps what the watch
@@ -3707,6 +3774,12 @@ components:
         mergeWhenReady:
           description: The daemon merges as soon as the watch is ready to merge; absent
             keeps what the watch has
+          nullable: true
+          type: boolean
+        updateOnGitHub:
+          description: When the branch falls behind its base, GitHub updates it first
+            with the branch update, and the agent does it only when GitHub refuses;
+            absent keeps what the watch has
           nullable: true
           type: boolean
       type: object

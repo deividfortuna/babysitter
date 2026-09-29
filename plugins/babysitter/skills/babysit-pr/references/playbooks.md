@@ -37,8 +37,12 @@ user more than a red one.
 
 ## A branch behind its base, or in conflict
 
-Fetch the base, rebase onto it, resolve each conflict on the merits of
-the two sides, verify, and push with `--force-with-lease`.
+Use the method that the message of the daemon names. For a rebase,
+fetch the base, rebase onto it, resolve each conflict on the merits of
+the two sides, verify, and push with `--force-with-lease`. For a merge,
+fetch the base, merge it into the branch, resolve each conflict, verify,
+commit the merge, and push without force. Do not rebase a branch whose
+watch merges the base.
 
 When a conflict needs a decision that only the user can make, stop and
 ask. A wrong resolution is difficult to see in a later review.

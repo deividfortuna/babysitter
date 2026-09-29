@@ -184,6 +184,8 @@ watch** are what a watch starts with:
 | Report the review items that already exist | A new watch hands the agent what is on the pull request already |
 | Report my own comments | A new watch reports the comments of your own user, for a repository you review yourself |
 | Keep the worktree when a watch stops | The worktree of the agent stays on disk, however the watch ends |
+| Branch behind its base | How a new watch updates a branch that fell behind its base: `rebase` (default) or `merge`, which adds a merge commit of the base. The agent solves a conflict with the same method |
+| Update the branch on GitHub first | On by default. GitHub updates a branch that fell behind its base, with no turn of the agent. The agent does it only when GitHub refuses |
 
 Each of these values comes from the first layer that sets it, from left
 to right:
@@ -206,8 +208,8 @@ A watch copies the values at its start, and a later change to the
 repository or to the daemon does not reach a running watch. The
 **Watch settings** panel of the watch, or `watch mode` and
 `watch merge-rules`, change the approval mode, the clean rebase switch,
-the approvals and the merge method of one running watch and leave the
-defaults alone. The worktree switch applies when the watch stops, and
+the approvals, the merge method and the branch update of one running
+watch and leave the defaults alone. The worktree switch applies when the watch stops, and
 the stop dialog or `watch stop --keep-worktree` can still say otherwise.
 
 The **Notifications** pane holds three more:
@@ -243,6 +245,8 @@ babysitter settings set --auto-approve-rebase      # approved work goes out agai
 babysitter settings set --include-existing --include-own
 babysitter settings set --provider copilot --model auto   # the agent of a new watch; a new provider alone takes its default model
 babysitter settings set --model opus --effort high        # the effort of that model; a new model alone takes its default effort
+babysitter settings set --branch-update merge      # a branch behind its base gets a merge of the base, not a rebase
+babysitter settings set --update-on-github=false   # the agent updates a branch behind its base, GitHub does not
 ```
 
 The notification flags of `settings set` are in
@@ -347,6 +351,8 @@ babysitter watch start --include-existing        # also hand the agent the revie
 babysitter watch start --include-own             # also report the comments of your own user
 babysitter watch start --merge-when-ready        # the daemon merges with the method of the watch as soon as the watch is ready
 babysitter watch start --keep-worktree           # a stop leaves the worktree on disk; without the flag the repository, then the daemon, decides
+babysitter watch start --branch-update merge      # rebase or merge: how the branch is updated when it falls behind its base, and how the agent solves a conflict
+babysitter watch start --update-on-github=false   # the agent updates a branch behind its base; without the flag the repository, then the daemon, decides
 babysitter watch list                             # the watched pull requests
 babysitter watch list --all                       # stopped watches too
 babysitter watch status 1                         # state, checks, the agent, and what blocks the merge
@@ -373,6 +379,7 @@ babysitter watch mode 1 manual --auto-approve-rebase # back to manual, and let a
 babysitter watch merge-rules 1 --approvals 0      # change the approvals of a running watch; branch reads the rule of the base branch again
 babysitter watch merge-rules 1 --merge-method rebase # change the merge method of a running watch; empty takes the first method the repository allows
 babysitter watch merge-rules 1 --merge-when-ready # let the daemon merge watch 1 when it is ready; =false turns it off
+babysitter watch merge-rules 1 --branch-update merge --update-on-github=false # change how a running watch updates a branch behind its base
 babysitter watch start --approval-mode auto       # the approval mode of this watch; without the flag the settings decide
 babysitter watch start --auto-approve-rebase      # approved work goes out again after a clean rebase, without asking
 babysitter watch stop 1                           # stop with a summary, and delete the worktree unless the settings keep it
@@ -829,9 +836,24 @@ The daemon asks for no review while reviewers are already requested. A
 request that fails three times leaves a row in the activity that names
 the reviewers and the cause.
 
-When the branch falls behind its base or conflicts with it, the agent
-rebases in the worktree, resolves each conflict on the merits of both
-sides, and commits. A pull request opened by Dependabot is different:
+When the branch falls behind its base, the daemon first asks GitHub to
+update it, with the GraphQL mutation `updatePullRequestBranch`, and the
+method of the watch: `rebase` or `merge`. The expected head of the
+mutation makes GitHub refuse the update when someone pushed in between.
+The activity records `branch_updated`, and the agent gets no message.
+The work branch of the worktree follows the new head before the next
+message. GitHub tries once for each head. When GitHub refuses, for
+example on a conflict, the activity records `branch_update_failed` with
+the reason, and the agent updates the branch.
+
+The agent updates the branch in the worktree with the method of the
+watch: it rebases onto the base, or it merges the base into the branch.
+It resolves each conflict on the merits of both sides, and commits.
+GitHub cannot solve a conflict, so a branch in conflict goes to the agent
+at once. With `--update-on-github=false`, the agent also updates a branch
+that is only behind. A `--provider self` watch never asks GitHub: your
+own session pushes the branch, and a rebase on GitHub would move the
+branch under it. A pull request opened by Dependabot is different:
 the branch belongs to the bot, which drops the pull request or opens it
 again when somebody else pushes to it. The agent comments
 `@dependabot rebase` instead, and the daemon never pushes and never
@@ -856,6 +878,7 @@ babysitter repo config acme/billing --dependabot-limit 2        # Dependabot wat
 babysitter repo config acme/billing --merge-method squash --approval-mode manual   # the overrides of each watch on the repository
 babysitter repo config acme/billing --provider claude --model opus --effort max   # the agent of each watch on the repository
 babysitter repo config acme/billing --keep-worktree --include-own=false            # a switch takes an override too
+babysitter repo config acme/billing --branch-update merge --update-on-github=false # how the watches on the repository update a branch behind its base
 babysitter repo config acme/billing --approvals default --reset-overrides           # back to the settings of the daemon
 babysitter repo config acme/billing --auto-start-mine=false     # turn a toggle off; the watches that run go on
 babysitter repo queue acme/billing                              # the Dependabot pull requests that wait

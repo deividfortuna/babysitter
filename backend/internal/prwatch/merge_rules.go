@@ -15,6 +15,8 @@ type MergeRulesChange struct {
 	ApprovalsRequired Approvals
 	MergeMethod       *string
 	MergeWhenReady    *bool
+	BranchUpdate      *store.BranchUpdate
+	UpdateOnGitHub    *bool
 }
 
 func (s *Service) SetMergeRules(ctx context.Context, id int64, c MergeRulesChange) (store.Watch, error) {
@@ -34,14 +36,21 @@ func (s *Service) SetMergeRules(ctx context.Context, id int64, c MergeRulesChang
 	if err != nil {
 		return store.Watch{}, err
 	}
+	update, err := branchUpdateAfter(w.BranchUpdate, c.BranchUpdate)
+	if err != nil {
+		return store.Watch{}, err
+	}
 	approvals, err := s.changedApprovals(ctx, w, c.ApprovalsRequired)
 	if err != nil {
 		return store.Watch{}, err
 	}
 	mergeWhenReady := *cmp.Or(c.MergeWhenReady, &w.MergeWhenReady)
-	needsPoll := approvals != w.ApprovalsRequired || mergeWhenReady && !w.MergeWhenReady
+	onGitHub := *cmp.Or(c.UpdateOnGitHub, &w.UpdateOnGitHub)
+	turnedOn := mergeWhenReady && !w.MergeWhenReady || onGitHub && !w.UpdateOnGitHub
+	needsPoll := approvals != w.ApprovalsRequired || turnedOn
 	w, err = s.store.SetWatchMergeRules(ctx, w.ID, store.MergeRules{
 		ApprovalsRequired: approvals, MergeMethod: method, MergeWhenReady: mergeWhenReady,
+		BranchUpdate: update, UpdateOnGitHub: onGitHub,
 	})
 	if err != nil {
 		return store.Watch{}, err

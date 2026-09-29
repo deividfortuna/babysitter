@@ -124,7 +124,7 @@ var (
 		unavailable("watch_unavailable", errWatchUnavailable),
 		badRequest("watch_rejected",
 			prwatch.ErrNotOpen, prwatch.ErrNoPushAccess, prwatch.ErrNoIdentity, prwatch.ErrWrongRepo, prwatch.ErrWrongBranch, prwatch.ErrNoCheckout, snapshot.ErrIncompleteTarget,
-			prwatch.ErrBadProvider, prwatch.ErrBadModel, prwatch.ErrBadEffort, prwatch.ErrNoAgent, prwatch.ErrBadMergeMethod, prwatch.ErrBadApprovalMode),
+			prwatch.ErrBadProvider, prwatch.ErrBadModel, prwatch.ErrBadEffort, prwatch.ErrNoAgent, prwatch.ErrBadMergeMethod, prwatch.ErrBadApprovalMode, prwatch.ErrBadBranchUpdate),
 	)
 	nextWatchErrors = newErrorMap("next_failed",
 		notFound("watch_not_found", store.ErrWatchNotFound),
@@ -145,6 +145,7 @@ var (
 		notFound("watch_not_found", store.ErrWatchNotFound),
 		conflict("watch_stopped", prwatch.ErrWatchStopped),
 		badRequest("bad_merge_method", prwatch.ErrBadMergeMethod),
+		badRequest("bad_branch_update", prwatch.ErrBadBranchUpdate),
 		badRequest("bad_approvals", prwatch.ErrBadApprovals),
 		unavailable("watch_unavailable", errWatchUnavailable),
 	)

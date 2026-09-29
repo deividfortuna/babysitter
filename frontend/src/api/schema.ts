@@ -718,7 +718,7 @@ export interface components {
             /** Format: int64 */
             id: number;
             /** @enum {string} */
-            kind: "comment" | "review_comment" | "review" | "check_failed" | "check_recovered" | "checks_green" | "commit" | "behind" | "conflict" | "merged" | "closed" | "heartbeat" | "watch_started" | "watch_stopped" | "session_started" | "session_exited" | "nudged" | "agent_failed" | "merge_ready" | "merge_failed" | "replied" | "review_requested" | "proposal" | "taken_over" | "handed_back" | "auto_started" | "approved" | "approval_asked";
+            kind: "comment" | "review_comment" | "review" | "check_failed" | "check_recovered" | "checks_green" | "commit" | "behind" | "conflict" | "merged" | "closed" | "heartbeat" | "watch_started" | "watch_stopped" | "session_started" | "session_exited" | "nudged" | "agent_failed" | "merge_ready" | "merge_failed" | "replied" | "review_requested" | "proposal" | "taken_over" | "handed_back" | "auto_started" | "approved" | "approval_asked" | "branch_updated" | "branch_update_failed";
             /**
              * Format: date-time
              * @description When the row reached the agent
@@ -1184,6 +1184,11 @@ export interface components {
             approvalsRequired: number | null;
             /** @description Approved work goes out after a clean rebase without asking again */
             autoApproveRebase: boolean;
+            /**
+             * @description How a new watch updates a branch that fell behind its base. rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way
+             * @enum {string}
+             */
+            branchUpdate: "rebase" | "merge";
             /** @description Longest time between two reads of the pending checks of an open pull request by the repository watcher. The wait starts at one minute, or at pollIntervalSeconds or this value when one is shorter, and doubles after each read that finds the checks still pending, up to this value. A new head commit or a manual sync starts it again */
             checkMaxIntervalSeconds: number;
             /** @description The effort level of that model, one the providers route lists for it; empty takes the default of the model */
@@ -1214,6 +1219,8 @@ export interface components {
              * @enum {string}
              */
             provider: "claude" | "copilot";
+            /** @description A new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses */
+            updateOnGitHub: boolean;
             /** @description Time between polls of a watched pull request */
             watchIntervalSeconds: number;
             /** @description Longest time between polls of a watched pull request where nothing happens. After each quiet poll the time doubles up to this value; activity, running checks or a working agent bring it back to watchIntervalSeconds. The same value as watchIntervalSeconds keeps one fixed interval */
@@ -1229,6 +1236,11 @@ export interface components {
             approvalsRequired?: number | null;
             /** @description Approved work goes out after a clean rebase without asking again; absent takes the repository, then the daemon */
             autoApproveRebase?: boolean | null;
+            /**
+             * @description rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way; absent takes the repository, then the daemon
+             * @enum {string|null}
+             */
+            branchUpdate?: "rebase" | "merge" | null;
             /** @description The effort level of that model, one the providers route lists for it; empty takes the effort of the layer that gives the model */
             effort?: string;
             /** @description Report the review items the pull request has already; absent takes the repository, then the daemon */
@@ -1255,6 +1267,8 @@ export interface components {
             /** @description A git checkout whose origin is the head repository of the pull request; absent makes the daemon clone the head repository into its data directory and use that clone, which needs a hosted provider and a target with the repository and the number */
             sourceDir?: string;
             target: string;
+            /** @description When the branch falls behind its base, GitHub updates it first with the branch update, and the agent does it only when GitHub refuses; absent takes the repository, then the daemon */
+            updateOnGitHub?: boolean | null;
         };
         HttpdSyncAccepted: {
             accepted: boolean;
@@ -1298,6 +1312,11 @@ export interface components {
              */
             autoReason?: "" | "mine" | "assigned" | "dependabot";
             baseRef: string;
+            /**
+             * @description rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way
+             * @enum {string}
+             */
+            branchUpdate: "rebase" | "merge";
             checkStates: {
                 [key: string]: string;
             } | null;
@@ -1362,6 +1381,8 @@ export interface components {
              */
             takenOverAt?: string | null;
             title: string;
+            /** @description When the branch falls behind its base, GitHub updates it first with the branch update, and the agent does it only when GitHub refuses */
+            updateOnGitHub: boolean;
             /**
              * @description The highest update of a Dependabot pull request; a type the daemon cannot read counts as major
              * @enum {string}
@@ -1385,6 +1406,11 @@ export interface components {
             approvalsRequired?: number | null;
             /** @description Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon */
             autoApproveRebase?: boolean | null;
+            /**
+             * @description How a watch updates a branch that fell behind its base: rebase or merge; empty takes the setting of the daemon
+             * @enum {string}
+             */
+            branchUpdate: "" | "rebase" | "merge";
             /** @description The effort level of that model, one the providers route lists for it; empty takes the default of the model. Needs a provider */
             effort: string;
             /** @description Report the review items the pull request has already; absent takes the setting of the daemon */
@@ -1405,6 +1431,8 @@ export interface components {
              * @enum {string}
              */
             provider: "" | "claude" | "copilot";
+            /** @description GitHub updates a branch that fell behind its base before the agent does; absent takes the setting of the daemon */
+            updateOnGitHub?: boolean | null;
         };
         HttpdWatchSummary: {
             activity: {
@@ -1486,12 +1514,19 @@ export interface components {
             /** @description How many approvals the pull request needs before the watch calls it ready to merge; absent keeps what the watch has, 0 asks for none, and null reads the rule of the base branch again */
             approvalsRequired?: number | null;
             /**
+             * @description rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way; absent keeps what the watch has
+             * @enum {string|null}
+             */
+            branchUpdate?: "rebase" | "merge" | null;
+            /**
              * @description The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent keeps what the watch has
              * @enum {string|null}
              */
             mergeMethod?: "" | "squash" | "merge" | "rebase" | null;
             /** @description The daemon merges as soon as the watch is ready to merge; absent keeps what the watch has */
             mergeWhenReady?: boolean | null;
+            /** @description When the branch falls behind its base, GitHub updates it first with the branch update, and the agent does it only when GitHub refuses; absent keeps what the watch has */
+            updateOnGitHub?: boolean | null;
         };
     };
     responses: never;

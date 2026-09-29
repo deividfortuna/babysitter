@@ -47,6 +47,7 @@ func (w watchOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(out, "Checks:    %s\n", checks.Summarize(w.CheckStates, w.HeadSHA, w.GreenSHA))
 	fmt.Fprintf(out, "Mergeable: %s\n", orDash(string(w.MergeableState)))
 	fmt.Fprintf(out, "Merge:     %s\n", mergeLine(httpd.Watch(w)))
+	fmt.Fprintf(out, "Behind:    %s\n", branchUpdateWord(string(w.BranchUpdate), w.UpdateOnGitHub))
 	if line := autoLine(httpd.Watch(w)); line != "" {
 		fmt.Fprintf(out, "Auto:      %s\n", line)
 	}
@@ -264,6 +265,8 @@ func newWatchStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		autoRebase      bool
 		mergeWhenReady  bool
 		keepWorktree    bool
+		branchUpdate    string
+		updateOnGitHub  bool
 		noCheckout      bool
 	)
 	cmd := &cobra.Command{
@@ -282,6 +285,11 @@ and the number, and the provider must be claude or copilot.
 Only activity after the start goes to the agent, except that a branch
 already behind its base or in conflict with it, or a check that already
 failed, is told at once.
+
+When the branch falls behind its base, the daemon first asks GitHub to
+update it with --branch-update (rebase or merge), and the agent does it
+only when GitHub refuses. --update-on-github=false leaves it to the
+agent. The agent solves a conflict with the same method.
 --include-existing also reports the comments and reviews that already
 exist on the pull request.
 
@@ -323,6 +331,8 @@ A flag you do not type takes the override of the repository
 				AutoApproveRebase: typed(cmd, "auto-approve-rebase", &autoRebase),
 				MergeWhenReady:    typed(cmd, "merge-when-ready", &mergeWhenReady),
 				KeepWorktree:      typed(cmd, "keep-worktree", &keepWorktree),
+				BranchUpdate:      typedBranchUpdate(cmd, branchUpdate),
+				UpdateOnGitHub:    typed(cmd, updateOnGitHubFlag, &updateOnGitHub),
 			}
 			if req.ApprovalsRequired, err = typedApprovals(cmd, approvals); err != nil {
 				return err
@@ -358,6 +368,8 @@ A flag you do not type takes the override of the repository
 	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&mergeWhenReady, "merge-when-ready", false, "the daemon merges with the method of the watch as soon as the watch is ready to merge; off without the flag")
 	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "a stop leaves the worktree of the watch on disk; without the flag the repository, then the daemon, decides")
+	cmd.Flags().StringVar(&branchUpdate, branchUpdateFlag, "", "how the branch is updated when it falls behind its base: rebase or merge. The agent solves a conflict the same way; without the flag the repository, then the daemon, decides")
+	cmd.Flags().BoolVar(&updateOnGitHub, updateOnGitHubFlag, false, "ask GitHub to update a branch that fell behind its base before the agent does it; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&noCheckout, "no-checkout", false, "do not use the current folder: the daemon clones the head repository into its data directory and makes the worktree from that clone")
 	return cmd
 }

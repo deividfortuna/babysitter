@@ -1,13 +1,32 @@
 package ghfake
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 )
 
-// graphql answers the review state query of ghclient: the review requests
-// and the review threads of one pull request, on one page.
+// graphql answers the queries of ghclient: the review state of one pull
+// request on one page, the node ID of a pull request, and the update of its
+// branch.
 func (c *call) graphql() {
+	var req struct {
+		Query string `json:"query"`
+	}
+	if !c.decode(&req) {
+		return
+	}
+	switch {
+	case strings.Contains(req.Query, "updatePullRequestBranch"):
+		c.updateBranch()
+	case strings.Contains(req.Query, "reviewThreads"):
+		c.reviewState()
+	default:
+		c.pullRequestID()
+	}
+}
+
+func (c *call) pullOfQuery() *PR {
 	var req struct {
 		Variables struct {
 			Owner  string `json:"owner"`
@@ -16,7 +35,7 @@ func (c *call) graphql() {
 		} `json:"variables"`
 	}
 	if !c.decode(&req) {
-		return
+		return nil
 	}
 	v := req.Variables
 	r, ok := c.g.repos[strings.ToLower(v.Owner+"/"+v.Name)]
@@ -25,10 +44,90 @@ func (c *call) graphql() {
 		p = r.find(v.Number)
 	}
 	if p == nil {
-		c.json(http.StatusOK, map[string]any{
-			"data":   map[string]any{"repository": nil},
-			"errors": []map[string]string{{"type": "NOT_FOUND", "message": "Could not resolve to a PullRequest."}},
-		})
+		c.graphqlError("NOT_FOUND", "Could not resolve to a PullRequest.")
+	}
+	return p
+}
+
+func (c *call) graphqlError(kind, message string) {
+	c.json(http.StatusOK, map[string]any{
+		"data":   nil,
+		"errors": []map[string]string{{"type": kind, "message": message}},
+	})
+}
+
+func nodeID(r *Repo, p *PR) string {
+	return fmt.Sprintf("PR_%s#%d", r.FullName(), p.Number)
+}
+
+func (c *call) pullRequestID() {
+	var req struct {
+		Variables struct {
+			Owner string `json:"owner"`
+			Name  string `json:"name"`
+		} `json:"variables"`
+	}
+	p := c.pullOfQuery()
+	if p == nil || !c.decode(&req) {
+		return
+	}
+	r := c.g.repos[strings.ToLower(req.Variables.Owner+"/"+req.Variables.Name)]
+	c.json(http.StatusOK, map[string]any{"data": map[string]any{"repository": map[string]any{
+		"pullRequest": map[string]any{"id": nodeID(r, p)},
+	}}})
+}
+
+// updateBranch applies the update of the branch: the head moves to a new
+// commit and GitHub has yet to compute the mergeable state.
+func (c *call) updateBranch() {
+	var req struct {
+		Variables struct {
+			ID     string `json:"id"`
+			Head   string `json:"head"`
+			Method string `json:"method"`
+		} `json:"variables"`
+	}
+	if !c.decode(&req) {
+		return
+	}
+	v := req.Variables
+	p := c.g.pullOfNode(v.ID)
+	if p == nil {
+		c.graphqlError("NOT_FOUND", "Could not resolve to a node with the global id of '"+v.ID+"'")
+		return
+	}
+	p.BranchUpdates = append(p.BranchUpdates, BranchUpdate{Method: v.Method, ExpectedHead: v.Head})
+	switch {
+	case p.RefuseBranchUpdate != "":
+		c.graphqlError("UNPROCESSABLE", p.RefuseBranchUpdate)
+		return
+	case v.Head != p.HeadSHA:
+		c.graphqlError("UNPROCESSABLE", "Expected head oid "+v.Head+" does not match the head of the pull request")
+		return
+	}
+	p.HeadSHA = fmt.Sprintf("%s-%d", strings.ToLower(v.Method), c.g.id())
+	p.MergeableState = "unknown"
+	c.json(http.StatusOK, map[string]any{"data": map[string]any{"updatePullRequestBranch": map[string]any{
+		"pullRequest": map[string]any{"headRefOid": p.HeadSHA},
+	}}})
+}
+
+func (g *GitHub) pullOfNode(id string) *PR {
+	for _, r := range g.order {
+		for _, p := range r.order {
+			if nodeID(r, p) == id {
+				return p
+			}
+		}
+	}
+	return nil
+}
+
+// reviewState answers the review requests and the review threads of one
+// pull request, on one page.
+func (c *call) reviewState() {
+	p := c.pullOfQuery()
+	if p == nil {
 		return
 	}
 

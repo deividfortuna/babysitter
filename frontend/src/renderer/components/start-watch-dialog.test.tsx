@@ -223,6 +223,8 @@ const INHERITED_FIELDS = [
   "approvalMode",
   "autoApproveRebase",
   "mergeWhenReady",
+  "branchUpdate",
+  "updateOnGitHub",
 ];
 
 test("starts with the defaults while the additional settings stay folded", async () => {
@@ -288,6 +290,7 @@ test("the override of the repository beats the daemon", async () => {
         effort: "",
         approvalMode: "auto",
         mergeMethod: "squash",
+        branchUpdate: "",
         approvalsRequired: null,
         keepWorktree: false,
       },
@@ -314,6 +317,24 @@ test("the override of the repository beats the daemon", async () => {
   for (const field of INHERITED_FIELDS) {
     expect(startBodies[0]).not.toHaveProperty(field);
   }
+});
+
+test("a watch can start with its own branch update", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ settings: buildSettings({ branchUpdate: "rebase", updateOnGitHub: true }), startBodies });
+  renderDialog();
+  const user = userEvent.setup();
+  await fillTarget(user);
+  await openAdditional(user);
+
+  expect(screen.getByLabelText("Branch behind its base")).toHaveTextContent("Default (rebase)");
+  await chooseOption(user, screen.getByLabelText("Branch behind its base"), "Merge");
+  await user.click(screen.getByRole("switch", { name: "Update the branch on GitHub first" }));
+  expect(screen.getByText(/--branch-update merge --update-on-github=false/)).toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).toMatchObject({ branchUpdate: "merge", updateOnGitHub: false });
 });
 
 test("holds the start until the list of repositories has landed", async () => {

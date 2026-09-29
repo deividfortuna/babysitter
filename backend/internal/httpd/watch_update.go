@@ -10,7 +10,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/prwatch"
 )
 
-var changeableWatchFields = []string{"approvalsRequired", "mergeMethod", "mergeWhenReady"}
+var changeableWatchFields = []string{"approvalsRequired", "mergeMethod", "mergeWhenReady", "branchUpdate", "updateOnGitHub"}
 
 func (a *api) handleUpdateWatch(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
@@ -29,13 +29,15 @@ func (a *api) handleUpdateWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	var req UpdateWatchRequest
 	if err := decodeFields(fields, &req); err != nil {
-		writeError(w, http.StatusBadRequest, "bad_request", "approvalsRequired must be a number or null, mergeMethod a string and mergeWhenReady a boolean")
+		writeError(w, http.StatusBadRequest, "bad_request", "approvalsRequired must be a number or null, mergeMethod and branchUpdate strings, and mergeWhenReady and updateOnGitHub booleans")
 		return
 	}
 	wt, err := a.watches.SetMergeRules(r.Context(), id, prwatch.MergeRulesChange{
 		ApprovalsRequired: approvalsIn(req.ApprovalsRequired),
 		MergeMethod:       req.MergeMethod,
 		MergeWhenReady:    req.MergeWhenReady,
+		BranchUpdate:      req.BranchUpdate,
+		UpdateOnGitHub:    req.UpdateOnGitHub,
 	})
 	if updateWatchErrors.write(w, err) {
 		return

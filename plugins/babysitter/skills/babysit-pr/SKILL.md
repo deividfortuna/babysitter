@@ -44,6 +44,9 @@ Flags that change what you get:
   repositories.
 - `--approvals <n>`: approvals before the pull request counts as ready.
 - `--merge-method squash|merge|rebase`.
+- `--branch-update rebase|merge`: how the branch is updated when it falls
+  behind its base, and how you solve a conflict. The messages of the
+  daemon name the method.
 - `--merge-when-ready`: the daemon merges as soon as the pull request is
   ready. Use it only when the user asks for it.
 
@@ -54,6 +57,7 @@ that runs, when the user asks for it:
 babysitter watch merge-rules <watch> --approvals 0              # a number, or branch for the rule of the base branch
 babysitter watch merge-rules <watch> --merge-method rebase      # empty for the first method the repository allows
 babysitter watch merge-rules <watch> --merge-when-ready         # the daemon merges when ready; =false turns it off
+babysitter watch merge-rules <watch> --branch-update merge      # rebase or merge for a branch behind its base or in conflict
 ```
 
 The start refuses when the pull request is not open, when the token
@@ -221,7 +225,8 @@ babysitter repo queue <owner/name>                                    # the Depe
 
 The override flags of `repo config` (`--provider`, `--model`, `--effort`,
 `--approval-mode`, `--merge-method`, `--approvals`, `--include-existing`,
-`--auto-approve-rebase`, `--include-own`, `--keep-worktree`) set the
+`--auto-approve-rebase`, `--include-own`, `--keep-worktree`,
+`--branch-update`, `--update-on-github`) set the
 overrides of each watch on the repository, by hand or by auto start. The
 same flags on `watch start` set only that watch. A value comes from the
 first layer that sets it: watch, then repository, then daemon.

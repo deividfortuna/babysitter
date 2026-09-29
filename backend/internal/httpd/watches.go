@@ -98,6 +98,7 @@ func (a *api) handleStartWatch(w http.ResponseWriter, r *http.Request) {
 		MergeMethod:       req.MergeMethod,
 		ApprovalMode:      mode, AutoApproveRebase: req.AutoApproveRebase,
 		MergeWhenReady: req.MergeWhenReady, KeepWorktree: req.KeepWorktree,
+		BranchUpdate: req.BranchUpdate, UpdateOnGitHub: req.UpdateOnGitHub,
 	})
 	if errors.Is(err, store.ErrWatchExists) {
 		writeError(w, http.StatusConflict, "watch_exists", "the pull request is already watched as watch "+strconv.FormatInt(wt.ID, 10))

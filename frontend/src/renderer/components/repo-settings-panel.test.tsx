@@ -173,7 +173,15 @@ test("the limit of Dependabot watches takes a whole number from 1", async () => 
 test("an override sends every override of the repository at once", async () => {
   const { repoConfigBodies, user } = renderPanel({
     ...withCheckout,
-    overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "squash", approvalsRequired: 2 },
+    overrides: {
+      provider: "",
+      model: "",
+      effort: "",
+      approvalMode: "",
+      mergeMethod: "squash",
+      branchUpdate: "",
+      approvalsRequired: 2,
+    },
   });
 
   await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
@@ -190,6 +198,7 @@ test("an override sends every override of the repository at once", async () => {
       effort: "",
       approvalMode: "auto",
       mergeMethod: "squash",
+      branchUpdate: "",
       approvalsRequired: 2,
     },
   });
@@ -202,10 +211,34 @@ test("an override sends every override of the repository at once", async () => {
   expect(repoConfigBodies[1].overrides).toMatchObject({ includeExisting: true, approvalsRequired: 2 });
 });
 
+test("the branch update of the repository is an override", async () => {
+  const { repoConfigBodies, user } = renderPanel(withCheckout);
+
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+  expect(screen.getByLabelText("Branch behind its base")).toHaveTextContent("Default (rebase)");
+  expect(screen.getByRole("switch", { name: "Update the branch on GitHub first" })).toBeChecked();
+
+  await chooseOption(user, screen.getByLabelText("Branch behind its base"), "Merge");
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(1));
+  expect(repoConfigBodies[0].overrides).toMatchObject({ branchUpdate: "merge" });
+
+  await user.click(screen.getByRole("switch", { name: "Update the branch on GitHub first" }));
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
+  expect(repoConfigBodies[1].overrides).toMatchObject({ updateOnGitHub: false });
+});
+
 test("the approvals store an override only when they differ from the daemon", async () => {
   const { repoConfigBodies, user } = renderPanel({
     ...withCheckout,
-    overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "", approvalsRequired: 2 },
+    overrides: {
+      provider: "",
+      model: "",
+      effort: "",
+      approvalMode: "",
+      mergeMethod: "",
+      branchUpdate: "",
+      approvalsRequired: 2,
+    },
   });
   await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
   const approvals = await screen.findByLabelText("Approvals before ready to merge");
@@ -228,7 +261,15 @@ test("each field shows the value a watch takes", async () => {
   serveApi({
     repoConfig: buildRepoConfig({
       ...withCheckout,
-      overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "", includeOwn: true },
+      overrides: {
+        provider: "",
+        model: "",
+        effort: "",
+        approvalMode: "",
+        mergeMethod: "",
+        branchUpdate: "",
+        includeOwn: true,
+      },
     }),
     repoConfigBodies,
     settings: buildSettings({

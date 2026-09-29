@@ -665,6 +665,47 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	`
 	ALTER TABLE settings ADD COLUMN check_max_interval_ms INTEGER NOT NULL DEFAULT 900000;
 	`,
+	`
+	ALTER TABLE settings ADD COLUMN branch_update TEXT NOT NULL DEFAULT 'rebase' CHECK (branch_update IN ('rebase', 'merge'));
+	ALTER TABLE settings ADD COLUMN update_on_github INTEGER NOT NULL DEFAULT 1;
+
+	ALTER TABLE repo_config ADD COLUMN branch_update TEXT NOT NULL DEFAULT '' CHECK (branch_update IN ('', 'rebase', 'merge'));
+	ALTER TABLE repo_config ADD COLUMN update_on_github INTEGER;
+
+	ALTER TABLE watches ADD COLUMN branch_update TEXT NOT NULL DEFAULT 'rebase' CHECK (branch_update IN ('rebase', 'merge'));
+	ALTER TABLE watches ADD COLUMN update_on_github INTEGER NOT NULL DEFAULT 1;
+
+	CREATE TABLE watch_activity_new (
+	    id          INTEGER PRIMARY KEY,
+	    watch_id    INTEGER NOT NULL REFERENCES watches(id) ON DELETE CASCADE,
+	    kind        TEXT NOT NULL CHECK (kind IN (
+	                    'comment', 'review_comment', 'review',
+	                    'check_failed', 'check_recovered', 'checks_green',
+	                    'commit', 'behind', 'conflict', 'merged', 'closed',
+	                    'heartbeat', 'watch_started', 'watch_stopped',
+	                    'session_started', 'session_exited', 'nudged', 'agent_failed',
+	                    'merge_ready', 'merge_failed', 'replied', 'review_requested', 'proposal',
+	                    'taken_over', 'handed_back', 'auto_started', 'approved', 'approval_asked',
+	                    'branch_updated', 'branch_update_failed')),
+	    ref         TEXT NOT NULL,
+	    at          TEXT NOT NULL,
+	    actor       TEXT NOT NULL DEFAULT '',
+	    summary     TEXT NOT NULL DEFAULT '',
+	    url         TEXT NOT NULL DEFAULT '',
+	    payload     TEXT NOT NULL DEFAULT '{}',
+	    reported    INTEGER NOT NULL DEFAULT 0,
+	    reported_at TEXT,
+	    nudged_at   TEXT,
+	    UNIQUE (watch_id, kind, ref)
+	);
+
+	INSERT INTO watch_activity_new (id, watch_id, kind, ref, at, actor, summary, url, payload, reported, reported_at, nudged_at)
+	SELECT id, watch_id, kind, ref, at, actor, summary, url, payload, reported, reported_at, nudged_at FROM watch_activity;
+
+	DROP TABLE watch_activity;
+	ALTER TABLE watch_activity_new RENAME TO watch_activity;
+	CREATE INDEX watch_activity_watch_idx ON watch_activity (watch_id, id);
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

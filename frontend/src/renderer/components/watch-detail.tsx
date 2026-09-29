@@ -102,6 +102,8 @@ const icons: Record<Activity["kind"], { icon: LucideIcon; tone?: string }> = {
   auto_started: { icon: ZapIcon },
   approved: { icon: ShieldCheckIcon, tone: "text-success" },
   approval_asked: { icon: ShieldQuestionMarkIcon, tone: "text-attention" },
+  branch_updated: { icon: RefreshCwIcon, tone: "text-success" },
+  branch_update_failed: { icon: TriangleAlertIcon, tone: "text-chart-3" },
 };
 
 const checkTone: Record<string, string> = {

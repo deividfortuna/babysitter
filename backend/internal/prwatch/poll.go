@@ -91,6 +91,9 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 	if s.hostsSession(w) {
 		s.tellHandback(ctx, w)
 	}
+	if err := s.updateBehind(ctx, client, w); err != nil {
+		return err
+	}
 	pending, err := s.tell(ctx, client, w)
 	if err != nil {
 		return err
@@ -156,7 +159,7 @@ func (s *Service) refresh(ctx context.Context, w store.Watch, snap *snapshot.Sna
 	if err := s.keepJobs(ctx, w, snap); err != nil {
 		return pass{}, err
 	}
-	w.HeadSHA, w.CheckStates = next.HeadSHA, next.Checks
+	w.HeadSHA, w.CheckStates, w.MergeableState = next.HeadSHA, next.Checks, next.MergeableState
 	w.Title, w.BaseRef = snap.PR.Title, snap.PR.BaseBranch
 	if len(inserted) > 0 {
 		s.report(ctx, w, inserted)

@@ -7,6 +7,7 @@ import { OptionSelect, toOptions } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { ApprovalModeSelect } from "@/components/approval-mode-select";
+import { BranchUpdateSelect } from "@/components/branch-update-select";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
@@ -267,6 +268,35 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
             <FieldDescription>Empty takes the first method the repository allows.</FieldDescription>
           </FieldContent>
           <MergeMethodSelect id="merge-method" value={draft.mergeMethod} onChange={(v) => edit({ mergeMethod: v })} />
+        </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="branch-update">Branch behind its base</FieldLabel>
+            <FieldDescription>
+              Rebase rewrites the branch on top of its base. Merge adds a merge commit and keeps the history. The agent
+              solves a conflict the same way.
+            </FieldDescription>
+          </FieldContent>
+          <BranchUpdateSelect
+            id="branch-update"
+            value={draft.branchUpdate}
+            onChange={(branchUpdate) => edit({ branchUpdate })}
+          />
+        </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="update-on-github">Update the branch on GitHub first</FieldLabel>
+            <FieldDescription>
+              GitHub updates the branch with no turn of the agent. The agent does it only when GitHub refuses.
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            id="update-on-github"
+            checked={draft.updateOnGitHub}
+            onCheckedChange={(on) => edit({ updateOnGitHub: on })}
+          />
         </Field>
 
         <Field orientation="horizontal">

@@ -38,7 +38,7 @@ func (s *Service) syncWork(ctx context.Context, w store.Watch) {
 	if err != nil || work == remote {
 		return
 	}
-	if !s.pushes(w) {
+	if s.followsRemote(ctx, w, work) {
 		s.follow(ctx, w, remote)
 		return
 	}
