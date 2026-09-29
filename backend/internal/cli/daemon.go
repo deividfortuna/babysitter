@@ -98,6 +98,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		interval      time.Duration
 		watchInterval time.Duration
 		watchMax      time.Duration
+		checkMax      time.Duration
 		agentBin      string
 		agentModel    string
 		copilotBin    string
@@ -141,6 +142,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				Interval:         interval,
 				WatchInterval:    watchInterval,
 				WatchMaxInterval: watchMax,
+				CheckMaxInterval: checkMax,
 				AgentBin:         agentBin,
 				AgentModel:       agentModel,
 				CopilotBin:       copilotBin,
@@ -162,6 +164,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().DurationVar(&interval, "interval", 0, "time between polls of the watched repositories, for this run only; unset takes the setting of the daemon")
 	cmd.Flags().DurationVar(&watchInterval, "watch-interval", 0, "time between polls of a watched pull request, for this run only; unset takes the setting of the daemon")
 	cmd.Flags().DurationVar(&watchMax, "watch-max-interval", 0, "longest time between polls of a watched pull request where nothing happens, for this run only; unset takes the setting of the daemon")
+	cmd.Flags().DurationVar(&checkMax, "check-max-interval", 0, "longest time between reads of the pending checks of an open pull request, for this run only; unset takes the setting of the daemon")
 	cmd.Flags().StringVar(&agentBin, "agent-bin", "claude", "Claude Code command that babysits watched pull requests, or none")
 	cmd.Flags().StringVar(&agentModel, "agent-model", "", "model of the agent, empty for its default")
 	cmd.Flags().StringVar(&copilotBin, "copilot-bin", "copilot", "Copilot CLI command that babysits watched pull requests")

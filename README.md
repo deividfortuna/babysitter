@@ -165,7 +165,7 @@ The Settings dialog of the app has four panes: **General**, **Watching**,
 **Notifications** and **Updates**. **General** holds the theme of the app:
 light, dark or system.
 
-**Watching** holds the preferences of the daemon. The three intervals
+**Watching** holds the preferences of the daemon. The four intervals
 apply to the daemon as a whole. The rows under **Defaults of a new
 watch** are what a watch starts with:
 
@@ -174,6 +174,7 @@ watch** are what a watch starts with:
 | Repository poll interval | Seconds between passes over the repositories you watch, 60 by default |
 | Watch poll interval | Seconds between polls of a pull request under watch, 180 by default |
 | Longest watch poll interval | Seconds a quiet pull request waits between polls at most, 900 by default. After each poll where nothing happens, the wait of that watch doubles up to this value. A new activity row, a check that runs or an agent that works brings it back to the watch poll interval. The same value as the watch poll interval keeps one fixed interval |
+| Longest check read interval | Seconds the repository poll waits at most between two reads of the checks of an open pull request while they run, 900 by default. The wait starts at one minute, or at the repository poll interval or this value when one is shorter, and doubles after each read that finds the checks still pending. A new head commit or a manual sync starts it again |
 | Agent | The provider and the model of a new watch, Claude and its default model by default |
 | Effort | How much the model reasons before it acts: a level the model takes, such as `low`, `medium` or `high`. Empty takes the default of the model. A model can take no effort level, and then the field stays empty |
 | Approval mode | Who releases the work of each turn of the agent of a new watch: `manual` holds it until you approve it, `auto` pushes and posts as soon as the turn ends. A new install asks, `manual`; an install that upgrades keeps `auto`. A `--provider self` watch always runs in auto |
@@ -221,8 +222,10 @@ The daemon stores them in the database, so the CLI takes the same
 defaults: a flag of `watch start` that you do not type is left out of the
 request, and the repository, then the daemon, decides. An interval takes effect
 at once, with no restart, and every watch starts again from the watch poll
-interval. The intervals accept 10 seconds to 24 hours, and the longest
-watch poll interval cannot be shorter than the watch poll interval.
+interval. A new longest check read interval applies from the next read
+of each pull request. The intervals accept 10 seconds
+to 24 hours, and the longest watch poll interval cannot be shorter than
+the watch poll interval.
 
 Read and write them from the terminal too:
 
@@ -231,6 +234,7 @@ babysitter settings get                            # what the daemon holds
 babysitter settings set --watch-interval 45s       # only the flags you type change
 babysitter settings set --watch-max-interval 30m   # the longest wait of a quiet watch; the watch interval itself keeps one fixed interval
 babysitter settings set --poll-interval 5m         # the repository poll interval
+babysitter settings set --check-max-interval 5m    # the longest wait between reads of pending checks
 babysitter settings set --approvals 2              # a number, 0 for none
 babysitter settings set --approvals branch         # give the decision back to the base branch
 babysitter settings set --merge-method rebase --keep-worktree
@@ -257,8 +261,8 @@ A build that does not update itself shows only its version there, and
 tells you to install a new version with Homebrew or from the release
 page.
 
-`daemon start --interval`, `--watch-interval` and `--watch-max-interval`
-hold for that run only. A `--watch-interval` above the stored longest
+`daemon start --interval`, `--watch-interval`, `--watch-max-interval` and
+`--check-max-interval` hold for that run only. A `--watch-interval` above the stored longest
 interval raises the longest interval to it for that run. They do not change the stored settings, so the app keeps showing the
 stored value while such a daemon runs at another rate; the daemon says so
 in its log at start. Saving from the app wins over the flag. An interval
@@ -1265,10 +1269,12 @@ babysitter service uninstall
 
 `service install` passes the `--db` and `--token` flags to the service when
 you give them. Without a token, the service uses `GITHUB_TOKEN` or the `gh`
-CLI. Without `--interval`, the service follows the poll interval of the
-settings, so the Watching pane of the app and `babysitter settings set
---poll-interval` reach it; with `--interval` it polls at that rate for
-as long as it stays installed.
+CLI. Without `--interval`, the service follows the poll interval and the
+longest check read interval of the settings, so the Watching pane of the
+app and `babysitter settings set --poll-interval` and
+`--check-max-interval` reach it; with `--interval` it polls at that rate
+for as long as it stays installed, and takes the longest check read
+interval of the settings when it starts.
 
 `service install` takes an interval between 10 seconds and 24 hours, the
 bound of the settings, because the definition it writes holds that value
@@ -1301,8 +1307,12 @@ included, the `service` commands fail.
 
 Each repository poll costs one request per page of 100 open pull
 requests of each repository. The checks of an open pull request cost two
-more requests, read only when its CI is pending, its head commit is new,
-or ten minutes passed since the last read. The time of the last read is
+more requests, read only when its head commit is new, when the wait since
+the last read has passed, or on a manual sync while its CI is pending.
+While CI is pending, the wait starts at one minute, or at the repository
+poll interval or the longest check read interval when one is shorter, and
+doubles after each read up to the longest check read interval. When CI has finished,
+the wait is ten minutes. The time of the last read is
 kept in memory, so a process that starts reads the checks of every open
 pull request again. A pull request that changed, that is new to the
 store, or whose mergeable state is still unknown costs two more, and one
@@ -1323,9 +1333,10 @@ serves the body from the cache it keeps in the database.
 When fewer than 10 requests remain in the hour, babysitter waits for the
 limit to reset. If you watch many active repositories or pull requests,
 raise the intervals in the Watching pane of the settings, or with
-`babysitter settings set --poll-interval`, `--watch-interval` and
-`--watch-max-interval`. `daemon start --interval`, `--watch-interval` and
-`--watch-max-interval` hold for that run only.
+`babysitter settings set --poll-interval`, `--watch-interval`,
+`--watch-max-interval` and `--check-max-interval`. `daemon start
+--interval`, `--watch-interval`, `--watch-max-interval` and
+`--check-max-interval` hold for that run only.
 
 The daemon reads the budget from the headers of each GitHub answer.
 `babysitter ratelimit` prints it, and the sidebar of the desktop app

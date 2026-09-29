@@ -43,6 +43,7 @@ type Store interface {
 
 type Syncer interface {
 	Kick()
+	Sync()
 }
 
 type Deps struct {
@@ -176,6 +177,8 @@ func NewRouter(d Deps) http.Handler {
 type noopSyncer struct{}
 
 func (noopSyncer) Kick() {}
+
+func (noopSyncer) Sync() {}
 
 func requestLogger(log *slog.Logger) func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {

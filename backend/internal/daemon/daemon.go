@@ -38,6 +38,7 @@ type Config struct {
 	Interval         time.Duration
 	WatchInterval    time.Duration
 	WatchMaxInterval time.Duration
+	CheckMaxInterval time.Duration
 	AgentBin         string
 	AgentModel       string
 	CopilotBin       string
@@ -89,7 +90,7 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 	if intervalsOverridden(settings, stored) {
 		log.Info("the command line asked for other intervals than the settings hold; they hold for this run only",
-			"interval", settings.PollInterval, "watchInterval", settings.WatchInterval, "watchMaxInterval", settings.WatchMaxInterval)
+			"interval", settings.PollInterval, "watchInterval", settings.WatchInterval, "watchMaxInterval", settings.WatchMaxInterval, "checkMaxInterval", settings.CheckMaxInterval)
 	}
 
 	notifications := notify.NewCenter(notify.CenterDeps{
@@ -98,7 +99,8 @@ func Run(ctx context.Context, cfg Config) error {
 		Log:     log.With("component", "notify"),
 	})
 	var autoStart func(ctx context.Context)
-	w := watcher.New(st, cfg.NewClient, watcher.WithInterval(settings.PollInterval), watcher.WithLogger(log),
+	w := watcher.New(st, cfg.NewClient, watcher.WithInterval(settings.PollInterval),
+		watcher.WithLongestCheckWait(settings.CheckMaxInterval), watcher.WithLogger(log),
 		watcher.WithAfterPass(func(ctx context.Context) { autoStart(ctx) }))
 	watchOpts := []prwatch.Option{prwatch.WithInterval(settings.WatchInterval), prwatch.WithMaxInterval(settings.WatchMaxInterval)}
 	exe, err := os.Executable()
@@ -155,6 +157,7 @@ func Run(ctx context.Context, cfg Config) error {
 		Notifications: notifications,
 		ApplySettings: func(s store.Settings) {
 			w.SetInterval(s.PollInterval)
+			w.SetLongestCheckWait(s.CheckMaxInterval)
 			watches.SetInterval(s.WatchInterval)
 			watches.SetMaxInterval(s.WatchMaxInterval)
 		},

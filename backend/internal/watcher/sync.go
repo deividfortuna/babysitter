@@ -86,7 +86,7 @@ func (w *Watcher) syncOpenPR(ctx context.Context, c *github.Client, repo store.R
 }
 
 func (w *Watcher) syncChecks(ctx context.Context, c *github.Client, repo store.Repo, pr store.PullRequest, now time.Time) (checks.CIStatus, error) {
-	if !w.staleChecks(pr, now) {
+	if !w.checksDue(pr, now) {
 		return pr.CIStatus, nil
 	}
 	runs, resp, err := ghclient.ListCheckRuns(ctx, c, repo.Owner, repo.Name, pr.HeadSHA)
@@ -97,24 +97,52 @@ func (w *Watcher) syncChecks(ctx context.Context, c *github.Client, repo store.R
 	if err := w.afterCall(ctx, resp, err); err != nil {
 		return "", err
 	}
-	w.markChecked(pr, now)
-	return checks.Overall(runs, combined), nil
+	status := checks.Overall(runs, combined)
+	w.markChecked(pr, status, w.now())
+	return status, nil
 }
 
-func (w *Watcher) staleChecks(pr store.PullRequest, now time.Time) bool {
-	if pr.CIStatus == checks.CIPending {
-		return true
+func (w *Watcher) checksDue(pr store.PullRequest, now time.Time) bool {
+	w.checksMu.Lock()
+	defer w.checksMu.Unlock()
+	last, ok := w.checked[checkKeyOf(pr)]
+	return !ok || now.Add(w.Interval()/2).Sub(last.at) >= last.wait
+}
+
+func (w *Watcher) markChecked(pr store.PullRequest, status checks.CIStatus, now time.Time) {
+	key := checkKeyOf(pr)
+	w.checksMu.Lock()
+	defer w.checksMu.Unlock()
+	w.checked[key] = checkRead{at: now, wait: w.nextCheckWait(w.checked[key], status), status: status}
+}
+
+func (w *Watcher) nextCheckWait(last checkRead, status checks.CIStatus) time.Duration {
+	switch {
+	case status != checks.CIPending:
+		return w.checkTTL
+	case last.status != checks.CIPending:
+		return w.checkWaitFloor()
+	default:
+		return min(2*last.wait, w.longestCheckWait)
 	}
-	w.checksMu.Lock()
-	defer w.checksMu.Unlock()
-	at, ok := w.checked[checkKey{pr.RepoID, pr.Number, pr.HeadSHA}]
-	return !ok || now.Sub(at) >= w.checkTTL
 }
 
-func (w *Watcher) markChecked(pr store.PullRequest, now time.Time) {
+func (w *Watcher) checkWaitFloor() time.Duration {
+	return min(firstCheckWait, w.Interval(), w.longestCheckWait)
+}
+
+func (w *Watcher) forgetPendingChecks() {
 	w.checksMu.Lock()
 	defer w.checksMu.Unlock()
-	w.checked[checkKey{pr.RepoID, pr.Number, pr.HeadSHA}] = now
+	for key, last := range w.checked {
+		if last.status == checks.CIPending {
+			delete(w.checked, key)
+		}
+	}
+}
+
+func checkKeyOf(pr store.PullRequest) checkKey {
+	return checkKey{pr.RepoID, pr.Number, pr.HeadSHA}
 }
 
 func (w *Watcher) forgetChecks(repoID int64, live map[checkKey]bool) {

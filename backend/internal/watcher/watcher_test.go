@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -18,12 +19,13 @@ import (
 )
 
 type fixture struct {
-	gh    *ghfake.GitHub
-	store *store.Store
-	w     *Watcher
-	slept []time.Duration
-	repo  store.Repo
-	now   time.Time
+	gh      *ghfake.GitHub
+	store   *store.Store
+	w       *Watcher
+	slept   []time.Duration
+	repo    store.Repo
+	now     time.Time
+	onSleep func(d time.Duration)
 }
 
 func (fx *fixture) advance(d time.Duration) { fx.now = fx.now.Add(d) }
@@ -52,6 +54,9 @@ func newFixture(t *testing.T) *fixture {
 		WithLogger(testutil.Logger(t)),
 		WithClock(func() time.Time { return fx.now }, func(ctx context.Context, d time.Duration) error {
 			fx.slept = append(fx.slept, d)
+			if fx.onSleep != nil {
+				fx.onSleep(d)
+			}
 			return nil
 		}),
 	)
@@ -88,6 +93,28 @@ func greenRun(id int64) ghfake.CheckRun {
 
 func runningRun(id int64) ghfake.CheckRun {
 	return ghfake.CheckRun{ID: id, Status: "in_progress"}
+}
+
+func (fx *fixture) passesThatReadChecks(t *testing.T, sha string, every time.Duration, passes int) []int {
+	t.Helper()
+	var read []int
+	for pass := range passes {
+		fx.gh.Reset()
+		if err := fx.w.SyncAll(t.Context()); err != nil {
+			t.Fatal(err)
+		}
+		if fx.gh.CountPath("/repos/o/r/commits/"+sha+"/check-runs") > 0 {
+			read = append(read, pass)
+		}
+		fx.advance(every)
+	}
+	return read
+}
+
+func (fx *fixture) seedPendingPR() *ghfake.PR {
+	pr := fx.seedOpenPR()
+	fx.update(pr, func(pr *ghfake.PR) { pr.CheckRuns = []ghfake.CheckRun{runningRun(1)} })
+	return pr
 }
 
 // paths lists the paths the fake received, for a failure message.
@@ -148,7 +175,7 @@ func TestSyncNewAndUnchangedPR(t *testing.T) {
 	}
 }
 
-func TestSyncReadsPendingChecksOnEveryPass(t *testing.T) {
+func TestSyncReadsPendingChecksAgainAfterAMinute(t *testing.T) {
 	fx := newFixture(t)
 	pr := fx.seedOpenPR()
 	fx.update(pr, func(pr *ghfake.PR) { pr.CheckRuns = []ghfake.CheckRun{runningRun(1)} })
@@ -173,6 +200,123 @@ func TestSyncReadsPendingChecksOnEveryPass(t *testing.T) {
 	prs, _ = fx.store.ListPRs(ctx, store.ListPRsOptions{})
 	if prs[0].CIStatus != checks.CISuccess {
 		t.Fatalf("CI status = %q, want success", prs[0].CIStatus)
+	}
+}
+
+func TestSyncBacksOffTheChecksOfAPendingPR(t *testing.T) {
+	fx := newFixture(t)
+	fx.w.SetLongestCheckWait(8 * time.Minute)
+	fx.seedPendingPR()
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", time.Minute, 32), []int{0, 1, 3, 7, 15, 23, 31}; !slices.Equal(got, want) {
+		t.Fatalf("checks read at minutes %v, want %v", got, want)
+	}
+}
+
+func TestSyncStartsTheBackOffAtAPollIntervalShorterThanAMinute(t *testing.T) {
+	fx := newFixture(t)
+	WithInterval(20 * time.Second)(fx.w)
+	fx.seedPendingPR()
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", 20*time.Second, 16), []int{0, 1, 3, 7, 15}; !slices.Equal(got, want) {
+		t.Fatalf("checks read on passes %v, want %v: waits of 20s, 40s, 80s and 160s", got, want)
+	}
+}
+
+func TestSyncKeepsTheBackOffWhenAPassStartsALittleEarly(t *testing.T) {
+	fx := newFixture(t)
+	fx.seedPendingPR()
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", time.Minute-100*time.Millisecond, 16), []int{0, 1, 3, 7, 15}; !slices.Equal(got, want) {
+		t.Fatalf("checks read on passes %v, want %v", got, want)
+	}
+}
+
+func TestSyncHonorsALongestCheckWaitShorterThanTheFirstWait(t *testing.T) {
+	fx := newFixture(t)
+	fx.w.SetLongestCheckWait(10 * time.Second)
+	fx.seedPendingPR()
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", 20*time.Second, 4), []int{0, 1, 2, 3}; !slices.Equal(got, want) {
+		t.Fatalf("checks read on passes %v, want %v: kicked passes 20s apart with a longest wait of 10s", got, want)
+	}
+}
+
+func TestSyncStartsTheBackOffWhenAReadThatWaitedForTheRateLimitEnds(t *testing.T) {
+	fx := newFixture(t)
+	fx.seedPendingPR()
+	fx.onSleep = func(time.Duration) {
+		actions := fx.gh.Actions()
+		if actions[len(actions)-1].Path == "/repos/o/r/commits/sha1/check-runs" {
+			fx.advance(30 * time.Minute)
+		}
+	}
+	fx.gh.SetRate(&ghfake.Rate{Limit: 5000, Remaining: 3, Reset: fx.now})
+	if err := fx.w.SyncAll(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	fx.gh.SetRate(nil)
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", time.Minute, 2), []int{1}; !slices.Equal(got, want) {
+		t.Fatalf("checks read on passes %v after a read that waited 30m for the rate limit, want %v", got, want)
+	}
+}
+
+func TestForgettingPendingChecksStartsTheBackOffAgain(t *testing.T) {
+	fx := newFixture(t)
+	fx.seedPendingPR()
+	fx.passesThatReadChecks(t, "sha1", time.Minute, 5)
+
+	fx.w.forgetPendingChecks()
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", time.Minute, 4), []int{0, 1, 3}; !slices.Equal(got, want) {
+		t.Fatalf("checks read on passes %v after they were forgotten, want %v", got, want)
+	}
+}
+
+func TestRunReadsPendingChecksOnAManualSyncAndNotOnAKick(t *testing.T) {
+	fx := newFixture(t)
+	passes := make(chan struct{}, 1)
+	WithAfterPass(func(context.Context) { passes <- struct{}{} })(fx.w)
+	fx.seedPendingPR()
+	checkReads := func() int { return fx.gh.CountPath("/repos/o/r/commits/sha1/check-runs") }
+	waitPass := func(after string) {
+		t.Helper()
+		select {
+		case <-passes:
+		case <-time.After(testutil.Timeout):
+			t.Fatalf("no pass after %s", after)
+		}
+	}
+
+	go func() { _ = fx.w.Run(t.Context()) }()
+	waitPass("the start")
+
+	fx.w.Kick()
+	waitPass("the kick")
+	if got := checkReads(); got != 1 {
+		t.Fatalf("checks read %d times after a kick, want 1: a kick keeps the wait of pending checks", got)
+	}
+
+	fx.w.Sync()
+	waitPass("the manual sync")
+	if got := checkReads(); got != 2 {
+		t.Fatalf("checks read %d times after a manual sync, want 2", got)
+	}
+}
+
+func TestSyncStartsTheBackOffAgainOnANewHead(t *testing.T) {
+	fx := newFixture(t)
+	pr := fx.seedPendingPR()
+	fx.passesThatReadChecks(t, "sha1", time.Minute, 10)
+
+	fx.update(pr, func(pr *ghfake.PR) {
+		pr.HeadSHA = "sha2"
+		pr.CheckRuns = []ghfake.CheckRun{runningRun(2)}
+	})
+
+	if got, want := fx.passesThatReadChecks(t, "sha2", time.Minute, 4), []int{0, 1, 3}; !slices.Equal(got, want) {
+		t.Fatalf("checks of the new head read at minutes %v, want %v", got, want)
 	}
 }
 

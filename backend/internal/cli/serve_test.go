@@ -120,6 +120,58 @@ func TestFollowIntervalTakesANewSetting(t *testing.T) {
 	t.Fatalf("Interval() = %s, want the stored 30s", w.Interval())
 }
 
+func TestFollowIntervalTakesANewLongestCheckReadInterval(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "x.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+
+	w := watcher.New(st, nil, watcher.WithInterval(time.Minute))
+
+	runCtx, stop := context.WithCancel(ctx)
+	defer stop()
+	go followInterval(runCtx, st, w, 5*time.Millisecond, testutil.Logger(t))
+
+	next := store.DefaultSettings()
+	next.CheckMaxInterval = 5 * time.Minute
+	if _, err := st.SaveSettings(ctx, next); err != nil {
+		t.Fatal(err)
+	}
+
+	if testutil.Within(testutil.Timeout, func() bool { return w.LongestCheckWait() == 5*time.Minute }) {
+		return
+	}
+	t.Fatalf("LongestCheckWait() = %s, want the stored 5m0s", w.LongestCheckWait())
+}
+
+func TestServeStartsWithTheStoredLongestCheckReadInterval(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	st, err := store.Open(filepath.Join(t.TempDir(), "x.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer st.Close()
+	next := store.DefaultSettings()
+	next.CheckMaxInterval = 5 * time.Minute
+	if _, err := st.SaveSettings(ctx, next); err != nil {
+		t.Fatal(err)
+	}
+
+	opts, err := serveWatcherOptions(ctx, st, 2*time.Minute)
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := watcher.New(st, nil, opts...)
+
+	if w.Interval() != 2*time.Minute || w.LongestCheckWait() != 5*time.Minute {
+		t.Fatalf("interval %s and longest check wait %s, want the flag 2m0s and the stored 5m0s", w.Interval(), w.LongestCheckWait())
+	}
+}
+
 func TestTheIntervalGoroutineIsGoneBeforeTheStoreCloses(t *testing.T) {
 	t.Parallel()
 	for range 50 {

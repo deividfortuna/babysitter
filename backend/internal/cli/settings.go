@@ -24,6 +24,7 @@ func (s settingsOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(tw, "Repository poll interval\t%s\n", time.Duration(s.PollIntervalSeconds)*time.Second)
 	fmt.Fprintf(tw, "Watch poll interval\t%s\n", time.Duration(s.WatchIntervalSeconds)*time.Second)
 	fmt.Fprintf(tw, "Longest watch poll interval\t%s\n", time.Duration(s.WatchMaxIntervalSeconds)*time.Second)
+	fmt.Fprintf(tw, "Longest check read interval\t%s\n", time.Duration(s.CheckMaxIntervalSeconds)*time.Second)
 	fmt.Fprintf(tw, "Approvals\t%s\n", approvalsWord(s.ApprovalsRequired))
 	fmt.Fprintf(tw, "Merge method\t%s\n", mergeMethodWord(s.MergeMethod))
 	fmt.Fprintf(tw, "Report items that already exist\t%s\n", yesNo(s.IncludeExisting))
@@ -107,6 +108,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		pollInterval    time.Duration
 		watchInterval   time.Duration
 		watchMax        time.Duration
+		checkMax        time.Duration
 		approvals       string
 		mergeMethod     string
 		includeExisting bool
@@ -141,6 +143,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				{"poll-interval", func(s *httpd.Settings) { s.PollIntervalSeconds = int(pollInterval.Seconds()) }},
 				{"watch-interval", func(s *httpd.Settings) { s.WatchIntervalSeconds = int(watchInterval.Seconds()) }},
 				{"watch-max-interval", func(s *httpd.Settings) { s.WatchMaxIntervalSeconds = int(watchMax.Seconds()) }},
+				{"check-max-interval", func(s *httpd.Settings) { s.CheckMaxIntervalSeconds = int(checkMax.Seconds()) }},
 				{"approvals", func(s *httpd.Settings) { s.ApprovalsRequired = wanted }},
 				{"merge-method", func(s *httpd.Settings) { s.MergeMethod = mergeMethod }},
 				{"include-existing", func(s *httpd.Settings) { s.IncludeExisting = includeExisting }},
@@ -187,6 +190,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().DurationVar(&pollInterval, "poll-interval", 0, "time between passes over the repositories you watch, 10s to 24h")
 	cmd.Flags().DurationVar(&watchInterval, "watch-interval", 0, "time between polls of a watched pull request, 10s to 24h")
 	cmd.Flags().DurationVar(&watchMax, "watch-max-interval", 0, "longest time between polls of a watched pull request where nothing happens, from the watch interval to 24h; the watch interval itself keeps one fixed interval")
+	cmd.Flags().DurationVar(&checkMax, "check-max-interval", 0, "longest time between reads of the pending checks of an open pull request by the repository watcher, 10s to 24h")
 	cmd.Flags().StringVar(&approvals, "approvals", "", "approvals a new watch wants before the pull request is ready to merge: a number, 0 for none, or 'branch' for the rule of the base branch")
 	cmd.Flags().StringVar(&mergeMethod, "merge-method", "", "merge method of a new watch: squash, merge, rebase, or empty for the first one the repository allows")
 	cmd.Flags().BoolVar(&includeExisting, "include-existing", false, "a new watch reports the review items that already exist")
