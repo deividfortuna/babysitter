@@ -768,3 +768,37 @@ func TestABranchRewrittenUnderTheWorkOfAMergingWatchIsNotPushedOver(t *testing.T
 		t.Fatalf("pushes = %+v, want no push over the rewrite", got)
 	}
 }
+
+func TestAnAcceptedUpdateThatCannotBeRecordedStopsThePoll(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+	allow := fx.refuse("branch_updated_refused", "INSERT ON watch_activity WHEN NEW.kind = 'branch_updated'")
+
+	fx.behind()
+	fx.comment()
+	fx.advance(time.Minute)
+	if err := fx.svc.Poll(context.Background(), w.ID); err == nil || len(h.messages()) != 1 {
+		t.Fatalf("Poll() error = %v, messages = %q, want the poll stopped before the comment", err, h.messages())
+	}
+
+	allow()
+	fx.poll(w)
+	if msgs := h.messages(); len(msgs) != 2 || !strings.Contains(msgs[1], "rename this") {
+		t.Fatalf("messages = %q, want the comment told on the head GitHub made", msgs)
+	}
+}
+
+func TestAStartBehindTellsNothingWhenTheAcceptedUpdateCannotBeRecorded(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.refuse("branch_updated_refused", "INSERT ON watch_activity WHEN NEW.kind = 'branch_updated'")
+	fx.behind()
+	fx.failBuild("")
+	w := fx.start()
+	if msgs := fx.host.last().messages(); len(msgs) != 1 {
+		t.Fatalf("kinds = %v, messages = %q, want only the opening message", fx.kinds(w), msgs)
+	}
+}

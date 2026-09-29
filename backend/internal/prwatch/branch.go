@@ -19,6 +19,8 @@ import (
 var (
 	ErrBadBranchUpdate = errors.New("invalid branch update: use rebase or merge")
 	ErrBranchUpdating  = errors.New("GitHub is updating the branch; send the message again after the next poll")
+
+	errAcceptedNotRecorded = errors.New("GitHub accepted the update of the branch, but the daemon could not record it")
 )
 
 const (
@@ -83,7 +85,7 @@ func (s *Service) githubStep(ctx context.Context, client *github.Client, w store
 }
 
 func (s *Service) keepPolling(w store.Watch, err error) error {
-	if err == nil || errors.Is(err, ghclient.ErrPaused) {
+	if err == nil || stopsThePoll(err) {
 		return err
 	}
 	s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
@@ -116,7 +118,14 @@ func (s *Service) updateBehind(ctx context.Context, client *github.Client, w sto
 		Summary: "GitHub accepted the request to " + branchUpdateWord(w) + " at " + textx.ShortSHA(w.HeadSHA),
 		Payload: mustJSON(branchPayload(w)),
 	})
-	return err
+	if err != nil {
+		return fmt.Errorf("%w: %w", errAcceptedNotRecorded, err)
+	}
+	return nil
+}
+
+func stopsThePoll(err error) bool {
+	return errors.Is(err, ghclient.ErrPaused) || errors.Is(err, errAcceptedNotRecorded)
 }
 
 func (s *Service) catchStalledUpdate(ctx context.Context, w store.Watch) error {

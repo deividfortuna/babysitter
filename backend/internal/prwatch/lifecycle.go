@@ -425,14 +425,18 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 	}
 	unlock := s.locks.Lock(w.ID)
 	defer unlock()
-	if err := s.githubStep(ctx, client, w, snap.PR.NodeID); err != nil {
-		s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
+	stepErr := s.githubStep(ctx, client, w, snap.PR.NodeID)
+	if stepErr != nil {
+		s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", stepErr)
 	}
 	if !s.runs(w) {
 		return nil
 	}
 	if _, err := s.ensureSession(ctx, w); err != nil {
 		s.agentFailed(ctx, w, "start the agent session", err)
+		return nil
+	}
+	if stepErr != nil {
 		return nil
 	}
 	_, err := s.tell(ctx, client, w)
