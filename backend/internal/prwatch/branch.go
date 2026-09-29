@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 
 	"github.com/google/go-github/v91/github"
 
@@ -37,12 +38,16 @@ func (s *Service) updateBehind(ctx context.Context, client *github.Client, w sto
 	if !s.updatesOnGitHub(w) {
 		return nil
 	}
-	behind, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBehind, "behind@"+w.HeadSHA)
-	if err != nil || !found || behind.NudgedAt != nil {
+	behind, err := s.store.UnnudgedOfKind(ctx, w.ID, store.ActivityBehind)
+	if err != nil || len(behind) == 0 {
 		return err
 	}
 	tried, err := s.triedOnGitHub(ctx, w)
 	if err != nil || tried {
+		return err
+	}
+	inFlight, err := s.workInFlight(ctx, w)
+	if err != nil || inFlight {
 		return err
 	}
 	head, resp, err := ghclient.UpdatePullBranch(ctx, client, w.Owner, w.Name, w.Number, string(w.BranchUpdate), w.HeadSHA)
@@ -59,8 +64,33 @@ func (s *Service) updateBehind(ctx context.Context, client *github.Client, w sto
 	}); err != nil {
 		return err
 	}
-	return s.store.MarkActivityNudged(ctx, []int64{behind.ID}, s.now())
+	return s.store.MarkActivityNudged(ctx, ids(behind), s.now())
 }
+
+func (s *Service) workInFlight(ctx context.Context, w store.Watch) (bool, error) {
+	if s.sessionBusy(w) {
+		return true, nil
+	}
+	blocker, err := s.proposalBlocker(ctx, w)
+	return blocker != "", err
+}
+
+func (s *Service) sessionBusy(w store.Watch) bool {
+	return !s.quiet(w) || s.withAuthor(w)
+}
+
+func (s *Service) holdForGitHub(ctx context.Context, w store.Watch, todo []store.Activity) ([]store.Activity, error) {
+	if !s.updatesOnGitHub(w) {
+		return todo, nil
+	}
+	tried, err := s.triedOnGitHub(ctx, w)
+	if err != nil || tried {
+		return todo, err
+	}
+	return slices.DeleteFunc(todo, isBehind), nil
+}
+
+func isBehind(a store.Activity) bool { return a.Kind == store.ActivityBehind }
 
 func (s *Service) triedOnGitHub(ctx context.Context, w store.Watch) (bool, error) {
 	ref := branchUpdateRef(w.HeadSHA)

@@ -841,6 +841,11 @@ update it, with the GraphQL mutation `updatePullRequestBranch`, and the
 method of the watch: `rebase` or `merge`. The expected head of the
 mutation makes GitHub refuse the update when someone pushed in between.
 The activity records `branch_updated`, and the agent gets no message.
+The daemon waits while work is in flight: while the agent works, while a
+proposal is open or waits for you, or while the session is with you. A
+rebase on GitHub would move the branch under that work, so the daemon
+asks GitHub after the work is done, and until then the agent gets no
+message about the branch.
 The work branch of the worktree follows the new head before the next
 message. GitHub tries once for each head. When GitHub refuses, for
 example on a conflict, the activity records `branch_update_failed` with

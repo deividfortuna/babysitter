@@ -49,6 +49,7 @@ func TestABranchBehindItsBaseIsRebasedOnGitHubAndTheAgentHearsNothing(t *testing
 	fx := newFixture(t)
 	w := fx.start()
 	h := fx.host.last()
+	fx.agentIdle(w)
 
 	fx.behind()
 	fx.poll(w)
@@ -70,6 +71,7 @@ func TestAWatchThatMergesTheBaseAsksGitHubForAMerge(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
 	w := fx.startWith(func(r *StartRequest) { r.BranchUpdate = new(store.BranchMerge) })
+	fx.agentIdle(w)
 
 	fx.behind()
 	fx.poll(w)
@@ -163,6 +165,7 @@ func TestADependabotBranchIsNotUpdatedOnGitHub(t *testing.T) {
 	fx := newFixture(t)
 	fx.update(func() { fx.pr.Author = "dependabot[bot]" })
 	w := fx.start()
+	fx.agentIdle(w)
 
 	fx.behind()
 	fx.poll(w)
@@ -190,6 +193,7 @@ func TestTheWorkBranchFollowsTheBranchGitHubRebased(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
 	w := fx.start()
+	fx.agentIdle(w)
 	fx.behind()
 	fx.poll(w)
 	head := fx.activityOf(w, store.ActivityBranchUpdated)
@@ -209,6 +213,61 @@ func TestTheWorkBranchFollowsTheBranchGitHubRebased(t *testing.T) {
 
 	if work, _ := fx.rel.Head(context.Background(), ""); work != to.To {
 		t.Fatalf("work branch = %s, want it on %s, where GitHub put the pull request branch", work, to.To)
+	}
+}
+
+func TestGitHubWaitsWhileTheAgentWorks(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+
+	fx.behind()
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); len(got) != 0 {
+		t.Fatalf("branch updates = %+v, want none while the agent works", got)
+	}
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("messages = %q, want only the opening message: the branch waits for GitHub", msgs)
+	}
+
+	fx.agentIdle(w)
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); len(got) != 1 {
+		t.Fatalf("branch updates = %+v, want one once the agent is idle", got)
+	}
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("messages = %q, want no message about the branch", msgs)
+	}
+}
+
+func TestGitHubWaitsUntilTheProposalIsDecided(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startManual()
+	fx.propose(w)
+
+	fx.behind()
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); len(got) != 0 {
+		t.Fatalf("branch updates = %+v, want none while proposal 1 waits", got)
+	}
+	if p := fx.proposal(w, 1); p.Status != store.ProposalPending {
+		t.Fatalf("proposal = %+v, want it still pending", p)
+	}
+
+	if _, err := fx.svc.Approve(context.Background(), w.ID, 1, Decision{}); err != nil {
+		t.Fatal(err)
+	}
+	fx.update(func() { fx.pr.HeadSHA = "w1" })
+	fx.agentIdle(w)
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "REBASE", ExpectedHead: "w1"}}) {
+		t.Fatalf("branch updates = %+v, want one rebase of the head that the proposal pushed", got)
 	}
 }
 

@@ -285,7 +285,7 @@ func (s *Service) actionable(ctx context.Context, w store.Watch) ([]store.Activi
 	if err := s.store.MarkActivityNudged(ctx, ids(stale), s.now()); err != nil {
 		return nil, err
 	}
-	return current, nil
+	return s.holdForGitHub(ctx, w, current)
 }
 
 type message struct {
