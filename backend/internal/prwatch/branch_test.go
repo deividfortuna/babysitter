@@ -412,6 +412,47 @@ func TestAnUpdateThatGitHubAcceptedButNeverAppliedGoesToTheAgent(t *testing.T) {
 	}
 }
 
+func TestAnAcceptedUpdateStallsWhenTheHeadIsNoLongerACandidate(t *testing.T) {
+	t.Parallel()
+	cases := map[string]func(fx *fixture, w store.Watch){
+		"updates on GitHub turned off": func(fx *fixture, w store.Watch) {
+			if _, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{UpdateOnGitHub: new(false)}); err != nil {
+				fx.t.Fatal(err)
+			}
+		},
+		"the head conflicts with its base": func(fx *fixture, _ store.Watch) {
+			fx.update(func() { fx.pr.MergeableState = "dirty" })
+		},
+	}
+	for name, change := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := fx.start()
+			h := fx.host.last()
+			fx.agentIdle(w)
+			fx.api.React(ghfake.RouteGraphQL, func(a ghfake.Action) (ghfake.Response, bool) {
+				body := `{"data":{"updatePullRequestBranch":{"pullRequest":{"headRefOid":"abc"}}}}`
+				return ghfake.Response{Status: http.StatusOK, Body: body}, strings.Contains(string(a.Body), "updatePullRequestBranch")
+			})
+			fx.behind()
+			fx.poll(w)
+			change(fx, w)
+
+			fx.comment()
+			for range 4 {
+				fx.poll(w)
+			}
+			if !slices.Contains(fx.kinds(w), string(store.ActivityBranchNotUpdated)) {
+				t.Fatalf("kinds = %v, want the stall recorded", fx.kinds(w))
+			}
+			if msgs := h.messages(); len(msgs) != 2 || !strings.Contains(msgs[1], "rename this") {
+				t.Fatalf("messages = %q, want the comment told once the update stalled", msgs)
+			}
+		})
+	}
+}
+
 func TestTheWorkBranchFollowsABranchSomeoneElseRewrote(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

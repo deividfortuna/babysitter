@@ -69,12 +69,12 @@ func (s *Service) updatesOnGitHub(w store.Watch) bool {
 }
 
 func (s *Service) githubStep(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
+	if err := s.catchStalledUpdate(ctx, w); err != nil {
+		return s.keepPolling(w, err)
+	}
 	candidate := w.MergeableState == store.MergeableBehind && s.updatesOnGitHub(w)
 	if !candidate {
 		return nil
-	}
-	if err := s.catchStalledUpdate(ctx, w); err != nil {
-		return s.keepPolling(w, err)
 	}
 	return s.keepPolling(w, s.updateBehind(ctx, client, w, nodeID))
 }
