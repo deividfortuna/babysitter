@@ -117,6 +117,67 @@ test("the saved mark does not show when the daemon refuses the change", async ()
   expect(screen.queryByText("saved")).not.toBeInTheDocument();
 });
 
+async function typeWatchIntervalThenOpenLogs(user: ReturnType<typeof userEvent.setup>) {
+  const field = await screen.findByLabelText("Watch poll interval", { exact: true });
+  await user.clear(field);
+  await user.type(field, "90");
+  await user.click(pageButton("Logs"));
+}
+
+test("a number still waiting when you leave its page is saved, and the navigation says so", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings({ pollIntervalSeconds: 45 }), savedSettings });
+  const user = userEvent.setup();
+  renderWithProviders(<SettingsDialog open category="polling" onOpenChange={vi.fn()} />);
+
+  await typeWatchIntervalThenOpenLogs(user);
+
+  expect(await within(navigation()).findByText("Polling saved")).toBeVisible();
+  expect(savedSettings).toHaveLength(1);
+  expect(savedSettings[0]).toMatchObject({ watchIntervalSeconds: 90 });
+  expect(screen.getByRole("heading", { name: "Logs" })).toBeVisible();
+  expect(screen.queryByText("saved")).not.toBeInTheDocument();
+});
+
+test("a number the daemon refuses after you left its page shows why under the navigation", async () => {
+  serveApi({ settings: buildSettings({ pollIntervalSeconds: 45 }) });
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), () =>
+      HttpResponse.json({ error: { code: "bad_request", message: "the interval is too short" } }, { status: 400 }),
+    ),
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<SettingsDialog open category="polling" onOpenChange={vi.fn()} />);
+
+  await typeWatchIntervalThenOpenLogs(user);
+
+  expect(await within(navigation()).findByText("Polling: the interval is too short")).toBeVisible();
+});
+
+test("a save still running when you leave its page keeps its line until it ends", async () => {
+  serveApi({ settings: buildSettings() });
+  let release = () => undefined as void;
+  const held = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), async ({ request }) => {
+      const body = await request.json();
+      await held;
+      return HttpResponse.json(body as Settings);
+    }),
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<SettingsDialog open category="review" onOpenChange={vi.fn()} />);
+
+  await user.click(await screen.findByRole("switch", { name: "Report my own comments" }));
+  await user.click(pageButton("Agent"));
+
+  expect(await within(navigation()).findByText("Review and merge saving")).toBeVisible();
+  release();
+  expect(await within(navigation()).findByText("Review and merge saved")).toBeVisible();
+});
+
 test("closing the dialog tells the owner", async () => {
   const onOpenChange = vi.fn();
   const user = userEvent.setup();

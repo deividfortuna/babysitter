@@ -13,7 +13,7 @@ import { AppearancePanel } from "@/components/settings-appearance";
 import { AgentPanel } from "@/components/settings-agent";
 import { LogsPanel } from "@/components/settings-logs";
 import { NotificationsPanel } from "@/components/settings-notifications";
-import { SaveMark, SaveTracker, useSaveState } from "@/components/settings-page";
+import { SaveElsewhere, SaveMark, SaveTracker, useSaveState } from "@/components/settings-page";
 import { PollingPanel } from "@/components/settings-polling";
 import { ReviewPanel } from "@/components/settings-review";
 import { UpdatesPanel } from "@/components/settings-updates";
@@ -107,19 +107,21 @@ export function SettingsDialog({ open, onOpenChange, category = "appearance" }: 
 
   if (open !== wasOpen) {
     setWasOpen(open);
-    if (open) setActive(pageOf(category));
+    if (open) {
+      setActive(pageOf(category));
+      save.clear();
+    }
   }
 
   function show(page: Page) {
     setActive(page);
-    save.reset();
+    save.settle();
   }
 
   return (
     <Dialog
       open={open}
       onOpenChange={(next) => {
-        if (!next) save.reset();
         onOpenChange(next);
       }}
     >
@@ -152,7 +154,10 @@ export function SettingsDialog({ open, onOpenChange, category = "appearance" }: 
               ))}
             </div>
           ))}
-          <AppVersion />
+          <div className="mt-auto flex flex-col gap-1 pt-2 pb-1">
+            <SaveElsewhere state={save.state} page={active.id} />
+            <AppVersion />
+          </div>
         </nav>
 
         <section
@@ -166,9 +171,9 @@ export function SettingsDialog({ open, onOpenChange, category = "appearance" }: 
               </h2>
               {active.description ? <p className="text-sm/snug text-muted-foreground">{active.description}</p> : null}
             </div>
-            <SaveMark state={save.state} />
+            <SaveMark state={save.state} page={active.id} />
           </header>
-          <SaveTracker track={save.track}>
+          <SaveTracker track={save.trackFor(active.id, active.label)}>
             <div className={cn("flex flex-col", active.fill && "min-h-0 flex-1")}>
               <active.Panel key={active.id} />
             </div>
@@ -182,9 +187,5 @@ export function SettingsDialog({ open, onOpenChange, category = "appearance" }: 
 function AppVersion() {
   const { status } = useAppUpdate();
   if (!status) return null;
-  return (
-    <p className="mt-auto px-2.5 pt-2 pb-1 font-mono text-2xs text-muted-foreground">
-      babysitter {status.currentVersion}
-    </p>
-  );
+  return <p className="px-2.5 font-mono text-2xs text-muted-foreground">babysitter {status.currentVersion}</p>;
 }

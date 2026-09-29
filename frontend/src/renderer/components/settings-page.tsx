@@ -8,7 +8,12 @@ import type { DraftField } from "@/hooks/use-draft-field";
 import { useSettings, useWriteSettings, type Settings } from "@/hooks/useSettings";
 import { cn } from "@/lib/utils";
 
-export type SaveState = "idle" | "saving" | "saved";
+export type SaveState = {
+  page: string;
+  label: string;
+  status: "saving" | "saved" | "failed";
+  message?: string;
+} | null;
 
 type Track = (work: Promise<unknown>) => void;
 
@@ -20,29 +25,42 @@ export function useTrackSave(): Track {
   return useContext(TrackContext);
 }
 
+function keepSaving(state: SaveState): SaveState {
+  return state?.status === "saving" ? state : null;
+}
+
+function messageOf(error: unknown): string {
+  return error instanceof Error ? error.message : "Could not save the change.";
+}
+
 export function useSaveState() {
-  const [state, setState] = useState<SaveState>("idle");
+  const [state, setState] = useState<SaveState>(null);
   const latest = useRef(0);
+  const tracks = useRef(new Map<string, Track>());
 
-  const track = useCallback<Track>((work) => {
-    const turn = ++latest.current;
-    setState("saving");
-    work.then(
-      () => {
-        if (turn === latest.current) setState("saved");
-      },
-      () => {
-        if (turn === latest.current) setState("idle");
-      },
-    );
+  const trackFor = useCallback((page: string, label: string): Track => {
+    const known = tracks.current.get(page);
+    if (known) return known;
+    const track: Track = (work) => {
+      const turn = ++latest.current;
+      setState({ page, label, status: "saving" });
+      work.then(
+        () => {
+          if (turn === latest.current) setState({ page, label, status: "saved" });
+        },
+        (error: unknown) => {
+          if (turn === latest.current) setState({ page, label, status: "failed", message: messageOf(error) });
+        },
+      );
+    };
+    tracks.current.set(page, track);
+    return track;
   }, []);
 
-  const reset = useCallback(() => {
-    latest.current++;
-    setState("idle");
-  }, []);
+  const settle = useCallback(() => setState(keepSaving), []);
+  const clear = useCallback(() => setState(null), []);
 
-  return { state, track, reset };
+  return { state, trackFor, settle, clear };
 }
 
 export function SaveTracker({ track, children }: { track: Track; children: ReactNode }) {
@@ -54,9 +72,10 @@ const MARKS = {
   saved: { icon: <CheckIcon className="size-3.5 text-success" />, word: "saved" },
 };
 
-export function SaveMark({ state }: { state: SaveState }) {
-  if (state === "idle") return null;
-  const { icon, word } = MARKS[state];
+export function SaveMark({ state, page }: { state: SaveState; page: string }) {
+  const onThisPage = state?.page === page;
+  if (!onThisPage || state.status === "failed") return null;
+  const { icon, word } = MARKS[state.status];
   return (
     <span
       role="status"
@@ -65,6 +84,24 @@ export function SaveMark({ state }: { state: SaveState }) {
       {icon}
       {word}
     </span>
+  );
+}
+
+function elsewhereText({ label, status, message }: NonNullable<SaveState>): string {
+  if (status === "failed") return `${label}: ${message}`;
+  return `${label} ${status}`;
+}
+
+export function SaveElsewhere({ state, page }: { state: SaveState; page: string }) {
+  const elsewhere = state !== null && state.page !== page;
+  if (!elsewhere) return null;
+  return (
+    <p
+      role="status"
+      className={cn("px-2.5 text-2xs/snug text-muted-foreground", state.status === "failed" && "text-destructive")}
+    >
+      {elsewhereText(state)}
+    </p>
   );
 }
 
@@ -81,8 +118,8 @@ export function SettingsCard({ className, children }: { className?: string; chil
   return <div className={cn("divide-y rounded-lg border bg-muted/25", className)}>{children}</div>;
 }
 
-export function SettingsRow(props: ComponentProps<typeof SettingRow>) {
-  return <SettingRow {...props} className="px-3.5 py-3" />;
+export function SettingsRow({ className, ...props }: ComponentProps<typeof SettingRow>) {
+  return <SettingRow {...props} className={cn("px-3.5 py-3", className)} />;
 }
 
 type DraftNumberRowProps = {

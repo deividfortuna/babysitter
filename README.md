@@ -161,13 +161,26 @@ comes from, in this order:
 
 ### Settings
 
-The Settings dialog of the app has four panes: **General**, **Watching**,
-**Notifications** and **Updates**. **General** holds the theme of the app:
-light, dark or system.
+The Settings dialog of the app has three groups of pages:
 
-**Watching** holds the preferences of the daemon. The four intervals
-apply to the daemon as a whole. The rows under **Defaults of a new
-watch** are what a watch starts with:
+- **App**: **Appearance** (the theme, light, dark or system, and the
+  rate limit card), **Notifications** and **Updates**.
+- **New watches**: **Agent** and **Review and merge**, what a watch
+  starts with.
+- **Daemon**: **Polling** and **Logs**.
+
+Each page saves a change at once and shows "saved" in its header. A
+number field saves when you stop typing. When you go to another page
+before a save ends, the line under the navigation shows its result.
+
+**Polling** holds the four intervals, which apply to the daemon as a
+whole. **Relaxed**, **Balanced** and **Eager** set the four at once, and
+Balanced holds the defaults. A bar shows about how many GitHub requests
+an hour the intervals cost for the repositories and watches of now. "Set
+the intervals by hand" shows the four fields. A watch poll interval
+longer than the longest watch poll interval sets the longest to the same
+value. **Agent** and **Review and merge** hold the defaults of a new
+watch:
 
 | Setting | What it does |
 | --- | --- |
@@ -210,7 +223,7 @@ the approvals and the merge method of one running watch and leave the
 defaults alone. The worktree switch applies when the watch stops, and
 the stop dialog or `watch stop --keep-worktree` can still say otherwise.
 
-The **Notifications** pane holds four more:
+The **Notifications** page holds four more:
 
 | Setting | What it does |
 | --- | --- |
@@ -249,7 +262,7 @@ babysitter settings set --model opus --effort high        # the effort of that m
 The notification flags of `settings set` are in
 [Notifications](#notifications).
 
-The **Updates** pane belongs to the app, not to the daemon. The app
+The **Updates** page belongs to the app, not to the daemon. The app
 keeps it in `update-settings.json` in the data directory:
 
 | Setting | What it does |
@@ -622,7 +635,7 @@ The history keeps the newest 5000 rows: one of a watch goes when that
 watch is removed, and the oldest fall out of the bottom as new ones
 arrive.
 
-Four settings govern them, in the **Notifications** pane of the app or
+Four settings govern them, in the **Notifications** page of the app or
 from the terminal:
 
 ```sh
@@ -1283,7 +1296,7 @@ babysitter service uninstall
 `service install` passes the `--db` and `--token` flags to the service when
 you give them. Without a token, the service uses `GITHUB_TOKEN` or the `gh`
 CLI. Without `--interval`, the service follows the poll interval and the
-longest check read interval of the settings, so the Watching pane of the
+longest check read interval of the settings, so the Polling page of the
 app and `babysitter settings set --poll-interval` and
 `--check-max-interval` reach it; with `--interval` it polls at that rate
 for as long as it stays installed, and takes the longest check read
@@ -1345,7 +1358,7 @@ serves the body from the cache it keeps in the database.
 
 When fewer than 10 requests remain in the hour, babysitter waits for the
 limit to reset. If you watch many active repositories or pull requests,
-raise the intervals in the Watching pane of the settings, or with
+raise the intervals in the Polling page of the settings, or with
 `babysitter settings set --poll-interval`, `--watch-interval`,
 `--watch-max-interval` and `--check-max-interval`. `daemon start
 --interval`, `--watch-interval`, `--watch-max-interval` and
@@ -1355,11 +1368,11 @@ The daemon reads the budget from the headers of each GitHub answer.
 `babysitter ratelimit` prints it, and the sidebar of the desktop app
 shows it above the account when more than half of the budget is used,
 or when the daemon slows down or pauses its polls. "Always show the
-GitHub rate limit" in the Developer pane of the settings shows the card
+GitHub rate limit" in the Appearance page of the settings shows the card
 all the time. The card says when the budget is nearly
 used, when the polls pause until the reset, and when GitHub asked for a
-slow down with its secondary limit. "Poll less often" opens the Watching
-pane of the settings.
+slow down with its secondary limit. "Poll less often" opens the Polling
+page of the settings.
 
 ## Logs
 
@@ -1386,7 +1399,7 @@ daemon, or from `daemon.log` when no daemon runs. `-f` follows the
 daemon until Ctrl-C, `--level` hides the records below a level, and
 `--app` prints `app.log`.
 
-In the desktop app, the Developer pane of the settings has the same
+In the desktop app, the Logs page of the settings has the same
 view: a live log of the daemon or of the app, a level filter, a text
 filter, a copy button, and a button that opens the `logs/` folder. Its
 "Debug logs" switch changes the level of the daemon.

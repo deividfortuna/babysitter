@@ -10,6 +10,8 @@ import {
   rateLimitQueryKey,
   repoConfigQueryKey,
   reposQueryKey,
+  settingsMutationKey,
+  settingsQueryKey,
   viewerQueryKey,
   watchesQueryKey,
 } from "./query-keys";
@@ -43,6 +45,40 @@ describe("connectEventTransport", () => {
     FakeEventSource.instances.at(-1)!.dispatch("log_level_changed");
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: logLevelQueryKey });
+
+    dispose();
+  });
+
+  it("reads the settings again when the daemon changes them", () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    setApiBaseUrl("http://localhost:1234");
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+
+    const dispose = connectEventTransport(queryClient);
+    FakeEventSource.instances.at(-1)!.dispatch("settings_changed");
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: settingsQueryKey });
+
+    dispose();
+  });
+
+  it("leaves the settings alone while a save of the settings is running", () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    setApiBaseUrl("http://localhost:1234");
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const saving = queryClient.getMutationCache().build(queryClient, {
+      mutationKey: settingsMutationKey,
+      mutationFn: () => new Promise<void>(() => undefined),
+    });
+    void saving.execute(undefined);
+
+    const dispose = connectEventTransport(queryClient);
+    FakeEventSource.instances.at(-1)!.dispatch("settings_changed");
+
+    expect(queryClient.isMutating({ mutationKey: settingsMutationKey })).toBe(1);
+    expect(invalidateQueries).not.toHaveBeenCalledWith({ queryKey: settingsQueryKey });
 
     dispose();
   });

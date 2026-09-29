@@ -211,7 +211,8 @@ ipcMain.handle(NOTIFICATIONS_SHOW_CHANNEL, (_event, notification: DesktopNotific
     toast.on("click", () => openFromToast(notification));
     toast.show();
   }
-  signalAttention(win, shows);
+  const inFront = win?.isFocused() ?? false;
+  if (!inFront) signalAttention(win, shows);
 });
 
 function openFromToast(notification: DesktopNotification) {

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useAppUpdate, useUpdateSettings } from "@/hooks/useAppUpdate";
 import { SettingsCard, SettingsError, SettingsRow, SettingsSection, useTrackSave } from "@/components/settings-page";
 import { Button } from "@/components/ui/button";
@@ -44,6 +45,7 @@ export function UpdatesPanel() {
   const { status, check } = useAppUpdate();
   const { settings, save } = useUpdateSettings();
   const track = useTrackSave();
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   if (!status) return <Spinner />;
 
@@ -59,7 +61,14 @@ export function UpdatesPanel() {
   }
 
   const checking = status.state === "checking";
-  const write = (patch: Partial<UpdateSettings>) => track(save(patch));
+  const write = (patch: Partial<UpdateSettings>) => {
+    const work = save(patch);
+    track(work);
+    work.then(
+      () => setSaveError(null),
+      (error: unknown) => setSaveError(error instanceof Error ? error.message : "Could not save the update settings."),
+    );
+  };
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -115,7 +124,7 @@ export function UpdatesPanel() {
         </SettingsSection>
       ) : null}
 
-      <SettingsError message={status.message} />
+      <SettingsError message={saveError ?? status.message} />
     </div>
   );
 }

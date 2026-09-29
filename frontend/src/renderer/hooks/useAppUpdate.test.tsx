@@ -107,13 +107,13 @@ test("a change shows at once and keeps what the main process saved", async () =>
   expect(result.current.settings).toEqual({ autoDownload: true, channel: "nightly" });
 });
 
-test("a change the main process refuses goes back", async () => {
+test("a change the main process refuses goes back and rejects", async () => {
   vi.spyOn(bridge.updates, "getSettings").mockResolvedValue({ autoDownload: true, channel: "stable" });
   vi.spyOn(bridge.updates, "setSettings").mockRejectedValue(new Error("no handler"));
   const { result } = renderHook(() => useUpdateSettings());
   await waitFor(() => expect(result.current.settings).not.toBeNull());
 
-  await act(() => result.current.save({ autoDownload: false }));
+  await act(() => expect(result.current.save({ autoDownload: false })).rejects.toThrow("no handler"));
 
   expect(result.current.settings).toEqual({ autoDownload: true, channel: "stable" });
 });

@@ -91,6 +91,34 @@ test("an interval typed by hand is saved a moment after the typing stops", async
   await waitFor(() => expect(tile("Custom")).toHaveAttribute("aria-pressed", "true"));
 });
 
+test("a watch poll interval above the longest raises the longest in the same save", async () => {
+  const { savedSettings, user } = renderPolling();
+  await user.click(await screen.findByRole("button", { name: "Set the intervals by hand" }));
+
+  const field = screen.getByLabelText("Watch poll interval", { exact: true });
+  await user.clear(field);
+  await user.type(field, "1200");
+  await user.tab();
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0]).toMatchObject({ watchIntervalSeconds: 1200, watchMaxIntervalSeconds: 1200 });
+  expect(await screen.findByText(/The longest watch poll interval moved to 20m too\./)).toBeVisible();
+  await waitFor(() => expect(screen.getByLabelText("Longest watch poll interval")).toHaveValue(1200));
+});
+
+test("a longest watch poll interval below the watch poll interval is refused before it is sent", async () => {
+  const { savedSettings, user } = renderPolling();
+  await user.click(await screen.findByRole("button", { name: "Set the intervals by hand" }));
+
+  const field = screen.getByLabelText("Longest watch poll interval");
+  await user.clear(field);
+  await user.type(field, "120");
+  await user.tab();
+
+  expect(await screen.findByText("A whole number of seconds from 180 to 86400.")).toBeVisible();
+  expect(savedSettings).toHaveLength(0);
+});
+
 test("an interval out of range is refused before it is sent", async () => {
   const { savedSettings, user } = renderPolling();
   await user.click(await screen.findByRole("button", { name: "Set the intervals by hand" }));

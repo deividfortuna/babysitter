@@ -7,6 +7,7 @@ import {
   pullsQueryKey,
   rateLimitQueryKey,
   reposQueryKey,
+  settingsMutationKey,
   settingsQueryKey,
   viewerQueryKey,
   watchesQueryKey,
@@ -116,6 +117,8 @@ export function connectEventTransport(
       es.addEventListener(type, scheduleRefetch);
     }
     es.addEventListener("settings_changed", () => {
+      const saving = queryClient.isMutating({ mutationKey: settingsMutationKey }) > 0;
+      if (saving) return;
       void queryClient.invalidateQueries({ queryKey: settingsQueryKey });
     });
     es.addEventListener("log_level_changed", () => {

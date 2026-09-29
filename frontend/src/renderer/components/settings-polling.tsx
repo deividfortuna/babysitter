@@ -1,4 +1,4 @@
-import { Fragment, useState, type CSSProperties } from "react";
+import { Fragment, useMemo, useState, type CSSProperties } from "react";
 import { ChevronRightIcon } from "lucide-react";
 import {
   DaemonSettings,
@@ -35,11 +35,13 @@ import { cn } from "@/lib/utils";
 const MIN_SECONDS = 10;
 const MAX_SECONDS = 86_400;
 
-function parseSeconds(text: string): number | undefined {
-  const seconds = wholeNumber(text);
-  if (seconds === undefined) return undefined;
-  const inRange = seconds >= MIN_SECONDS && seconds <= MAX_SECONDS;
-  return inRange ? seconds : undefined;
+function secondsFrom(min: number) {
+  return (text: string): number | undefined => {
+    const seconds = wholeNumber(text);
+    if (seconds === undefined) return undefined;
+    const inRange = seconds >= min && seconds <= MAX_SECONDS;
+    return inRange ? seconds : undefined;
+  };
 }
 
 const PACE_ROWS: { label: string; seconds: (intervals: Intervals) => number; suffix: string }[] = [
@@ -57,6 +59,18 @@ function PollingForm({ settings }: { settings: Settings }) {
   const intervals: Intervals = settings;
   const preset = presetOf(intervals);
   const [byHand, setByHand] = useState(!preset);
+  const [raisedTo, setRaisedTo] = useState<number | null>(null);
+
+  function saveWatchInterval(watchIntervalSeconds: number) {
+    const raises = watchIntervalSeconds > intervals.watchMaxIntervalSeconds;
+    setRaisedTo(raises ? watchIntervalSeconds : null);
+    save(raises ? { watchIntervalSeconds, watchMaxIntervalSeconds: watchIntervalSeconds } : { watchIntervalSeconds });
+  }
+
+  function savePreset(choice: Preset) {
+    setRaisedTo(null);
+    save(choice.intervals);
+  }
 
   return (
     <div className="flex flex-col gap-4.5">
@@ -67,7 +81,7 @@ function PollingForm({ settings }: { settings: Settings }) {
             label={choice.label}
             detail={presetSummary(choice.intervals)}
             pressed={preset?.id === choice.id}
-            onClick={() => save(choice.intervals)}
+            onClick={() => savePreset(choice)}
           />
         ))}
         <SpeedTile label="Custom" detail="your values" pressed={!preset} onClick={() => setByHand(true)} />
@@ -115,15 +129,20 @@ function PollingForm({ settings }: { settings: Settings }) {
             <SecondsRow
               id="watch-interval"
               label="Watch poll interval"
-              description="Seconds between polls of a pull request under watch."
+              description={
+                raisedTo === null
+                  ? "Seconds between polls of a pull request under watch."
+                  : `Seconds between polls of a pull request under watch. The longest watch poll interval moved to ${shortInterval(raisedTo)} too.`
+              }
               value={intervals.watchIntervalSeconds}
-              onCommit={(watchIntervalSeconds) => save({ watchIntervalSeconds })}
+              onCommit={saveWatchInterval}
             />
             <SecondsRow
               id="watch-max-interval"
               label="Longest watch poll interval"
               description="Seconds a quiet pull request waits between polls at most. The wait doubles after each poll where nothing happens. The same value as the watch poll interval keeps one fixed interval."
               value={intervals.watchMaxIntervalSeconds}
+              min={intervals.watchIntervalSeconds}
               onCommit={(watchMaxIntervalSeconds) => save({ watchMaxIntervalSeconds })}
             />
           </SettingsCard>
@@ -220,18 +239,20 @@ type SecondsRowProps = {
   label: string;
   description: string;
   value: number;
+  min?: number;
   onCommit: (seconds: number) => void;
 };
 
-function SecondsRow({ id, label, description, value, onCommit }: SecondsRowProps) {
-  const field = useDraftField<number>({ value, format: String, parse: parseSeconds, commit: onCommit });
+function SecondsRow({ id, label, description, value, min = MIN_SECONDS, onCommit }: SecondsRowProps) {
+  const parse = useMemo(() => secondsFrom(min), [min]);
+  const field = useDraftField<number>({ value, format: String, parse, commit: onCommit });
   return (
     <DraftNumberRow
       id={id}
       label={label}
       description={description}
-      error="A whole number of seconds from 10 to 86400."
-      min={MIN_SECONDS}
+      error={`A whole number of seconds from ${min} to ${MAX_SECONDS}.`}
+      min={min}
       max={MAX_SECONDS}
       field={field}
     />

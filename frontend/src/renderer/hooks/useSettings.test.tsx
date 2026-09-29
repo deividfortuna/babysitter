@@ -56,3 +56,113 @@ test("a write the daemon refuses puts the settings back and tells why", async ()
   await waitFor(() => expect(writer().error?.message).toBe("the store is read only"));
   expect(queryClient.getQueryData<Settings>(settingsQueryKey)?.keepWorktree).toBe(false);
 });
+
+type Gate = { open: () => void; wait: Promise<void> };
+
+function gate(): Gate {
+  let open = () => undefined as void;
+  const wait = new Promise<void>((resolve) => {
+    open = resolve;
+  });
+  return { open, wait };
+}
+
+function heldSaves(refuse: (body: Settings) => boolean = () => false) {
+  const bodies: Settings[] = [];
+  const gates = [gate(), gate(), gate()];
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), async ({ request }) => {
+      const body = (await request.json()) as Settings;
+      const turn = bodies.length;
+      bodies.push(body);
+      await gates[turn]?.wait;
+      if (refuse(body)) {
+        return HttpResponse.json({ error: { code: "bad_request", message: "refused" } }, { status: 400 });
+      }
+      return HttpResponse.json(body);
+    }),
+  );
+  return { bodies, gates };
+}
+
+test("a queued write sends the confirmed settings and its own change, not the changes queued after it", async () => {
+  const { queryClient, writer } = await harness(buildSettings());
+  const { bodies, gates } = heldSaves();
+
+  let all: Promise<unknown> = Promise.resolve();
+  act(() => {
+    all = Promise.all([
+      writer().write({ includeOwn: true }),
+      writer().write({ keepWorktree: true }),
+      writer().write({ includeExisting: true }),
+    ]);
+  });
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  await waitFor(() =>
+    expect(queryClient.getQueryData<Settings>(settingsQueryKey)).toMatchObject({
+      includeOwn: true,
+      keepWorktree: true,
+      includeExisting: true,
+    }),
+  );
+
+  gates[0].open();
+  await waitFor(() => expect(bodies).toHaveLength(2));
+  expect(bodies[1]).toMatchObject({ includeOwn: true, keepWorktree: true, includeExisting: false });
+
+  gates[1].open();
+  gates[2].open();
+  await act(() => all);
+  expect(bodies[2]).toMatchObject({ includeOwn: true, keepWorktree: true, includeExisting: true });
+});
+
+test("a refused write in the middle drops only its own change and keeps the one still queued", async () => {
+  const { queryClient, writer } = await harness(buildSettings());
+  const { bodies, gates } = heldSaves((body) => body.keepWorktree);
+
+  let settled: Promise<PromiseSettledResult<unknown>[]> = Promise.resolve([]);
+  act(() => {
+    settled = Promise.allSettled([
+      writer().write({ includeOwn: true }),
+      writer().write({ keepWorktree: true }),
+      writer().write({ includeExisting: true }),
+    ]);
+  });
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  gates[0].open();
+  gates[1].open();
+  await waitFor(() => expect(bodies).toHaveLength(3));
+
+  expect(queryClient.getQueryData<Settings>(settingsQueryKey)).toMatchObject({
+    includeOwn: true,
+    keepWorktree: false,
+    includeExisting: true,
+  });
+  expect(bodies[2]).toMatchObject({ includeOwn: true, keepWorktree: false, includeExisting: true });
+
+  gates[2].open();
+  const results = await act(() => settled);
+  expect(results.map((result) => result.status)).toEqual(["fulfilled", "rejected", "fulfilled"]);
+});
+
+test("a write after a refused one does not send the refused change again", async () => {
+  const { writer } = await harness(buildSettings({ keepWorktree: false }));
+  const bodies: Settings[] = [];
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), async ({ request }) => {
+      const body = (await request.json()) as Settings;
+      bodies.push(body);
+      if (body.keepWorktree) {
+        return HttpResponse.json({ error: { code: "bad_request", message: "refused" } }, { status: 400 });
+      }
+      return HttpResponse.json(body);
+    }),
+  );
+
+  await act(async () => {
+    await expect(writer().write({ keepWorktree: true })).rejects.toThrow("refused");
+  });
+  await act(() => writer().write({ includeOwn: true }));
+
+  expect(bodies[1]).toMatchObject({ includeOwn: true, keepWorktree: false });
+});
