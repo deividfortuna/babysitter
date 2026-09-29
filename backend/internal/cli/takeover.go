@@ -66,6 +66,9 @@ func writeTakeover(out io.Writer, w httpd.Watch, tk httpd.TakeoverResponse) {
 	if tk.NewConversation {
 		fmt.Fprintln(out, "The watch had no conversation yet, so the agent starts a new one.")
 	}
+	if tk.BranchUpdating {
+		fmt.Fprintln(out, "GitHub is updating the branch; your worktree is still on the old head, so fetch before you push.")
+	}
 	fmt.Fprintf(out, "Give it back with: babysitter watch handback %s\n", watchName(w))
 }
 

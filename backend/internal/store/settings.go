@@ -32,6 +32,8 @@ type Settings struct {
 	Provider                    string
 	Model                       string
 	Effort                      string
+	BranchUpdate                BranchUpdate
+	UpdateOnGitHub              bool
 }
 
 type ApprovalMode string
@@ -44,6 +46,17 @@ const (
 var ApprovalModes = []ApprovalMode{ApprovalAuto, ApprovalManual}
 
 func (m ApprovalMode) Valid() bool { return slices.Contains(ApprovalModes, m) }
+
+type BranchUpdate string
+
+const (
+	BranchRebase BranchUpdate = "rebase"
+	BranchMerge  BranchUpdate = "merge"
+)
+
+var BranchUpdates = []BranchUpdate{BranchRebase, BranchMerge}
+
+func (b BranchUpdate) Valid() bool { return slices.Contains(BranchUpdates, b) }
 
 const (
 	MinInterval = 10 * time.Second
@@ -64,6 +77,8 @@ func DefaultSettings() Settings {
 		NotificationsBackgroundOnly: true,
 		ApprovalMode:                ApprovalManual,
 		Provider:                    "claude",
+		BranchUpdate:                BranchRebase,
+		UpdateOnGitHub:              true,
 	}
 }
 
@@ -88,6 +103,9 @@ func (s Settings) Validate() error {
 	}
 	if !s.ApprovalMode.Valid() {
 		return fmt.Errorf("%w: unknown approval mode %q: use auto or manual", ErrInvalidSettings, s.ApprovalMode)
+	}
+	if !s.BranchUpdate.Valid() {
+		return fmt.Errorf("%w: unknown branch update %q: use rebase or merge", ErrInvalidSettings, s.BranchUpdate)
 	}
 	if s.ApprovalsRequired != nil && *s.ApprovalsRequired < 0 {
 		return fmt.Errorf("%w: the approvals must be 0 or more, got %d", ErrInvalidSettings, *s.ApprovalsRequired)
@@ -150,7 +168,7 @@ func parseKinds(value string) []NotificationKind {
 	return out
 }
 
-const settingsColumns = "poll_interval_ms, watch_interval_ms, watch_max_interval_ms, check_max_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notifications_background_only, muted_notification_kinds, silent_notification_kinds, approval_mode, auto_approve_rebase, provider, model, effort"
+const settingsColumns = "poll_interval_ms, watch_interval_ms, watch_max_interval_ms, check_max_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notifications_background_only, muted_notification_kinds, silent_notification_kinds, approval_mode, auto_approve_rebase, provider, model, effort, branch_update, update_on_github"
 
 func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	var (
@@ -166,7 +184,7 @@ func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	err := s.db.QueryRowContext(ctx, "SELECT "+settingsColumns+" FROM settings WHERE id = 1").
 		Scan(&pollMS, &watchMS, &maxMS, &checkMS, &approvals, &out.MergeMethod, &out.IncludeExisting, &out.IncludeOwn, &out.KeepWorktree,
 			&out.NotificationsEnabled, &out.NotificationsBackgroundOnly, &muted, &silent, &out.ApprovalMode, &out.AutoApproveRebase,
-			&out.Provider, &out.Model, &out.Effort)
+			&out.Provider, &out.Model, &out.Effort, &out.BranchUpdate, &out.UpdateOnGitHub)
 	if err != nil {
 		return Settings{}, fmt.Errorf("read settings: %w", err)
 	}
@@ -224,12 +242,14 @@ UPDATE settings SET
     auto_approve_rebase = ?,
     provider            = ?,
     model               = ?,
-    effort              = ?
+    effort              = ?,
+    branch_update       = ?,
+    update_on_github    = ?
 WHERE id = 1`,
 		next.PollInterval.Milliseconds(), next.WatchInterval.Milliseconds(), next.WatchMaxInterval.Milliseconds(), next.CheckMaxInterval.Milliseconds(), approvals,
 		next.MergeMethod, next.IncludeExisting, next.IncludeOwn, next.KeepWorktree,
 		next.NotificationsEnabled, next.NotificationsBackgroundOnly, muted, silent, next.ApprovalMode, next.AutoApproveRebase,
-		next.Provider, next.Model, next.Effort)
+		next.Provider, next.Model, next.Effort, next.BranchUpdate, next.UpdateOnGitHub)
 	if err != nil {
 		return Settings{}, fmt.Errorf("save settings: %w", err)
 	}

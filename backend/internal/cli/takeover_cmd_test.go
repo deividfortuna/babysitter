@@ -235,3 +235,15 @@ func TestStatusAndListOfAStoppedWatchDoNotSayTheSessionIsWithYou(t *testing.T) {
 		t.Fatalf("list = %q, %v", out, err)
 	}
 }
+
+func TestTheTakeoverSaysWhenGitHubIsUpdatingTheBranch(t *testing.T) {
+	t.Parallel()
+	const warning = "GitHub is updating the branch; your worktree is still on the old head, so fetch before you push"
+	for updating, want := range map[bool]bool{true: true, false: false} {
+		var out strings.Builder
+		writeTakeover(&out, httpd.Watch{Repo: "octo/hello", Number: 3}, httpd.TakeoverResponse{HeadRef: "fix", BranchUpdating: updating})
+		if got := strings.Contains(out.String(), warning); got != want {
+			t.Errorf("branchUpdating %v: banner has the warning = %v, want %v:\n%s", updating, got, want, out.String())
+		}
+	}
+}

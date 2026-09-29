@@ -33,6 +33,7 @@ func TestTheRepositoryConfigurationKeepsEachField(t *testing.T) {
 			Provider: "copilot", Model: "gpt-5", ApprovalMode: ApprovalAuto, MergeMethod: "squash",
 			ApprovalsSet: true, Approvals: &two, IncludeExisting: &yes,
 			AutoApproveRebase: &yes, IncludeOwn: &no, KeepWorktree: &yes,
+			BranchUpdate: BranchMerge, UpdateOnGitHub: &no,
 		},
 		DependabotScope: dependabot.Minor, DependabotApproval: ApproveGreen, DependabotLimit: 3,
 	}
@@ -48,6 +49,7 @@ func TestTheRepositoryConfigurationKeepsEachField(t *testing.T) {
 		got.Overrides.ApprovalMode != ApprovalAuto || got.Overrides.MergeMethod != "squash" || !got.Overrides.ApprovalsSet ||
 		*got.Overrides.Approvals != 2 || !*got.Overrides.IncludeExisting ||
 		!*got.Overrides.AutoApproveRebase || *got.Overrides.IncludeOwn || !*got.Overrides.KeepWorktree ||
+		got.Overrides.BranchUpdate != BranchMerge || *got.Overrides.UpdateOnGitHub ||
 		got.DependabotScope != dependabot.Minor || got.DependabotApproval != ApproveGreen || got.DependabotLimit != 3 {
 		t.Fatalf("GetRepoConfig() = %+v, want %+v", got, want)
 	}
@@ -62,7 +64,8 @@ func TestAnEmptyOverrideStaysUnset(t *testing.T) {
 		t.Fatal(err)
 	}
 	o := c.Overrides
-	if o.IncludeExisting != nil || o.AutoApproveRebase != nil || o.IncludeOwn != nil || o.KeepWorktree != nil {
+	if o.IncludeExisting != nil || o.AutoApproveRebase != nil || o.IncludeOwn != nil || o.KeepWorktree != nil ||
+		o.BranchUpdate != "" || o.UpdateOnGitHub != nil {
 		t.Fatalf("Overrides = %+v, want each switch unset so the daemon decides", o)
 	}
 }
@@ -185,7 +188,7 @@ func TestAWatchKeepsItsAutoFieldsAndMergeWhenReady(t *testing.T) {
 	if w.AutoReason != AutoDependabot || w.UpdateType != dependabot.Patch || !w.MergeWhenReady || !w.KeepWorktree {
 		t.Fatalf("CreateWatch() = %+v", w)
 	}
-	w, err = s.SetWatchMergeRules(ctx, w.ID, MergeRules{MergeMethod: "squash"})
+	w, err = s.SetWatchMergeRules(ctx, w.ID, MergeRules{MergeMethod: "squash", BranchUpdate: BranchRebase})
 	if err != nil || w.MergeWhenReady || w.MergeMethod != "squash" {
 		t.Fatalf("SetWatchMergeRules() = %+v, %v, want merge when ready off", w, err)
 	}

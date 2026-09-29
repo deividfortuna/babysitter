@@ -1,4 +1,5 @@
 import { MergeMethodSelect } from "@/components/merge-method-select";
+import { OptionSelect } from "@/components/option-select";
 import {
   DaemonSettings,
   DraftNumberRow,
@@ -11,6 +12,7 @@ import { Switch } from "@/components/ui/switch";
 import { useDraftField } from "@/hooks/use-draft-field";
 import type { Settings } from "@/hooks/useSettings";
 import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/approvals";
+import { BRANCH_UPDATES } from "@/lib/branch-update";
 
 function parseApprovals(text: string): number | null | undefined {
   if (approvalsInvalid(text)) return undefined;
@@ -52,6 +54,37 @@ function ReviewForm({ settings }: { settings: Settings }) {
               className="w-44"
               value={settings.mergeMethod}
               onChange={(mergeMethod) => save({ mergeMethod })}
+            />
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection label="Branch behind its base">
+        <SettingsCard>
+          <SettingsRow
+            label="Branch update"
+            htmlFor="branch-update"
+            description="Rebase rewrites the branch on top of its base. Merge adds a merge commit and keeps the history. The agent solves a conflict the same way."
+          >
+            <OptionSelect
+              id="branch-update"
+              label="Branch behind its base"
+              size="default"
+              className="w-44"
+              options={BRANCH_UPDATES}
+              value={settings.branchUpdate}
+              onChange={(branchUpdate) => save({ branchUpdate })}
+            />
+          </SettingsRow>
+          <SettingsRow
+            label="Update the branch on GitHub first"
+            htmlFor="update-on-github"
+            description="GitHub updates the branch with no turn of the agent. The agent does it only when GitHub refuses."
+          >
+            <Switch
+              id="update-on-github"
+              checked={settings.updateOnGitHub}
+              onCheckedChange={(on) => save({ updateOnGitHub: on })}
             />
           </SettingsRow>
         </SettingsCard>

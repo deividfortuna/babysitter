@@ -23,7 +23,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Navigate } from "@/lib/navigation";
 import { relativeTime } from "@/lib/time";
-import { queuePlace, type Tone } from "@/lib/watch-status";
+import { needsYouFirst, queuePlace, type Tone } from "@/lib/watch-status";
 
 function ciWord(status: PullRequest["ciStatus"]): { label: string; tone: Tone } | null {
   switch (status) {
@@ -139,7 +139,7 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
   const queue = useRepoQueue(enabled && repo ? repo.id : null);
   const queuedByNumber = useMemo(() => new Map((queue.data ?? []).map((item) => [item.number, item])), [queue.data]);
   const watched = useMemo<Watch[]>(
-    () => (watches.data ?? []).filter((w) => w.repo === name).sort((a, b) => b.number - a.number),
+    () => (watches.data ?? []).filter((w) => w.repo === name).sort(needsYouFirst),
     [watches.data, name],
   );
   const watchedNumbers = useMemo(() => new Set(watched.map((w) => w.number)), [watched]);

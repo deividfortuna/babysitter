@@ -56,7 +56,7 @@ test("the panel holds the copy of the defaults of this watch", async () => {
 
   const panel = await openSettings(user);
   expect(within(panel).getByLabelText("Approval mode")).toHaveTextContent("manual");
-  expect(within(panel).getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(within(panel).getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
   expect(within(panel).getByLabelText("Approvals before ready to merge")).toHaveValue(3);
   expect(within(panel).getByLabelText("Merge method")).toHaveTextContent("Squash");
 });
@@ -121,6 +121,39 @@ test("the merge method of the watch changes", async () => {
   expect(decisions[0]).toEqual({ route: "update", watch: 42, body: { mergeMethod: "rebase" } });
 });
 
+test("the branch update of the watch changes", async () => {
+  const { decisions, user } = renderDetail({ branchUpdate: "rebase", updateOnGitHub: true });
+
+  const panel = await openSettings(user);
+  expect(within(panel).getByLabelText("Branch behind its base")).toHaveTextContent("Rebase");
+  await chooseOption(user, within(panel).getByLabelText("Branch behind its base"), "Merge");
+  await waitFor(() => expect(decisions).toHaveLength(1));
+  expect(decisions[0]).toEqual({ route: "update", watch: 42, body: { branchUpdate: "merge" } });
+
+  await user.click(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" }));
+  await waitFor(() => expect(decisions).toHaveLength(2));
+  expect(decisions[1].body).toEqual({ updateOnGitHub: false });
+});
+
+test("a Dependabot watch says the bot updates its branch", async () => {
+  const { user } = renderDetail({ author: "dependabot[bot]", dependabot: true, branchUpdater: "dependabot" });
+
+  const panel = await openSettings(user);
+  expect(within(panel).getAllByText("Dependabot owns the branch, so only the bot updates it.")).toHaveLength(2);
+  expect(within(panel).getByLabelText("Branch behind its base")).toBeDisabled();
+  expect(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" })).toBeDisabled();
+});
+
+test.each<Partial<Watch>>([
+  { branchUpdater: "dependabot", author: "dependabot[bot]", dependabot: true },
+  { branchUpdater: "session", provider: "self" },
+])("a watch whose branch $branchUpdater updates shows GitHub off", async (watch) => {
+  const { user } = renderDetail({ ...watch, updateOnGitHub: true });
+
+  const panel = await openSettings(user);
+  expect(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" })).not.toBeChecked();
+});
+
 test("a self watch shows a fixed auto badge", async () => {
   const { decisions, user } = renderDetail({
     provider: "self",
@@ -131,7 +164,7 @@ test("a self watch shows a fixed auto badge", async () => {
   const panel = await openSettings(user);
   expect(within(panel).getByTitle("A watch your own coding session drives has no gate")).toHaveTextContent("auto");
   expect(within(panel).queryByLabelText("Approval mode")).toBeNull();
-  expect(within(panel).queryByRole("switch", { name: "Approve a clean rebase on its own" })).toBeNull();
+  expect(within(panel).queryByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeNull();
 
   await chooseOption(user, within(panel).getByLabelText("Merge method"), "Merge commit");
   await waitFor(() => expect(decisions).toHaveLength(1));

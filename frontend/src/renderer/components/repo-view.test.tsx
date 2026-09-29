@@ -82,6 +82,26 @@ test("heads the watched and the open pull requests like the other lists", async 
   expect(within(open).getByText("Fix the flaky test")).toBeVisible();
 });
 
+test("puts the watches that need you first in the watched list", async () => {
+  serveApi({
+    repos: [buildRepo()],
+    watches: [
+      buildWatch({ id: 1, number: 20, title: "Quiet newer" }),
+      buildWatch({ id: 2, number: 10, title: "Waiting older", pendingProposal: 2 }),
+    ],
+  });
+
+  renderView();
+
+  const watching = await screen.findByRole("region", { name: "Watching · 2" });
+  const titles = within(watching)
+    .getAllByRole("listitem")
+    .map((row) => row.textContent);
+  expect(titles[0]).toContain("Waiting older");
+  expect(titles[1]).toContain("Quiet newer");
+  expect(within(watching).getByRole("button", { name: "Review proposal 2" })).toBeVisible();
+});
+
 test("keeps the title in the view header", async () => {
   serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
 

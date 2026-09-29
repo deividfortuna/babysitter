@@ -45,8 +45,8 @@ post its replies, `watch activity` has an `agent_failed` row with the
 reason and the `watch retry` command. Tell the user the reason. Retry
 only when the user says so, or when the reason is gone: a credential
 that git could not read, for example, needs the user first. A retry
-rebases a turn that only added commits onto a branch that moved. Work
-the daemon cannot rebase goes to that agent, which brings it up to the
+rebases a turn that only added commits onto a branch that moved, or merges the branch into it when the watch merges. Work
+the daemon cannot rebase or merge goes to that agent, which brings it up to the
 branch in its next turn. In `manual`, the daemon refuses a retry of work
 the user never approved. It refuses a reject of a failed proposal whose
 push landed or whose reply posted: part of it is on GitHub, and a retry

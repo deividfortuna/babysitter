@@ -96,10 +96,12 @@ function AgentForm({ settings }: { settings: Settings }) {
       <SettingsSection label="While you approve">
         <SettingsCard>
           <SettingsRow
-            label="Approve a clean rebase on its own"
+            label="Approve a clean rebase or merge on its own"
             htmlFor="auto-rebase"
             description={
-              auto ? "Auto approves every turn, so this has no effect." : "A rebase that conflicts always asks."
+              auto
+                ? "Auto approves every turn, so this has no effect."
+                : "A rebase or merge that conflicts always asks."
             }
             disabled={auto}
           >

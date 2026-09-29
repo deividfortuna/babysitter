@@ -191,12 +191,14 @@ watch:
 | Agent | The provider and the model of a new watch, Claude and its default model by default |
 | Effort | How much the model reasons before it acts: a level the model takes, such as `low`, `medium` or `high`. Empty takes the default of the model. A model can take no effort level, and then the field stays empty |
 | Approval mode | Who releases the work of each turn of the agent of a new watch: `manual` holds it until you approve it, `auto` pushes and posts as soon as the turn ends. A new install asks, `manual`; an install that upgrades keeps `auto`. A `--provider self` watch always runs in auto |
-| Approve a clean rebase on its own | Work you approved does not ask again because the branch moved under it. A rebase that conflicts always asks. No effect in auto |
+| Approve a clean rebase or merge on its own | Work you approved does not ask again because the branch moved under it. A rebase or merge that conflicts always asks. No effect in auto |
 | Approvals before ready to merge | What a new watch wants before it calls a pull request ready; empty takes the rule of the base branch |
 | Merge method | The merge method of a new watch; empty takes the first one the repository allows |
 | Report the review items that already exist | A new watch hands the agent what is on the pull request already |
 | Report my own comments | A new watch reports the comments of your own user, for a repository you review yourself |
 | Keep the worktree when a watch stops | The worktree of the agent stays on disk, however the watch ends |
+| Branch behind its base | How a new watch updates a branch that fell behind its base: `rebase` (default) or `merge`, which adds a merge commit of the base. The agent solves a conflict with the same method |
+| Update the branch on GitHub first | On by default. GitHub updates a branch that fell behind its base, with no turn of the agent. The agent does it only when GitHub refuses |
 
 Each of these values comes from the first layer that sets it, from left
 to right:
@@ -219,8 +221,8 @@ A watch copies the values at its start, and a later change to the
 repository or to the daemon does not reach a running watch. The
 **Watch settings** panel of the watch, or `watch mode` and
 `watch merge-rules`, change the approval mode, the clean rebase switch,
-the approvals and the merge method of one running watch and leave the
-defaults alone. The worktree switch applies when the watch stops, and
+the approvals, the merge method and the branch update of one running
+watch and leave the defaults alone. The worktree switch applies when the watch stops, and
 the stop dialog or `watch stop --keep-worktree` can still say otherwise.
 
 The **Notifications** page holds four more:
@@ -253,10 +255,12 @@ babysitter settings set --approvals 2              # a number, 0 for none
 babysitter settings set --approvals branch         # give the decision back to the base branch
 babysitter settings set --merge-method rebase --keep-worktree
 babysitter settings set --approval-mode auto       # push and post as soon as each turn ends
-babysitter settings set --auto-approve-rebase      # approved work goes out again after a clean rebase
+babysitter settings set --auto-approve-rebase      # approved work goes out again after a clean rebase or merge
 babysitter settings set --include-existing --include-own
 babysitter settings set --provider copilot --model auto   # the agent of a new watch; a new provider alone takes its default model
 babysitter settings set --model opus --effort high        # the effort of that model; a new model alone takes its default effort
+babysitter settings set --branch-update merge      # a branch behind its base gets a merge of the base, not a rebase
+babysitter settings set --update-on-github=false   # the agent updates a branch behind its base, GitHub does not
 ```
 
 The notification flags of `settings set` are in
@@ -361,6 +365,8 @@ babysitter watch start --include-existing        # also hand the agent the revie
 babysitter watch start --include-own             # also report the comments of your own user
 babysitter watch start --merge-when-ready        # the daemon merges with the method of the watch as soon as the watch is ready
 babysitter watch start --keep-worktree           # a stop leaves the worktree on disk; without the flag the repository, then the daemon, decides
+babysitter watch start --branch-update merge      # rebase or merge: how the branch is updated when it falls behind its base, and how the agent solves a conflict
+babysitter watch start --update-on-github=false   # the agent updates a branch behind its base; without the flag the repository, then the daemon, decides
 babysitter watch list                             # the watched pull requests
 babysitter watch list --all                       # stopped watches too
 babysitter watch status 1                         # state, checks, the agent, and what blocks the merge
@@ -383,12 +389,13 @@ babysitter watch approve 1 --stop-asking          # release it and run the watch
 babysitter watch approve 1 --reject-push          # post the replies without the commits
 babysitter watch reject 1 --reason "use a table test" --discard # nothing goes out; the agent works on your reason
 babysitter watch mode 1 auto --release            # switch a running watch to auto, which releases what waits
-babysitter watch mode 1 manual --auto-approve-rebase # back to manual, and let a clean rebase of approved work go out on its own
+babysitter watch mode 1 manual --auto-approve-rebase # back to manual, and let a clean rebase or merge of approved work go out on its own
 babysitter watch merge-rules 1 --approvals 0      # change the approvals of a running watch; branch reads the rule of the base branch again
 babysitter watch merge-rules 1 --merge-method rebase # change the merge method of a running watch; empty takes the first method the repository allows
 babysitter watch merge-rules 1 --merge-when-ready # let the daemon merge watch 1 when it is ready; =false turns it off
+babysitter watch merge-rules 1 --branch-update merge --update-on-github=false # change how a running watch updates a branch behind its base
 babysitter watch start --approval-mode auto       # the approval mode of this watch; without the flag the settings decide
-babysitter watch start --auto-approve-rebase      # approved work goes out again after a clean rebase, without asking
+babysitter watch start --auto-approve-rebase      # approved work goes out again after a clean rebase or merge, without asking
 babysitter watch stop 1                           # stop with a summary, and delete the worktree unless the settings keep it
 babysitter watch stop 1 --keep-worktree           # stop but leave the worktree on disk; without the flag the rule the watch started with decides
 babysitter watch merge 1                          # merge the pull request once the watch says it is ready, and stop
@@ -502,7 +509,7 @@ snapshot keys the pull request by the owner and name GitHub returns.
 The snapshot holds:
 
 - `snapshot_at`: when the snapshot was taken
-- `pr`: repository, number, URL, title, author, state, draft, merged and
+- `pr`: repository, number, `node_id`, URL, title, author, state, draft, merged and
   closed flags, head and base branch, the `head_repo` of a fork, head
   commit, `mergeable` (`null`
   while GitHub computes it), `mergeable_state`, `review_decision`, the
@@ -855,9 +862,50 @@ The daemon asks for no review while reviewers are already requested. A
 request that fails three times leaves a row in the activity that names
 the reviewers and the cause.
 
-When the branch falls behind its base or conflicts with it, the agent
-rebases in the worktree, resolves each conflict on the merits of both
-sides, and commits. A pull request opened by Dependabot is different:
+When the branch falls behind its base, the daemon first asks GitHub to
+update it, with the GraphQL mutation `updatePullRequestBranch`, and the
+method of the watch: `rebase` or `merge`. The expected head of the
+mutation makes GitHub refuse the update when someone pushed in between.
+The activity records `branch_updated`, and the agent gets no message.
+GitHub accepts the request and moves the branch a moment later, so the
+answer still names the old head and the next poll sees the new one. A
+conflict is refused at once. When the head did not move three poll
+intervals after GitHub accepted the request, the activity records
+`branch_update_failed` and the agent updates the branch. Until the head
+moves or the update is recorded as failed, the agent gets no message,
+and `watch send` is refused with the reason.
+The daemon waits while work is in flight: while the agent works, while a
+proposal is open or waits for you, or while the session is with you. A
+rebase on GitHub would move the branch under that work, so the daemon
+asks GitHub after the work is done, and until then the agent gets no
+message about the branch.
+The work branch of the worktree follows the new head before the next
+message. It follows any rewrite of the pull request branch, by GitHub,
+by you or by a force push, when it sits on a head that the daemon saw
+before, because then it holds no work that the branch lacks. GitHub gets one try for each head, and a new head that is
+still behind gets a new try. When GitHub refuses, for example on a
+conflict, the activity records `branch_update_failed` with the reason,
+and the agent updates the branch. Only a GraphQL error of the type
+`UNPROCESSABLE`, `FORBIDDEN` or `NOT_FOUND` is a refusal. A network
+error, a timeout, a 5xx answer, a rate limit or an error of another
+type is not a refusal: the next poll tries again, and after three
+failures for the same head the agent updates the branch. When a
+proposal of the agent failed, the daemon does not ask GitHub: the agent
+gets the branch behind its base, and its next turn also solves the
+failed proposal.
+
+The agent updates the branch in the worktree with the method of the
+watch: it rebases onto the base, or it merges the base into the branch.
+It resolves each conflict on the merits of both sides, and commits.
+When the pull request branch moves under work that did not go out yet,
+the daemon moves the work with the same method: it rebases the new
+commits of the work, or, with `merge`, it merges the branch into the
+work and pushes without force. A conflict goes back to the agent.
+GitHub cannot solve a conflict, so a branch in conflict goes to the agent
+at once. With `--update-on-github=false`, the agent also updates a branch
+that is only behind. A `--provider self` watch never asks GitHub: your
+own session pushes the branch, and a rebase on GitHub would move the
+branch under it. A pull request opened by Dependabot is different:
 the branch belongs to the bot, which drops the pull request or opens it
 again when somebody else pushes to it. The agent comments
 `@dependabot rebase` instead, and the daemon never pushes and never
@@ -882,6 +930,7 @@ babysitter repo config acme/billing --dependabot-limit 2        # Dependabot wat
 babysitter repo config acme/billing --merge-method squash --approval-mode manual   # the overrides of each watch on the repository
 babysitter repo config acme/billing --provider claude --model opus --effort max   # the agent of each watch on the repository
 babysitter repo config acme/billing --keep-worktree --include-own=false            # a switch takes an override too
+babysitter repo config acme/billing --branch-update merge --update-on-github=false # how the watches on the repository update a branch behind its base
 babysitter repo config acme/billing --approvals default --reset-overrides           # back to the settings of the daemon
 babysitter repo config acme/billing --auto-start-mine=false     # turn a toggle off; the watches that run go on
 babysitter repo queue acme/billing                              # the Dependabot pull requests that wait
@@ -998,7 +1047,9 @@ of the head it started from, none of them a merge, the daemon rebases
 those commits onto the new head and pushes them. A turn that takes over
 the commits of a failed release starts from the head that release
 started from. A rewrite that would drop a commit the work branch never
-had does not go out.
+had does not go out. A watch with the branch update `merge` never
+pushes with force: a rewrite fails its release and names the commits of
+the branch that the work lacks.
 The push runs with `--no-verify`, because the session never ran the
 hooks of the repository either, and with `GIT_TERMINAL_PROMPT=0` and
 `GCM_INTERACTIVE=never`.
@@ -1006,14 +1057,17 @@ hooks of the repository either, and with `GIT_TERMINAL_PROMPT=0` and
 A release that fails is an `agent_failed` row in the activity, with the
 reason and the command that retries it, and a notification of kind
 `watch`. `babysitter watch retry <watch> [proposal]` pushes and posts
-again. In `auto`, or with **Approve a clean rebase on its own**, it
+again. In `auto`, or with **Approve a clean rebase or merge on its own**, it
 rebases a turn that only added commits onto a pull request branch that
 moved; otherwise the next poll rebases it and asks you again. Each
-reply that names one of the old commits then names the rebased one. In
-`manual`, a retry of work you never approved is refused. Work the daemon cannot rebase goes to the agent: a rebase
+reply that names one of the old commits then names the rebased one.
+With the branch update `merge`, the daemon merges the pull request
+branch into the work instead: no commit is rewritten, the replies stay
+as they were, and a merge that conflicts goes to the agent the same
+way. In `manual`, a retry of work you never approved is refused. Work the daemon cannot rebase or merge goes to the agent: a rebase or merge
 that conflicts, at once, and a rewrite that lacks commits of the pull
 request branch, on a retry. These are the only failed pushes the agent
-hears about. The row of a rebase that conflicts names no retry, because
+hears about. The row of a rebase or merge that conflicts names no retry, because
 only the agent can resolve it. Its next turn brings the work up to the
 branch and takes over the replies that did not go out. The agent can
 record a reply again for the same comment, and the new reply takes the
@@ -1068,9 +1122,11 @@ decision carries all of them. `watch send` is refused with the reason.
 When the pull request branch moves while you read, the daemon rebases
 the proposal itself. A clean rebase comes back to you marked rebased,
 with the commits it now names, and a reply that named an old commit
-names the new one; with **Approve a clean rebase on its own**, work you
-approved goes out without asking again. A rebase that conflicts goes to
-the agent, and in `manual` its resolution asks you, because nobody read
+names the new one; with **Approve a clean rebase or merge on its own**, work you
+approved goes out without asking again. With the branch update `merge`,
+the daemon merges the branch into the proposal instead: it comes back
+marked merged, and its commits and replies stay as they were. A rebase
+or a merge that conflicts goes to the agent, and in `manual` its resolution asks you, because nobody read
 it. Work that rewrote the branch is not rebased: its release fails, and
 its retry goes to the agent. Stop declines what waits. A watch started
 with `--provider self` has no gate: your own session pushes and posts,
@@ -1087,7 +1143,7 @@ rejection, **Approve and stop asking** and a switch to auto each ask
 first. The
 **Watch settings** button at the far right of the header, after
 **Merge**, opens a panel docked on the right with the copy of the
-defaults of that watch: the approval mode, **Approve a clean rebase on
+defaults of that watch: the approval mode, **Approve a clean rebase or merge on
 its own**, the approvals before ready to merge and the merge method.
 Each one saves when you change it, and an empty approvals field reads
 the rule of the base branch again. The dialog that starts a watch sets
@@ -1144,7 +1200,9 @@ the `dontAsk` of the daemon that the conversation would keep. Push with
 `git push origin HEAD:<head branch>`: a plain `git push` fails, because
 the work branch has another name. `--shell` runs your shell in the
 worktree instead of the agent. A watch with no conversation yet starts
-a new one, and the command says so. The takeover of a self watch, of a
+a new one, and the command says so. When GitHub is updating the branch,
+the takeover goes through and the command says that your worktree is
+still on the old head, so fetch before you push. The takeover of a self watch, of a
 stopped watch or of a watch that is already taken over is refused, and
 so is the takeover of a watch whose provider the daemon does not have,
 unless you pass `--shell`.

@@ -23,6 +23,7 @@ type Takeover struct {
 	Argv            []string
 	Declined        []int
 	NewConversation bool
+	BranchUpdating  bool
 }
 
 type TakeoverOptions struct {
@@ -56,6 +57,7 @@ func (s *Service) Takeover(ctx context.Context, id int64, o TakeoverOptions) (Ta
 	if err != nil {
 		return Takeover{}, err
 	}
+	updating := s.waitsForGitHub(ctx, w)
 	fresh := w.AgentSession == "" && !o.Shell
 	session := w.AgentSession
 	if fresh {
@@ -77,7 +79,7 @@ func (s *Service) Takeover(ctx context.Context, id int64, o TakeoverOptions) (Ta
 	s.Kick(w.ID)
 	return Takeover{
 		Watch: w, WorktreeDir: w.WorktreeDir, WorkBranch: w.WorkBranch, HeadRef: w.HeadRef,
-		Argv: argv, Declined: declined, NewConversation: fresh,
+		Argv: argv, Declined: declined, NewConversation: fresh, BranchUpdating: updating,
 	}, nil
 }
 

@@ -1,34 +1,95 @@
 package ghfake
 
 import (
+	"fmt"
 	"net/http"
 	"strings"
 )
 
-// graphql answers the review state query of ghclient: the review requests
-// and the review threads of one pull request, on one page.
+type graphqlVariables struct {
+	Owner  string `json:"owner"`
+	Name   string `json:"name"`
+	Number int    `json:"number"`
+	ID     string `json:"id"`
+	Head   string `json:"head"`
+	Method string `json:"method"`
+}
+
 func (c *call) graphql() {
 	var req struct {
-		Variables struct {
-			Owner  string `json:"owner"`
-			Name   string `json:"name"`
-			Number int    `json:"number"`
-		} `json:"variables"`
+		Query     string           `json:"query"`
+		Variables graphqlVariables `json:"variables"`
 	}
 	if !c.decode(&req) {
 		return
 	}
-	v := req.Variables
+	if strings.Contains(req.Query, "updatePullRequestBranch") {
+		c.updateBranch(req.Variables)
+		return
+	}
+	c.reviewState(req.Variables)
+}
+
+func (c *call) pullOfQuery(v graphqlVariables) *PR {
 	r, ok := c.g.repos[strings.ToLower(v.Owner+"/"+v.Name)]
 	var p *PR
 	if ok {
 		p = r.find(v.Number)
 	}
 	if p == nil {
-		c.json(http.StatusOK, map[string]any{
-			"data":   map[string]any{"repository": nil},
-			"errors": []map[string]string{{"type": "NOT_FOUND", "message": "Could not resolve to a PullRequest."}},
-		})
+		c.graphqlError("NOT_FOUND", "Could not resolve to a PullRequest.")
+	}
+	return p
+}
+
+func (c *call) graphqlError(kind, message string) {
+	c.json(http.StatusOK, map[string]any{
+		"data":   nil,
+		"errors": []map[string]string{{"type": kind, "message": message}},
+	})
+}
+
+func nodeID(r *Repo, p *PR) string {
+	return fmt.Sprintf("PR_%s#%d", r.FullName(), p.Number)
+}
+
+func (c *call) updateBranch(v graphqlVariables) {
+	p := c.g.pullOfNode(v.ID)
+	if p == nil {
+		c.graphqlError("NOT_FOUND", "Could not resolve to a node with the global id of '"+v.ID+"'")
+		return
+	}
+	p.BranchUpdates = append(p.BranchUpdates, BranchUpdate{Method: v.Method, ExpectedHead: v.Head})
+	switch {
+	case p.RefuseBranchUpdate != "":
+		c.graphqlError("UNPROCESSABLE", p.RefuseBranchUpdate)
+		return
+	case v.Head != p.HeadSHA:
+		c.graphqlError("UNPROCESSABLE", "Expected head oid "+v.Head+" does not match the head of the pull request")
+		return
+	}
+	accepted := p.HeadSHA
+	p.HeadSHA = fmt.Sprintf("%s-%d", strings.ToLower(v.Method), c.g.id())
+	p.MergeableState = "unknown"
+	c.json(http.StatusOK, map[string]any{"data": map[string]any{"updatePullRequestBranch": map[string]any{
+		"pullRequest": map[string]any{"headRefOid": accepted},
+	}}})
+}
+
+func (g *GitHub) pullOfNode(id string) *PR {
+	for _, r := range g.order {
+		for _, p := range r.order {
+			if nodeID(r, p) == id {
+				return p
+			}
+		}
+	}
+	return nil
+}
+
+func (c *call) reviewState(v graphqlVariables) {
+	p := c.pullOfQuery(v)
+	if p == nil {
 		return
 	}
 

@@ -526,7 +526,7 @@ func repository(r *Repo) *github.Repository {
 func pullRequest(r *Repo, p *PR) *github.PullRequest {
 	headOwner, headName, _ := strings.Cut(p.HeadRepo, "/")
 	out := &github.PullRequest{
-		ID: new(p.ID), Number: new(p.Number), Title: new(p.Title), State: new(p.State),
+		ID: new(p.ID), NodeID: new(nodeID(r, p)), Number: new(p.Number), Title: new(p.Title), State: new(p.State),
 		Merged: new(p.Merged), MergedAt: stamp(p.MergedAt), ClosedAt: stamp(p.ClosedAt), Draft: new(p.Draft),
 		Mergeable: p.Mergeable, MergeableState: str(p.MergeableState), User: user(p.Author), HTMLURL: new(p.URL),
 		Head: &github.PullRequestBranch{

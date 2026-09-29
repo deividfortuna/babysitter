@@ -614,6 +614,26 @@ test("a proposal the daemon rebased says so", async () => {
   ).toBeVisible();
 });
 
+test("a proposal the daemon merged the head into says so", async () => {
+  renderPending({
+    proposal: {
+      rebasedFrom: "4e7d0b8bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      movedBy: "merge",
+      workSha: "c81f7e2eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+    },
+  });
+  const panel = await section();
+
+  expect(within(panel).getByText("merged")).toBeVisible();
+  expect(within(panel).queryByText("rebased")).toBeNull();
+  expect(within(panel).getByText("work c81f7e2, was 4e7d0b8")).toBeVisible();
+  expect(
+    within(panel).getByText(
+      "The pull request branch moved while this waited, and the daemon merged it into the work without conflicts. The commits you were reading stay as they were, with a merge commit on top.",
+    ),
+  ).toBeVisible();
+});
+
 test("a Dependabot proposal carries replies only", async () => {
   renderPending({
     watch: { author: "dependabot[bot]", dependabot: true },

@@ -158,9 +158,11 @@ test("a watch with a proposal waiting needs you in the list", async () => {
 
   renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
 
-  const row = (await screen.findByText("Retry webhooks")).closest("button") as HTMLElement;
+  const needsYou = await screen.findByRole("region", { name: "Needs you · 1" });
+  const row = within(needsYou).getByRole("button", { name: /Retry webhooks/ });
   expect(within(row).getByText("approval needed")).toBeVisible();
-  expect(screen.getByText("2 active · 1 needs you")).toBeVisible();
+  expect(within(needsYou).getByRole("button", { name: "Review proposal 3" })).toBeVisible();
+  expect(within(needsYou).queryByText("Quiet one")).toBeNull();
 });
 
 test("a stop declines the proposal that waits", async () => {
@@ -182,7 +184,7 @@ test("the Agent page holds the approval mode and the clean rebase", async () => 
   renderWithProviders(<SettingsDialog open category="agent" onOpenChange={vi.fn()} />);
 
   expect(await screen.findByRole("radio", { name: /Manual/ })).toBeChecked();
-  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
+  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" });
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
 
@@ -195,7 +197,7 @@ test("the clean rebase means nothing in auto", async () => {
 
   renderWithProviders(<SettingsDialog open category="agent" onOpenChange={vi.fn()} />);
 
-  expect(await screen.findByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(await screen.findByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
   expect(screen.getByText("Auto approves every turn, so this has no effect.")).toBeVisible();
 });
 
@@ -203,7 +205,7 @@ test("the panel sets the clean rebase of one watch", async () => {
   const { decisions, user } = renderDetail({ approvalMode: "manual" });
 
   await openSettings(user);
-  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
+  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" });
   expect(rebase).toBeVisible();
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
@@ -216,7 +218,7 @@ test("the panel shows the clean rebase a watch has", async () => {
   const { user } = renderDetail({ approvalMode: "manual", autoApproveRebase: true });
 
   await openSettings(user);
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
 });
 
 test("the clean rebase of a watch in auto means nothing, so the panel turns it off", async () => {
@@ -224,5 +226,5 @@ test("the clean rebase of a watch in auto means nothing, so the panel turns it o
 
   await openSettings(user);
   expect(screen.getByLabelText("Approval mode")).toHaveTextContent("auto");
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
 });

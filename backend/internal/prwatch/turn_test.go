@@ -341,6 +341,24 @@ func TestARewriteGoesOutWithTheLeasePinnedToTheHeadOfTheTurn(t *testing.T) {
 	}
 }
 
+func TestARewriteDoesNotGoOutWithForceWhenTheWatchMerges(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startWith(func(r *StartRequest) { r.BranchUpdate = new(store.BranchMerge) })
+	fx.turn(w)
+	fx.rel.set(func(f *fakeRelease) {
+		f.history["r1"] = []string{"base"}
+		f.work = "r1"
+	})
+	fx.hook(w, agent.EventStop, `{}`)
+	if got := fx.rel.pushed(); len(got) != 0 {
+		t.Fatalf("pushes = %+v, want no push: a watch that merges never pushes with force", got)
+	}
+	if p := fx.proposal(w, 1); p.Status != store.ProposalFailed || !strings.Contains(p.Error, "abc") {
+		t.Fatalf("proposal = %+v, want it failed on the commit abc the work lacks", p)
+	}
+}
+
 func TestARewriteLeasesTheHeadItWasCheckedAgainst(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

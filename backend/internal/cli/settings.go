@@ -35,7 +35,8 @@ func (s settingsOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(tw, "Muted notification kinds\t%s\n", kindsWord(s.MutedNotificationKinds))
 	fmt.Fprintf(tw, "Silent notification kinds\t%s\n", kindsWord(s.SilentNotificationKinds))
 	fmt.Fprintf(tw, "Approval mode\t%s\n", s.ApprovalMode)
-	fmt.Fprintf(tw, "Approve a clean rebase on its own\t%s\n", yesNo(s.AutoApproveRebase))
+	fmt.Fprintf(tw, "Approve a clean rebase or merge on its own\t%s\n", yesNo(s.AutoApproveRebase))
+	fmt.Fprintf(tw, "Branch behind its base\t%s\n", branchUpdateWord(s.BranchUpdate, s.UpdateOnGitHub))
 	fmt.Fprintf(tw, "Agent\t%s\n", providerLabel(s.Provider, s.Model, s.Effort))
 	return tw.Flush()
 }
@@ -125,6 +126,8 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		provider        string
 		model           string
 		effort          string
+		branchUpdate    string
+		updateOnGitHub  bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set",
@@ -163,6 +166,8 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				{"provider", func(s *httpd.Settings) { s.Provider, s.Model, s.Effort = provider, "", "" }},
 				{"model", func(s *httpd.Settings) { s.Model, s.Effort = model, "" }},
 				{"effort", func(s *httpd.Settings) { s.Effort = effort }},
+				{branchUpdateFlag, func(s *httpd.Settings) { s.BranchUpdate = branchUpdate }},
+				{updateOnGitHubFlag, func(s *httpd.Settings) { s.UpdateOnGitHub = updateOnGitHub }},
 			}
 
 			var asked []func(*httpd.Settings)
@@ -206,10 +211,12 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().BoolVar(&backgroundOnly, "notifications-background-only", false, "the app shows a notification only while none of its windows has the focus")
 	cmd.Flags().BoolVar(&sound, "notification-sound", true, "let every notification kind make a sound; false makes every kind silent")
 	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "who releases the work of a turn of the agent of a new watch: manual waits for you, auto pushes and posts when the turn ends")
-	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "a new watch lets approved work go out after a clean rebase without asking again")
+	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "a new watch lets approved work go out after a clean rebase or merge without asking again")
 	cmd.Flags().StringVar(&provider, "provider", "", "AI provider of a new watch: claude or copilot; a new provider takes its default model and effort unless --model and --effort name them")
 	cmd.Flags().StringVar(&model, "model", "", "model of the provider of a new watch, empty for its default; a new model takes its default effort unless --effort names one")
 	cmd.Flags().StringVar(&effort, "effort", "", "effort level of that model, empty for its default, for example low, medium or high")
+	cmd.Flags().StringVar(&branchUpdate, branchUpdateFlag, "", "how a new watch updates a branch that fell behind its base: rebase or merge. The agent solves a conflict the same way")
+	cmd.Flags().BoolVar(&updateOnGitHub, updateOnGitHubFlag, true, "a new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses")
 	cmd.Flags().StringVar(&mutedKinds, "mute-notifications", "", "notification kinds that reach nobody, separated by commas: "+store.JoinKinds()+". An empty list shows them all again")
 	cmd.Flags().StringVar(&silentKinds, "silent-notifications", "", "notification kinds that arrive without a sound, separated by commas: "+store.JoinKinds()+". An empty list lets them all make a sound again")
 	cmd.MarkFlagsMutuallyExclusive("notification-sound", "silent-notifications")

@@ -109,7 +109,8 @@ type Service struct {
 	turns         keyedQueues
 	work          selfWork
 	waiting       waiting
-	rereviewTries rereviewTries
+	rereviewTries refTries
+	branchTries   refTries
 
 	bgMu sync.Mutex
 	bg   context.Context

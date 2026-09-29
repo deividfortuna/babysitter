@@ -126,6 +126,9 @@ func (s *Service) Send(ctx context.Context, id int64, text string) (store.Activi
 	if err := s.refusePending(ctx, w); err != nil {
 		return store.Activity{}, err
 	}
+	if s.waitsForGitHub(ctx, w) {
+		return store.Activity{}, ErrBranchUpdating
+	}
 	summary := "you told the agent: " + firstLine(text)
 	s.syncWork(ctx, w)
 	return s.deliver(ctx, w, text, summary, deliverAuthor, nil)

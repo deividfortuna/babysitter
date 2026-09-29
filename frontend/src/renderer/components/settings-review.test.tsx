@@ -27,6 +27,18 @@ test("the Review and merge page shows the settings of the daemon", async () => {
   expect(screen.getByRole("switch", { name: "Report the review items that already exist" })).not.toBeChecked();
 });
 
+test("the branch update of a new watch is saved to the daemon", async () => {
+  const { savedSettings, user } = renderReview();
+
+  await chooseOption(user, await screen.findByLabelText("Branch update"), "Merge");
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0]).toMatchObject({ branchUpdate: "merge", updateOnGitHub: true });
+
+  await user.click(screen.getByRole("switch", { name: "Update the branch on GitHub first" }));
+  await waitFor(() => expect(savedSettings).toHaveLength(2));
+  expect(savedSettings[1]).toMatchObject({ branchUpdate: "merge", updateOnGitHub: false });
+});
+
 test("a number of approvals is saved a moment after the typing stops", async () => {
   const { savedSettings, user } = renderReview();
 

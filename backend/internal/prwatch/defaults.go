@@ -30,6 +30,8 @@ func (s *Service) withDefaults(ctx context.Context, req StartRequest) (StartRequ
 	req.ApprovalMode = cmp.Or(req.ApprovalMode, setOrNil(repo.ApprovalMode), &set.ApprovalMode)
 	req.AutoApproveRebase = cmp.Or(req.AutoApproveRebase, repo.AutoApproveRebase, &set.AutoApproveRebase)
 	req.KeepWorktree = cmp.Or(req.KeepWorktree, repo.KeepWorktree, &set.KeepWorktree)
+	req.BranchUpdate = cmp.Or(req.BranchUpdate, setOrNil(repo.BranchUpdate), &set.BranchUpdate)
+	req.UpdateOnGitHub = cmp.Or(req.UpdateOnGitHub, repo.UpdateOnGitHub, &set.UpdateOnGitHub)
 	req.ApprovalsRequired = approvalsOf(req.ApprovalsRequired, repo, set)
 	return req, nil
 }

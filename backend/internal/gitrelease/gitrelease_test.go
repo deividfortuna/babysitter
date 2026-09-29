@@ -283,6 +283,114 @@ func TestARebaseThatConflictsIsAborted(t *testing.T) {
 	}
 }
 
+func TestAMergeKeepsTheCommitsOfBothSides(t *testing.T) {
+	t.Parallel()
+	_, work, other := repos(t)
+	ctx := context.Background()
+	g := New()
+	commit(t, other, "c.txt", "theirs\n", "their c")
+	git(t, other, "push", "-q", "origin", "fix")
+	mine := commit(t, work, "d.txt", "mine\n", "my d")
+	remote, err := g.Fetch(ctx, work, "fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := g.Merge(ctx, work, remote); err != nil {
+		t.Fatalf("Merge() error = %v", err)
+	}
+	head, _ := g.Head(ctx, work)
+	for _, want := range []string{mine, remote} {
+		if kept, err := g.Contains(ctx, work, head, want); err != nil || !kept {
+			t.Fatalf("the merge %s lost %s: %v, %v", head, want, kept, err)
+		}
+	}
+}
+
+func diverged(t *testing.T) (work, mine, theirs string) {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	work = t.TempDir()
+	git(t, work, "init", "-q", "-b", "fix")
+	git(t, work, "config", "user.name", "t")
+	git(t, work, "config", "user.email", "t@example.com")
+	commit(t, work, "a.txt", "one\n", "add a")
+	git(t, work, "checkout", "-q", "-b", "moved")
+	theirs = commit(t, work, "c.txt", "theirs\n", "their c")
+	git(t, work, "checkout", "-q", "fix")
+	mine = commit(t, work, "d.txt", "mine\n", "my d")
+	return work, mine, theirs
+}
+
+func mergedBoth(t *testing.T, g *Runner, work, mine, theirs string) {
+	t.Helper()
+	head, _ := g.Head(context.Background(), work)
+	for _, want := range []string{mine, theirs} {
+		if kept, err := g.Contains(context.Background(), work, head, want); err != nil || !kept {
+			t.Fatalf("the merge %s lost %s: %v, %v", head, want, kept, err)
+		}
+	}
+}
+
+func TestAMergeSkipsTheHooksOfTheRepository(t *testing.T) {
+	hooks := t.TempDir()
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "core.hooksPath")
+	t.Setenv("GIT_CONFIG_VALUE_0", hooks)
+	work, mine, theirs := diverged(t)
+	for _, name := range []string{"pre-merge-commit", "prepare-commit-msg", "commit-msg"} {
+		if err := os.WriteFile(filepath.Join(hooks, name), []byte("#!/bin/sh\nexit 1\n"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+	g := New()
+
+	if err := g.Merge(context.Background(), work, theirs); err != nil {
+		t.Fatalf("Merge() error = %v, want the hooks skipped", err)
+	}
+	mergedBoth(t, g, work, mine, theirs)
+}
+
+func TestAMergeMakesAMergeCommitWhenTheCheckoutOnlyFastForwards(t *testing.T) {
+	t.Parallel()
+	work, mine, theirs := diverged(t)
+	git(t, work, "config", "merge.ff", "only")
+	g := New()
+
+	if err := g.Merge(context.Background(), work, theirs); err != nil {
+		t.Fatalf("Merge() error = %v, want a merge commit whatever merge.ff says", err)
+	}
+	mergedBoth(t, g, work, mine, theirs)
+}
+
+func TestAMergeThatConflictsIsAborted(t *testing.T) {
+	t.Parallel()
+	_, work, other := repos(t)
+	ctx := context.Background()
+	g := New()
+	commit(t, other, "b.txt", "theirs\n", "their b")
+	git(t, other, "push", "-q", "origin", "fix")
+	mine := commit(t, work, "b.txt", "mine\n", "my b")
+	remote, err := g.Fetch(ctx, work, "fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = g.Merge(ctx, work, remote)
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) || !slices.Equal(conflict.Files, []string{"b.txt"}) {
+		t.Fatalf("Merge() error = %v, want the file that conflicts", err)
+	}
+	if head, _ := g.Head(ctx, work); head != mine {
+		t.Fatalf("head = %s, want %s after the abort", head, mine)
+	}
+	if status := git(t, work, "status", "--porcelain"); status != "" {
+		t.Fatalf("the worktree is not clean after the abort: %q", status)
+	}
+}
+
 func TestARebaseThatNeverStartedSaysWhy(t *testing.T) {
 	t.Parallel()
 	_, work, other := repos(t)

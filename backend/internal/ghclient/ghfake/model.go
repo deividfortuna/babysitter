@@ -97,7 +97,14 @@ type PR struct {
 	// Refuse holds the logins GitHub refuses as reviewers, with a 422.
 	Refuse []string
 	// ReviewRequests holds the reviewers of every review request, in order.
-	ReviewRequests [][]string
+	ReviewRequests     [][]string
+	BranchUpdates      []BranchUpdate
+	RefuseBranchUpdate string
+}
+
+type BranchUpdate struct {
+	Method       string
+	ExpectedHead string
 }
 
 // Merge is one merge request the fake received.

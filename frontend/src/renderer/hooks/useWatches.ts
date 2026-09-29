@@ -7,6 +7,7 @@ export type Watch = components["schemas"]["HttpdWatch"];
 export type WatchSummary = components["schemas"]["HttpdWatchSummary"];
 export type StartWatchRequest = components["schemas"]["HttpdStartWatchRequest"];
 export type MergeMethod = NonNullable<Watch["mergeMethod"]>;
+export type BranchUpdate = Watch["branchUpdate"];
 
 export function useWatches(enabled: boolean, status: "active" | "all" = "active") {
   return useQuery({

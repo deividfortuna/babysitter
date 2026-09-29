@@ -44,6 +44,8 @@ func TestSaveSettingsKeepsWhatItWasGiven(t *testing.T) {
 		AutoApproveRebase: true,
 		Provider:          "copilot",
 		Model:             "auto",
+		BranchUpdate:      BranchMerge,
+		UpdateOnGitHub:    false,
 	}
 
 	saved, err := s.SaveSettings(ctx, want)
@@ -67,11 +69,11 @@ func TestSaveSettingsForgetsTheApprovalsAndTakesTheRuleOfTheBranch(t *testing.T)
 	s, _ := openTemp(t)
 	ctx := context.Background()
 	approvals := 3
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, CheckMaxInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, CheckMaxInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual, Provider: "claude", BranchUpdate: BranchRebase}); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, CheckMaxInterval: time.Minute, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, CheckMaxInterval: time.Minute, ApprovalMode: ApprovalManual, Provider: "claude", BranchUpdate: BranchRebase}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -100,6 +102,7 @@ func TestSaveSettingsRejectsValuesTheDaemonCannotRun(t *testing.T) {
 		"longest above the roof":         {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: 25 * time.Hour},
 		"check wait below the floor":     {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, CheckMaxInterval: time.Second},
 		"check wait above the roof":      {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, CheckMaxInterval: 25 * time.Hour},
+		"branch update unknown":          {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, ApprovalMode: ApprovalAuto, Provider: "claude", BranchUpdate: "squash"},
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -257,7 +260,7 @@ func TestUpgradeKeepsTheNotificationsSilentWhenTheSoundWasOff(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := migrateTo(ctx, db, 32); err != nil {
+			if err := migrateTo(ctx, db, 33); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := db.ExecContext(ctx, "UPDATE settings SET notification_sound = ? WHERE id = 1", c.sound); err != nil {
@@ -463,7 +466,7 @@ func TestUpgradeGivesTheWatchALongestIntervalNoShorterThanItsInterval(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := migrateTo(ctx, db, 30); err != nil {
+			if err := migrateTo(ctx, db, schemaBeforeWatchMaxInterval); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := db.ExecContext(ctx, "UPDATE settings SET watch_interval_ms = ? WHERE id = 1", c.watchMS); err != nil {

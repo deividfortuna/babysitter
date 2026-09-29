@@ -36,15 +36,15 @@ test("a tile saves its approval mode at once", async () => {
 test("in auto the clean rebase is off and says why", async () => {
   renderAgent(buildSettings({ approvalMode: "auto" }));
 
-  expect(await screen.findByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(await screen.findByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
   expect(screen.getByText("Auto approves every turn, so this has no effect.")).toBeVisible();
 });
 
 test("in manual the clean rebase tells what still asks", async () => {
   renderAgent(buildSettings({ approvalMode: "manual" }));
 
-  expect(await screen.findByRole("switch", { name: "Approve a clean rebase on its own" })).toBeEnabled();
-  expect(screen.getByText("A rebase that conflicts always asks.")).toBeVisible();
+  expect(await screen.findByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeEnabled();
+  expect(screen.getByText("A rebase or merge that conflicts always asks.")).toBeVisible();
 });
 
 test("keeping the worktree is saved at once", async () => {

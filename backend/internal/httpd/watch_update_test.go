@@ -22,6 +22,7 @@ func (f *fakeWatches) SetMergeRules(ctx context.Context, id int64, c prwatch.Mer
 	}
 	negative := c.ApprovalsRequired.Count != nil && *c.ApprovalsRequired.Count < 0
 	unknownMethod := c.MergeMethod != nil && *c.MergeMethod == "fast-forward"
+	unknownUpdate := c.BranchUpdate != nil && !c.BranchUpdate.Valid()
 	switch {
 	case negative:
 		return store.Watch{}, prwatch.ErrBadApprovals
@@ -29,6 +30,8 @@ func (f *fakeWatches) SetMergeRules(ctx context.Context, id int64, c prwatch.Mer
 		return store.Watch{}, prwatch.ErrWatchStopped
 	case unknownMethod:
 		return store.Watch{}, prwatch.ErrBadMergeMethod
+	case unknownUpdate:
+		return store.Watch{}, prwatch.ErrBadBranchUpdate
 	}
 	f.mu.Lock()
 	f.mergeRules = append(f.mergeRules, c)
@@ -47,7 +50,16 @@ func (f *fakeWatches) SetMergeRules(ctx context.Context, id int64, c prwatch.Mer
 	if c.MergeWhenReady != nil {
 		mergeWhenReady = *c.MergeWhenReady
 	}
-	return f.st.SetWatchMergeRules(ctx, id, store.MergeRules{ApprovalsRequired: approvals, MergeMethod: method, MergeWhenReady: mergeWhenReady})
+	update, onGitHub := w.BranchUpdate, w.UpdateOnGitHub
+	if c.BranchUpdate != nil {
+		update = *c.BranchUpdate
+	}
+	if c.UpdateOnGitHub != nil {
+		onGitHub = *c.UpdateOnGitHub
+	}
+	return f.st.SetWatchMergeRules(ctx, id, store.MergeRules{
+		ApprovalsRequired: approvals, MergeMethod: method, MergeWhenReady: mergeWhenReady, BranchUpdate: update, UpdateOnGitHub: onGitHub,
+	})
 }
 
 func TestAPatchChangesTheMergeRulesOfAWatch(t *testing.T) {
@@ -76,6 +88,24 @@ func TestAPatchChangesTheMergeRulesOfAWatch(t *testing.T) {
 	fw.mu.Unlock()
 	if len(changes) != 3 || changes[2].ApprovalsRequired.Set || changes[1].MergeMethod != nil {
 		t.Fatalf("changes = %+v, want the fields each body left out unset", changes)
+	}
+}
+
+func TestAPatchChangesHowAWatchUpdatesItsBranch(t *testing.T) {
+	t.Parallel()
+	h, st, _ := newTestAPI(t)
+	if _, err := st.CreateWatch(context.Background(), store.Watch{Owner: "octo", Name: "hello", Number: 3, StartedAt: time.Now(), UpdateOnGitHub: true}); err != nil {
+		t.Fatal(err)
+	}
+
+	var got Watch
+	if rec := call(t, h, http.MethodPatch, "/watches/1", `{"branchUpdate":"merge","updateOnGitHub":false}`, &got); rec.Code != http.StatusOK ||
+		got.BranchUpdate != store.BranchMerge || got.UpdateOnGitHub {
+		t.Fatalf("PATCH = %d %s, want a merge by the agent", rec.Code, rec.Body)
+	}
+	if rec := call(t, h, http.MethodPatch, "/watches/1", `{"branchUpdate":"squash"}`, nil); rec.Code != http.StatusBadRequest ||
+		!strings.Contains(rec.Body.String(), `"code":"bad_branch_update"`) {
+		t.Fatalf("PATCH squash = %d %s, want bad_branch_update", rec.Code, rec.Body)
 	}
 }
 
@@ -129,7 +159,7 @@ func TestAPatchRefusesAFieldOfAWatchThatCannotChange(t *testing.T) {
 	} {
 		rec := call(t, h, http.MethodPatch, "/watches/1", body, nil)
 		if rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), `"code":"field_not_changeable"`) ||
-			!strings.Contains(rec.Body.String(), "only approvalsRequired, mergeMethod, mergeWhenReady can") {
+			!strings.Contains(rec.Body.String(), "only approvalsRequired, mergeMethod, mergeWhenReady, branchUpdate, updateOnGitHub can") {
 			t.Fatalf("PATCH %s = %d %s", body, rec.Code, rec.Body)
 		}
 	}

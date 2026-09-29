@@ -29,6 +29,8 @@ type overridesOutput struct {
 	AutoApproveRebase *bool  `json:"auto_approve_rebase,omitempty"`
 	IncludeOwn        *bool  `json:"include_own,omitempty"`
 	KeepWorktree      *bool  `json:"keep_worktree,omitempty"`
+	BranchUpdate      string `json:"branch_update,omitempty"`
+	UpdateOnGitHub    *bool  `json:"update_on_github,omitempty"`
 }
 
 type repoConfigOutput struct {
@@ -54,6 +56,7 @@ func configOutput(repo store.Repo, c store.RepoConfig) repoConfigOutput {
 		Overrides: overridesOutput{
 			Provider: o.Provider, Model: o.Model, Effort: o.Effort, ApprovalMode: string(o.ApprovalMode), MergeMethod: o.MergeMethod,
 			IncludeExisting: o.IncludeExisting, AutoApproveRebase: o.AutoApproveRebase, IncludeOwn: o.IncludeOwn, KeepWorktree: o.KeepWorktree,
+			BranchUpdate: string(o.BranchUpdate), UpdateOnGitHub: o.UpdateOnGitHub,
 		},
 		DependabotScope: string(c.DependabotScope), DependabotApproval: string(c.DependabotApproval), DependabotLimit: c.DependabotLimit,
 	}
@@ -107,6 +110,7 @@ func (o overridesOutput) words() string {
 	add("approval mode", o.ApprovalMode)
 	add("merge method", o.MergeMethod)
 	add("approvals", o.ApprovalsRequired)
+	add("branch update", o.BranchUpdate)
 	addBool := func(label string, value *bool) {
 		if value != nil {
 			add(label, strconv.FormatBool(*value))
@@ -116,6 +120,7 @@ func (o overridesOutput) words() string {
 	addBool("auto approve rebase", o.AutoApproveRebase)
 	addBool("include own", o.IncludeOwn)
 	addBool("keep worktree", o.KeepWorktree)
+	addBool("update on GitHub", o.UpdateOnGitHub)
 	if len(parts) == 0 {
 		return "the settings of the daemon"
 	}
@@ -137,6 +142,8 @@ type repoConfigFlags struct {
 	autoRebase      bool
 	includeOwn      bool
 	keepWorktree    bool
+	branchUpdate    string
+	updateOnGitHub  bool
 	resetOverrides  bool
 	scope           string
 	approval        string
@@ -165,7 +172,7 @@ takes only the pull requests created after it went on. Turn one off with
 
 The override flags (--provider, --model, --effort, --approval-mode, --merge-method,
 --approvals, --include-existing, --auto-approve-rebase, --include-own,
---keep-worktree) set the overrides of each watch that starts on the
+--keep-worktree, --branch-update, --update-on-github) set the overrides of each watch that starts on the
 repository, by hand or by auto start. A field that 'watch start' does
 not name takes the override, and a field without an override takes the
 setting of the daemon. --approvals default and --reset-overrides give
@@ -222,9 +229,11 @@ The daemon starts nothing with 'babysitter serve'; auto start runs in
 	fl.StringVar(&f.mergeMethod, "merge-method", "", "merge method of the watches on the repository: squash, merge or rebase; empty takes the setting of the daemon")
 	fl.StringVar(&f.approvals, "approvals", "", "approvals the watches on the repository need: a number, 0 for none, 'branch' for the rule of the base branch, or 'default' for the setting of the daemon")
 	fl.BoolVar(&f.includeExisting, "include-existing", false, "the watches on the repository also report the review items that already exist")
-	fl.BoolVar(&f.autoRebase, "auto-approve-rebase", false, "the watches on the repository let approved work go out after a clean rebase without asking again")
+	fl.BoolVar(&f.autoRebase, "auto-approve-rebase", false, "the watches on the repository let approved work go out after a clean rebase or merge without asking again")
 	fl.BoolVar(&f.includeOwn, "include-own", false, "the watches on the repository also report your own comments")
 	fl.BoolVar(&f.keepWorktree, "keep-worktree", false, "a stop leaves the worktree of a watch on the repository on disk")
+	fl.StringVar(&f.branchUpdate, branchUpdateFlag, "", "how the watches on the repository update a branch that fell behind its base: rebase or merge; empty takes the setting of the daemon")
+	fl.BoolVar(&f.updateOnGitHub, updateOnGitHubFlag, false, "the watches on the repository ask GitHub to update a branch that fell behind its base before the agent does it")
 	fl.BoolVar(&f.resetOverrides, "reset-overrides", false, "give every override back to the settings of the daemon")
 	fl.StringVar(&f.scope, "dependabot-scope", "", "the highest Dependabot update that merges on its own: patch, minor or major")
 	fl.StringVar(&f.approval, "dependabot-approval", "", "never, ask or green")
@@ -303,6 +312,12 @@ func (f repoConfigFlags) overrides(cmd *cobra.Command, o store.WatchOverrides) (
 	if flags.Changed("keep-worktree") {
 		o.KeepWorktree = &f.keepWorktree
 	}
+	if flags.Changed(branchUpdateFlag) {
+		o.BranchUpdate = store.BranchUpdate(f.branchUpdate)
+	}
+	if flags.Changed(updateOnGitHubFlag) {
+		o.UpdateOnGitHub = &f.updateOnGitHub
+	}
 	if flags.Changed("approvals") {
 		var err error
 		if o.ApprovalsSet, o.Approvals, err = overrideApprovals(f.approvals); err != nil {
@@ -315,7 +330,7 @@ func (f repoConfigFlags) overrides(cmd *cobra.Command, o store.WatchOverrides) (
 
 var overrideFlags = []string{
 	"provider", "model", "effort", "approval-mode", "merge-method", "include-existing", "approvals",
-	"auto-approve-rebase", "include-own", "keep-worktree",
+	"auto-approve-rebase", "include-own", "keep-worktree", branchUpdateFlag, updateOnGitHubFlag,
 }
 
 func overrideApprovals(value string) (bool, *int, error) {

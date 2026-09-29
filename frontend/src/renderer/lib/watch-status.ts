@@ -1,4 +1,5 @@
 import type { Activity } from "@/hooks/useWatchActivity";
+import type { PullRequest } from "@/hooks/usePulls";
 import type { Watch } from "@/hooks/useWatches";
 
 export type Tone = "neutral" | "good" | "done" | "bad" | "wait";
@@ -199,6 +200,17 @@ export function isAgentLive(state: SessionState): boolean {
 
 export function needsAttention(w: Pick<Watch, "status" | "session" | "pendingProposal">): boolean {
   return w.status === "active" && (sessionWord(w.session.state).needsYou || Boolean(w.pendingProposal));
+}
+
+export function needsYouFirst(
+  a: Pick<Watch, "status" | "session" | "pendingProposal" | "number">,
+  b: Pick<Watch, "status" | "session" | "pendingProposal" | "number">,
+): number {
+  return Number(needsAttention(b)) - Number(needsAttention(a)) || b.number - a.number;
+}
+
+export function watchAuthor(w: Pick<Watch, "author">, pull?: Pick<PullRequest, "author">): string {
+  return w.author || pull?.author || "";
 }
 
 const ESC = String.fromCharCode(27);

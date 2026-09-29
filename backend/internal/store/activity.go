@@ -16,34 +16,36 @@ import (
 type ActivityKind string
 
 const (
-	ActivityComment         ActivityKind = "comment"
-	ActivityReviewComment   ActivityKind = "review_comment"
-	ActivityReview          ActivityKind = "review"
-	ActivityCheckFailed     ActivityKind = "check_failed"
-	ActivityCheckRecovered  ActivityKind = "check_recovered"
-	ActivityChecksGreen     ActivityKind = "checks_green"
-	ActivityCommit          ActivityKind = "commit"
-	ActivityBehind          ActivityKind = "behind"
-	ActivityConflict        ActivityKind = "conflict"
-	ActivityMerged          ActivityKind = "merged"
-	ActivityClosed          ActivityKind = "closed"
-	ActivityHeartbeat       ActivityKind = "heartbeat"
-	ActivityWatchStarted    ActivityKind = "watch_started"
-	ActivityWatchStopped    ActivityKind = "watch_stopped"
-	ActivitySessionStarted  ActivityKind = "session_started"
-	ActivitySessionExited   ActivityKind = "session_exited"
-	ActivityNudged          ActivityKind = "nudged"
-	ActivityAgentFailed     ActivityKind = "agent_failed"
-	ActivityMergeReady      ActivityKind = "merge_ready"
-	ActivityMergeFailed     ActivityKind = "merge_failed"
-	ActivityReplied         ActivityKind = "replied"
-	ActivityReviewRequested ActivityKind = "review_requested"
-	ActivityProposal        ActivityKind = "proposal"
-	ActivityTakenOver       ActivityKind = "taken_over"
-	ActivityHandedBack      ActivityKind = "handed_back"
-	ActivityAutoStarted     ActivityKind = "auto_started"
-	ActivityApproved        ActivityKind = "approved"
-	ActivityApprovalAsked   ActivityKind = "approval_asked"
+	ActivityComment          ActivityKind = "comment"
+	ActivityReviewComment    ActivityKind = "review_comment"
+	ActivityReview           ActivityKind = "review"
+	ActivityCheckFailed      ActivityKind = "check_failed"
+	ActivityCheckRecovered   ActivityKind = "check_recovered"
+	ActivityChecksGreen      ActivityKind = "checks_green"
+	ActivityCommit           ActivityKind = "commit"
+	ActivityBehind           ActivityKind = "behind"
+	ActivityConflict         ActivityKind = "conflict"
+	ActivityMerged           ActivityKind = "merged"
+	ActivityClosed           ActivityKind = "closed"
+	ActivityHeartbeat        ActivityKind = "heartbeat"
+	ActivityWatchStarted     ActivityKind = "watch_started"
+	ActivityWatchStopped     ActivityKind = "watch_stopped"
+	ActivitySessionStarted   ActivityKind = "session_started"
+	ActivitySessionExited    ActivityKind = "session_exited"
+	ActivityNudged           ActivityKind = "nudged"
+	ActivityAgentFailed      ActivityKind = "agent_failed"
+	ActivityMergeReady       ActivityKind = "merge_ready"
+	ActivityMergeFailed      ActivityKind = "merge_failed"
+	ActivityReplied          ActivityKind = "replied"
+	ActivityReviewRequested  ActivityKind = "review_requested"
+	ActivityProposal         ActivityKind = "proposal"
+	ActivityTakenOver        ActivityKind = "taken_over"
+	ActivityHandedBack       ActivityKind = "handed_back"
+	ActivityAutoStarted      ActivityKind = "auto_started"
+	ActivityApproved         ActivityKind = "approved"
+	ActivityApprovalAsked    ActivityKind = "approval_asked"
+	ActivityBranchUpdated    ActivityKind = "branch_updated"
+	ActivityBranchNotUpdated ActivityKind = "branch_update_failed"
 )
 
 var ActivityKinds = []ActivityKind{
@@ -54,6 +56,7 @@ var ActivityKinds = []ActivityKind{
 	ActivitySessionStarted, ActivitySessionExited, ActivityNudged, ActivityAgentFailed,
 	ActivityMergeReady, ActivityMergeFailed, ActivityReplied, ActivityReviewRequested, ActivityProposal,
 	ActivityTakenOver, ActivityHandedBack, ActivityAutoStarted, ActivityApproved, ActivityApprovalAsked,
+	ActivityBranchUpdated, ActivityBranchNotUpdated,
 }
 
 func (k ActivityKind) Valid() bool { return slices.Contains(ActivityKinds, k) }
@@ -108,10 +111,18 @@ RETURNING id`,
 }
 
 func (s *Store) HasActivity(ctx context.Context, watchID int64, kind ActivityKind, ref string) (bool, error) {
+	return s.HasActivityOfKinds(ctx, watchID, ref, kind)
+}
+
+func (s *Store) HasActivityOfKinds(ctx context.Context, watchID int64, ref string, kinds ...ActivityKind) (bool, error) {
 	var has bool
+	args := []any{watchID, ref}
+	for _, k := range kinds {
+		args = append(args, k)
+	}
 	err := s.db.QueryRowContext(ctx,
-		"SELECT EXISTS (SELECT 1 FROM watch_activity WHERE watch_id = ? AND kind = ? AND ref = ?)",
-		watchID, kind, ref).Scan(&has)
+		"SELECT EXISTS (SELECT 1 FROM watch_activity WHERE watch_id = ? AND ref = ? AND kind IN ("+placeholders(len(kinds))+"))",
+		args...).Scan(&has)
 	if err != nil {
 		return false, fmt.Errorf("has activity: %w", err)
 	}

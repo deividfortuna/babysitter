@@ -42,6 +42,7 @@ type Git interface {
 	Missing(ctx context.Context, dir, work, head, since string) ([]string, error)
 	Push(ctx context.Context, dir string, p Push) error
 	Rebase(ctx context.Context, dir, onto string) error
+	Merge(ctx context.Context, dir, sha string) error
 	Discard(ctx context.Context, dir, sha string) error
 	Log(ctx context.Context, dir, from, to string) ([]Commit, error)
 	Files(ctx context.Context, dir, from, to string) ([]File, error)
@@ -268,18 +269,31 @@ func wholeFiles(patch string, limit int) string {
 }
 
 func (g *Runner) Rebase(ctx context.Context, dir, onto string) error {
-	_, err := g.git(ctx, dir, "rebase", "-q", onto)
-	if err == nil || !g.rebasing(ctx, dir) {
+	return g.bringIn(ctx, dir, "rebase", g.rebasing, "rebase", "-q", onto)
+}
+
+func (g *Runner) Merge(ctx context.Context, dir, sha string) error {
+	return g.bringIn(ctx, dir, "merge", g.merging, "-c", "core.hooksPath="+os.DevNull, "merge", "-q", "--no-edit", "--no-ff", sha)
+}
+
+func (g *Runner) bringIn(ctx context.Context, dir, command string, inProgress func(context.Context, string) bool, args ...string) error {
+	_, err := g.git(ctx, dir, args...)
+	if err == nil || !inProgress(ctx, dir) {
 		return err
 	}
 	files, _ := g.git(ctx, dir, "diff", "--name-only", "--diff-filter=U")
-	if _, abortErr := g.git(ctx, dir, "rebase", "--abort"); abortErr != nil {
+	if _, abortErr := g.git(ctx, dir, command, "--abort"); abortErr != nil {
 		return fmt.Errorf("%w, and the abort failed: %w", err, abortErr)
 	}
 	if files == "" {
 		return err
 	}
 	return &ConflictError{Files: strings.Fields(files)}
+}
+
+func (g *Runner) merging(ctx context.Context, dir string) bool {
+	_, err := g.git(ctx, dir, "rev-parse", "-q", "--verify", "MERGE_HEAD")
+	return err == nil
 }
 
 func (g *Runner) rebasing(ctx context.Context, dir string) bool {

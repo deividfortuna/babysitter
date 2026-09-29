@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { buildNotification, buildWatch } from "@test/fixtures";
@@ -158,7 +158,50 @@ test("a notification whose watch stopped offers no Approve and merge", async () 
 
   expect(await screen.findByRole("button", { name: "Approve and merge" })).toBeVisible();
   expect(screen.getAllByRole("button", { name: "Approve and merge" })).toHaveLength(1);
-  expect(screen.getByText("still watched").closest(".border-b")).toContainElement(
+  expect(screen.getByText("still watched").closest('[role="listitem"]')).toContainElement(
     screen.getByRole("button", { name: "Approve and merge" }),
   );
+});
+
+test("groups the notifications into today and earlier, and marks the unread ones", async () => {
+  serveApi({
+    notifications: [
+      buildNotification({ id: 3, kind: "agent", title: "Agent asks", createdAt: new Date().toISOString() }),
+      buildNotification({ id: 2, kind: "merge", title: "Merged one", createdAt: new Date().toISOString() }),
+      buildNotification({ id: 1, title: "Old one", readAt: "2026-09-21T11:00:00Z" }),
+    ],
+  });
+
+  renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
+
+  const today = await screen.findByRole("region", { name: "Today" });
+  const asks = within(today).getByRole("button", { name: /Agent asks/ });
+  expect(within(asks).getByText("unread")).toBeInTheDocument();
+  const merged = within(today).getByRole("button", { name: /Merged one/ });
+  expect(within(merged).getByText("unread")).toBeInTheDocument();
+  const earlier = screen.getByRole("region", { name: "Earlier" });
+  const old = within(earlier).getByRole("button", { name: /Old one/ });
+  expect(within(old).queryByText("unread")).toBeNull();
+});
+
+test("only an unread notification that waits on you asks for attention", async () => {
+  serveApi({
+    watches: [buildWatch({ id: 42 })],
+    notifications: [
+      buildNotification({ id: 5, kind: "auto", watchId: 41, action: "approve_merge", title: "Watch stopped" }),
+      buildNotification({ id: 4, kind: "agent", title: "Agent asks" }),
+      buildNotification({ id: 3, kind: "auto", watchId: 42, action: "approve_merge", title: "Review waits" }),
+      buildNotification({ id: 2, kind: "merge", title: "Merged one" }),
+      buildNotification({ id: 1, kind: "agent", title: "Answered", readAt: "2026-09-21T11:00:00Z" }),
+    ],
+  });
+
+  renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
+
+  const rowOf = async (name: RegExp) => (await screen.findByRole("button", { name })).closest('[role="listitem"]');
+  expect(await rowOf(/Agent asks/)).toHaveAttribute("data-attention");
+  expect(await rowOf(/Review waits/)).toHaveAttribute("data-attention");
+  expect(await rowOf(/Merged one/)).not.toHaveAttribute("data-attention");
+  expect(await rowOf(/Answered/)).not.toHaveAttribute("data-attention");
+  expect(await rowOf(/Watch stopped/)).not.toHaveAttribute("data-attention");
 });
