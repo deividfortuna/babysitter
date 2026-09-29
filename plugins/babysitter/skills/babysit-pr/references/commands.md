@@ -47,11 +47,15 @@ Six of them are easy to read wrong:
 
 Two come from a branch that fell behind its base, on a watch of the app:
 
-- `branch_updated`: GitHub updated the branch with the method of the
-  watch, and the agent got no message. A `commit` with the new head
-  follows.
-- `branch_update_failed`: GitHub refused the update. The payload holds
-  the reason, and the agent updates the branch.
+- `branch_updated`: GitHub accepted the request to update the branch
+  with the method of the watch, and the agent got no message. GitHub
+  moves the branch a moment later, so the head can still be the old
+  one. When it moves, a `commit` with the new head follows.
+- `branch_update_failed`: GitHub did not update the branch, and the
+  agent updates it. GitHub refused the request, three requests for the
+  same head failed, or GitHub accepted the request and the head did not
+  move three poll intervals later. In the last case this row follows a
+  `branch_updated` for the same head. The payload holds the reason.
 
 Three come from auto watch (`babysitter repo config`):
 
