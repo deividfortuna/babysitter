@@ -43,15 +43,37 @@ func (e *headCommitsMissing) Error() string {
 }
 func (e *headCommitsMissing) Unwrap() error { return ErrHeadCommitsMissing }
 
-type rebaseConflict struct {
+type moveConflict struct {
 	remote string
+	merges bool
 	err    *gitrelease.ConflictError
 }
 
-func (e *rebaseConflict) Error() string {
-	return fmt.Sprintf("the rebase onto %s conflicts in %s", textx.ShortSHA(e.remote), strings.Join(e.err.Files, ", "))
+func (e *moveConflict) Error() string {
+	return fmt.Sprintf("%s conflicts in %s", e.move(), strings.Join(e.err.Files, ", "))
 }
-func (e *rebaseConflict) Unwrap() error { return e.err }
+func (e *moveConflict) Unwrap() error { return e.err }
+
+func (e *moveConflict) move() string {
+	if e.merges {
+		return "the merge of " + textx.ShortSHA(e.remote)
+	}
+	return "the rebase onto " + textx.ShortSHA(e.remote)
+}
+
+func (e *moveConflict) action(proposal int) string {
+	if e.merges {
+		return fmt.Sprintf("merge %s into proposal %d", textx.ShortSHA(e.remote), proposal)
+	}
+	return fmt.Sprintf("rebase proposal %d", proposal)
+}
+
+func (e *moveConflict) of(proposal int) string {
+	if e.merges {
+		return fmt.Sprintf("the merge of %s into proposal %d", textx.ShortSHA(e.remote), proposal)
+	}
+	return fmt.Sprintf("the rebase of proposal %d onto %s", proposal, textx.ShortSHA(e.remote))
+}
 
 func (s *Service) release(ctx context.Context, w store.Watch, p store.Proposal, retry bool) (failure, err error) {
 	failure = s.releaseWork(ctx, w, &p)
@@ -68,7 +90,7 @@ func (s *Service) release(ctx context.Context, w store.Watch, p store.Proposal, 
 }
 
 func goesBack(failure error, retry bool) bool {
-	var conflict *rebaseConflict
+	var conflict *moveConflict
 	var missing *headCommitsMissing
 	return errors.As(failure, &conflict) || retry && errors.As(failure, &missing)
 }
@@ -174,7 +196,7 @@ func (s *Service) moveOnto(ctx context.Context, w store.Watch, p store.Proposal,
 	}
 	if err := move(ctx, w.WorktreeDir, remote); err != nil {
 		if conflict, ok := errors.AsType[*gitrelease.ConflictError](err); ok {
-			return "", &rebaseConflict{remote: remote, err: conflict}
+			return "", &moveConflict{remote: remote, merges: merges, err: conflict}
 		}
 		return "", err
 	}
@@ -384,7 +406,7 @@ func (s *Service) releaseFailed(ctx context.Context, w store.Watch, p store.Prop
 }
 
 func conflicts(failure error) bool {
-	var conflict *rebaseConflict
+	var conflict *moveConflict
 	return errors.As(failure, &conflict)
 }
 
@@ -448,9 +470,9 @@ func (s *Service) handWork(ctx context.Context, w store.Watch, p store.Proposal,
 
 func handWorkOf(w store.Watch, p store.Proposal, failure error) (c agent.Conflict, summary, remote string) {
 	c = agent.Conflict{PR: pullRequestOf(w), Proposal: p.Number}
-	if conflict, ok := errors.AsType[*rebaseConflict](failure); ok {
+	if conflict, ok := errors.AsType[*moveConflict](failure); ok {
 		c.Remote, c.Files = textx.ShortSHA(conflict.remote), strings.Join(conflict.err.Files, ", ")
-		return c, fmt.Sprintf("told the agent the rebase of proposal %d onto %s conflicts", p.Number, c.Remote), conflict.remote
+		return c, fmt.Sprintf("told the agent %s conflicts", conflict.of(p.Number)), conflict.remote
 	}
 	var missing *headCommitsMissing
 	errors.As(failure, &missing)

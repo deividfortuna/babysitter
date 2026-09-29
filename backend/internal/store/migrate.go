@@ -705,6 +705,9 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	DROP TABLE watch_activity;
 	ALTER TABLE watch_activity_new RENAME TO watch_activity;
 	CREATE INDEX watch_activity_watch_idx ON watch_activity (watch_id, id);
+
+	ALTER TABLE proposals ADD COLUMN moved_by TEXT NOT NULL DEFAULT '' CHECK (moved_by IN ('', 'rebase', 'merge'));
+	UPDATE proposals SET moved_by = 'rebase' WHERE rebased_from != '';
 	`,
 }
 

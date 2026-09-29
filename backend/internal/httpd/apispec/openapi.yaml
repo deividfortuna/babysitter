@@ -2269,6 +2269,14 @@ components:
             a turn that only added commits on top of it is rebased onto a head that
             moved
           type: string
+        movedBy:
+          description: 'How the daemon moved the work onto the head. rebase: the work
+            is on new commits; merge: the head is merged into the work and its commits
+            stay'
+          enum:
+          - rebase
+          - merge
+          type: string
         number:
           description: Counts the proposals of one watch from 1
           type: integer
@@ -2282,7 +2290,7 @@ components:
           description: What the author said when they rejected it
           type: string
         rebasedFrom:
-          description: The work the daemon rebased onto a head that moved
+          description: The work before the daemon moved it onto a head that moved
           type: string
         releasedAt:
           format: date-time
@@ -2388,6 +2396,14 @@ components:
             a turn that only added commits on top of it is rebased onto a head that
             moved
           type: string
+        movedBy:
+          description: 'How the daemon moved the work onto the head. rebase: the work
+            is on new commits; merge: the head is merged into the work and its commits
+            stay'
+          enum:
+          - rebase
+          - merge
+          type: string
         number:
           description: Counts the proposals of one watch from 1
           type: integer
@@ -2401,7 +2417,7 @@ components:
           description: What the author said when they rejected it
           type: string
         rebasedFrom:
-          description: The work the daemon rebased onto a head that moved
+          description: The work before the daemon moved it onto a head that moved
           type: string
         releasedAt:
           format: date-time

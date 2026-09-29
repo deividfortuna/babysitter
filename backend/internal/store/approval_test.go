@@ -184,12 +184,12 @@ func TestTheDecisionOnAProposal(t *testing.T) {
 	if rejected.Status != ProposalRejected || rejected.Reason != "use a table test" || rejected.DecidedAt == nil {
 		t.Fatalf("rejected proposal = %+v", rejected)
 	}
-	if err := s.MarkProposalRebased(ctx, p.ID, "h2", "w2", now); err != nil {
-		t.Fatalf("MarkProposalRebased() error = %v", err)
+	if err := s.MarkProposalMoved(ctx, p.ID, "h2", "w2", BranchMerge, now); err != nil {
+		t.Fatalf("MarkProposalMoved() error = %v", err)
 	}
-	rebased, _ := s.GetProposal(ctx, w.ID, 1)
-	if rebased.HeadSHA != "h2" || rebased.BaseSHA != "h2" || rebased.WorkSHA != "w2" || rebased.RebasedFrom != "w1" || rebased.ApprovedAt != nil {
-		t.Fatalf("rebased proposal = %+v", rebased)
+	moved, _ := s.GetProposal(ctx, w.ID, 1)
+	if moved.HeadSHA != "h2" || moved.BaseSHA != "h2" || moved.WorkSHA != "w2" || moved.RebasedFrom != "w1" || moved.MovedBy != BranchMerge || moved.ApprovedAt != nil {
+		t.Fatalf("moved proposal = %+v", moved)
 	}
 }
 

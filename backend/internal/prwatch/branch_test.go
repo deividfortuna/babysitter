@@ -421,6 +421,50 @@ func TestAWatchThatMergesMergesTheBranchThatMovedUnderItsWork(t *testing.T) {
 	}
 }
 
+func (fx *fixture) startMerging() store.Watch {
+	fx.t.Helper()
+	return fx.startWith(func(r *StartRequest) {
+		r.ApprovalMode, r.BranchUpdate = new(store.ApprovalManual), new(store.BranchMerge)
+	})
+}
+
+func TestAMergedProposalSaysItWasMerged(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startMerging()
+	fx.propose(w)
+	fx.update(func() { fx.pr.HeadSHA = "t1" })
+	fx.rel.moveRemote("abc", "t1")
+
+	fx.poll(w)
+	if p := fx.proposal(w, 1); p.RebasedFrom != "w1" || p.MovedBy != store.BranchMerge {
+		t.Fatalf("proposal = %+v, want it moved by a merge", p)
+	}
+	for _, a := range fx.activity(w) {
+		if a.Kind == store.ActivityProposal && strings.Contains(a.Summary, "rebase") {
+			t.Fatalf("the merged proposal says it was rebased: %q", a.Summary)
+		}
+	}
+}
+
+func TestAMergeThatConflictsSaysItIsAMerge(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startMerging()
+	fx.propose(w)
+	fx.update(func() { fx.pr.HeadSHA = "t1" })
+	fx.rel.moveRemote("abc", "t1")
+	fx.rel.set(func(f *fakeRelease) { f.rebaseErr = &gitrelease.ConflictError{Files: []string{"x.go"}} })
+
+	fx.poll(w)
+	if a := fx.activityOf(w, store.ActivityAgentFailed); !strings.Contains(a.Summary, "merge") || strings.Contains(a.Summary, "rebase") {
+		t.Fatalf("conflict row = %q, want it to name the merge", a.Summary)
+	}
+	if a := fx.activityOf(w, store.ActivityNudged); strings.Contains(a.Summary, "rebase") {
+		t.Fatalf("hand back row = %q, want it to name the merge", a.Summary)
+	}
+}
+
 func TestGitHubWaitsForThePollAfterTheDaemonPushed(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

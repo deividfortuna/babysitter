@@ -99,6 +99,45 @@ func TestAnUpgradedWatchUpdatesItsBranchOnGitHubWithARebase(t *testing.T) {
 	}
 }
 
+func TestAProposalRebasedBeforeTheUpgradeSaysItWasRebased(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "babysitter.db")
+	db, err := sql.Open("sqlite3", "file:"+path+"?_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateTo(ctx, db, schemaBeforeBranchUpdate); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, `INSERT INTO watches (owner, name, number, url, title, author, bot_login, head_ref, base_ref,
+		source_dir, worktree_dir, work_branch, git_user_name, git_user_email, provider, model, status, stop_reason,
+		include_existing, started_at, head_sha, pr_state, mergeable_state, check_states, green_sha, summary)
+		VALUES ('octo', 'hello', 3, '', '', 'alice', 'alice', 'fix', 'main', '/src', '/wt', 'babysitter/fix', 'Alice', 'a@x', 'claude', '',
+		'active', '', 0, '2026-09-01T00:00:00Z', 'abc', 'open', 'clean', '{}', '', '{}');
+		INSERT INTO proposals (watch_id, number, status, head_sha, base_sha, work_sha, opened_at, rebased_from)
+		VALUES (1, 1, 'pending', 't1', 't1', 'w1-on-t1', '2026-09-01T00:00:00Z', 'w1');
+		INSERT INTO proposals (watch_id, number, status, head_sha, base_sha, work_sha, opened_at)
+		VALUES (1, 2, 'released', 't1', 't1', 'w2', '2026-09-01T00:00:00Z');`); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer s.Close()
+	if p, err := s.GetProposal(ctx, 1, 1); err != nil || p.MovedBy != BranchRebase {
+		t.Fatalf("rebased proposal of an upgraded database = %+v, %v, want it moved by a rebase", p, err)
+	}
+	if p, err := s.GetProposal(ctx, 1, 2); err != nil || p.MovedBy != "" {
+		t.Fatalf("proposal of an upgraded database = %+v, %v, want it not moved", p, err)
+	}
+}
+
 func TestTheSettingsRefuseAnUnknownProvider(t *testing.T) {
 	t.Parallel()
 	s, _ := openTemp(t)

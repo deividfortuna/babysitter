@@ -260,7 +260,8 @@ type Proposal struct {
 	ApprovedAt   *time.Time           `json:"approvedAt,omitempty" description:"When the author approved it"`
 	DecidedAt    *time.Time           `json:"decidedAt,omitempty" description:"When the author approved or rejected it"`
 	PushRejected bool                 `json:"pushRejected" description:"The author let the replies go out without the commits"`
-	RebasedFrom  string               `json:"rebasedFrom,omitempty" description:"The work the daemon rebased onto a head that moved"`
+	RebasedFrom  string               `json:"rebasedFrom,omitempty" description:"The work before the daemon moved it onto a head that moved"`
+	MovedBy      store.BranchUpdate   `json:"movedBy,omitempty" enum:"rebase,merge" description:"How the daemon moved the work onto the head. rebase: the work is on new commits; merge: the head is merged into the work and its commits stay"`
 	Reason       string               `json:"reason,omitempty" description:"What the author said when they rejected it"`
 	Replies      []ProposalReply      `json:"replies"`
 }
@@ -339,7 +340,7 @@ func proposalFromStore(p store.Proposal) Proposal {
 	return Proposal{
 		Number: p.Number, Status: p.Status, HeadSHA: p.HeadSHA, BaseSHA: p.BaseSHA, WorkSHA: p.WorkSHA, HasPush: p.HasPush,
 		OpenedAt: p.OpenedAt, EndedAt: p.EndedAt, ReleasedAt: p.ReleasedAt, Error: p.Error,
-		ApprovedAt: p.ApprovedAt, DecidedAt: p.DecidedAt, PushRejected: p.PushRejected, RebasedFrom: p.RebasedFrom, Reason: p.Reason,
+		ApprovedAt: p.ApprovedAt, DecidedAt: p.DecidedAt, PushRejected: p.PushRejected, RebasedFrom: p.RebasedFrom, MovedBy: p.MovedBy, Reason: p.Reason,
 		Replies: []ProposalReply{},
 	}
 }

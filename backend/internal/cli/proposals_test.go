@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/deividfortuna/babysitter/internal/httpd"
+	"github.com/deividfortuna/babysitter/internal/store"
 )
 
 const pendingProposalJSON = `{"number":2,"status":"pending","headSha":"abcdef1234567","baseSha":"abcdef1234567","workSha":"1a2b3c4d5e6f7","hasPush":true,
@@ -242,6 +243,20 @@ func TestAReplyTheDaemonDroppedSaysWhy(t *testing.T) {
 	}
 	if got, want := replyHeading(r), "reply 7 to comment 31, dropped: no such review comment: 31"; got != want {
 		t.Fatalf("replyHeading() = %q, want %q", got, want)
+	}
+}
+
+func TestAProposalSaysHowTheDaemonMovedIt(t *testing.T) {
+	t.Parallel()
+	cases := map[store.BranchUpdate]string{
+		store.BranchRebase: "rebased from 4e7d0b8",
+		store.BranchMerge:  "merged 7a1b2c3 into 4e7d0b8",
+	}
+	for by, want := range cases {
+		p := httpd.Proposal{HeadSHA: "7a1b2c3d4e5f6", RebasedFrom: "4e7d0b8bbbbbb", MovedBy: by}
+		if got := proposalNote(p); got != want {
+			t.Errorf("proposalNote(moved by %s) = %q, want %q", by, got, want)
+		}
 	}
 }
 

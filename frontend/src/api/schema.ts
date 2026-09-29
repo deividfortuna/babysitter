@@ -874,6 +874,11 @@ export interface components {
             hasPush: boolean;
             /** @description The head of the pull request branch when the turn started; a turn that only added commits on top of it is rebased onto a head that moved */
             headSha: string;
+            /**
+             * @description How the daemon moved the work onto the head. rebase: the work is on new commits; merge: the head is merged into the work and its commits stay
+             * @enum {string}
+             */
+            movedBy?: "rebase" | "merge";
             /** @description Counts the proposals of one watch from 1 */
             number: number;
             /** Format: date-time */
@@ -882,7 +887,7 @@ export interface components {
             pushRejected: boolean;
             /** @description What the author said when they rejected it */
             reason?: string;
-            /** @description The work the daemon rebased onto a head that moved */
+            /** @description The work before the daemon moved it onto a head that moved */
             rebasedFrom?: string;
             /** Format: date-time */
             releasedAt?: string | null;
@@ -929,6 +934,11 @@ export interface components {
             hasPush: boolean;
             /** @description The head of the pull request branch when the turn started; a turn that only added commits on top of it is rebased onto a head that moved */
             headSha: string;
+            /**
+             * @description How the daemon moved the work onto the head. rebase: the work is on new commits; merge: the head is merged into the work and its commits stay
+             * @enum {string}
+             */
+            movedBy?: "rebase" | "merge";
             /** @description Counts the proposals of one watch from 1 */
             number: number;
             /** Format: date-time */
@@ -937,7 +947,7 @@ export interface components {
             pushRejected: boolean;
             /** @description What the author said when they rejected it */
             reason?: string;
-            /** @description The work the daemon rebased onto a head that moved */
+            /** @description The work before the daemon moved it onto a head that moved */
             rebasedFrom?: string;
             /** Format: date-time */
             releasedAt?: string | null;

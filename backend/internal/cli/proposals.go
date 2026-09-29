@@ -54,6 +54,8 @@ func proposalNote(p httpd.Proposal) string {
 		return "rejected: " + p.Reason
 	case p.PushRejected:
 		return "push rejected"
+	case p.MovedBy == store.BranchMerge:
+		return fmt.Sprintf("merged %s into %s", textx.ShortSHA(p.HeadSHA), textx.ShortSHA(p.RebasedFrom))
 	case p.RebasedFrom != "":
 		return "rebased from " + textx.ShortSHA(p.RebasedFrom)
 	}

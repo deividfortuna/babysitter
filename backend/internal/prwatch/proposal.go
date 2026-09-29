@@ -542,7 +542,7 @@ func (s *Service) offer(ctx context.Context, w store.Watch, p store.Proposal, re
 	ref, summary := fmt.Sprint(p.Number), fmt.Sprintf("proposal %d waits on you: %s", p.Number, parts)
 	if rebased {
 		ref = fmt.Sprintf("%d rebased %s", p.Number, p.WorkSHA)
-		summary = fmt.Sprintf("proposal %d rebased onto %s without conflicts and offered again: %s", p.Number, textx.ShortSHA(p.HeadSHA), parts)
+		summary = fmt.Sprintf("%s without conflicts and offered again: %s", moved(p), parts)
 	}
 	_, err = s.record(ctx, w, store.Activity{
 		Kind: store.ActivityProposal, Ref: ref, At: s.now(),
@@ -550,6 +550,13 @@ func (s *Service) offer(ctx context.Context, w store.Watch, p store.Proposal, re
 		Payload: mustJSON(map[string]any{"proposal": p.Number, "rebased": rebased, "head_sha": p.HeadSHA, "work_sha": p.WorkSHA}),
 	})
 	return err
+}
+
+func moved(p store.Proposal) string {
+	if p.MovedBy == store.BranchMerge {
+		return fmt.Sprintf("%s merged into proposal %d", textx.ShortSHA(p.HeadSHA), p.Number)
+	}
+	return fmt.Sprintf("proposal %d rebased onto %s", p.Number, textx.ShortSHA(p.HeadSHA))
 }
 
 func (s *Service) proposalParts(ctx context.Context, w store.Watch, p store.Proposal) (string, error) {
@@ -620,7 +627,7 @@ func (s *Service) rebaseStale(ctx context.Context, w store.Watch) error {
 	if err != nil {
 		return s.staleConflict(ctx, w, p, err)
 	}
-	if err := s.store.MarkProposalRebased(ctx, p.ID, remote, work, s.now()); err != nil {
+	if err := s.store.MarkProposalMoved(ctx, p.ID, remote, work, w.BranchUpdate, s.now()); err != nil {
 		return err
 	}
 	p, err = s.store.GetProposal(ctx, w.ID, p.Number)
@@ -631,11 +638,11 @@ func (s *Service) rebaseStale(ctx context.Context, w store.Watch) error {
 }
 
 func (s *Service) staleConflict(ctx context.Context, w store.Watch, p store.Proposal, err error) error {
-	var c *rebaseConflict
+	var c *moveConflict
 	if !errors.As(err, &c) {
 		return err
 	}
-	if err := s.releaseFailed(ctx, w, p, &releaseError{what: fmt.Sprintf("rebase proposal %d", p.Number), err: c}); err != nil {
+	if err := s.releaseFailed(ctx, w, p, &releaseError{what: c.action(p.Number), err: c}); err != nil {
 		return err
 	}
 	s.handWork(ctx, w, p, c)
