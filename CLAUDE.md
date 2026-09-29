@@ -35,6 +35,10 @@ and the watch flow in detail. Read it before changing `httpd`, `prwatch`,
   runs Vitest, Oxlint and Oxfmt; `frontend/vite.config.ts` holds their
   `test`, `lint` and `fmt` blocks. Forge builds with the
   `vite.{main,preload,renderer}.config.mts` files, not `vite.config.ts`.
+  pnpm 12 installs it. `frontend/pnpm-workspace.yaml` holds the pnpm
+  settings: `nodeLinker: hoisted`, which Forge needs, the `vite` and
+  `vitest` overrides, and `allowBuilds`, the only packages whose install
+  scripts run.
 - `codegen/`: openapi-typescript, which writes `frontend/src/api/schema.ts`
   from `openapi.yaml`. It has its own lockfile because it uses the compiler
   API of TypeScript 5, which TypeScript 7 does not have.
@@ -51,16 +55,16 @@ and the watch flow in detail. Read it before changing `httpd`, `prwatch`,
 Run from the repository root unless noted.
 
 ```sh
-npm run check              # golangci-lint, go test, tsc, vp fmt, vp lint, vp test, actionlint, zizmor: what CI runs
-npm run backend:lint       # golangci-lint, rules in backend/.golangci.yml
-npm run backend:test       # go test ./...
-npm run frontend:typecheck
-npm run frontend:format    # vp fmt with the Tailwind class sorter, rules in the fmt block of frontend/vite.config.ts
-npm run frontend:lint      # type-aware vp lint with @shadcn/lint and better-tailwindcss, rules in the lint block of frontend/vite.config.ts
-npm run frontend:test
-npm run actions:lint       # actionlint and zizmor on .github/workflows
-npm run api                # regenerate openapi.yaml and frontend/src/api/schema.ts, needs npm ci in codegen/
-npm start                  # go install the binary, then open the Electron app
+pnpm run check             # golangci-lint, go test, tsc, vp fmt, vp lint, vp test, actionlint, zizmor: what CI runs
+pnpm run backend:lint      # golangci-lint, rules in backend/.golangci.yml
+pnpm run backend:test      # go test ./...
+pnpm run frontend:typecheck
+pnpm run frontend:format   # vp fmt with the Tailwind class sorter, rules in the fmt block of frontend/vite.config.ts
+pnpm run frontend:lint     # type-aware vp lint with @shadcn/lint and better-tailwindcss, rules in the lint block of frontend/vite.config.ts
+pnpm run frontend:test
+pnpm run actions:lint      # actionlint and zizmor on .github/workflows
+pnpm run api               # regenerate openapi.yaml and frontend/src/api/schema.ts, needs pnpm install in codegen/
+pnpm start                 # go install the binary, then open the Electron app
 ```
 
 Backend, from `backend/`:
@@ -77,15 +81,15 @@ go run ./cmd/babysitter daemon start           # daemon in the foreground
 Frontend, from `frontend/`:
 
 ```sh
-npm run test -- src/renderer/hooks/useRepos.test.tsx   # one test file
-npm run test:coverage                                   # CI enforces thresholds in vite.config.ts
-npm run package                                         # distributable in frontend/out
+pnpm run test src/renderer/hooks/useRepos.test.tsx      # one test file
+pnpm run test:coverage                                  # CI enforces thresholds in vite.config.ts
+pnpm run package                                        # distributable in frontend/out
 ```
 
 CI (`.github/workflows/pr.yaml`) fails when `go mod tidy`, `go generate`
-for the OpenAPI document, or `npm run api:ts` produce a diff. After a change
+for the OpenAPI document, or `pnpm run api:ts` produce a diff. After a change
 to a route in `internal/httpd/router.go` or a DTO in `internal/httpd/dto.go`,
-run `npm run api` and commit both generated files.
+run `pnpm run api` and commit both generated files.
 
 On macOS, when `go build` fails to link with `tapi error: malformed file`,
 point cgo at the Xcode toolchain as the README shows.
@@ -129,7 +133,7 @@ The grid fills the width of the panel and the height of the window, from
 which resizes the pseudo terminal of the agent.
 The WASM is inlined in a lazy chunk, because the packaged app loads from
 `file://`, where `fetch` fails; the CSP allows it with `'wasm-unsafe-eval'`.
-`npm run build:ghostty-wasm` rebuilds it at the revision in `vendor/VERSION`.
+`pnpm run build:ghostty-wasm` rebuilds it at the revision in `vendor/VERSION`.
 
 **Tests.** Go tests sit next to the code and share two helper packages.
 `internal/testutil` waits (`Eventually`, `Within`, `Settle`) and gives the
@@ -149,5 +153,5 @@ handler in `src/test/msw.ts` or in the test. Fixtures live in
 `src/test/fixtures.ts`.
 
 To see the renderer in a plain browser, open the Vite dev server that
-`npm start` prints with `?daemon=http://127.0.0.1:<port>/api/v1`, where the
+`pnpm start` prints with `?daemon=http://127.0.0.1:<port>/api/v1`, where the
 port is that of a daemon started from the terminal.

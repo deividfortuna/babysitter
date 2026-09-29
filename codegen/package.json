@@ -12,5 +12,12 @@
   "devDependencies": {
     "openapi-typescript": "^7.13.0",
     "typescript": "^5.9.3"
+  },
+  "devEngines": {
+    "packageManager": {
+      "name": "pnpm",
+      "version": "12.6.0",
+      "onFail": "download"
+    }
   }
 }
