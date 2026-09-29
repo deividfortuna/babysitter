@@ -107,9 +107,19 @@ func mergeableBlockers(pr PR) []string {
 	case !*pr.Mergeable:
 		return []string{"GitHub reports it cannot merge"}
 	case pr.MergeableState != store.MergeableClean:
-		return []string{"GitHub reports " + mergeableWord(pr.MergeableState)}
+		return []string{"GitHub reports " + mergeableWord(pr.MergeableState) + blockedBehindWord(pr)}
 	}
 	return nil
+}
+
+func blockedBehindWord(pr PR) string {
+	switch {
+	case pr.BehindErr != "":
+		return ", and the compare with " + pr.BaseBranch + " failed: " + pr.BehindErr
+	case pr.blockedBehind():
+		return fmt.Sprintf(", and the branch is %s behind %s", textx.Plural(pr.BehindBy, "commit"), pr.BaseBranch)
+	}
+	return ""
 }
 
 func reviewBlockers(pr PR, approvals int) []string {

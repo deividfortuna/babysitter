@@ -71,6 +71,7 @@ func (c *call) updateBranch(v graphqlVariables) {
 	accepted := p.HeadSHA
 	p.HeadSHA = fmt.Sprintf("%s-%d", strings.ToLower(v.Method), c.g.id())
 	p.MergeableState = "unknown"
+	p.BehindBy = 0
 	c.json(http.StatusOK, map[string]any{"data": map[string]any{"updatePullRequestBranch": map[string]any{
 		"pullRequest": map[string]any{"headRefOid": accepted},
 	}}})

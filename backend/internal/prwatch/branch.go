@@ -12,6 +12,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/redact"
+	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
 	"github.com/deividfortuna/babysitter/internal/textx"
 )
@@ -73,15 +74,18 @@ func (s *Service) updatesOnGitHub(w store.Watch) bool {
 	return BranchUpdaterOf(w) == UpdaterGitHub
 }
 
-func (s *Service) githubStep(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
+func (s *Service) githubStep(ctx context.Context, client *github.Client, w store.Watch, pr snapshot.PR) error {
+	if pr.BehindErr != "" {
+		s.log.Warn("could not compare the branch with its base, it counts as up to date", "watch", w.ID, "pr", prLabel(w), "err", redact.Text(pr.BehindErr))
+	}
 	if err := s.catchStalledUpdate(ctx, w); err != nil {
 		return s.keepPolling(w, err)
 	}
-	candidate := w.MergeableState == store.MergeableBehind && s.updatesOnGitHub(w)
+	candidate := pr.Behind() && s.updatesOnGitHub(w)
 	if !candidate {
 		return nil
 	}
-	return s.keepPolling(w, s.updateBehind(ctx, client, w, nodeID))
+	return s.keepPolling(w, s.updateBehind(ctx, client, w, pr.NodeID))
 }
 
 func (s *Service) keepPolling(w store.Watch, err error) error {

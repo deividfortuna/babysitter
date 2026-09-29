@@ -100,11 +100,11 @@ func Diff(prev State, s *snapshot.Snapshot, now time.Time) ([]store.Activity, St
 
 	if ms := s.PR.MergeableState; ms.Known() {
 		next.MergeableState = ms
-		switch ms {
-		case store.MergeableBehind:
+		switch {
+		case s.PR.Behind():
 			add(store.ActivityBehind, behindRef(sha), "", s.PR.HeadBranch+" is behind "+s.PR.BaseBranch, s.PR.URL,
 				map[string]any{"sha": sha, "base": s.PR.BaseBranch})
-		case store.MergeableDirty:
+		case ms == store.MergeableDirty:
 			add(store.ActivityConflict, "conflict@"+sha, "", s.PR.HeadBranch+" conflicts with "+s.PR.BaseBranch, s.PR.URL,
 				map[string]any{"sha": sha, "base": s.PR.BaseBranch})
 		default:

@@ -32,6 +32,17 @@ func GetPull(ctx context.Context, c *github.Client, owner, repo string, number i
 	return pr, resp, nil
 }
 
+const comparePageWithoutFiles = 2
+
+func BehindBy(ctx context.Context, c *github.Client, owner, repo, base, head string) (int, *github.Response, error) {
+	opts := &github.ListOptions{PerPage: 1, Page: comparePageWithoutFiles}
+	comparison, resp, err := c.Repositories.CompareCommits(ctx, owner, repo, base, head, opts)
+	if err != nil {
+		return 0, resp, fmt.Errorf("compare %s/%s %s...%s: %w", owner, repo, base, head, err)
+	}
+	return comparison.GetBehindBy(), resp, nil
+}
+
 func ListReviews(ctx context.Context, c *github.Client, owner, repo string, number int) ([]*github.PullRequestReview, *github.Response, error) {
 	opts := &github.ListOptions{PerPage: maxPerPage}
 	return paginate(func(page int) ([]*github.PullRequestReview, *github.Response, error) {

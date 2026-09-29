@@ -425,7 +425,7 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 	}
 	unlock := s.locks.Lock(w.ID)
 	defer unlock()
-	stepErr := s.githubStep(ctx, client, w, snap.PR.NodeID)
+	stepErr := s.githubStep(ctx, client, w, snap.PR)
 	if stepErr != nil {
 		s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", stepErr)
 	}

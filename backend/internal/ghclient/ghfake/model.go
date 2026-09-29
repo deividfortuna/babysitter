@@ -67,6 +67,9 @@ type PR struct {
 	Body      string
 	BaseRef   string
 	BaseSHA   string
+	// BehindBy is how many commits of BaseRef the head does not have, as a
+	// compare of BaseRef with HeadSHA answers.
+	BehindBy  int
 	Labels    []string
 	Additions int
 	Deletions int

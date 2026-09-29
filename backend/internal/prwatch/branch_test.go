@@ -21,6 +21,10 @@ func (fx *fixture) behind() {
 	fx.update(func() { fx.pr.MergeableState = "behind" })
 }
 
+func (fx *fixture) blockedBehind(commits int) {
+	fx.update(func() { fx.pr.MergeableState, fx.pr.BehindBy = "blocked", commits })
+}
+
 func (fx *fixture) branchUpdates() []ghfake.BranchUpdate {
 	var out []ghfake.BranchUpdate
 	fx.update(func() { out = append(out, fx.pr.BranchUpdates...) })
@@ -66,6 +70,63 @@ func TestABranchBehindItsBaseIsRebasedOnGitHubAndTheAgentHearsNothing(t *testing
 	}
 	if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, "GitHub accepted the request to rebase fix onto main at abc") {
 		t.Fatalf("summary = %q", a.Summary)
+	}
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("messages = %q, want only the opening message", msgs)
+	}
+}
+
+func TestABlockedBranchBehindItsBaseIsRebasedOnGitHub(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+
+	fx.blockedBehind(2)
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "REBASE", ExpectedHead: "abc"}}) {
+		t.Fatalf("branch updates = %+v, want one rebase that expects abc", got)
+	}
+	if kinds := fx.kinds(w); !slices.Contains(kinds, string(store.ActivityBehind)) {
+		t.Fatalf("kinds = %v, want a behind row", kinds)
+	}
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("messages = %q, want only the opening message", msgs)
+	}
+}
+
+func TestTheAgentRebasesABlockedBranchBehindItsBaseWhenGitHubIsOff(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startWith(func(r *StartRequest) { r.UpdateOnGitHub = new(false) })
+	h := fx.host.last()
+
+	fx.blockedBehind(2)
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); len(got) != 0 {
+		t.Fatalf("branch updates = %+v, want none with GitHub off", got)
+	}
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "is behind main") {
+		t.Fatalf("messages = %q, want the agent told the branch is behind", msgs)
+	}
+}
+
+func TestABlockedBranchUpToDateWithItsBaseIsLeftAlone(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+
+	fx.blockedBehind(0)
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); len(got) != 0 {
+		t.Fatalf("branch updates = %+v, want none: the branch has every commit of its base", got)
 	}
 	if msgs := h.messages(); len(msgs) != 1 {
 		t.Fatalf("messages = %q, want only the opening message", msgs)

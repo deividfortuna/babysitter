@@ -147,6 +147,8 @@ func TestBlockers(t *testing.T) {
 		{"not mergeable", Snapshot{PR: with(func(pr *PR) { pr.Mergeable = new(false); pr.MergeableState = "dirty" }), Checks: green}, 1, "GitHub reports it cannot merge"},
 		{"behind", Snapshot{PR: with(func(pr *PR) { pr.MergeableState = "behind" }), Checks: green}, 1, "GitHub reports behind"},
 		{"blocked", Snapshot{PR: with(func(pr *PR) { pr.MergeableState = "blocked" }), Checks: green}, 1, "GitHub reports blocked"},
+		{"blocked and behind", Snapshot{PR: with(func(pr *PR) { pr.MergeableState, pr.BehindBy, pr.BaseBranch = "blocked", 3, "main" }), Checks: green}, 1, "GitHub reports blocked, and the branch is 3 commits behind main"},
+		{"blocked and not compared", Snapshot{PR: with(func(pr *PR) { pr.MergeableState, pr.BehindErr, pr.BaseBranch = "blocked", "404 Not Found", "main" }), Checks: green}, 1, "GitHub reports blocked, and the compare with main failed: 404 Not Found"},
 		{"changes requested", Snapshot{PR: with(func(pr *PR) { pr.ChangesRequested = 1 }), Checks: green}, 1, "1 reviewer requested changes"},
 		{"no approval", Snapshot{PR: with(func(pr *PR) { pr.Approvals = 0 }), Checks: green}, 1, "no approval yet"},
 		{"reviewer asked", Snapshot{PR: with(func(pr *PR) { pr.RequestedReviewers = []string{"alice", "bob"} }), Checks: green}, 1, "waiting for a review from alice, bob"},

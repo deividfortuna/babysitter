@@ -498,7 +498,11 @@ The snapshot holds:
 - `pr`: repository, number, `node_id`, URL, title, author, state, draft, merged and
   closed flags, head and base branch, the `head_repo` of a fork, head
   commit, `mergeable` (`null`
-  while GitHub computes it), `mergeable_state`, `review_decision`, the
+  while GitHub computes it), `mergeable_state`, `behind` (the branch
+  needs the commits of its base, see below), `behind_by` (the commits
+  of the base that the head does not have, read only while the state is
+  `blocked`, else 0), `behind_err` when that compare failed,
+  `review_decision`, the
   counts of `approvals` and `changes_requested`, the
   `requested_reviewers` still pending, the `reviewers_behind_head`
   who reviewed an earlier commit, and for a pull request of Dependabot
@@ -835,6 +839,17 @@ blocker always has feedback behind it; with `--include-own` it counts.
 The daemon asks for no review while reviewers are already requested. A
 request that fails three times leaves a row in the activity that names
 the reviewers and the cause.
+
+A branch is behind its base when GitHub reports the state `behind`, or
+when GitHub reports `blocked` and a compare of the base with the head
+finds commits of the base that the head does not have. GitHub reports
+`blocked` in place of `behind` when a rule other than an up to date
+branch also fails, for example a required check that the old head never
+reports. The daemon compares only while the state is `blocked`. It reads
+the second page of the compare, which has no list of changed files, so
+the answer stays small and a conditional request gets a 304 until the
+base or the head moves. A compare that fails counts as not behind: the
+blockers and the daemon log give the reason.
 
 When the branch falls behind its base, the daemon first asks GitHub to
 update it, with the GraphQL mutation `updatePullRequestBranch`, and the
