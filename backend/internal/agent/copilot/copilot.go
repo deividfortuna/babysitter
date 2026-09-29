@@ -41,6 +41,8 @@ func (c *Runner) Signals() bool { return true }
 
 func (c *Runner) Prelude() string { return agent.SystemPrompt() }
 
+func (c *Runner) DefaultModel() string { return c.Model }
+
 func (c *Runner) AuthorCommand(l agent.Launch) ([]string, error) {
 	return agent.AuthorArgs(c.bin(), c.Model, l, agent.EffortArgs(effortFlag, l)...)
 }

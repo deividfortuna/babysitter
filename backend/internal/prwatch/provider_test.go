@@ -142,13 +142,24 @@ func TestEffortErrorNamesTheLevelsOfThatModel(t *testing.T) {
 	}
 }
 
-func TestCheckHostedAgentRefusesAnEffortTheModelDoesNotTake(t *testing.T) {
+func TestNormalizeHostedAgentRefusesAnEffortTheModelDoesNotTake(t *testing.T) {
 	t.Parallel()
-	if err := CheckHostedAgent(ProviderClaude, "haiku", "high"); !errors.Is(err, ErrBadEffort) {
-		t.Fatalf("CheckHostedAgent() = %v, want ErrBadEffort", err)
+	if _, _, err := NormalizeHostedAgent(ProviderClaude, "haiku", "high"); !errors.Is(err, ErrBadEffort) {
+		t.Fatalf("NormalizeHostedAgent() = %v, want ErrBadEffort", err)
 	}
-	if err := CheckHostedAgent(ProviderClaude, "opus", "high"); err != nil {
-		t.Fatalf("CheckHostedAgent() = %v, want nil", err)
+	if _, _, err := NormalizeHostedAgent(ProviderClaude, "opus", "high"); err != nil {
+		t.Fatalf("NormalizeHostedAgent() = %v, want nil", err)
+	}
+}
+
+func TestNormalizeHostedAgentGivesTheIDsOfTheManifest(t *testing.T) {
+	t.Parallel()
+	model, effort, err := NormalizeHostedAgent(ProviderClaude, " Opus ", " High ")
+	if err != nil {
+		t.Fatalf("NormalizeHostedAgent() = %v", err)
+	}
+	if model != "opus" || effort != "high" {
+		t.Fatalf("NormalizeHostedAgent() = %q, %q, want opus and high", model, effort)
 	}
 }
 

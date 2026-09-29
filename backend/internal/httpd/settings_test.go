@@ -82,6 +82,23 @@ func TestPutSettingsStoresThemAndHandsThemToTheDaemon(t *testing.T) {
 	}
 }
 
+func TestPutSettingsStoresTheModelAndTheEffortWithTheIDsOfTheManifest(t *testing.T) {
+	t.Parallel()
+	h, st, _, _ := newTestAPISettings(t)
+
+	rec := call(t, h, http.MethodPut, "/settings", `{"provider":"claude","model":" Opus ","effort":" High "}`, nil)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
+	}
+	stored, err := st.Settings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.Model != "opus" || stored.Effort != "high" {
+		t.Fatalf("stored model %q and effort %q, want opus and high", stored.Model, stored.Effort)
+	}
+}
+
 func TestPutSettingsRejectsWhatTheDaemonCannotRun(t *testing.T) {
 	t.Parallel()
 	h, _, _, applied := newTestAPISettings(t)

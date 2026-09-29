@@ -43,6 +43,8 @@ func (c *Runner) Signals() bool { return true }
 
 func (c *Runner) Prelude() string { return "" }
 
+func (c *Runner) DefaultModel() string { return c.Model }
+
 func (c *Runner) AuthorCommand(l agent.Launch) ([]string, error) {
 	flags := append([]string{"--permission-mode", "manual"}, agent.EffortArgs(effortFlag, l)...)
 	args, err := agent.AuthorArgs(c.bin(), c.Model, l, flags...)

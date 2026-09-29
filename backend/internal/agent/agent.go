@@ -25,6 +25,7 @@ type Runner interface {
 	NewSessionID() string
 	Command(l Launch) (argv []string, env []string, err error)
 	Doctor(ctx context.Context) error
+	DefaultModel() string
 	Signals() bool
 	Prelude() string
 	AuthorCommand(l Launch) ([]string, error)

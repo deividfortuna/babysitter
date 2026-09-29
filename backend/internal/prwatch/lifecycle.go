@@ -13,6 +13,7 @@ import (
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/checks"
 	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
@@ -79,6 +80,9 @@ func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout
 	if err != nil {
 		return checkout{}, err
 	}
+	if _, err := normalizeEffort(chosen.provider, s.launchedModel(chosen), chosen.effort); err != nil {
+		return checkout{}, err
+	}
 	if hostedProvider(chosen.provider) && s.lacksRunner(chosen.provider) {
 		return checkout{}, fmt.Errorf("%w: %s", ErrNoAgent, chosen.provider)
 	}
@@ -141,6 +145,18 @@ func readSource(ctx context.Context, dir string) (source, error) {
 
 func (s *Service) lacksRunner(provider string) bool {
 	return len(s.agents) > 0 && s.agents[provider] == nil
+}
+
+func (s *Service) launchedModel(chosen agentChoice) string {
+	runner := s.agents[chosen.provider]
+	if runner == nil {
+		return chosen.model
+	}
+	launched := normalized(agent.PickModel(runner.DefaultModel(), chosen.model))
+	if _, known := modelOf(chosen.provider, launched); !known {
+		return chosen.model
+	}
+	return launched
 }
 
 func checkHeadRepo(pr snapshot.PR, c checkout) error {

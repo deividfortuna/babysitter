@@ -161,12 +161,12 @@ func normalizeProvider(s string) (string, bool) {
 
 var hostedProviders = []string{ProviderClaude, ProviderCopilot}
 
-func CheckHostedAgent(provider, model, effort string) error {
+func NormalizeHostedAgent(provider, model, effort string) (normalModel, normalEffort string, err error) {
 	if !slices.Contains(hostedProviders, provider) {
-		return fmt.Errorf("%w: provider must be %q or %q, got %q", ErrBadProvider, ProviderClaude, ProviderCopilot, provider)
+		return "", "", fmt.Errorf("%w: provider must be %q or %q, got %q", ErrBadProvider, ProviderClaude, ProviderCopilot, provider)
 	}
-	_, err := normalizeAgent(provider, model, effort)
-	return err
+	chosen, err := normalizeAgent(provider, model, effort)
+	return chosen.model, chosen.effort, err
 }
 
 func normalizeAgent(provider, model, effort string) (agentChoice, error) {
