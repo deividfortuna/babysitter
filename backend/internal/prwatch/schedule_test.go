@@ -331,7 +331,6 @@ func TestAPassThatCannotReachGitHubWaitsOneIntervalBeforeItTriesAgain(t *testing
 func TestAMessageToASelfAgentKeepsTheWatchAtTheShortestInterval(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	fx.svc.schedule.now = fx.clock
 	w := fx.startSelf()
 	fx.update(func() {
 		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "please add a test", URL: "https://c/11"}}
@@ -344,7 +343,7 @@ func TestAMessageToASelfAgentKeepsTheWatchAtTheShortestInterval(t *testing.T) {
 	}
 
 	fx.advance(time.Minute)
-	if !fx.svc.schedule.due(w.ID, fx.svc.cadence()) {
+	if !fx.due(w) {
 		t.Fatal("a watch whose self agent took a message is not due after the shortest interval")
 	}
 }
