@@ -10,7 +10,7 @@ const choices: Array<{ preference: ThemePreference; label: string; Icon: LucideI
   { preference: "dark", label: "Dark theme", Icon: MoonIcon },
 ];
 
-export function ThemeToggle() {
+export function ThemeToggle({ onChange }: { onChange?: () => void }) {
   const { preference, setPreference } = useTheme();
 
   return (
@@ -28,7 +28,10 @@ export function ThemeToggle() {
           aria-pressed={preference === choice}
           title={label}
           className={cn("text-muted-foreground", preference === choice && "bg-background text-foreground shadow-xs")}
-          onClick={() => setPreference(choice)}
+          onClick={() => {
+            setPreference(choice);
+            onChange?.();
+          }}
         >
           <Icon />
         </Button>

@@ -31,8 +31,9 @@ func (s settingsOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(tw, "Report my own comments\t%s\n", yesNo(s.IncludeOwn))
 	fmt.Fprintf(tw, "Keep the worktree on stop\t%s\n", yesNo(s.KeepWorktree))
 	fmt.Fprintf(tw, "Show notifications\t%s\n", yesNo(s.NotificationsEnabled))
-	fmt.Fprintf(tw, "Notification sound\t%s\n", yesNo(s.NotificationSound))
-	fmt.Fprintf(tw, "Muted notification kinds\t%s\n", mutedKindsWord(s.MutedNotificationKinds))
+	fmt.Fprintf(tw, "Only in the background\t%s\n", yesNo(s.NotificationsBackgroundOnly))
+	fmt.Fprintf(tw, "Muted notification kinds\t%s\n", kindsWord(s.MutedNotificationKinds))
+	fmt.Fprintf(tw, "Silent notification kinds\t%s\n", kindsWord(s.SilentNotificationKinds))
 	fmt.Fprintf(tw, "Approval mode\t%s\n", s.ApprovalMode)
 	fmt.Fprintf(tw, "Approve a clean rebase or merge on its own\t%s\n", yesNo(s.AutoApproveRebase))
 	fmt.Fprintf(tw, "Branch behind its base\t%s\n", branchUpdateWord(s.BranchUpdate, s.UpdateOnGitHub))
@@ -40,7 +41,7 @@ func (s settingsOutput) writeText(out io.Writer) error {
 	return tw.Flush()
 }
 
-func mutedKindsWord(kinds []string) string {
+func kindsWord(kinds []string) string {
 	if len(kinds) == 0 {
 		return "none"
 	}
@@ -74,7 +75,7 @@ func newSettingsCmd(opts *options) *cobra.Command {
 		Use:   "settings",
 		Short: "Read and write the settings of the running daemon",
 		Long: `The settings of the daemon: how often it polls, and what a new watch
-takes when you do not say. They are the same settings the Watching pane
+takes when you do not say. They are the same settings the Settings dialog
 of the desktop app shows, and a change takes effect at once.
 
 'settings set' writes only the flags you type; the rest keep the value
@@ -116,8 +117,10 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		includeOwn      bool
 		keepWorktree    bool
 		notifications   bool
+		backgroundOnly  bool
 		sound           bool
 		mutedKinds      string
+		silentKinds     string
 		approvalMode    string
 		autoRebase      bool
 		provider        string
@@ -139,6 +142,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				}
 			}
 			muted := notificationKinds(mutedKinds)
+			silent := notificationKinds(silentKinds)
 			settings := []struct {
 				flag  string
 				write func(*httpd.Settings)
@@ -153,8 +157,10 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				{"include-own", func(s *httpd.Settings) { s.IncludeOwn = includeOwn }},
 				{"keep-worktree", func(s *httpd.Settings) { s.KeepWorktree = keepWorktree }},
 				{"notifications", func(s *httpd.Settings) { s.NotificationsEnabled = notifications }},
-				{"notification-sound", func(s *httpd.Settings) { s.NotificationSound = sound }},
+				{"notifications-background-only", func(s *httpd.Settings) { s.NotificationsBackgroundOnly = backgroundOnly }},
+				{"notification-sound", func(s *httpd.Settings) { s.SilentNotificationKinds = silentKindsFor(sound) }},
 				{"mute-notifications", func(s *httpd.Settings) { s.MutedNotificationKinds = muted }},
+				{"silent-notifications", func(s *httpd.Settings) { s.SilentNotificationKinds = silent }},
 				{"approval-mode", func(s *httpd.Settings) { s.ApprovalMode = approvalMode }},
 				{"auto-approve-rebase", func(s *httpd.Settings) { s.AutoApproveRebase = autoRebase }},
 				{"provider", func(s *httpd.Settings) { s.Provider, s.Model, s.Effort = provider, "", "" }},
@@ -202,7 +208,8 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().BoolVar(&includeOwn, "include-own", false, "a new watch reports the comments of your own user")
 	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "a watch that stops leaves its worktree on disk")
 	cmd.Flags().BoolVar(&notifications, "notifications", true, "show what happens on a watched pull request as a notification of the operating system")
-	cmd.Flags().BoolVar(&sound, "notification-sound", true, "let a notification make a sound")
+	cmd.Flags().BoolVar(&backgroundOnly, "notifications-background-only", false, "the app shows a notification only while none of its windows has the focus")
+	cmd.Flags().BoolVar(&sound, "notification-sound", true, "let every notification kind make a sound; false makes every kind silent")
 	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "who releases the work of a turn of the agent of a new watch: manual waits for you, auto pushes and posts when the turn ends")
 	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "a new watch lets approved work go out after a clean rebase or merge without asking again")
 	cmd.Flags().StringVar(&provider, "provider", "", "AI provider of a new watch: claude or copilot; a new provider takes its default model and effort unless --model and --effort name them")
@@ -211,7 +218,16 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().StringVar(&branchUpdate, branchUpdateFlag, "", "how a new watch updates a branch that fell behind its base: rebase or merge. The agent solves a conflict the same way")
 	cmd.Flags().BoolVar(&updateOnGitHub, updateOnGitHubFlag, true, "a new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses")
 	cmd.Flags().StringVar(&mutedKinds, "mute-notifications", "", "notification kinds that reach nobody, separated by commas: "+store.JoinKinds()+". An empty list shows them all again")
+	cmd.Flags().StringVar(&silentKinds, "silent-notifications", "", "notification kinds that arrive without a sound, separated by commas: "+store.JoinKinds()+". An empty list lets them all make a sound again")
+	cmd.MarkFlagsMutuallyExclusive("notification-sound", "silent-notifications")
 	return cmd
+}
+
+func silentKindsFor(sound bool) []string {
+	if sound {
+		return []string{}
+	}
+	return store.KindNames()
 }
 
 func notificationKinds(value string) []string {

@@ -709,6 +709,12 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE proposals ADD COLUMN moved_by TEXT NOT NULL DEFAULT '' CHECK (moved_by IN ('', 'rebase', 'merge'));
 	UPDATE proposals SET moved_by = 'rebase' WHERE rebased_from != '';
 	`,
+	`
+	ALTER TABLE settings ADD COLUMN silent_notification_kinds TEXT NOT NULL DEFAULT '';
+	ALTER TABLE settings ADD COLUMN notifications_background_only INTEGER NOT NULL DEFAULT 1;
+	UPDATE settings SET silent_notification_kinds = 'agent,review,checks,watch,merge,auto' WHERE notification_sound = 0;
+	ALTER TABLE settings DROP COLUMN notification_sound;
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

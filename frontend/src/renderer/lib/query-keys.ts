@@ -44,6 +44,7 @@ export function proposalCodeQueryKey(
 export const providersQueryKey = ["providers"] as const;
 
 export const settingsQueryKey = ["settings"] as const;
+export const settingsMutationKey = ["settings"] as const;
 
 export const notificationsQueryKey = ["notifications"] as const;
 

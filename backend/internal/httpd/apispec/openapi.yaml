@@ -3060,8 +3060,9 @@ components:
             type: string
           nullable: true
           type: array
-        notificationSound:
-          description: A notification makes a sound
+        notificationsBackgroundOnly:
+          description: The app shows a notification only while none of its windows
+            has the focus
           type: boolean
         notificationsEnabled:
           description: What happens on a watched pull request is shown as a notification
@@ -3078,6 +3079,19 @@ components:
           - claude
           - copilot
           type: string
+        silentNotificationKinds:
+          description: The notification kinds that arrive without a sound
+          items:
+            enum:
+            - agent
+            - review
+            - checks
+            - watch
+            - merge
+            - auto
+            type: string
+          nullable: true
+          type: array
         updateOnGitHub:
           description: A new watch asks GitHub to update a branch that fell behind
             its base, and the agent does it only when GitHub refuses
@@ -3106,8 +3120,9 @@ components:
       - includeOwn
       - keepWorktree
       - notificationsEnabled
-      - notificationSound
+      - notificationsBackgroundOnly
       - mutedNotificationKinds
+      - silentNotificationKinds
       - approvalMode
       - autoApproveRebase
       - provider

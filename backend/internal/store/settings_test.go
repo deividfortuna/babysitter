@@ -131,8 +131,14 @@ func TestSaveSettingsPublishesTheChange(t *testing.T) {
 func TestDefaultSettingsShowNotificationsWithASound(t *testing.T) {
 	t.Parallel()
 	got := DefaultSettings()
-	if !got.NotificationsEnabled || !got.NotificationSound {
-		t.Fatalf("DefaultSettings() = %+v, want the notifications on and the sound on", got)
+	if !got.NotificationsEnabled {
+		t.Fatalf("DefaultSettings() = %+v, want the notifications on", got)
+	}
+	if len(got.SilentNotificationKinds) != 0 {
+		t.Fatalf("DefaultSettings() silences %v, want every kind with a sound", got.SilentNotificationKinds)
+	}
+	if !got.NotificationsBackgroundOnly {
+		t.Fatalf("DefaultSettings() = %+v, want the notifications only while the app is in the background", got)
 	}
 }
 
@@ -142,7 +148,7 @@ func TestSaveSettingsTurnsTheNotificationsOff(t *testing.T) {
 	ctx := context.Background()
 	want := DefaultSettings()
 	want.NotificationsEnabled = false
-	want.NotificationSound = false
+	want.NotificationsBackgroundOnly = false
 
 	if _, err := s.SaveSettings(ctx, want); err != nil {
 		t.Fatal(err)
@@ -151,8 +157,138 @@ func TestSaveSettingsTurnsTheNotificationsOff(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.NotificationsEnabled || got.NotificationSound {
-		t.Fatalf("Settings() = %+v, want both notification settings off", got)
+	if got.NotificationsEnabled {
+		t.Fatalf("Settings() = %+v, want the notifications off", got)
+	}
+	if got.NotificationsBackgroundOnly {
+		t.Fatalf("Settings() = %+v, want the notifications shown while the app has the focus too", got)
+	}
+}
+
+func TestSaveSettingsKeepsTheSilentNotificationKinds(t *testing.T) {
+	t.Parallel()
+	s, _ := openTemp(t)
+	ctx := context.Background()
+	next := DefaultSettings()
+	next.SilentNotificationKinds = []NotificationKind{NotificationMerge, NotificationReview, NotificationMerge}
+
+	saved, err := s.SaveSettings(ctx, next)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []NotificationKind{NotificationReview, NotificationMerge}
+	if !reflect.DeepEqual(saved.SilentNotificationKinds, want) {
+		t.Fatalf("SaveSettings returned %v, want %v", saved.SilentNotificationKinds, want)
+	}
+	got, err := s.Settings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(got.SilentNotificationKinds, want) {
+		t.Fatalf("Settings() = %v, want %v", got.SilentNotificationKinds, want)
+	}
+}
+
+func TestSaveSettingsRejectsAnUnknownSilentNotificationKind(t *testing.T) {
+	t.Parallel()
+	s, _ := openTemp(t)
+	next := DefaultSettings()
+	next.SilentNotificationKinds = []NotificationKind{"rumour"}
+
+	if _, err := s.SaveSettings(context.Background(), next); !errors.Is(err, ErrInvalidSettings) {
+		t.Fatalf("SaveSettings error = %v, want one that wraps ErrInvalidSettings", err)
+	}
+}
+
+func TestSaveSettingsKeepsASilentKindThisBuildDoesNotKnow(t *testing.T) {
+	t.Parallel()
+	s, _ := openTemp(t)
+	ctx := context.Background()
+	if _, err := s.db.ExecContext(ctx, `UPDATE settings SET silent_notification_kinds = 'merge,rumour'`); err != nil {
+		t.Fatal(err)
+	}
+	got, err := s.Settings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := []NotificationKind{NotificationMerge}; !reflect.DeepEqual(got.SilentNotificationKinds, want) {
+		t.Fatalf("Settings() silences %v, want %v", got.SilentNotificationKinds, want)
+	}
+
+	got.SilentNotificationKinds = []NotificationKind{NotificationChecks}
+	if _, err := s.SaveSettings(ctx, got); err != nil {
+		t.Fatal(err)
+	}
+
+	var silent string
+	if err := s.db.QueryRowContext(ctx, `SELECT silent_notification_kinds FROM settings WHERE id = 1`).Scan(&silent); err != nil {
+		t.Fatal(err)
+	}
+	if silent != "checks,rumour" {
+		t.Fatalf("the row holds %q, want the unknown kind kept beside the new one", silent)
+	}
+}
+
+func TestPlaysSoundFollowsTheSilentKinds(t *testing.T) {
+	t.Parallel()
+	settings := DefaultSettings()
+	settings.SilentNotificationKinds = []NotificationKind{NotificationChecks}
+
+	if settings.PlaysSound(NotificationChecks) {
+		t.Fatal("PlaysSound(checks) = true, want the silent kind without a sound")
+	}
+	if !settings.PlaysSound(NotificationReview) {
+		t.Fatal("PlaysSound(review) = false, want a kind nobody silenced with a sound")
+	}
+}
+
+func TestUpgradeKeepsTheNotificationsSilentWhenTheSoundWasOff(t *testing.T) {
+	t.Parallel()
+	cases := map[string]struct {
+		sound int
+		want  []NotificationKind
+	}{
+		"the sound was on":  {sound: 1, want: nil},
+		"the sound was off": {sound: 0, want: NotificationKinds},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			path := filepath.Join(t.TempDir(), "babysitter.db")
+			db, err := sql.Open("sqlite3", "file:"+path+"?_foreign_keys=on")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := migrateTo(ctx, db, 33); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.ExecContext(ctx, "UPDATE settings SET notification_sound = ? WHERE id = 1", c.sound); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			s, err := Open(path)
+			if err != nil {
+				t.Fatalf("Open() after the upgrade error = %v", err)
+			}
+			defer s.Close()
+			got, err := s.Settings(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(got.SilentNotificationKinds, c.want) {
+				t.Fatalf("SilentNotificationKinds = %v, want %v", got.SilentNotificationKinds, c.want)
+			}
+			if !got.NotificationsBackgroundOnly {
+				t.Fatalf("Settings() = %+v, want the notifications only in the background, as the app showed them before", got)
+			}
+			if _, err := s.db.ExecContext(ctx, "SELECT notification_sound FROM settings"); err == nil {
+				t.Fatal("the settings still hold the notification_sound column, want it dropped")
+			}
+		})
 	}
 }
 
@@ -271,7 +407,7 @@ func TestSaveSettingsKeepsAMutedKindThisBuildDoesNotKnow(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got.NotificationSound = false
+	got.NotificationsBackgroundOnly = true
 	got.MutedNotificationKinds = []NotificationKind{NotificationChecks}
 	if _, err := s.SaveSettings(ctx, got); err != nil {
 		t.Fatal(err)

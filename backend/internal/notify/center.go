@@ -163,7 +163,7 @@ func (c *Center) show(ctx context.Context, item Item) {
 		return
 	}
 	n := item.Notification
-	n.Silent = n.Silent || !settings.NotificationSound
+	n.Silent = n.Silent || !settings.PlaysSound(item.Kind)
 	banner, done := context.WithTimeout(context.Background(), c.showTimeout)
 	c.showing.Go(func() {
 		defer done()

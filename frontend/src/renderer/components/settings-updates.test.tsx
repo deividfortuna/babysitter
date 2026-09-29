@@ -1,9 +1,10 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, beforeEach, expect, test, vi } from "vite-plus/test";
-import { chooseOption } from "@test/test-utils";
+import { chooseOption, renderWithProviders } from "@test/test-utils";
 import { bridge } from "@/lib/bridge";
 import type { UpdateSettings, UpdateStatus } from "../../shared/updates";
+import { SettingsDialog } from "./settings-dialog";
 import { UpdatesPanel } from "./settings-updates";
 
 beforeEach(() => {
@@ -96,6 +97,21 @@ test("the switch turns the automatic download off", async () => {
 
   expect(setSettings).toHaveBeenCalledWith({ autoDownload: false });
   expect(toggle).not.toBeChecked();
+});
+
+test("a change the main process refuses goes back, says why and is not marked saved", async () => {
+  vi.spyOn(bridge.updates, "getStatus").mockResolvedValue({ state: "idle", currentVersion: "0.1.0" });
+  vi.spyOn(bridge.updates, "getSettings").mockResolvedValue({ autoDownload: true, channel: "stable" });
+  vi.spyOn(bridge.updates, "setSettings").mockRejectedValue(new Error("the settings file is read only"));
+  renderWithProviders(<SettingsDialog open category="updates" onOpenChange={vi.fn()} />);
+  const user = userEvent.setup();
+
+  const toggle = await screen.findByRole("switch", { name: "Download updates automatically" });
+  await user.click(toggle);
+
+  expect(await screen.findByText("the settings file is read only")).toBeVisible();
+  expect(toggle).toBeChecked();
+  expect(screen.queryByText("saved")).toBeNull();
 });
 
 test("the channel picks between stable versions and nightlies", async () => {

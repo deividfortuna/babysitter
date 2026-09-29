@@ -10,9 +10,12 @@ import {
   rateLimitQueryKey,
   repoConfigQueryKey,
   reposQueryKey,
+  settingsMutationKey,
+  settingsQueryKey,
   viewerQueryKey,
   watchesQueryKey,
 } from "./query-keys";
+import { deferred } from "@test/test-utils";
 
 afterEach(() => {
   FakeEventSource.instances = [];
@@ -43,6 +46,47 @@ describe("connectEventTransport", () => {
     FakeEventSource.instances.at(-1)!.dispatch("log_level_changed");
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: logLevelQueryKey });
+
+    dispose();
+  });
+
+  it("reads the settings again when the daemon changes them", () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    setApiBaseUrl("http://localhost:1234");
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+
+    const dispose = connectEventTransport(queryClient);
+    FakeEventSource.instances.at(-1)!.dispatch("settings_changed");
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: settingsQueryKey });
+
+    dispose();
+  });
+
+  it("holds the settings while a save of them runs, then reads them once", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    setApiBaseUrl("http://localhost:1234");
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+    const held = deferred();
+    const saving = queryClient.getMutationCache().build(queryClient, {
+      mutationKey: settingsMutationKey,
+      mutationFn: () => held.promise,
+    });
+    const saved = saving.execute(undefined);
+
+    const dispose = connectEventTransport(queryClient);
+    const es = FakeEventSource.instances.at(-1)!;
+    es.dispatch("settings_changed");
+    es.dispatch("settings_changed");
+    const settingsReads = () =>
+      invalidateQueries.mock.calls.filter(([filters]) => filters?.queryKey === settingsQueryKey).length;
+
+    expect(settingsReads()).toBe(0);
+    held.resolve();
+    await saved;
+    expect(settingsReads()).toBe(1);
 
     dispose();
   });

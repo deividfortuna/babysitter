@@ -37,8 +37,9 @@ export function useUpdateSettings() {
       if (before) apply({ ...before, ...patch });
       try {
         apply(await bridge.updates.setSettings(patch));
-      } catch {
+      } catch (error) {
         apply(before);
+        throw error;
       }
     },
     [apply],

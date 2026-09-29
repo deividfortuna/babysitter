@@ -1,7 +1,7 @@
 import { renderHook, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { QueryClientProvider } from "@tanstack/react-query";
-import { expect, test, vi } from "vite-plus/test";
+import { expect, onTestFinished, test, vi } from "vite-plus/test";
 import { buildNotification, buildSettings } from "@test/fixtures";
 import { http, HttpResponse } from "msw";
 import { apiUrl, server, serveApi } from "@test/msw";
@@ -10,6 +10,7 @@ import { createQueryClientForTests } from "@test/test-utils";
 import type { Notification } from "@/hooks/useNotifications";
 import { bridge } from "@/lib/bridge";
 import { notificationsQueryKey, settingsQueryKey } from "@/lib/query-keys";
+import type { NotificationClick } from "../../shared/notifications";
 import { useNativeNotifications } from "./useNativeNotifications";
 
 function failSettings() {
@@ -70,21 +71,54 @@ test("the row carries its kind, so the dock knows how loud to be", async () => {
   await waitFor(() => expect(show).toHaveBeenCalledWith(expect.objectContaining({ kind: "agent", silent: false })));
 });
 
-test("the sound setting of the daemon silences what the app shows", async () => {
-  const { queryClient, wrapper, show } = harness(
-    [buildNotification({ id: 3 })],
-    buildSettings({ notificationSound: false }),
-  );
+test("a kind the settings make silent is shown without a sound", async () => {
+  const quiet = buildSettings({ silentNotificationKinds: ["review"] });
+  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })], quiet);
   renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
   await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
 
   serveApi({
-    notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })],
-    settings: buildSettings({ notificationSound: false }),
+    notifications: [
+      buildNotification({ id: 5, kind: "checks" }),
+      buildNotification({ id: 4, kind: "review" }),
+      buildNotification({ id: 3 }),
+    ],
+    settings: quiet,
   });
   await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
 
-  await waitFor(() => expect(show).toHaveBeenCalledWith(expect.objectContaining({ silent: true })));
+  await waitFor(() => expect(show).toHaveBeenCalledTimes(2));
+  expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 4, silent: true }));
+  expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 5, silent: false }));
+});
+
+test("with background only on, the app shows nothing while it has the focus", async () => {
+  const focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
+  onTestFinished(() => focus.mockRestore());
+  const background = buildSettings({ notificationsBackgroundOnly: true });
+  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })], background);
+  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
+
+  serveApi({ notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })], settings: background });
+  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(2));
+  expect(show).not.toHaveBeenCalled();
+});
+
+test("with background only on, the app shows a notification while it is in the background", async () => {
+  const focus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
+  onTestFinished(() => focus.mockRestore());
+  const background = buildSettings({ notificationsBackgroundOnly: true });
+  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })], background);
+  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
+  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
+
+  serveApi({ notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })], settings: background });
+  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
+
+  await waitFor(() => expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 4 })));
 });
 
 test("a row that asked for no sound is silent while the sound is on", async () => {
@@ -143,7 +177,7 @@ test("the menu bar item opens the notification screen", async () => {
 test("a click on a notification opens the watch it belongs to", async () => {
   const { wrapper } = harness([]);
   const onNavigate = vi.fn();
-  const clicks: ((c: { id: number; watchId?: number }) => void)[] = [];
+  const clicks: ((c: NotificationClick) => void)[] = [];
   vi.spyOn(bridge.notifications, "onClick").mockImplementation((listener) => {
     clicks.push(listener);
     return () => undefined;
@@ -167,8 +201,8 @@ function readCalls(): number[][] {
   return calls;
 }
 
-function clickListeners(): ((click: { id: number; watchId?: number }) => void)[] {
-  const clicks: ((click: { id: number; watchId?: number }) => void)[] = [];
+function clickListeners(): ((click: NotificationClick) => void)[] {
+  const clicks: ((click: NotificationClick) => void)[] = [];
   vi.spyOn(bridge.notifications, "onClick").mockImplementation((listener) => {
     clicks.push(listener);
     return () => undefined;
@@ -193,6 +227,18 @@ test("a click on a banner of no watch marks it as seen just the same", async () 
   const clicks = clickListeners();
 
   renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
+  clicks[0]({ id: 7 });
+
+  await waitFor(() => expect(marks).toEqual([[7]]));
+});
+
+test("a click on the test notification marks nothing as seen", async () => {
+  const { wrapper } = harness([buildNotification({ id: 7 })]);
+  const marks = readCalls();
+  const clicks = clickListeners();
+
+  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
+  clicks[0]({});
   clicks[0]({ id: 7 });
 
   await waitFor(() => expect(marks).toEqual([[7]]));

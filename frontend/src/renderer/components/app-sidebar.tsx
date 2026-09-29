@@ -256,7 +256,7 @@ export function AppSidebar({
           <PlusIcon data-icon="inline-start" />
           Watch a pull request
         </Button>
-        <RateLimitCard enabled={enabled} onPollLessOften={() => onOpenSettings("watching")} />
+        <RateLimitCard enabled={enabled} onPollLessOften={() => onOpenSettings("polling")} />
         <UpdateCard />
         <AccountRow viewer={viewer.data} onOpenSettings={() => onOpenSettings()} />
       </SidebarFooter>

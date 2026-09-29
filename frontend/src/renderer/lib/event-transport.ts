@@ -7,6 +7,7 @@ import {
   pullsQueryKey,
   rateLimitQueryKey,
   reposQueryKey,
+  settingsMutationKey,
   settingsQueryKey,
   viewerQueryKey,
   watchesQueryKey,
@@ -28,6 +29,24 @@ const EVENT_TYPES = [
 ] as const;
 
 const INVALIDATE_WINDOW_MS = 150;
+
+type QueryKey = readonly unknown[];
+
+function invalidationHeldWhileSaving(queryClient: QueryClient, queryKey: QueryKey, mutationKey: QueryKey) {
+  let held = false;
+  const idle = () => queryClient.isMutating({ mutationKey }) === 0;
+  const invalidate = () => void queryClient.invalidateQueries({ queryKey });
+  const unsubscribe = queryClient.getMutationCache().subscribe(() => {
+    if (!held || !idle()) return;
+    held = false;
+    invalidate();
+  });
+  function request() {
+    if (idle()) invalidate();
+    else held = true;
+  }
+  return { request, dispose: unsubscribe };
+}
 
 function readyFrame(data: unknown): ReadyFrame {
   try {
@@ -63,6 +82,7 @@ export function connectEventTransport(
   let refreshTimer: ReturnType<typeof setTimeout> | null = null;
   let attempt = 0;
   let disposed = false;
+  const settings = invalidationHeldWhileSaving(queryClient, settingsQueryKey, settingsMutationKey);
 
   function scheduleRefetch() {
     if (refreshTimer) return;
@@ -115,9 +135,7 @@ export function connectEventTransport(
     for (const type of EVENT_TYPES) {
       es.addEventListener(type, scheduleRefetch);
     }
-    es.addEventListener("settings_changed", () => {
-      void queryClient.invalidateQueries({ queryKey: settingsQueryKey });
-    });
+    es.addEventListener("settings_changed", settings.request);
     es.addEventListener("log_level_changed", () => {
       void queryClient.invalidateQueries({ queryKey: logLevelQueryKey });
     });
@@ -143,6 +161,7 @@ export function connectEventTransport(
   return () => {
     disposed = true;
     unsubscribe();
+    settings.dispose();
     close();
     if (refreshTimer) clearTimeout(refreshTimer);
     onConnection("closed");

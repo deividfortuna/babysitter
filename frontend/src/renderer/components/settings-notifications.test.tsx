@@ -2,131 +2,138 @@ import { screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { buildSettings } from "@test/fixtures";
-import { serveApi } from "@test/msw";
+import { http, HttpResponse } from "msw";
+import { apiUrl, server, serveApi } from "@test/msw";
 import { renderWithProviders } from "@test/test-utils";
 import type { Settings } from "@/hooks/useSettings";
+import { bridge } from "@/lib/bridge";
+import { testNotification } from "../../shared/notifications";
 import { SettingsDialog } from "./settings-dialog";
 
-async function openNotifications() {
-  const user = userEvent.setup();
-  await user.click(screen.getByRole("button", { name: "Notifications" }));
-  return user;
+function renderNotifications(settings: Settings = buildSettings()) {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings, savedSettings });
+  renderWithProviders(<SettingsDialog open category="notifications" onOpenChange={vi.fn()} />);
+  return { savedSettings, user: userEvent.setup() };
 }
 
-test("the Notifications panel shows what the daemon holds", async () => {
-  serveApi({ settings: buildSettings({ notificationsEnabled: true, notificationSound: false }) });
+test("the Notifications page shows what the daemon holds", async () => {
+  renderNotifications(
+    buildSettings({
+      mutedNotificationKinds: ["checks"],
+      silentNotificationKinds: ["review"],
+      notificationsBackgroundOnly: true,
+    }),
+  );
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  await openNotifications();
+  expect(await screen.findByRole("switch", { name: "Show notifications of the system" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Notify: Review comments" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Sound: Review comments" })).not.toBeChecked();
+  expect(screen.getByRole("switch", { name: "Notify: Checks" })).not.toBeChecked();
+  expect(screen.getByRole("switch", { name: "Sound: Agent requests" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Only while the app is in the background" })).toBeChecked();
+});
 
-  expect(await screen.findByRole("switch", { name: "Show notifications" })).toBeChecked();
-  expect(screen.getByRole("switch", { name: "Play a sound" })).not.toBeChecked();
+test("each kind has a row with a switch to notify and a switch for the sound", async () => {
+  renderNotifications();
+
+  const table = await screen.findByRole("table", { name: "Notification kinds" });
+  expect(table).toBeVisible();
+  for (const label of ["Agent requests", "Review comments", "Checks", "Watches", "Merges", "Auto start"]) {
+    expect(screen.getByRole("switch", { name: `Notify: ${label}` })).toBeChecked();
+    expect(screen.getByRole("switch", { name: `Sound: ${label}` })).toBeChecked();
+  }
 });
 
 test("turning the notifications off is saved at once", async () => {
-  const savedSettings: Settings[] = [];
-  serveApi({ settings: buildSettings(), savedSettings });
+  const { savedSettings, user } = renderNotifications();
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  const user = await openNotifications();
-  await user.click(await screen.findByRole("switch", { name: "Show notifications" }));
+  await user.click(await screen.findByRole("switch", { name: "Show notifications of the system" }));
 
   await waitFor(() => expect(savedSettings).toHaveLength(1));
   expect(savedSettings[0].notificationsEnabled).toBe(false);
   expect(savedSettings[0].pollIntervalSeconds).toBe(60);
 });
 
-test("the sound cannot be changed while the notifications are off", async () => {
-  serveApi({ settings: buildSettings({ notificationsEnabled: false }) });
+test("no kind can be changed while the notifications are off", async () => {
+  renderNotifications(buildSettings({ notificationsEnabled: false }));
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  await openNotifications();
-
-  expect(await screen.findByRole("switch", { name: "Play a sound" })).toBeDisabled();
+  expect(await screen.findByRole("switch", { name: "Notify: Review comments" })).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Sound: Review comments" })).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Only while the app is in the background" })).toBeDisabled();
 });
 
-test("each kind has a switch, and a muted one is off", async () => {
-  serveApi({ settings: buildSettings({ mutedNotificationKinds: ["checks"] }) });
+test("the sound of a muted kind cannot be changed", async () => {
+  renderNotifications(buildSettings({ mutedNotificationKinds: ["watch"] }));
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  await openNotifications();
-
-  expect(await screen.findByRole("switch", { name: "Review comments" })).toBeChecked();
-  expect(screen.getByRole("switch", { name: "Checks" })).not.toBeChecked();
-  expect(screen.getByRole("switch", { name: "Agent requests" })).toBeChecked();
-  expect(screen.getByRole("switch", { name: "Watches" })).toBeChecked();
-  expect(screen.getByRole("switch", { name: "Merges" })).toBeChecked();
-  expect(screen.getByRole("switch", { name: "Auto start" })).toBeChecked();
-});
-
-test("the auto start kind can be muted", async () => {
-  const savedSettings: Settings[] = [];
-  serveApi({ settings: buildSettings(), savedSettings });
-
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  const user = await openNotifications();
-  await user.click(await screen.findByRole("switch", { name: "Auto start" }));
-
-  await waitFor(() => expect(savedSettings).toHaveLength(1));
-  expect(savedSettings[0].mutedNotificationKinds).toEqual(["auto"]);
+  const sound = await screen.findByRole("switch", { name: "Sound: Watches" });
+  expect(sound).toBeDisabled();
+  expect(sound).not.toBeChecked();
+  expect(screen.getByRole("switch", { name: "Sound: Merges" })).toBeEnabled();
 });
 
 test("turning a kind off mutes it and leaves the rest alone", async () => {
-  const savedSettings: Settings[] = [];
-  serveApi({ settings: buildSettings({ mutedNotificationKinds: ["checks"] }), savedSettings });
+  const { savedSettings, user } = renderNotifications(buildSettings({ mutedNotificationKinds: ["checks"] }));
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  const user = await openNotifications();
-  await user.click(await screen.findByRole("switch", { name: "Review comments" }));
+  await user.click(await screen.findByRole("switch", { name: "Notify: Review comments" }));
 
   await waitFor(() => expect(savedSettings).toHaveLength(1));
   expect(savedSettings[0].mutedNotificationKinds).toEqual(["checks", "review"]);
 });
 
 test("turning a kind back on takes it off the muted list", async () => {
-  const savedSettings: Settings[] = [];
-  serveApi({ settings: buildSettings({ mutedNotificationKinds: ["checks", "review"] }), savedSettings });
+  const { savedSettings, user } = renderNotifications(buildSettings({ mutedNotificationKinds: ["checks", "review"] }));
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  const user = await openNotifications();
-  await user.click(await screen.findByRole("switch", { name: "Checks" }));
+  await user.click(await screen.findByRole("switch", { name: "Notify: Checks" }));
 
   await waitFor(() => expect(savedSettings).toHaveLength(1));
   expect(savedSettings[0].mutedNotificationKinds).toEqual(["review"]);
 });
 
-test("a muted kind this build does not know stays muted", async () => {
-  const savedSettings: Settings[] = [];
-  const fromANewerDaemon = ["checks", "rumour"] as Settings["mutedNotificationKinds"];
-  serveApi({ settings: buildSettings({ mutedNotificationKinds: fromANewerDaemon }), savedSettings });
+test("turning the sound of a kind off makes it silent and leaves the rest alone", async () => {
+  const { savedSettings, user } = renderNotifications(buildSettings({ silentNotificationKinds: ["auto"] }));
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  const user = await openNotifications();
-  await user.click(await screen.findByRole("switch", { name: "Review comments" }));
+  await user.click(await screen.findByRole("switch", { name: "Sound: Checks" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0].silentNotificationKinds).toEqual(["auto", "checks"]);
+  expect(savedSettings[0].mutedNotificationKinds).toEqual([]);
+});
+
+test("turning the sound of a kind back on takes it off the silent list", async () => {
+  const { savedSettings, user } = renderNotifications(buildSettings({ silentNotificationKinds: ["review", "auto"] }));
+
+  await user.click(await screen.findByRole("switch", { name: "Sound: Review comments" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0].silentNotificationKinds).toEqual(["auto"]);
+});
+
+test("the background only switch is saved at once", async () => {
+  const { savedSettings, user } = renderNotifications();
+
+  await user.click(await screen.findByRole("switch", { name: "Only while the app is in the background" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0].notificationsBackgroundOnly).toBe(true);
+});
+
+test("a muted kind this build does not know stays muted", async () => {
+  const fromANewerDaemon = ["checks", "rumour"] as Settings["mutedNotificationKinds"];
+  const { savedSettings, user } = renderNotifications(buildSettings({ mutedNotificationKinds: fromANewerDaemon }));
+
+  await user.click(await screen.findByRole("switch", { name: "Notify: Review comments" }));
 
   await waitFor(() => expect(savedSettings).toHaveLength(1));
   expect(savedSettings[0].mutedNotificationKinds).toEqual(["checks", "rumour", "review"]);
 });
 
-test("no kind can be changed while the notifications are off", async () => {
-  serveApi({ settings: buildSettings({ notificationsEnabled: false }) });
+test("a kind only a newer daemon knows has a row of its own", async () => {
+  const { savedSettings, user } = renderNotifications(
+    buildSettings({ mutedNotificationKinds: ["review", "deploy"] as Settings["mutedNotificationKinds"] }),
+  );
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  await openNotifications();
-
-  expect(await screen.findByRole("switch", { name: "Review comments" })).toBeDisabled();
-});
-
-test("a kind only a newer daemon knows has a switch of its own", async () => {
-  const savedSettings: Settings[] = [];
-  serveApi({
-    settings: buildSettings({ mutedNotificationKinds: ["review", "deploy"] as Settings["mutedNotificationKinds"] }),
-    savedSettings,
-  });
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  const user = await openNotifications();
-
-  const unknown = await screen.findByRole("switch", { name: /deploy/i });
+  const unknown = await screen.findByRole("switch", { name: "Notify: deploy" });
   expect(unknown).not.toBeChecked();
 
   await user.click(unknown);
@@ -135,20 +142,80 @@ test("a kind only a newer daemon knows has a switch of its own", async () => {
   expect(savedSettings[0].mutedNotificationKinds).toEqual(["review"]);
 });
 
-test("a kind only a newer daemon knows keeps its switch once it is on", async () => {
-  const savedSettings: Settings[] = [];
-  serveApi({
-    settings: buildSettings({ mutedNotificationKinds: ["review", "deploy"] as Settings["mutedNotificationKinds"] }),
-    savedSettings,
-  });
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  const user = await openNotifications();
+test("a kind only a newer daemon knows keeps its row once it is on", async () => {
+  const { savedSettings, user } = renderNotifications(
+    buildSettings({ mutedNotificationKinds: ["review", "deploy"] as Settings["mutedNotificationKinds"] }),
+  );
 
-  await user.click(await screen.findByRole("switch", { name: /deploy/i }));
-  await waitFor(() => expect(screen.getByRole("switch", { name: /deploy/i })).toBeChecked());
+  await user.click(await screen.findByRole("switch", { name: "Notify: deploy" }));
+  await waitFor(() => expect(screen.getByRole("switch", { name: "Notify: deploy" })).toBeChecked());
 
-  await user.click(screen.getByRole("switch", { name: /deploy/i }));
+  await user.click(screen.getByRole("switch", { name: "Notify: deploy" }));
 
   await waitFor(() => expect(savedSettings).toHaveLength(2));
   expect(savedSettings[1].mutedNotificationKinds).toEqual(["review", "deploy"]);
+});
+
+test("a silent kind only a newer daemon knows has a row of its own", async () => {
+  renderNotifications(
+    buildSettings({ silentNotificationKinds: ["review", "deploy"] as Settings["silentNotificationKinds"] }),
+  );
+
+  expect(await screen.findByRole("switch", { name: "Sound: deploy" })).not.toBeChecked();
+  expect(screen.getByRole("switch", { name: "Notify: deploy" })).toBeChecked();
+});
+
+test("a kind only a newer daemon knows that is muted and silent has one row", async () => {
+  renderNotifications(
+    buildSettings({
+      mutedNotificationKinds: ["review", "deploy"] as Settings["mutedNotificationKinds"],
+      silentNotificationKinds: ["checks", "deploy"] as Settings["silentNotificationKinds"],
+    }),
+  );
+
+  expect(await screen.findAllByRole("switch", { name: "Notify: deploy" })).toHaveLength(1);
+  expect(screen.getAllByRole("switch", { name: "Sound: deploy" })).toHaveLength(1);
+});
+
+test("Send a test shows a notification of the system", async () => {
+  vi.spyOn(bridge.notifications, "supported").mockResolvedValue(true);
+  const show = vi.spyOn(bridge.notifications, "show").mockResolvedValue(undefined);
+  const { user } = renderNotifications();
+
+  const send = await screen.findByRole("button", { name: "Send a test" });
+  await waitFor(() => expect(send).toBeEnabled());
+  await user.click(send);
+
+  expect(show).toHaveBeenCalledWith(testNotification());
+});
+
+test("Send a test waits for a window that can show notifications", async () => {
+  vi.spyOn(bridge.notifications, "supported").mockResolvedValue(false);
+  renderNotifications();
+
+  expect(await screen.findByRole("button", { name: "Send a test" })).toBeDisabled();
+});
+
+test("Send a test is off while the notifications are off", async () => {
+  const supported = vi.spyOn(bridge.notifications, "supported").mockResolvedValue(true);
+  renderNotifications(buildSettings({ notificationsEnabled: false }));
+
+  const send = await screen.findByRole("button", { name: "Send a test" });
+  await waitFor(() => expect(supported).toHaveBeenCalled());
+  expect(send).toBeDisabled();
+});
+
+test("a save the daemon refuses shows what the daemon answered", async () => {
+  const { user } = renderNotifications();
+  server.use(
+    http.put(apiUrl("/api/v1/settings"), () =>
+      HttpResponse.json({ error: { code: "bad_request", message: "the store is read only" } }, { status: 400 }),
+    ),
+  );
+
+  const toggle = await screen.findByRole("switch", { name: "Notify: Merges" });
+  await user.click(toggle);
+
+  expect(await screen.findByText("the store is read only")).toBeVisible();
+  await waitFor(() => expect(toggle).toBeChecked());
 });

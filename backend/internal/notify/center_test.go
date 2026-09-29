@@ -168,18 +168,35 @@ func TestPostRecordsTheRowWithTheNotificationsOff(t *testing.T) {
 	}
 }
 
-func TestPostSilencesTheNotificationWithTheSoundOff(t *testing.T) {
+func TestPostSilencesTheNotificationOfASilentKind(t *testing.T) {
 	t.Parallel()
-	st, desk := newCenterStore(), &spyDesktop{}
-	st.settings.NotificationSound = false
-	c := NewCenter(CenterDeps{Log: testutil.Logger(t), Store: st, Desktop: desk})
-
-	if _, err := c.Post(context.Background(), item()); err != nil {
-		t.Fatalf("Post() error = %v", err)
+	cases := []struct {
+		name   string
+		silent []store.NotificationKind
+		want   bool
+	}{
+		{"the kind is silent", []store.NotificationKind{store.NotificationReview}, true},
+		{"another kind is silent", []store.NotificationKind{store.NotificationChecks}, false},
+		{"no kind is silent", nil, false},
 	}
-	c.Wait()
-	if len(desk.sent) != 1 || !desk.sent[0].Silent {
-		t.Fatalf("the desktop got %+v, want one silent notification", desk.sent)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			st, desk := newCenterStore(), &spyDesktop{}
+			st.settings.SilentNotificationKinds = c.silent
+			center := NewCenter(CenterDeps{Log: testutil.Logger(t), Store: st, Desktop: desk})
+
+			if _, err := center.Post(context.Background(), item()); err != nil {
+				t.Fatalf("Post() error = %v", err)
+			}
+			center.Wait()
+			if len(desk.sent) != 1 || desk.sent[0].Silent != c.want {
+				t.Fatalf("the desktop got %+v, want one notification with silent %t", desk.sent, c.want)
+			}
+			if st.rows[0].Silent {
+				t.Fatalf("the store holds %+v, want the row without the silent flag of the settings", st.rows[0])
+			}
+		})
 	}
 }
 

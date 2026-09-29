@@ -13,7 +13,7 @@ type Handler = (...args: never[]) => unknown;
 const appDir = vi.hoisted(() => process.cwd());
 
 const electron = vi.hoisted(() => ({
-  windows: [] as { webContents: unknown; shown: boolean }[],
+  windows: [] as { webContents: unknown; shown: boolean; focused: boolean }[],
   toasts: [] as { click: () => void }[],
   sent: [] as { channel: string; payload: unknown }[],
   opened: [] as string[],
@@ -27,6 +27,7 @@ const electron = vi.hoisted(() => ({
   exits: [] as number[],
   daemonStops: "at once" as "at once" | "never",
   updateSettings: {} as Record<string, unknown>,
+  attention: 0,
 }));
 
 vi.mock("./main/update-settings", () => ({
@@ -99,7 +100,9 @@ vi.mock("electron", () => {
     }
     on() {}
     once() {}
-    flashFrame() {}
+    flashFrame(on: boolean) {
+      if (on) electron.attention++;
+    }
     loadURL() {}
     loadFile() {}
   }
@@ -129,7 +132,14 @@ vi.mock("electron", () => {
         electron.exits.push(code);
       },
       on: (name: string, fn: Handler) => electron.appEvents.set(name, fn),
-      dock: { bounce: () => 1, cancelBounce() {}, setBadge() {} },
+      dock: {
+        bounce: () => {
+          electron.attention++;
+          return 1;
+        },
+        cancelBounce() {},
+        setBadge() {},
+      },
       setBadgeCount() {},
     },
     BrowserWindow: FakeBrowserWindow,
@@ -168,6 +178,7 @@ async function loadMain() {
   electron.exits.length = 0;
   electron.daemonStops = "at once";
   electron.updateSettings = {};
+  electron.attention = 0;
   vi.resetModules();
   vi.stubGlobal("MAIN_WINDOW_VITE_DEV_SERVER_URL", undefined);
   vi.stubGlobal("MAIN_WINDOW_VITE_NAME", "main_window");
@@ -217,6 +228,25 @@ test("a click on a banner of a pull request opens it and marks the row read", ()
 
   expect(electron.opened).toEqual(["https://github.com/octo/hello/pull/7"]);
   expect(electron.sent).toEqual([{ channel: NOTIFICATIONS_CLICK_CHANNEL, payload: { id: 7, watchId: undefined } }]);
+});
+
+test("a notification while the window has the focus shows the banner and calls nobody back", () => {
+  electron.appEvents.get("activate")?.();
+  electron.windows[0].focused = true;
+
+  show({ id: 4, title: "PR #7", body: "alice needs an answer", kind: "agent" });
+
+  expect(electron.toasts).toHaveLength(1);
+  expect(electron.attention).toBe(0);
+});
+
+test("a notification while the window is in the background shows the banner and calls you back", () => {
+  electron.appEvents.get("activate")?.();
+
+  show({ id: 4, title: "PR #7", body: "alice needs an answer", kind: "agent" });
+
+  expect(electron.toasts).toHaveLength(1);
+  expect(electron.attention).toBe(1);
 });
 
 test("a click that only opens the browser holds nothing back for a later window", () => {
