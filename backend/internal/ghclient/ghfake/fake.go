@@ -20,6 +20,7 @@ const (
 	RouteUser            = "GET /user"
 	RouteUserRepos       = "GET /user/repos"
 	RouteRepo            = "GET /repos/{owner}/{repo}"
+	RouteCompare         = "GET /repos/{owner}/{repo}/compare/{basehead}"
 	RouteRules           = "GET /repos/{owner}/{repo}/rules/branches/{branch}"
 	RouteProtection      = "GET /repos/{owner}/{repo}/branches/{branch}/protection"
 	RouteLatestRelease   = "GET /repos/{owner}/{repo}/releases/latest"
@@ -156,6 +157,7 @@ func New() *GitHub {
 		g.route(RouteJobLogDownload, (*call).jobLogDownload),
 		g.route(RouteGraphQL, (*call).graphql),
 		g.route(RouteRepo, (*call).repo),
+		g.route(RouteCompare, (*call).compare),
 	}
 	return g
 }

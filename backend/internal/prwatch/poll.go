@@ -85,7 +85,7 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		_, err := s.stop(ctx, w.ID, reason, "", StopOptions{})
 		return err
 	}
-	if err := s.githubStep(ctx, client, w, snap.PR.NodeID); err != nil {
+	if err := s.githubStep(ctx, client, w, snap.PR); err != nil {
 		return err
 	}
 	if err := s.rebaseStale(ctx, w); err != nil {

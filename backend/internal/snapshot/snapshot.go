@@ -3,6 +3,7 @@ package snapshot
 import (
 	"cmp"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -96,12 +97,30 @@ type PR struct {
 	BaseBranch          string               `json:"base_branch"`
 	Mergeable           *bool                `json:"mergeable"`
 	MergeableState      store.MergeableState `json:"mergeable_state"`
+	BehindBy            int                  `json:"behind_by"`
+	BehindErr           string               `json:"behind_err,omitempty"`
 	ReviewDecision      store.ReviewDecision `json:"review_decision"`
 	ReviewersBehindHead []string             `json:"reviewers_behind_head"`
 	RequestedReviewers  []string             `json:"requested_reviewers"`
 	Approvals           int                  `json:"approvals"`
 	ChangesRequested    int                  `json:"changes_requested"`
 	UpdateType          dependabot.Level     `json:"update_type,omitempty"`
+}
+
+func (pr PR) MarshalJSON() ([]byte, error) {
+	type fields PR
+	return json.Marshal(struct {
+		fields
+		Behind bool `json:"behind"`
+	}{fields(pr), pr.Behind()})
+}
+
+func (pr PR) Behind() bool {
+	return pr.MergeableState == store.MergeableBehind || pr.blockedBehind()
+}
+
+func (pr PR) blockedBehind() bool {
+	return pr.MergeableState == store.MergeableBlocked && pr.BehindBy > 0
 }
 
 type Threads struct {
@@ -231,6 +250,7 @@ func Collect(ctx context.Context, c *github.Client, st SeenStore, t Target, o Op
 		workflowRuns   []*github.WorkflowRun
 		threads        Threads
 		reviewState    ghclient.ReviewState
+		behind         behindBase
 	)
 	g, gctx := errgroup.WithContext(ctx)
 	fetch(gctx, g, o, &reviews, func(ctx context.Context) ([]*github.PullRequestReview, *github.Response, error) {
@@ -256,9 +276,15 @@ func Collect(ctx context.Context, c *github.Client, st SeenStore, t Target, o Op
 		threads, reviewState, err = fetchReviewState(gctx, c, t, o)
 		return err
 	})
+	g.Go(func() error {
+		var err error
+		behind, err = fetchBehindBy(gctx, c, t, s.PR, o)
+		return err
+	})
 	if err := g.Wait(); err != nil {
 		return nil, err
 	}
+	s.PR.BehindBy, s.PR.BehindErr = behind.by, behind.failure
 	s.PR.RequestedReviewers = withRequests(s.PR.RequestedReviewers, reviewState.Requested)
 	s.PR.ReviewDecision, s.PR.Approvals, s.PR.ChangesRequested = watcher.ReviewDecision(reviews, s.PR.Author, len(s.PR.RequestedReviewers))
 	s.Threads = threads
@@ -698,20 +724,45 @@ func uniqueLogins(logins []string) []string {
 	return out
 }
 
-func fetchReviewState(ctx context.Context, c *github.Client, t Target, o Options) (Threads, ghclient.ReviewState, error) {
-	state, resp, callErr := ghclient.FetchReviewState(ctx, c, t.Owner, t.Name, t.Number)
-	err := o.after(ctx, resp, callErr)
+func (o Options) afterOptional(ctx context.Context, resp *github.Response, callErr error) (failure string, err error) {
+	err = o.after(ctx, resp, callErr)
 	if callErr == nil {
-		return Threads{
-			Unresolved: state.Unresolved(o.IgnoreAuthor),
-			Unanswered: state.Unanswered(o.IgnoreAuthor, o.TokenLogin),
-			LastAnswer: state.LastAnswerID(o.TokenLogin),
-		}, state, err
+		return "", err
 	}
 	if err != nil && !errors.Is(err, callErr) {
-		return Threads{}, ghclient.ReviewState{}, err
+		return "", err
 	}
-	return Threads{Err: callErr.Error()}, ghclient.ReviewState{}, nil
+	return callErr.Error(), nil
+}
+
+func fetchReviewState(ctx context.Context, c *github.Client, t Target, o Options) (Threads, ghclient.ReviewState, error) {
+	state, resp, callErr := ghclient.FetchReviewState(ctx, c, t.Owner, t.Name, t.Number)
+	failure, err := o.afterOptional(ctx, resp, callErr)
+	if failure != "" || err != nil {
+		return Threads{Err: failure}, ghclient.ReviewState{}, err
+	}
+	return Threads{
+		Unresolved: state.Unresolved(o.IgnoreAuthor),
+		Unanswered: state.Unanswered(o.IgnoreAuthor, o.TokenLogin),
+		LastAnswer: state.LastAnswerID(o.TokenLogin),
+	}, state, nil
+}
+
+type behindBase struct {
+	by      int
+	failure string
+}
+
+func fetchBehindBy(ctx context.Context, c *github.Client, t Target, pr PR, o Options) (behindBase, error) {
+	if pr.MergeableState != store.MergeableBlocked {
+		return behindBase{}, nil
+	}
+	n, resp, callErr := ghclient.BehindBy(ctx, c, t.Owner, t.Name, pr.BaseBranch, pr.HeadSHA)
+	failure, err := o.afterOptional(ctx, resp, callErr)
+	if failure != "" || err != nil {
+		return behindBase{failure: failure}, err
+	}
+	return behindBase{by: n}, nil
 }
 
 func withRequests(rest, graph []string) []string {

@@ -326,6 +326,26 @@ func TestDiffRecordsBehindForANewHeadThatIsStillBehind(t *testing.T) {
 	}
 }
 
+func TestDiffRecordsBehindForABlockedBranchBehindItsBase(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	s := greenSnapshot("abc")
+	s.PR.MergeableState = "blocked"
+	items, prev := Diff(State{}, s, now)
+	if slices.ContainsFunc(items, isBehind) {
+		t.Fatalf("activity = %v, want no behind row for a blocked branch that is up to date", items)
+	}
+
+	s.PR.BehindBy = 1
+	items, next := Diff(prev, s, now)
+	if !slices.ContainsFunc(items, func(a store.Activity) bool { return a.Ref == "behind@abc" }) {
+		t.Fatalf("activity = %v, want behind@abc: the branch is blocked and behind", items)
+	}
+	if next.MergeableState != "blocked" {
+		t.Fatalf("mergeable state = %q, want what GitHub reports", next.MergeableState)
+	}
+}
+
 func TestDiffRecordsAConflictForANewHeadThatStillConflicts(t *testing.T) {
 	t.Parallel()
 	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)

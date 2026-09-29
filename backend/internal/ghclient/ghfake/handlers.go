@@ -102,6 +102,25 @@ func (c *call) protection() {
 	c.json(http.StatusOK, map[string]any{"required_pull_request_reviews": map[string]any{"required_approving_review_count": n}})
 }
 
+func (c *call) compare() {
+	r := c.repoOf()
+	if r == nil {
+		return
+	}
+	base, head, _ := strings.Cut(c.a.Vars["basehead"], "...")
+	i := slices.IndexFunc(r.order, func(p *PR) bool { return p.BaseRef == base && p.HeadSHA == head })
+	if i < 0 {
+		c.fail(http.StatusNotFound, defaultNotFoundError)
+		return
+	}
+	behind := r.order[i].BehindBy
+	status := "ahead"
+	if behind > 0 {
+		status = "diverged"
+	}
+	c.json(http.StatusOK, map[string]any{"status": status, "ahead_by": 1, "behind_by": behind, "total_commits": 1, "commits": []any{}})
+}
+
 func (c *call) latestRelease() {
 	rel, ok := c.g.releases[strings.ToLower(c.a.Vars["owner"]+"/"+c.a.Vars["repo"])]
 	if !ok {

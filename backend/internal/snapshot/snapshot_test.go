@@ -702,3 +702,91 @@ func TestReviewerLoginsKeepsAChangeRequestACommentFollowed(t *testing.T) {
 		t.Fatalf("behindHead() after an approval = %v, want nobody", got)
 	}
 }
+
+func TestCollectReadsHowFarABlockedBranchIsBehind(t *testing.T) {
+	t.Parallel()
+	g, pr := newFakePR()
+	pr.BehindBy = 2
+	c, st := g.Client(t), openStore(t)
+
+	s, err := Collect(context.Background(), c, st, Target{Owner: "octo", Name: "hello", Number: 3}, Options{MaxFlakyRetries: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.PR.BehindBy != 2 || !s.PR.Behind() {
+		t.Fatalf("behind by %d, Behind() = %t, want 2 and true", s.PR.BehindBy, s.PR.Behind())
+	}
+	calls := g.Calls(ghfake.RouteCompare)
+	if len(calls) != 1 || calls[0].Vars["basehead"] != "main...abc" {
+		t.Fatalf("compare calls = %+v, want one of main...abc", calls)
+	}
+	if q := calls[0].Query; q.Get("page") != "2" || q.Get("per_page") != "1" {
+		t.Fatalf("compare query = %v, want page 2 of one commit, the page without the changed files", q)
+	}
+}
+
+func TestSnapshotJSONSaysWhetherTheBranchIsBehind(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name string
+		pr   PR
+		want bool
+	}{
+		{"behind", PR{MergeableState: "behind"}, true},
+		{"blocked and behind", PR{MergeableState: "blocked", BehindBy: 2}, true},
+		{"blocked and up to date", PR{MergeableState: "blocked"}, false},
+		{"clean", PR{MergeableState: "clean"}, false},
+	}
+	for _, c := range cases {
+		b, err := json.Marshal(Snapshot{PR: c.pr})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var got struct {
+			PR struct {
+				Behind         bool   `json:"behind"`
+				MergeableState string `json:"mergeable_state"`
+			} `json:"pr"`
+		}
+		if err := json.Unmarshal(b, &got); err != nil {
+			t.Fatal(err)
+		}
+		if got.PR.Behind != c.want || got.PR.MergeableState != string(c.pr.MergeableState) {
+			t.Errorf("%s: pr = %+v, want behind %t", c.name, got.PR, c.want)
+		}
+	}
+}
+
+func TestCollectComparesOnlyABlockedBranch(t *testing.T) {
+	t.Parallel()
+	g, pr := newGreenPR()
+	pr.BehindBy = 2
+	c, st := g.Client(t), openStore(t)
+
+	s, err := Collect(context.Background(), c, st, Target{Owner: "octo", Name: "hello", Number: 3}, Options{MaxFlakyRetries: 3})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := g.Count(ghfake.RouteCompare); n != 0 || s.PR.BehindBy != 0 {
+		t.Fatalf("compare calls = %d, behind by %d, want neither for a clean branch", n, s.PR.BehindBy)
+	}
+}
+
+func TestCollectTakesAFailedCompareAsNotBehind(t *testing.T) {
+	t.Parallel()
+	g, pr := newFakePR()
+	pr.BehindBy = 2
+	g.Fail(ghfake.RouteCompare, http.StatusNotFound, "Not Found")
+	c, st := g.Client(t), openStore(t)
+
+	s, err := Collect(context.Background(), c, st, Target{Owner: "octo", Name: "hello", Number: 3}, Options{MaxFlakyRetries: 3})
+	if err != nil {
+		t.Fatalf("Collect() error = %v, want the poll to go on without the compare", err)
+	}
+	if s.PR.BehindBy != 0 || s.PR.Behind() {
+		t.Fatalf("behind by %d, want 0 when the compare fails", s.PR.BehindBy)
+	}
+	if !strings.Contains(s.PR.BehindErr, "404") {
+		t.Fatalf("behind error = %q, want the failure of the compare kept", s.PR.BehindErr)
+	}
+}
