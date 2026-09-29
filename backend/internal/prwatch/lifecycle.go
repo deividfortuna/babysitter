@@ -484,6 +484,7 @@ type Summary struct {
 }
 
 func (s *Service) stop(ctx context.Context, id int64, reason store.StopReason, detail string, o StopOptions) (store.Watch, error) {
+	s.tries.forget(id)
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {
 		return store.Watch{}, err

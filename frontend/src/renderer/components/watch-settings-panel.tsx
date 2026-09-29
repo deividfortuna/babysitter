@@ -94,14 +94,18 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       <SettingRow
         label="Branch behind its base"
         htmlFor="watch-branch-update"
-        description="The agent solves a conflict the same way."
+        description={
+          watch.dependabot
+            ? "Dependabot owns the branch, so only the bot updates it."
+            : "The agent solves a conflict the same way."
+        }
       >
         <BranchUpdateSelect
           id="watch-branch-update"
           size="sm"
           className="w-32 shrink-0"
           value={watch.branchUpdate}
-          disabled={branchRules.isPending}
+          disabled={branchRules.isPending || watch.dependabot}
           onChange={(branchUpdate) => branchRules.mutate({ id: watch.id, branchUpdate })}
         />
       </SettingRow>

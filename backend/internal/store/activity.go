@@ -111,14 +111,7 @@ RETURNING id`,
 }
 
 func (s *Store) HasActivity(ctx context.Context, watchID int64, kind ActivityKind, ref string) (bool, error) {
-	var has bool
-	err := s.db.QueryRowContext(ctx,
-		"SELECT EXISTS (SELECT 1 FROM watch_activity WHERE watch_id = ? AND kind = ? AND ref = ?)",
-		watchID, kind, ref).Scan(&has)
-	if err != nil {
-		return false, fmt.Errorf("has activity: %w", err)
-	}
-	return has, nil
+	return s.HasActivityOfKinds(ctx, watchID, ref, kind)
 }
 
 func (s *Store) HasActivityOfKinds(ctx context.Context, watchID int64, ref string, kinds ...ActivityKind) (bool, error) {

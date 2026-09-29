@@ -139,7 +139,8 @@ test("a Dependabot watch says the bot updates its branch", async () => {
   const { user } = renderDetail({ author: "dependabot[bot]", dependabot: true });
 
   const panel = await openSettings(user);
-  expect(within(panel).getByText("Dependabot owns the branch, so only the bot updates it.")).toBeVisible();
+  expect(within(panel).getAllByText("Dependabot owns the branch, so only the bot updates it.")).toHaveLength(2);
+  expect(within(panel).getByLabelText("Branch behind its base")).toBeDisabled();
   expect(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" })).toBeDisabled();
 });
 

@@ -591,43 +591,43 @@ func (s *Service) staleProposal(ctx context.Context, w store.Watch) (store.Propo
 	return p, approved, err
 }
 
-func (s *Service) rebaseStale(ctx context.Context, w store.Watch) error {
+func (s *Service) rebaseStale(ctx context.Context, w store.Watch) (pushed bool, err error) {
 	p, stale, err := s.staleProposal(ctx, w)
 	if err != nil || !stale || w.HeadSHA == p.HeadSHA {
-		return err
+		return false, err
 	}
 	remote, err := s.rel.Fetch(ctx, w.WorktreeDir, w.HeadRef)
 	if err != nil || remote == p.HeadSHA {
-		return err
+		return false, err
 	}
 	landed, err := s.rel.Contains(ctx, w.WorktreeDir, remote, p.WorkSHA)
 	if err != nil || landed {
-		return err
+		return false, err
 	}
 	movable, err := s.movable(ctx, w, w.WorktreeDir, p.HeadSHA, p.WorkSHA, remote)
 	if err != nil || !movable {
-		return err
+		return false, err
 	}
 	approvedAgain := p.ApprovedAt != nil && w.AutoApproveRebase
 	if approvedAgain {
 		if err := s.moveWork(ctx, w, &p, remote); err != nil {
-			return s.staleConflict(ctx, w, p, err)
+			return false, s.staleConflict(ctx, w, p, err)
 		}
-		_, err := s.release(ctx, w, p, false)
-		return err
+		failure, err := s.release(ctx, w, p, false)
+		return failure == nil && err == nil, err
 	}
 	work, err := s.moveOnto(ctx, w, p, remote)
 	if err != nil {
-		return s.staleConflict(ctx, w, p, err)
+		return false, s.staleConflict(ctx, w, p, err)
 	}
 	if err := s.store.MarkProposalRebased(ctx, p.ID, remote, work, s.now()); err != nil {
-		return err
+		return false, err
 	}
 	p, err = s.store.GetProposal(ctx, w.ID, p.Number)
 	if err != nil {
-		return err
+		return false, err
 	}
-	return s.offer(ctx, w, p, true)
+	return false, s.offer(ctx, w, p, true)
 }
 
 func (s *Service) staleConflict(ctx context.Context, w store.Watch, p store.Proposal, err error) error {

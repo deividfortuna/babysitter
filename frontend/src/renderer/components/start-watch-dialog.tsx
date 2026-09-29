@@ -218,6 +218,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const mergeMethodValue = mergeMethod ? mergeMethodOf(mergeMethod) : (defaults?.mergeMethod ?? "");
   const updateOnGitHubValue = updateOnGitHub ?? defaults?.updateOnGitHub ?? true;
   const ownedByDependabot = isDependabotLogin(picked?.author);
+  const branchUpdateChoice = ownedByDependabot ? "" : branchUpdate;
+  const updateOnGitHubChoice = ownedByDependabot ? null : updateOnGitHub;
   const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
   const badApprovals = approvalsInvalid(approvalsValue);
 
@@ -278,8 +280,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         ...(approvalMode ? { approvalMode } : {}),
         ...(rebaseChosen ? { autoApproveRebase: autoRebase } : {}),
         ...(mergeWhenReady === null ? {} : { mergeWhenReady }),
-        ...(branchUpdate ? { branchUpdate } : {}),
-        ...(updateOnGitHub === null ? {} : { updateOnGitHub }),
+        ...(branchUpdateChoice ? { branchUpdate: branchUpdateChoice } : {}),
+        ...(updateOnGitHubChoice === null ? {} : { updateOnGitHub: updateOnGitHubChoice }),
       },
       {
         onSuccess: (watch) => {
@@ -670,8 +672,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               approvalMode: approvalMode || null,
               autoRebase: rebaseChosen ? autoRebaseValue : null,
               mergeWhenReady: mergeWhenReady ?? false,
-              branchUpdate: branchUpdate || null,
-              updateOnGitHub,
+              branchUpdate: branchUpdateChoice || null,
+              updateOnGitHub: updateOnGitHubChoice,
               noCheckout: !checkout,
             })}
           </Meta>

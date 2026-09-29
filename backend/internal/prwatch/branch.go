@@ -83,9 +83,9 @@ func (s *Service) githubOwnsBehind(ctx context.Context, w store.Watch) (bool, er
 }
 
 func (s *Service) updateBehind(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
-	owns, err := s.githubOwnsBehind(ctx, w)
-	if err != nil || !owns {
-		return err
+	candidate := w.MergeableState == store.MergeableBehind && s.updatesOnGitHub(w)
+	if !candidate {
+		return nil
 	}
 	behind, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBehind, "behind@"+w.HeadSHA)
 	if err != nil {
@@ -94,6 +94,10 @@ func (s *Service) updateBehind(ctx context.Context, client *github.Client, w sto
 	waiting := found && behind.NudgedAt == nil
 	if !waiting {
 		return nil
+	}
+	owns, err := s.githubOwnsBehind(ctx, w)
+	if err != nil || !owns {
+		return err
 	}
 	inFlight, err := s.workInFlight(ctx, w)
 	if err != nil || inFlight {

@@ -338,14 +338,45 @@ test("a watch can start with its own branch update", async () => {
 });
 
 test("a Dependabot pull request leaves the branch update to the bot", async () => {
-  serveApi();
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ startBodies });
   renderDialog(buildPullRequest({ author: "dependabot[bot]" }));
   const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Checkout to copy the worktree from"), "/Users/octo/code/babysitter");
   await openAdditional(user);
 
   expect(screen.getByText("Dependabot owns the branch, so only the bot updates it.")).toBeVisible();
   expect(screen.getByLabelText("Branch behind its base")).toBeDisabled();
   expect(screen.getByRole("switch", { name: "Update the branch on GitHub first" })).toBeDisabled();
+  expect(screen.queryByText(/--branch-update|--update-on-github/)).toBeNull();
+
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).not.toHaveProperty("branchUpdate");
+  expect(startBodies[0]).not.toHaveProperty("updateOnGitHub");
+});
+
+test("a Dependabot pull request drops the branch update chosen before it was picked", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({
+    startBodies,
+    pullRequests: [buildPullRequest({ number: 7, title: "Bump lodash", author: "dependabot[bot]" })],
+  });
+  renderDialog(buildPullRequest());
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Checkout to copy the worktree from"), "/Users/octo/code/babysitter");
+  await openAdditional(user);
+  await chooseOption(user, screen.getByLabelText("Branch behind its base"), "Merge");
+  await user.click(screen.getByRole("switch", { name: "Update the branch on GitHub first" }));
+
+  await user.click(screen.getByRole("button", { name: "Change" }));
+  await user.click(await screen.findByRole("option", { name: /#7 Bump lodash/ }));
+
+  expect(screen.queryByText(/--branch-update|--update-on-github/)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).not.toHaveProperty("branchUpdate");
+  expect(startBodies[0]).not.toHaveProperty("updateOnGitHub");
 });
 
 test("holds the start until the list of repositories has landed", async () => {

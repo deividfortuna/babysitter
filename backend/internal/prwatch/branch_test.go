@@ -417,6 +417,38 @@ func TestAWatchThatMergesMergesTheBranchThatMovedUnderItsWork(t *testing.T) {
 	}
 }
 
+func TestGitHubWaitsForThePollAfterTheDaemonPushed(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startWith(func(r *StartRequest) {
+		r.ApprovalMode, r.AutoApproveRebase = new(store.ApprovalManual), new(true)
+	})
+	fx.propose(w)
+	fx.rel.set(func(f *fakeRelease) { f.pushErr = errors.New("the lease refused the push") })
+	if p, err := fx.svc.Approve(context.Background(), w.ID, 1, Decision{}); err != nil || p.Status != store.ProposalFailed {
+		t.Fatalf("Approve() = %+v, %v, want the push to fail", p, err)
+	}
+	fx.rel.set(func(f *fakeRelease) { f.pushErr = nil })
+	fx.update(func() { fx.pr.HeadSHA, fx.pr.MergeableState = "t1", "behind" })
+	fx.rel.moveRemote("abc", "t1")
+	fx.agentIdle(w)
+
+	fx.poll(w)
+
+	if got := fx.rel.pushed(); len(got) == 0 || got[len(got)-1].SHA != "w1-on-t1" {
+		t.Fatalf("pushes = %+v, want the approved work pushed on t1", got)
+	}
+	if got := fx.branchUpdates(); len(got) != 0 {
+		t.Fatalf("branch updates = %+v, want none in the poll that pushed: t1 is no longer the head", got)
+	}
+
+	fx.update(func() { fx.pr.HeadSHA = "w1-on-t1" })
+	fx.poll(w)
+	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "REBASE", ExpectedHead: "w1-on-t1"}}) {
+		t.Fatalf("branch updates = %+v, want one update of the pushed head", got)
+	}
+}
+
 func TestAWatchChangesHowItUpdatesItsBranch(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

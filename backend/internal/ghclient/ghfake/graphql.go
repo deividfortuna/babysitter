@@ -98,8 +98,6 @@ func (g *GitHub) pullOfNode(id string) *PR {
 	return nil
 }
 
-// reviewState answers the review requests and the review threads of one
-// pull request, on one page.
 func (c *call) reviewState() {
 	p := c.pullOfQuery()
 	if p == nil {
