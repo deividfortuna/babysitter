@@ -56,7 +56,7 @@ test("offers to clear a repository filter with no active pull requests", async (
   expect(onNavigate).toHaveBeenCalledWith({ kind: "watching" });
 });
 
-test("counts the watches whose agent waits on the author", async () => {
+test("pins the watches that wait on the author above the repositories", async () => {
   serveApi({
     watches: [
       buildWatch({ id: 1, number: 1, title: "Quiet one" }),
@@ -66,9 +66,98 @@ test("counts the watches whose agent waits on the author", async () => {
 
   renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
 
-  expect(await screen.findByText("2 active · 1 needs you")).toBeVisible();
-  expect(screen.getByText("agent waits on a permission")).toBeVisible();
-  expect(screen.getByText("agent idle")).toBeVisible();
+  expect(await screen.findByText("2 active")).toBeVisible();
+  const needsYou = screen.getByRole("region", { name: "Needs you · 1" });
+  expect(within(needsYou).getByText("agent waits on a permission")).toBeVisible();
+  const repo = screen.getByRole("region", { name: "octo/babysitter · 1" });
+  expect(within(repo).getByText("agent idle")).toBeVisible();
+  expect(within(repo).queryByText("Loud one")).toBeNull();
+});
+
+test("a watch that needs you names its next step and opens the watch from it", async () => {
+  const onNavigate = vi.fn();
+  const user = userEvent.setup();
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 1, title: "Asks", session: { state: "waiting_input", pid: 8, logPath: "" } }),
+      buildWatch({ id: 2, number: 2, title: "Exited", session: { state: "exited", pid: 0, logPath: "" } }),
+      buildWatch({ id: 3, number: 3, title: "Idle one" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={onNavigate} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const needsYou = await screen.findByRole("region", { name: "Needs you · 2" });
+  expect(within(needsYou).getByRole("button", { name: "Message the agent" })).toBeVisible();
+  expect(within(needsYou).getAllByRole("link", { name: "Open on GitHub" })).toHaveLength(2);
+  await user.click(within(needsYou).getByRole("button", { name: "Answer the agent" }));
+  expect(onNavigate).toHaveBeenCalledWith({ kind: "watch", id: 1 });
+  const idle = screen.getByRole("button", { name: /Idle one/ }).closest('[role="listitem"]') as HTMLElement;
+  expect(within(idle).queryByRole("link", { name: "Open on GitHub" })).toBeNull();
+});
+
+test("the state chips count the watches and keep only the chosen state", async () => {
+  const user = userEvent.setup();
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 1, title: "Asks", session: { state: "waiting_input", pid: 8, logPath: "" } }),
+      buildWatch({ id: 2, number: 2, title: "Works", session: { state: "active", pid: 8, logPath: "" } }),
+      buildWatch({ id: 3, number: 3, title: "Ready", readySince: "2026-01-01T00:00:00Z" }),
+      buildWatch({ id: 4, number: 4, title: "Mine", takenOverAt: "2026-01-01T00:00:00Z" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+
+  const chips = await screen.findByRole("radiogroup", { name: "Filter by state" });
+  expect(within(chips).getByRole("radio", { name: "All 4" })).toBeChecked();
+  expect(within(chips).getByRole("radio", { name: "Needs you 1" })).toBeVisible();
+  expect(within(chips).getByRole("radio", { name: "Agent working 1" })).toBeVisible();
+  expect(within(chips).getByRole("radio", { name: "Ready to merge 1" })).toBeVisible();
+  expect(within(chips).getByRole("radio", { name: "With you 1" })).toBeVisible();
+
+  await user.click(within(chips).getByRole("radio", { name: "Ready to merge 1" }));
+
+  expect(screen.getByRole("button", { name: /Ready/ })).toBeVisible();
+  expect(screen.queryByText("Asks")).toBeNull();
+  expect(screen.queryByText("Works")).toBeNull();
+  expect(screen.queryByText("Mine")).toBeNull();
+});
+
+test("the search keeps the watches whose title, number or author holds the text", async () => {
+  const user = userEvent.setup();
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 482, title: "Retry webhooks", author: "deividfortuna" }),
+      buildWatch({ id: 2, number: 1203, title: "Paginate the audit log", author: "sgreen" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+  const search = await screen.findByRole("searchbox", { name: "Filter by title, number, author, repository or label" });
+
+  await user.type(search, "#482");
+  expect(screen.getByText("Retry webhooks")).toBeVisible();
+  expect(screen.queryByText("Paginate the audit log")).toBeNull();
+
+  await user.clear(search);
+  await user.type(search, "SGREEN");
+  expect(screen.getByText("Paginate the audit log")).toBeVisible();
+  expect(screen.queryByText("Retry webhooks")).toBeNull();
+});
+
+test("offers to clear the filters when no watch matches them", async () => {
+  const user = userEvent.setup();
+  serveApi({ watches: [buildWatch({ id: 1, number: 1, title: "Quiet one" })] });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+  await user.click(await screen.findByRole("radio", { name: "With you 0" }));
+
+  expect(screen.getByText("No watch matches")).toBeVisible();
+  await user.click(screen.getByRole("button", { name: "Clear the filters" }));
+
+  expect(screen.getByRole("radio", { name: "All 1" })).toBeChecked();
+  expect(screen.getByText("Quiet one")).toBeVisible();
 });
 
 test("shows a live dot on the row of a pull request whose agent works", async () => {
@@ -222,4 +311,49 @@ test("keeps the rows and names the failure when the pull requests do not load", 
   expect(within(alert).getByText("Labels and changed lines did not load")).toBeVisible();
   expect(within(alert).getByText("pull request store gone")).toBeVisible();
   expect(screen.getByRole("button", { name: /Add notifications/ })).toBeVisible();
+});
+
+test("the search also finds a watch by its repository and its labels", async () => {
+  const user = userEvent.setup();
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 12, title: "", repo: "octo/api" }),
+      buildWatch({ id: 2, number: 13, title: "Labelled one", repo: "octo/web" }),
+    ],
+    pullRequests: [buildPullRequest({ number: 13, repo: "octo/web", labels: ["billing"] })],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+  const search = await screen.findByRole("searchbox", {
+    name: "Filter by title, number, author, repository or label",
+  });
+
+  await user.type(search, "octo/api");
+  expect(screen.getByRole("button", { name: /octo\/api#12/ })).toBeVisible();
+  expect(screen.queryByText("Labelled one")).toBeNull();
+
+  await user.clear(search);
+  await user.type(search, "BILLING");
+  expect(await screen.findByText("Labelled one")).toBeVisible();
+  expect(screen.queryByRole("button", { name: /octo\/api#12/ })).toBeNull();
+});
+
+test("the chip counts follow the search text", async () => {
+  const user = userEvent.setup();
+  serveApi({
+    watches: [
+      buildWatch({ id: 1, number: 1, title: "Retry webhooks", pendingProposal: 2 }),
+      buildWatch({ id: 2, number: 2, title: "Paginate the log", pendingProposal: 3 }),
+      buildWatch({ id: 3, number: 3, title: "Quiet webhooks" }),
+    ],
+  });
+
+  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
+  expect(await screen.findByRole("radio", { name: "Needs you 2" })).toBeVisible();
+
+  await user.type(screen.getByRole("searchbox"), "webhooks");
+
+  expect(screen.getByRole("radio", { name: "All 2" })).toBeChecked();
+  expect(screen.getByRole("radio", { name: "Needs you 1" })).toBeVisible();
+  expect(screen.getByRole("region", { name: "Needs you · 1" })).toBeVisible();
 });

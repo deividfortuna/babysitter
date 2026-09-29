@@ -100,14 +100,14 @@ type InboxGroupProps = {
 export function InboxGroup({ heading, empty, children }: InboxGroupProps) {
   const headingId = useId();
   return (
-    <section aria-labelledby={headingId} className="flex flex-col gap-0.5">
+    <section aria-labelledby={headingId} className="flex flex-col gap-1.5">
       <h2 id={headingId} className="flex px-3.5 py-1 text-body font-medium text-muted-foreground">
         {heading}
       </h2>
       {empty ? (
         <p className="px-3.5 py-3 text-body text-muted-foreground">{empty}</p>
       ) : (
-        <ItemGroup className="gap-0.5">{children}</ItemGroup>
+        <ItemGroup className="gap-1.5">{children}</ItemGroup>
       )}
     </section>
   );
@@ -120,17 +120,31 @@ type RowContentProps = {
   details: ReactNode;
   time: string;
   attention?: boolean;
+  emphasized?: boolean;
 };
 
-const rowClassName = "w-full flex-nowrap items-start gap-3.5 rounded-lg px-3.5 py-3 text-left hover:bg-accent";
+const rowClassName = "w-full flex-nowrap items-start gap-3.5 rounded-xl px-3.5 py-3 text-left";
 
-function RowContent({ icon, title, status, details, time, attention = false }: RowContentProps) {
+type CardLook = { attention?: boolean; clickable?: boolean };
+
+function cardClassName({ attention = false, clickable = false }: CardLook): string {
+  const attentionHover = attention && clickable;
+  return cn(
+    "rounded-xl bg-row ring-1 ring-border/60 transition-colors ring-inset",
+    clickable && "hover:bg-accent/60",
+    attention && "bg-attention/7 ring-attention/35",
+    attentionHover && "hover:bg-attention/12",
+  );
+}
+
+function RowContent({ icon, title, status, details, time, attention = false, emphasized = false }: RowContentProps) {
+  const quiet = !attention && !emphasized;
   return (
     <>
       <ItemMedia className="pt-0.5 [&_svg]:size-4.5">{icon}</ItemMedia>
       <ItemContent className="min-w-0 gap-1.5">
         <div className="flex items-center gap-2.5">
-          <ItemTitle className={cn("min-w-0 text-title", !attention && "text-foreground/75")}>
+          <ItemTitle className={cn("min-w-0 text-title", quiet && "text-foreground/75")}>
             <span className="truncate">{title}</span>
           </ItemTitle>
           <span className="ml-auto flex shrink-0 items-center gap-2">{status}</span>
@@ -144,16 +158,21 @@ function RowContent({ icon, title, status, details, time, attention = false }: R
   );
 }
 
-type InboxRowProps = RowContentProps & { onOpen: () => void };
+type InboxRowProps = RowContentProps & { onOpen: () => void; actions?: ReactNode };
 
-export function InboxRow({ onOpen, ...content }: InboxRowProps) {
+export function InboxRow({ onOpen, actions, ...content }: InboxRowProps) {
   return (
-    <div role="listitem">
-      <Item asChild className={cn(rowClassName, content.attention && "bg-attention/7")}>
+    <div
+      role="listitem"
+      data-attention={content.attention || undefined}
+      className={cardClassName({ attention: content.attention, clickable: true })}
+    >
+      <Item asChild className={rowClassName}>
         <button type="button" onClick={onOpen}>
           <RowContent {...content} />
         </button>
       </Item>
+      {actions ? <div className="flex flex-wrap items-center gap-2 pr-3.5 pb-2.5 pl-11.5">{actions}</div> : null}
     </div>
   );
 }
@@ -162,9 +181,15 @@ type InboxItemProps = RowContentProps & { actions: ReactNode };
 
 export function InboxItem({ actions, ...content }: InboxItemProps) {
   return (
-    <Item role="listitem" className={rowClassName}>
-      <RowContent {...content} />
-      <ItemActions className="self-center">{actions}</ItemActions>
-    </Item>
+    <div
+      role="listitem"
+      data-attention={content.attention || undefined}
+      className={cardClassName({ attention: content.attention })}
+    >
+      <Item className={rowClassName}>
+        <RowContent {...content} />
+        <ItemActions className="self-center">{actions}</ItemActions>
+      </Item>
+    </div>
   );
 }

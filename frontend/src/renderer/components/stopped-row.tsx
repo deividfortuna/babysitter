@@ -4,7 +4,7 @@ import type { Watch } from "@/hooks/useWatches";
 import { AuthorName, DiffStat, InboxRow, LabelBadges } from "@/components/inbox-row";
 import { StopBadge, TagBadges } from "@/components/status-badges";
 import { duration, relativeTime } from "@/lib/time";
-import { autoTags, watchLabel } from "@/lib/watch-status";
+import { autoTags, watchAuthor, watchLabel } from "@/lib/watch-status";
 
 function StopIcon({ reason }: { reason: Watch["stopReason"] }) {
   switch (reason) {
@@ -31,7 +31,7 @@ type Props = {
 };
 
 export function StoppedRow({ watch: w, pull, onOpen }: Props) {
-  const author = w.author || pull?.author;
+  const author = watchAuthor(w, pull);
   const labels = pull?.labels ?? [];
   const tags = autoTags(w);
   return (

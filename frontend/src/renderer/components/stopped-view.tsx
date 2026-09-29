@@ -1,6 +1,6 @@
 import { ArchiveIcon, CircleAlertIcon } from "lucide-react";
 import { usePullsByLabel } from "@/hooks/usePulls";
-import { useWatches, type Watch } from "@/hooks/useWatches";
+import { useWatches } from "@/hooks/useWatches";
 import { InboxGroup, PullsErrorAlert } from "@/components/inbox-row";
 import { Meta } from "@/components/status-badges";
 import { StoppedRow } from "@/components/stopped-row";
@@ -9,22 +9,8 @@ import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Navigate } from "@/lib/navigation";
+import { groupByDay } from "@/lib/time";
 import { watchLabel } from "@/lib/watch-status";
-
-function stoppedToday(w: Watch): boolean {
-  if (!w.stoppedAt) return false;
-  return new Date(w.stoppedAt).toDateString() === new Date().toDateString();
-}
-
-function byDay(stopped: Watch[]): [string, Watch[]][] {
-  const today = stopped.filter(stoppedToday);
-  const earlier = stopped.filter((w) => !stoppedToday(w));
-  const days: [string, Watch[]][] = [
-    ["Today", today],
-    ["Earlier", earlier],
-  ];
-  return days.filter(([, list]) => list.length > 0);
-}
 
 type Props = {
   enabled: boolean;
@@ -92,7 +78,7 @@ export function StoppedView({ enabled, onNavigate }: Props) {
       </ViewHeader>
       <PullsErrorAlert error={pulls.error} />
       <div className="flex flex-col gap-3 p-3">
-        {byDay(stopped).map(([day, list]) => (
+        {groupByDay(stopped, (w) => w.stoppedAt).map(([day, list]) => (
           <InboxGroup key={day} heading={day}>
             {list.map((w) => (
               <StoppedRow
