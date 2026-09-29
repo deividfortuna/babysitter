@@ -80,10 +80,11 @@ func (c *call) updateBranch() {
 		c.graphqlError("UNPROCESSABLE", "Expected head oid "+v.Head+" does not match the head of the pull request")
 		return
 	}
+	accepted := p.HeadSHA
 	p.HeadSHA = fmt.Sprintf("%s-%d", strings.ToLower(v.Method), c.g.id())
 	p.MergeableState = "unknown"
 	c.json(http.StatusOK, map[string]any{"data": map[string]any{"updatePullRequestBranch": map[string]any{
-		"pullRequest": map[string]any{"headRefOid": p.HeadSHA},
+		"pullRequest": map[string]any{"headRefOid": accepted},
 	}}})
 }
 

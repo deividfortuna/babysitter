@@ -25,28 +25,21 @@ func (r *BranchRefusal) Error() string { return ErrBranchNotUpdated.Error() + ":
 
 func (r *BranchRefusal) Is(target error) bool { return target == ErrBranchNotUpdated }
 
-func UpdatePullBranch(ctx context.Context, c *github.Client, nodeID, method, expectedHead string) (string, *github.Response, error) {
+func UpdatePullBranch(ctx context.Context, c *github.Client, nodeID, method, expectedHead string) (*github.Response, error) {
 	var out struct {
-		Data struct {
-			UpdatePullRequestBranch struct {
-				PullRequest struct {
-					HeadRefOid string `json:"headRefOid"`
-				} `json:"pullRequest"`
-			} `json:"updatePullRequestBranch"`
-		} `json:"data"`
 		Errors graphqlErrors `json:"errors"`
 	}
 	resp, err := postGraphQL(ctx, c, updateBranchMutation, map[string]any{
 		"id": nodeID, "head": expectedHead, "method": strings.ToUpper(method),
 	}, &out)
 	if err != nil {
-		return "", resp, fmt.Errorf("update the branch of %s: %w", nodeID, err)
+		return resp, fmt.Errorf("update the branch of %s: %w", nodeID, err)
 	}
 	if failure := out.Errors.err(); failure != nil {
 		if out.Errors.refusal() {
-			return "", resp, &BranchRefusal{Reason: failure.Error()}
+			return resp, &BranchRefusal{Reason: failure.Error()}
 		}
-		return "", resp, fmt.Errorf("update the branch of %s: %w", nodeID, failure)
+		return resp, fmt.Errorf("update the branch of %s: %w", nodeID, failure)
 	}
-	return out.Data.UpdatePullRequestBranch.PullRequest.HeadRefOid, resp, nil
+	return resp, nil
 }

@@ -29,8 +29,7 @@ func TestUpdatePullBranchRebasesTheHeadItExpects(t *testing.T) {
 	p := gh.PR("o/r", 5)
 	c := gh.Client(t)
 
-	head, _, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "rebase", "abc")
-	if err != nil {
+	if _, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "rebase", "abc"); err != nil {
 		t.Fatalf("UpdatePullBranch() error = %v", err)
 	}
 	var updates []ghfake.BranchUpdate
@@ -39,8 +38,8 @@ func TestUpdatePullBranchRebasesTheHeadItExpects(t *testing.T) {
 	if len(updates) != 1 || updates[0] != (ghfake.BranchUpdate{Method: "REBASE", ExpectedHead: "abc"}) {
 		t.Fatalf("BranchUpdates = %+v, want one rebase that expects abc", updates)
 	}
-	if head == "" || head != now {
-		t.Fatalf("UpdatePullBranch() = %q, want the new head %q", head, now)
+	if now == "abc" {
+		t.Fatal("the head did not move")
 	}
 }
 
@@ -51,7 +50,7 @@ func TestUpdatePullBranchReportsTheRefusalOfGitHub(t *testing.T) {
 	gh.Update(func() { p.RefuseBranchUpdate = "merge conflict between base and head" })
 	c := gh.Client(t)
 
-	_, _, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "abc")
+	_, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "abc")
 	if !errors.Is(err, ErrBranchNotUpdated) || !strings.Contains(err.Error(), "merge conflict") {
 		t.Fatalf("UpdatePullBranch() error = %v, want the refusal with the reason of GitHub", err)
 	}
@@ -63,7 +62,7 @@ func TestUpdatePullBranchRefusesAHeadThatMoved(t *testing.T) {
 	gh.PR("o/r", 5)
 	c := gh.Client(t)
 
-	_, _, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "old")
+	_, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "old")
 	if !errors.Is(err, ErrBranchNotUpdated) {
 		t.Fatalf("UpdatePullBranch() error = %v, want a refusal", err)
 	}
@@ -79,7 +78,7 @@ func TestUpdatePullBranchTakesARateLimitForATransientFailure(t *testing.T) {
 		return ghfake.Response{Status: 200, Body: `{"data":null,"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}`}, true
 	})
 
-	_, _, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
+	_, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
 	if err == nil || errors.Is(err, ErrBranchNotUpdated) {
 		t.Fatalf("UpdatePullBranch() error = %v, want a failure that is not a refusal", err)
 	}
@@ -93,7 +92,7 @@ func TestUpdatePullBranchKeepsATransportFailureApartFromARefusal(t *testing.T) {
 	id := nodeIDOf(t, c, 5)
 	gh.Fail(ghfake.RouteGraphQL, 502, "Bad Gateway")
 
-	_, _, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
+	_, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
 	if err == nil || errors.Is(err, ErrBranchNotUpdated) {
 		t.Fatalf("UpdatePullBranch() error = %v, want a failure that is not a refusal", err)
 	}

@@ -2,7 +2,6 @@ package prwatch
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"slices"
@@ -62,7 +61,7 @@ func TestABranchBehindItsBaseIsRebasedOnGitHubAndTheAgentHearsNothing(t *testing
 	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "REBASE", ExpectedHead: "abc"}}) {
 		t.Fatalf("branch updates = %+v, want one rebase that expects abc", got)
 	}
-	if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, "GitHub rebased fix onto main") {
+	if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, "GitHub accepted the request to rebase fix onto main at abc") {
 		t.Fatalf("summary = %q", a.Summary)
 	}
 	if msgs := h.messages(); len(msgs) != 1 {
@@ -82,7 +81,7 @@ func TestAWatchThatMergesTheBaseAsksGitHubForAMerge(t *testing.T) {
 	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "MERGE", ExpectedHead: "abc"}}) {
 		t.Fatalf("branch updates = %+v, want one merge that expects abc", got)
 	}
-	if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, "GitHub merged main into fix") {
+	if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, "GitHub accepted the request to merge main into fix at abc") {
 		t.Fatalf("summary = %q", a.Summary)
 	}
 }
@@ -199,14 +198,9 @@ func TestTheWorkBranchFollowsTheBranchGitHubRebased(t *testing.T) {
 	fx.agentIdle(w)
 	fx.behind()
 	fx.poll(w)
-	head := fx.activityOf(w, store.ActivityBranchUpdated)
-	var to struct {
-		To string `json:"to"`
-	}
-	if err := json.Unmarshal(head.Payload, &to); err != nil {
-		t.Fatal(err)
-	}
-	fx.rel.set(func(f *fakeRelease) { f.remote = to.To })
+	var rebased string
+	fx.update(func() { rebased = fx.pr.HeadSHA })
+	fx.rel.set(func(f *fakeRelease) { f.history[rebased] = []string{"base"}; f.remote = rebased })
 	fx.agentIdle(w)
 
 	fx.update(func() {
@@ -214,8 +208,8 @@ func TestTheWorkBranchFollowsTheBranchGitHubRebased(t *testing.T) {
 	})
 	fx.poll(w)
 
-	if work, _ := fx.rel.Head(context.Background(), ""); work != to.To {
-		t.Fatalf("work branch = %s, want it on %s, where GitHub put the pull request branch", work, to.To)
+	if work, _ := fx.rel.Head(context.Background(), ""); work != rebased {
+		t.Fatalf("work branch = %s, want it on %s, where GitHub put the pull request branch", work, rebased)
 	}
 }
 
@@ -350,10 +344,11 @@ func TestAHeadThatIsStillBehindAfterTheUpdateGetsItsOwnTry(t *testing.T) {
 	}
 }
 
-func TestAnAnswerWithTheSameHeadIsNotAnUpdate(t *testing.T) {
+func TestAnUpdateThatGitHubAcceptedButNeverAppliedGoesToTheAgent(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
 	w := fx.start()
+	h := fx.host.last()
 	fx.agentIdle(w)
 	fx.api.React(ghfake.RouteGraphQL, func(a ghfake.Action) (ghfake.Response, bool) {
 		body := `{"data":{"updatePullRequestBranch":{"pullRequest":{"headRefOid":"abc"}}}}`
@@ -362,10 +357,19 @@ func TestAnAnswerWithTheSameHeadIsNotAnUpdate(t *testing.T) {
 
 	fx.behind()
 	fx.poll(w)
+	fx.poll(w)
+	if kinds := fx.kinds(w); !slices.Contains(kinds, string(store.ActivityBranchUpdated)) || len(h.messages()) != 1 {
+		t.Fatalf("kinds = %v, messages = %d, want the update accepted and no message while GitHub works", kinds, len(h.messages()))
+	}
 
-	kinds := fx.kinds(w)
-	if slices.Contains(kinds, string(store.ActivityBranchUpdated)) || slices.Contains(kinds, string(store.ActivityBranchNotUpdated)) {
-		t.Fatalf("kinds = %v, want no update and no refusal: the next poll tries again", kinds)
+	fx.poll(w)
+	fx.poll(w)
+	if !slices.Contains(fx.kinds(w), string(store.ActivityBranchNotUpdated)) {
+		t.Fatalf("kinds = %v, want the stall recorded after three poll intervals", fx.kinds(w))
+	}
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "is behind main") {
+		t.Fatalf("messages = %q, want the agent told once the update stalled", msgs)
 	}
 }
 

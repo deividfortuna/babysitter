@@ -841,6 +841,11 @@ update it, with the GraphQL mutation `updatePullRequestBranch`, and the
 method of the watch: `rebase` or `merge`. The expected head of the
 mutation makes GitHub refuse the update when someone pushed in between.
 The activity records `branch_updated`, and the agent gets no message.
+GitHub accepts the request and moves the branch a moment later, so the
+answer still names the old head and the next poll sees the new one. A
+conflict is refused at once. When the head did not move three poll
+intervals after GitHub accepted the request, the activity records
+`branch_update_failed` and the agent updates the branch.
 The daemon waits while work is in flight: while the agent works, while a
 proposal is open or waits for you, or while the session is with you. A
 rebase on GitHub would move the branch under that work, so the daemon
@@ -854,8 +859,8 @@ still behind gets a new try. When GitHub refuses, for example on a
 conflict, the activity records `branch_update_failed` with the reason,
 and the agent updates the branch. Only a GraphQL error of the type
 `UNPROCESSABLE`, `FORBIDDEN` or `NOT_FOUND` is a refusal. A network
-error, a timeout, a 5xx answer, a rate limit, an error of another type,
-or an answer without a new head is not a refusal: the next poll tries again, and after three
+error, a timeout, a 5xx answer, a rate limit or an error of another
+type is not a refusal: the next poll tries again, and after three
 failures for the same head the agent updates the branch. When a
 proposal of the agent failed, the daemon does not ask GitHub: the agent
 gets the branch behind its base, and its next turn also solves the

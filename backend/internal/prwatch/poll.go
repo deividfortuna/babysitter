@@ -93,7 +93,7 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		s.tellHandback(ctx, w)
 	}
 	if !pushed {
-		if err := s.updateBehind(ctx, client, w, snap.PR.NodeID); err != nil {
+		if err := s.githubStep(ctx, client, w, snap.PR.NodeID); err != nil {
 			if errors.Is(err, ghclient.ErrPaused) {
 				return err
 			}

@@ -19,7 +19,9 @@ import (
 
 var ErrBadBranchUpdate = errors.New("invalid branch update: use rebase or merge")
 
-var errHeadDidNotMove = errors.New("GitHub answered without a new head")
+var errBranchStalled = errors.New("GitHub accepted the update, but the branch did not move")
+
+const stallPolls = 3
 
 const branchUpdateTries = 3
 
@@ -82,6 +84,13 @@ func (s *Service) githubOwnsBehind(ctx context.Context, w store.Watch) (bool, er
 	return !tried, err
 }
 
+func (s *Service) githubStep(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
+	if err := s.catchStalledUpdate(ctx, w); err != nil {
+		return err
+	}
+	return s.updateBehind(ctx, client, w, nodeID)
+}
+
 func (s *Service) updateBehind(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
 	candidate := w.MergeableState == store.MergeableBehind && s.updatesOnGitHub(w)
 	if !candidate {
@@ -103,23 +112,46 @@ func (s *Service) updateBehind(ctx context.Context, client *github.Client, w sto
 	if err != nil || inFlight {
 		return err
 	}
-	head, resp, err := ghclient.UpdatePullBranch(ctx, client, nodeID, string(w.BranchUpdate), w.HeadSHA)
+	resp, err := ghclient.UpdatePullBranch(ctx, client, nodeID, string(w.BranchUpdate), w.HeadSHA)
 	if err := s.afterWrite(ctx, resp, err); err != nil {
 		return s.branchUpdateFailed(ctx, w, err)
-	}
-	moved := head != "" && head != w.HeadSHA
-	if !moved {
-		return s.branchUpdateFailed(ctx, w, errHeadDidNotMove)
 	}
 	s.tries.forget(w.ID)
 	if _, err := s.record(ctx, w, store.Activity{
 		Kind: store.ActivityBranchUpdated, Ref: branchUpdateRef(w.HeadSHA),
-		Summary: "GitHub " + branchUpdateWord(w) + ", now at " + textx.ShortSHA(head),
-		Payload: mustJSON(map[string]any{"method": w.BranchUpdate, "from": w.HeadSHA, "to": head, "base": w.BaseRef}),
+		Summary: "GitHub accepted the request to " + branchUpdateWord(w) + " at " + textx.ShortSHA(w.HeadSHA),
+		Payload: mustJSON(map[string]any{"method": w.BranchUpdate, "from": w.HeadSHA, "base": w.BaseRef}),
 	}); err != nil {
 		return err
 	}
 	return s.store.MarkActivityNudged(ctx, []int64{behind.ID}, s.now())
+}
+
+func (s *Service) catchStalledUpdate(ctx context.Context, w store.Watch) error {
+	if !s.updatesOnGitHub(w) {
+		return nil
+	}
+	ref := branchUpdateRef(w.HeadSHA)
+	sent, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBranchUpdated, ref)
+	if err != nil || !found {
+		return err
+	}
+	stalled := s.now().Sub(sent.At) >= stallPolls*s.Interval()
+	if !stalled {
+		return nil
+	}
+	refused, err := s.store.HasActivity(ctx, w.ID, store.ActivityBranchNotUpdated, ref)
+	if err != nil || refused {
+		return err
+	}
+	if err := s.recordBranchRefused(ctx, w, errBranchStalled); err != nil {
+		return err
+	}
+	behind, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBehind, "behind@"+w.HeadSHA)
+	if err != nil || !found {
+		return err
+	}
+	return s.store.UnmarkActivityNudged(ctx, []int64{behind.ID})
 }
 
 func (s *Service) branchUpdateFailed(ctx context.Context, w store.Watch, failure error) error {
@@ -199,9 +231,9 @@ func (s *Service) recordBranchRefused(ctx context.Context, w store.Watch, refusa
 
 func branchUpdateWord(w store.Watch) string {
 	if w.BranchUpdate == store.BranchMerge {
-		return "merged " + w.BaseRef + " into " + w.HeadRef
+		return "merge " + w.BaseRef + " into " + w.HeadRef
 	}
-	return "rebased " + w.HeadRef + " onto " + w.BaseRef
+	return "rebase " + w.HeadRef + " onto " + w.BaseRef
 }
 
 func (s *Service) knownHead(ctx context.Context, w store.Watch, sha string) bool {
