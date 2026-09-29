@@ -1021,7 +1021,9 @@ of the head it started from, none of them a merge, the daemon rebases
 those commits onto the new head and pushes them. A turn that takes over
 the commits of a failed release starts from the head that release
 started from. A rewrite that would drop a commit the work branch never
-had does not go out.
+had does not go out. A watch with the branch update `merge` never
+pushes with force: a rewrite fails its release and names the commits of
+the branch that the work lacks.
 The push runs with `--no-verify`, because the session never ran the
 hooks of the repository either, and with `GIT_TERMINAL_PROMPT=0` and
 `GCM_INTERACTIVE=never`.

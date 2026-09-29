@@ -132,7 +132,7 @@ func (s *Service) pushWork(ctx context.Context, w store.Watch, p *store.Proposal
 	if fastForward {
 		return s.rel.Push(ctx, dir, gitrelease.Push{SHA: work, Branch: w.HeadRef})
 	}
-	missing, err := s.rel.Missing(ctx, dir, work, remote, p.BaseSHA)
+	missing, err := s.missing(ctx, w, dir, work, remote, p.BaseSHA)
 	if err != nil {
 		return err
 	}
@@ -150,6 +150,21 @@ func (s *Service) pushWork(ctx context.Context, w store.Watch, p *store.Proposal
 		return fmt.Errorf("%w: it is at %s", asksAgain(w), textx.ShortSHA(remote))
 	}
 	return s.rebaseWork(ctx, w, p, remote)
+}
+
+func (s *Service) missing(ctx context.Context, w store.Watch, dir, work, remote, since string) ([]string, error) {
+	if w.BranchUpdate != store.BranchMerge {
+		return s.rel.Missing(ctx, dir, work, remote, since)
+	}
+	commits, err := s.rel.Log(ctx, dir, work, remote)
+	if err != nil {
+		return nil, err
+	}
+	shas := make([]string, 0, len(commits))
+	for _, c := range commits {
+		shas = append(shas, c.SHA)
+	}
+	return shas, nil
 }
 
 func rebaseAsks(w store.Watch) bool {

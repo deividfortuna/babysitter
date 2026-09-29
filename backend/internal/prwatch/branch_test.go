@@ -749,3 +749,22 @@ func TestASendWaitsForTheBranchGitHubIsUpdating(t *testing.T) {
 		t.Fatalf("messages = %q, want the send told on the new head", msgs)
 	}
 }
+
+func TestABranchRewrittenUnderTheWorkOfAMergingWatchIsNotPushedOver(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startMerging()
+	fx.propose(w)
+	fx.rel.set(func(f *fakeRelease) {
+		f.history["abc2"] = []string{"base"}
+		f.remote = "abc2"
+	})
+
+	p, err := fx.svc.Approve(context.Background(), w.ID, 1, Decision{})
+	if err != nil || p.Status != store.ProposalFailed || !strings.Contains(p.Error, "abc2") {
+		t.Fatalf("Approve() = %+v, %v, want the release failed on the rewrite abc2", p, err)
+	}
+	if got := fx.rel.pushed(); len(got) != 0 {
+		t.Fatalf("pushes = %+v, want no push over the rewrite", got)
+	}
+}
