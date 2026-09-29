@@ -1937,6 +1937,8 @@ components:
           - auto_started
           - approved
           - approval_asked
+          - branch_updated
+          - branch_update_failed
           type: string
         nudgedAt:
           description: When the row reached the agent
@@ -2267,6 +2269,14 @@ components:
             a turn that only added commits on top of it is rebased onto a head that
             moved
           type: string
+        movedBy:
+          description: 'How the daemon moved the work onto the head. rebase: the work
+            is on new commits; merge: the head is merged into the work and its commits
+            stay'
+          enum:
+          - rebase
+          - merge
+          type: string
         number:
           description: Counts the proposals of one watch from 1
           type: integer
@@ -2280,7 +2290,7 @@ components:
           description: What the author said when they rejected it
           type: string
         rebasedFrom:
-          description: The work the daemon rebased onto a head that moved
+          description: The work before the daemon moved it onto a head that moved
           type: string
         releasedAt:
           format: date-time
@@ -2386,6 +2396,14 @@ components:
             a turn that only added commits on top of it is rebased onto a head that
             moved
           type: string
+        movedBy:
+          description: 'How the daemon moved the work onto the head. rebase: the work
+            is on new commits; merge: the head is merged into the work and its commits
+            stay'
+          enum:
+          - rebase
+          - merge
+          type: string
         number:
           description: Counts the proposals of one watch from 1
           type: integer
@@ -2399,7 +2417,7 @@ components:
           description: What the author said when they rejected it
           type: string
         rebasedFrom:
-          description: The work the daemon rebased onto a head that moved
+          description: The work before the daemon moved it onto a head that moved
           type: string
         releasedAt:
           format: date-time
@@ -2610,6 +2628,9 @@ components:
           type: string
         deletions:
           type: integer
+        dependabot:
+          description: Dependabot opened the pull request and owns its branch
+          type: boolean
         draft:
           type: boolean
         fork:
@@ -2676,6 +2697,7 @@ components:
       - number
       - title
       - author
+      - dependabot
       - state
       - draft
       - baseRef
@@ -2978,9 +3000,17 @@ components:
           nullable: true
           type: integer
         autoApproveRebase:
-          description: Approved work goes out after a clean rebase without asking
-            again
+          description: Approved work goes out after a clean rebase or merge onto a
+            branch that moved, without asking again
           type: boolean
+        branchUpdate:
+          description: 'How a new watch updates a branch that fell behind its base.
+            rebase: the branch is rebased onto its base; merge: the base is merged
+            into the branch. The agent solves a conflict the same way'
+          enum:
+          - rebase
+          - merge
+          type: string
         checkMaxIntervalSeconds:
           description: Longest time between two reads of the pending checks of an
             open pull request by the repository watcher. The wait starts at one minute,
@@ -3048,6 +3078,10 @@ components:
           - claude
           - copilot
           type: string
+        updateOnGitHub:
+          description: A new watch asks GitHub to update a branch that fell behind
+            its base, and the agent does it only when GitHub refuses
+          type: boolean
         watchIntervalSeconds:
           description: Time between polls of a watched pull request
           maximum: 86400
@@ -3079,6 +3113,8 @@ components:
       - provider
       - model
       - effort
+      - branchUpdate
+      - updateOnGitHub
       type: object
     HttpdStartWatchRequest:
       properties:
@@ -3099,10 +3135,20 @@ components:
           nullable: true
           type: integer
         autoApproveRebase:
-          description: Approved work goes out after a clean rebase without asking
-            again; absent takes the repository, then the daemon
+          description: Approved work goes out after a clean rebase or merge onto a
+            branch that moved, without asking again; absent takes the repository,
+            then the daemon
           nullable: true
           type: boolean
+        branchUpdate:
+          description: 'rebase: the branch is rebased onto its base; merge: the base
+            is merged into the branch. The agent solves a conflict the same way; absent
+            takes the repository, then the daemon'
+          enum:
+          - rebase
+          - merge
+          nullable: true
+          type: string
         effort:
           description: The effort level of that model, one the providers route lists
             for it; empty takes the effort of the layer that gives the model
@@ -3162,6 +3208,12 @@ components:
           type: string
         target:
           type: string
+        updateOnGitHub:
+          description: When the branch falls behind its base, GitHub updates it first
+            with the branch update, and the agent does it only when GitHub refuses;
+            absent takes the repository, then the daemon
+          nullable: true
+          type: boolean
       required:
       - target
       - repo
@@ -3182,6 +3234,10 @@ components:
             type: string
           nullable: true
           type: array
+        branchUpdating:
+          description: GitHub is updating the branch; the worktree is still on the
+            old head, so the author fetches before they push
+          type: boolean
         declined:
           description: The numbers of the proposals the takeover declined
           items:
@@ -3210,6 +3266,7 @@ components:
       - argv
       - declined
       - newConversation
+      - branchUpdating
       type: object
     HttpdViewer:
       properties:
@@ -3244,8 +3301,8 @@ components:
         author:
           type: string
         autoApproveRebase:
-          description: Approved work goes out after a clean rebase without asking
-            again
+          description: Approved work goes out after a clean rebase or merge onto a
+            branch that moved, without asking again
           type: boolean
         autoReason:
           description: 'Why auto start began the watch: the author opened the pull
@@ -3258,6 +3315,22 @@ components:
           - dependabot
           type: string
         baseRef:
+          type: string
+        branchUpdate:
+          description: 'rebase: the branch is rebased onto its base; merge: the base
+            is merged into the branch. The agent solves a conflict the same way'
+          enum:
+          - rebase
+          - merge
+          type: string
+        branchUpdater:
+          description: 'Who updates a branch that fell behind its base: Dependabot,
+            the session of the author for a self watch, GitHub first, or the agent'
+          enum:
+          - dependabot
+          - session
+          - github
+          - agent
           type: string
         checkStates:
           additionalProperties:
@@ -3382,6 +3455,10 @@ components:
           type: string
         title:
           type: string
+        updateOnGitHub:
+          description: When the branch falls behind its base, GitHub updates it first
+            with the branch update, and the agent does it only when GitHub refuses
+          type: boolean
         updateType:
           description: The highest update of a Dependabot pull request; a type the
             daemon cannot read counts as major
@@ -3433,6 +3510,9 @@ components:
       - autoApproveRebase
       - mergeWhenReady
       - keepWorktree
+      - branchUpdate
+      - branchUpdater
+      - updateOnGitHub
       - session
       type: object
     HttpdWatchList:
@@ -3463,10 +3543,18 @@ components:
           nullable: true
           type: integer
         autoApproveRebase:
-          description: Approved work goes out after a clean rebase without asking
-            again; absent takes the setting of the daemon
+          description: Approved work goes out after a clean rebase or merge without
+            asking again; absent takes the setting of the daemon
           nullable: true
           type: boolean
+        branchUpdate:
+          description: 'How a watch updates a branch that fell behind its base: rebase
+            or merge; empty takes the setting of the daemon'
+          enum:
+          - ""
+          - rebase
+          - merge
+          type: string
         effort:
           description: The effort level of that model, one the providers route lists
             for it; empty takes the default of the model. Needs a provider
@@ -3507,12 +3595,18 @@ components:
           - claude
           - copilot
           type: string
+        updateOnGitHub:
+          description: GitHub updates a branch that fell behind its base before the
+            agent does; absent takes the setting of the daemon
+          nullable: true
+          type: boolean
       required:
       - provider
       - model
       - effort
       - approvalMode
       - mergeMethod
+      - branchUpdate
       type: object
     HttpdWatchSummary:
       properties:
@@ -3693,6 +3787,15 @@ components:
           minimum: 0
           nullable: true
           type: integer
+        branchUpdate:
+          description: 'rebase: the branch is rebased onto its base; merge: the base
+            is merged into the branch. The agent solves a conflict the same way; absent
+            keeps what the watch has'
+          enum:
+          - rebase
+          - merge
+          nullable: true
+          type: string
         mergeMethod:
           description: 'The merge method of the watch: squash, merge, rebase, or empty
             for the first method the repository allows; absent keeps what the watch
@@ -3707,6 +3810,12 @@ components:
         mergeWhenReady:
           description: The daemon merges as soon as the watch is ready to merge; absent
             keeps what the watch has
+          nullable: true
+          type: boolean
+        updateOnGitHub:
+          description: When the branch falls behind its base, GitHub updates it first
+            with the branch update, and the agent does it only when GitHub refuses;
+            absent keeps what the watch has
           nullable: true
           type: boolean
       type: object

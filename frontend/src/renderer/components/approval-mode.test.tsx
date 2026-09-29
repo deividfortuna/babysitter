@@ -186,7 +186,7 @@ test("the Watching panel holds the approval mode and the clean rebase", async ()
 
   const mode = await screen.findByLabelText("Approval mode");
   expect(mode).toHaveTextContent("manual");
-  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
+  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" });
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
   await user.click(screen.getByRole("button", { name: "Save" }));
@@ -202,14 +202,14 @@ test("the clean rebase means nothing in auto", async () => {
   renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
   await user.click(screen.getByRole("button", { name: "Watching" }));
 
-  expect(await screen.findByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(await screen.findByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
 });
 
 test("the panel sets the clean rebase of one watch", async () => {
   const { decisions, user } = renderDetail({ approvalMode: "manual" });
 
   await openSettings(user);
-  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
+  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" });
   expect(rebase).toBeVisible();
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
@@ -222,7 +222,7 @@ test("the panel shows the clean rebase a watch has", async () => {
   const { user } = renderDetail({ approvalMode: "manual", autoApproveRebase: true });
 
   await openSettings(user);
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
 });
 
 test("the clean rebase of a watch in auto means nothing, so the panel turns it off", async () => {
@@ -230,5 +230,5 @@ test("the clean rebase of a watch in auto means nothing, so the panel turns it o
 
   await openSettings(user);
   expect(screen.getByLabelText("Approval mode")).toHaveTextContent("auto");
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
 });

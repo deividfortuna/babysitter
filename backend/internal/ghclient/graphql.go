@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/go-github/v91/github"
@@ -67,9 +68,41 @@ type reviewStateResponse struct {
 			} `json:"pullRequest"`
 		} `json:"repository"`
 	} `json:"data"`
-	Errors []struct {
-		Message string `json:"message"`
-	} `json:"errors"`
+	Errors graphqlErrors `json:"errors"`
+}
+
+type graphqlError struct {
+	Type    string `json:"type"`
+	Message string `json:"message"`
+}
+
+type graphqlErrors []graphqlError
+
+var refusalTypes = []string{"UNPROCESSABLE", "FORBIDDEN", "NOT_FOUND"}
+
+func (e graphqlError) refuses() bool { return slices.Contains(refusalTypes, e.Type) }
+
+func (e graphqlErrors) refusal() bool {
+	return len(e) > 0 && !slices.ContainsFunc(e, func(m graphqlError) bool { return !m.refuses() })
+}
+
+func (e graphqlErrors) err() error {
+	if len(e) == 0 {
+		return nil
+	}
+	msgs := make([]string, 0, len(e))
+	for _, m := range e {
+		msgs = append(msgs, m.Message)
+	}
+	return errors.New(strings.Join(msgs, "; "))
+}
+
+func postGraphQL(ctx context.Context, c *github.Client, query string, vars map[string]any, out any) (*github.Response, error) {
+	req, err := c.NewRequest(ctx, "POST", "graphql", graphqlRequest{Query: query, Variables: vars})
+	if err != nil {
+		return nil, err
+	}
+	return c.Do(req, out)
 }
 
 type threadComment struct {
@@ -203,21 +236,16 @@ func FetchReviewState(ctx context.Context, c *github.Client, owner, repo string,
 		last  *github.Response
 	)
 	for {
-		body := graphqlRequest{Query: reviewStateQuery, Variables: map[string]any{
-			"owner": owner, "name": repo, "number": number, "after": after,
-		}}
-		req, err := c.NewRequest(ctx, "POST", "graphql", body)
-		if err != nil {
-			return ReviewState{}, nil, fmt.Errorf("review threads %s/%s#%d: %w", owner, repo, number, err)
-		}
 		var page reviewStateResponse
-		resp, err := c.Do(req, &page)
+		resp, err := postGraphQL(ctx, c, reviewStateQuery, map[string]any{
+			"owner": owner, "name": repo, "number": number, "after": after,
+		}, &page)
 		last = resp
 		if err != nil {
 			return ReviewState{}, resp, fmt.Errorf("review threads %s/%s#%d: %w", owner, repo, number, err)
 		}
-		if len(page.Errors) > 0 {
-			return ReviewState{}, resp, fmt.Errorf("review threads %s/%s#%d: %w", owner, repo, number, graphqlError(page))
+		if refusal := page.Errors.err(); refusal != nil {
+			return ReviewState{}, resp, fmt.Errorf("review threads %s/%s#%d: %w", owner, repo, number, refusal)
 		}
 		pr := page.Data.Repository.PullRequest
 		if after == nil {
@@ -242,12 +270,4 @@ func FetchReviewState(ctx context.Context, c *github.Client, owner, repo string,
 		cursor := pr.ReviewThreads.PageInfo.EndCursor
 		after = &cursor
 	}
-}
-
-func graphqlError(out reviewStateResponse) error {
-	msgs := make([]string, 0, len(out.Errors))
-	for _, e := range out.Errors {
-		msgs = append(msgs, e.Message)
-	}
-	return errors.New(strings.Join(msgs, "; "))
 }

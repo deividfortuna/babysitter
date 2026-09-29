@@ -242,7 +242,7 @@ func pullRequestOf(w store.Watch) agent.PullRequest {
 	return agent.PullRequest{
 		Repo: w.Repo(), Number: w.Number, Title: w.Title, URL: w.URL, Author: w.Author,
 		HeadRef: w.HeadRef, BaseRef: w.BaseRef, HeadSHA: w.HeadSHA, Dependabot: agent.IsDependabot(w.Author),
-		DaemonPushes: hostedProvider(w.Provider),
+		DaemonPushes: hostedProvider(w.Provider), MergesBase: w.BranchUpdate == store.BranchMerge,
 	}
 }
 

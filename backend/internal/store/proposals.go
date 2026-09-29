@@ -64,6 +64,7 @@ type Proposal struct {
 	DecidedAt    *time.Time
 	PushRejected bool
 	RebasedFrom  string
+	MovedBy      BranchUpdate
 	Reason       string
 }
 
@@ -95,7 +96,7 @@ func (r ProposalReply) Text() string { return cmp.Or(r.Edited, r.Body) }
 func (r ProposalReply) Waiting() bool { return !r.Posted() && r.DroppedAt == nil && !r.Dropped }
 
 const proposalColumns = "id, watch_id, number, status, head_sha, base_sha, work_sha, has_push, opened_at, ended_at, released_at, error, " +
-	"approved_at, decided_at, push_rejected, rebased_from, reason, start_sha"
+	"approved_at, decided_at, push_rejected, rebased_from, moved_by, reason, start_sha"
 
 const replyColumns = "id, proposal_id, in_reply_to, in_reply_kind, body, recorded_at, posted_kind, posted_id, posted_url, posted_at, error, dropped_at, edited_body, dropped"
 
@@ -427,11 +428,11 @@ func (s *Store) RejectProposal(ctx context.Context, id int64, reason string, now
 		"UPDATE proposals SET status = ?, reason = ?, decided_at = ? WHERE id = ?", ProposalRejected, reason, timeToDB(now), id)
 }
 
-func (s *Store) MarkProposalRebased(ctx context.Context, id int64, head, work string, now time.Time) error {
-	return s.updateProposal(ctx, id, "mark proposal rebased", `
-UPDATE proposals SET rebased_from = work_sha, head_sha = ?, base_sha = ?, work_sha = ?, status = ?,
+func (s *Store) MarkProposalMoved(ctx context.Context, id int64, head, work string, by BranchUpdate, now time.Time) error {
+	return s.updateProposal(ctx, id, "mark proposal moved", `
+UPDATE proposals SET rebased_from = work_sha, moved_by = ?, head_sha = ?, base_sha = ?, work_sha = ?, status = ?,
 	approved_at = NULL, decided_at = NULL, ended_at = ?, error = ''
-WHERE id = ?`, head, head, work, ProposalPending, timeToDB(now), id)
+WHERE id = ?`, by, head, head, work, ProposalPending, timeToDB(now), id)
 }
 
 func (s *Store) updateProposal(ctx context.Context, id int64, what, q string, args ...any) error {
@@ -479,7 +480,7 @@ func scanProposal(row scanner) (Proposal, error) {
 		endedAt, released, approved, decided sql.NullString
 	)
 	err := row.Scan(&p.ID, &p.WatchID, &p.Number, &p.Status, &p.HeadSHA, &p.BaseSHA, &p.WorkSHA, &p.HasPush, &openedAt, &endedAt, &released, &p.Error,
-		&approved, &decided, &p.PushRejected, &p.RebasedFrom, &p.Reason, &p.StartSHA)
+		&approved, &decided, &p.PushRejected, &p.RebasedFrom, &p.MovedBy, &p.Reason, &p.StartSHA)
 	if err != nil {
 		return Proposal{}, err
 	}

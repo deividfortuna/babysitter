@@ -85,6 +85,9 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		_, err := s.stop(ctx, w.ID, reason, "", StopOptions{})
 		return err
 	}
+	if err := s.githubStep(ctx, client, w, snap.PR.NodeID); err != nil {
+		return err
+	}
 	if err := s.rebaseStale(ctx, w); err != nil {
 		s.log.Error("rebase the proposal that waits", "watch", w.ID, "err", err)
 	}
@@ -156,7 +159,7 @@ func (s *Service) refresh(ctx context.Context, w store.Watch, snap *snapshot.Sna
 	if err := s.keepJobs(ctx, w, snap); err != nil {
 		return pass{}, err
 	}
-	w.HeadSHA, w.CheckStates = next.HeadSHA, next.Checks
+	w.HeadSHA, w.CheckStates, w.MergeableState = next.HeadSHA, next.Checks, next.MergeableState
 	w.Title, w.BaseRef = snap.PR.Title, snap.PR.BaseBranch
 	if len(inserted) > 0 {
 		s.report(ctx, w, inserted)
@@ -249,6 +252,10 @@ func (s *Service) tell(ctx context.Context, client *github.Client, w store.Watch
 		s.log.Info("the agent waits on you, the message waits for the next poll", "watch", w.ID)
 		return todo, nil
 	}
+	if s.waitsForGitHub(ctx, w) {
+		s.log.Info("GitHub updates the branch, the message waits for the new head", "watch", w.ID)
+		return todo, nil
+	}
 	m, err := s.compose(ctx, client, w, todo)
 	if err != nil {
 		return todo, err
@@ -282,7 +289,7 @@ func (s *Service) actionable(ctx context.Context, w store.Watch) ([]store.Activi
 	if err := s.store.MarkActivityNudged(ctx, ids(stale), s.now()); err != nil {
 		return nil, err
 	}
-	return current, nil
+	return s.holdForGitHub(ctx, w, current)
 }
 
 type message struct {
@@ -397,7 +404,7 @@ func currentItems(items []store.Activity, headSHA string) (current, stale []stor
 }
 
 func staleCheck(a store.Activity, headSHA string) bool {
-	if a.Kind != store.ActivityCheckFailed || headSHA == "" {
+	if !boundToHead(a.Kind) || headSHA == "" {
 		return false
 	}
 	var p struct {
@@ -407,6 +414,10 @@ func staleCheck(a store.Activity, headSHA string) bool {
 		return false
 	}
 	return p.SHA != "" && p.SHA != headSHA
+}
+
+func boundToHead(kind store.ActivityKind) bool {
+	return slices.Contains([]store.ActivityKind{store.ActivityCheckFailed, store.ActivityBehind, store.ActivityConflict}, kind)
 }
 
 func ids(as []store.Activity) []int64 {

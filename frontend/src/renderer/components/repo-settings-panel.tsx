@@ -27,6 +27,7 @@ import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
 import {
   agentLabel,
+  branchUpdateDefaultLabel,
   daemonDefaults,
   defaultLabel,
   effortDefaultLabel,
@@ -37,6 +38,7 @@ import {
   repositoryDefaults,
   type WatchDefaults as Defaults,
 } from "@/lib/watch-defaults";
+import { BRANCH_UPDATES } from "@/lib/branch-update";
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { shortDate } from "@/lib/time";
@@ -469,7 +471,7 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
         </SettingRow>
         <SwitchOverride
           id="repo-override-auto-rebase"
-          label="Approve a clean rebase on its own"
+          label="Approve a clean rebase or merge on its own"
           description="Approved work does not ask again because the branch moved. No effect in auto."
           checked={effective?.autoApproveRebase}
           disabled={pending || !daemon}
@@ -492,6 +494,31 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
             onChange={(mergeMethod) => save({ mergeMethod })}
           />
         </SettingRow>
+        <SettingRow
+          label="Branch behind its base"
+          htmlFor="repo-override-branch-update"
+          description="The agent solves a conflict the same way."
+        >
+          <OptionSelect
+            id="repo-override-branch-update"
+            className={OVERRIDE_SELECT}
+            options={[
+              { value: "", label: defaultLabel(inherited((d) => branchUpdateDefaultLabel(d.branchUpdate))) },
+              ...BRANCH_UPDATES,
+            ]}
+            value={overrides.branchUpdate}
+            disabled={pending}
+            onChange={(branchUpdate) => save({ branchUpdate })}
+          />
+        </SettingRow>
+        <SwitchOverride
+          id="repo-override-update-on-github"
+          label="Update the branch on GitHub first"
+          description="The agent does it only when GitHub refuses."
+          checked={effective?.updateOnGitHub}
+          disabled={pending || !daemon}
+          onChange={(on) => save({ updateOnGitHub: overrideOf(on, daemon?.updateOnGitHub) })}
+        />
         {effective && daemon ? (
           <ApprovalsOverride
             key={String(effective.approvalsRequired)}

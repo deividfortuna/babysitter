@@ -249,7 +249,7 @@ func TestAStaleProposalIsRebasedAndOfferedAgain(t *testing.T) {
 	fx.rel.moveRemote("abc", "t1")
 	fx.poll(w)
 	p := fx.proposal(w, 1)
-	if p.Status != store.ProposalPending || p.HeadSHA != "t1" || p.WorkSHA != "w1-on-t1" || p.RebasedFrom != "w1" {
+	if p.Status != store.ProposalPending || p.HeadSHA != "t1" || p.WorkSHA != "w1-on-t1" || p.RebasedFrom != "w1" || p.MovedBy != store.BranchRebase {
 		t.Fatalf("rebased proposal = %+v", p)
 	}
 	if !slices.Contains(refsOf(fx.activity(w), store.ActivityProposal), "1 rebased w1-on-t1") {

@@ -54,6 +54,8 @@ func proposalNote(p httpd.Proposal) string {
 		return "rejected: " + p.Reason
 	case p.PushRejected:
 		return "push rejected"
+	case p.MovedBy == store.BranchMerge:
+		return fmt.Sprintf("merged %s into %s", textx.ShortSHA(p.HeadSHA), textx.ShortSHA(p.RebasedFrom))
 	case p.RebasedFrom != "":
 		return "rebased from " + textx.ShortSHA(p.RebasedFrom)
 	}
@@ -400,7 +402,7 @@ func (w modeOutput) writeText(out io.Writer) error {
 
 func rebaseWord(auto bool) string {
 	if auto {
-		return ", and approved work goes out after a clean rebase"
+		return ", and approved work goes out after a clean rebase or merge"
 	}
 	return ""
 }
@@ -417,7 +419,7 @@ func newWatchModeCmd(opts *options, dataDirFlag *string) *cobra.Command {
 you approve it. In auto, it pushes and posts as soon as the turn ends.
 A switch to auto releases the proposal that waits for you, so it needs
 --release: read the proposal first. --auto-approve-rebase lets work you
-approved go out after a clean rebase without asking again. A watch whose
+approved go out after a clean rebase or merge without asking again. A watch whose
 agent is your own session has no gate.`,
 		Args: cobra.ExactArgs(2),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, args []string) error {
@@ -438,7 +440,7 @@ agent is your own session has no gate.`,
 			return opts.print(cmd.OutOrStdout(), modeOutput(out))
 		}),
 	}
-	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again")
+	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase or merge without asking again")
 	cmd.Flags().BoolVar(&release, "release", false, "confirm that a switch to auto releases the proposal that waits for you")
 	return cmd
 }

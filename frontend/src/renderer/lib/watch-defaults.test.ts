@@ -25,6 +25,8 @@ test("a repository without overrides takes each setting of the daemon", () => {
     includeExisting: true,
     includeOwn: false,
     keepWorktree: true,
+    branchUpdate: "rebase",
+    updateOnGitHub: true,
   });
 });
 
@@ -37,6 +39,8 @@ test("an override of the repository beats the daemon, field by field", () => {
     mergeMethod: "",
     approvalsRequired: null,
     keepWorktree: false,
+    branchUpdate: "merge",
+    updateOnGitHub: false,
   });
   expect(got).toMatchObject({
     provider: "claude",
@@ -47,6 +51,8 @@ test("an override of the repository beats the daemon, field by field", () => {
     approvalsRequired: null,
     includeExisting: true,
     keepWorktree: false,
+    branchUpdate: "merge",
+    updateOnGitHub: false,
   });
 });
 
@@ -57,6 +63,7 @@ test("the provider of the repository brings its own model, not the one of the da
     effort: "",
     approvalMode: "",
     mergeMethod: "",
+    branchUpdate: "",
   });
   expect(got).toMatchObject({ provider: "copilot", model: "", effort: "" });
 });

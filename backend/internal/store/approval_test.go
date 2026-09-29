@@ -184,12 +184,12 @@ func TestTheDecisionOnAProposal(t *testing.T) {
 	if rejected.Status != ProposalRejected || rejected.Reason != "use a table test" || rejected.DecidedAt == nil {
 		t.Fatalf("rejected proposal = %+v", rejected)
 	}
-	if err := s.MarkProposalRebased(ctx, p.ID, "h2", "w2", now); err != nil {
-		t.Fatalf("MarkProposalRebased() error = %v", err)
+	if err := s.MarkProposalMoved(ctx, p.ID, "h2", "w2", BranchMerge, now); err != nil {
+		t.Fatalf("MarkProposalMoved() error = %v", err)
 	}
-	rebased, _ := s.GetProposal(ctx, w.ID, 1)
-	if rebased.HeadSHA != "h2" || rebased.BaseSHA != "h2" || rebased.WorkSHA != "w2" || rebased.RebasedFrom != "w1" || rebased.ApprovedAt != nil {
-		t.Fatalf("rebased proposal = %+v", rebased)
+	moved, _ := s.GetProposal(ctx, w.ID, 1)
+	if moved.HeadSHA != "h2" || moved.BaseSHA != "h2" || moved.WorkSHA != "w2" || moved.RebasedFrom != "w1" || moved.MovedBy != BranchMerge || moved.ApprovedAt != nil {
+		t.Fatalf("moved proposal = %+v", moved)
 	}
 }
 
@@ -243,18 +243,18 @@ func TestAWatchChangesItsMergeRules(t *testing.T) {
 	pub := &recordingPublisher{}
 	s.SetPublisher(pub)
 
-	w, err = s.SetWatchMergeRules(ctx, w.ID, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase"})
-	if err != nil || w.ApprovalsRequired != 2 || w.MergeMethod != "rebase" {
+	w, err = s.SetWatchMergeRules(ctx, w.ID, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase", BranchUpdate: BranchMerge, UpdateOnGitHub: true})
+	if err != nil || w.ApprovalsRequired != 2 || w.MergeMethod != "rebase" || w.BranchUpdate != BranchMerge || !w.UpdateOnGitHub {
 		t.Fatalf("SetWatchMergeRules() = %+v, %v", w, err)
 	}
 	if e := pub.last(); e.Type != events.WatchChanged || e.Number != 3 {
 		t.Fatalf("event = %+v", e)
 	}
 	n := len(pub.types)
-	if _, err := s.SetWatchMergeRules(ctx, w.ID, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase"}); err != nil || len(pub.types) != n {
+	if _, err := s.SetWatchMergeRules(ctx, w.ID, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase", BranchUpdate: BranchMerge, UpdateOnGitHub: true}); err != nil || len(pub.types) != n {
 		t.Fatalf("a change to the same values published %v, %v", pub.types[n:], err)
 	}
-	if _, err := s.SetWatchMergeRules(ctx, w.ID+100, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase"}); !errors.Is(err, ErrWatchNotFound) {
+	if _, err := s.SetWatchMergeRules(ctx, w.ID+100, MergeRules{ApprovalsRequired: 2, MergeMethod: "rebase", BranchUpdate: BranchMerge}); !errors.Is(err, ErrWatchNotFound) {
 		t.Fatalf("SetWatchMergeRules() of no watch = %v, want ErrWatchNotFound", err)
 	}
 }

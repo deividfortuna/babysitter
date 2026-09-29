@@ -57,6 +57,8 @@ Treat each request in the review the same way as a comment: verify it against th
 
 There are merge conflicts on {{$pr.Identity}}.
 {{- if $pr.Dependabot}} The branch belongs to Dependabot: comment `@dependabot rebase` and let the bot rebase it.
+{{- else if and $pr.MergesBase $pr.DaemonPushes}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, merge it into the branch, resolve each conflict on the merits of both sides, verify, and commit the merge: the daemon pushes it when your turn ends. Do not rebase.
+{{- else if $pr.MergesBase}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, merge it into the branch, resolve each conflict on the merits of both sides, verify, commit the merge, and push with `git push origin {{shellword (print "HEAD:" $pr.HeadRef)}}`. Do not rebase.
 {{- else if $pr.DaemonPushes}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, rebase onto it, resolve each conflict on the merits of both sides, verify, finish the rebase and commit: the daemon pushes it when your turn ends.
 {{- else}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, rebase onto it, resolve each conflict on the merits of both sides, verify, and push with `git push --force-with-lease origin {{shellword (print "HEAD:" $pr.HeadRef)}}`.
 {{- end}}
@@ -64,6 +66,8 @@ There are merge conflicts on {{$pr.Identity}}.
 
 {{$pr.Identity}} is behind {{sanitize $pr.BaseRef}}.
 {{- if $pr.Dependabot}} The branch belongs to Dependabot: comment `@dependabot rebase` and let the bot rebase it.
+{{- else if and $pr.MergesBase $pr.DaemonPushes}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, merge it into the branch, verify, and commit the merge: the daemon pushes it when your turn ends. Do not rebase.
+{{- else if $pr.MergesBase}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, merge it into the branch, verify, and push with `git push origin {{shellword (print "HEAD:" $pr.HeadRef)}}`. Do not rebase.
 {{- else if $pr.DaemonPushes}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, rebase onto it and verify: the daemon pushes it when your turn ends.
 {{- else}} Fetch {{shellword (print "origin/" $pr.BaseRef)}}, rebase onto it, verify, and push with `git push --force-with-lease origin {{shellword (print "HEAD:" $pr.HeadRef)}}`.
 {{- end}}

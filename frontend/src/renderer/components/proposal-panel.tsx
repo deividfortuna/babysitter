@@ -169,24 +169,28 @@ function PendingSection({ watch, proposal }: { watch: Watch; proposal: Proposal 
       />
     );
 
+  const moved = proposal.rebasedFrom ? (proposal.movedBy === "merge" ? "merged" : "rebased") : undefined;
+  const movedIntro =
+    moved === "merged"
+      ? "The pull request branch moved while this waited, and the daemon merged it into the work without conflicts. The commits you were reading stay as they were, with a merge commit on top."
+      : "The pull request branch moved while this waited, and the daemon rebased the work onto it without conflicts. It is the change you were reading, on new commits, and a reply that named an old commit now names the new one.";
   const intro = bot
     ? "The agent answered a comment. Dependabot owns this branch, so the proposal carries replies only: the daemon pushes nothing and rebases nothing."
-    : proposal.rebasedFrom
-      ? "The pull request branch moved while this waited, and the daemon rebased the work onto it without conflicts. It is the change you were reading, on new commits, and a reply that named an old commit now names the new one."
+    : moved
+      ? movedIntro
       : "The agent finished a turn. None of it is on GitHub yet: what you approve is what goes out, under your account.";
 
   return (
     <section aria-label="Proposal" className="flex flex-col gap-3 border-b px-5 py-3.5">
       <Heading proposal={proposal}>
         <AttentionBadge>approval needed</AttentionBadge>
-        {proposal.rebasedFrom ? (
+        {moved ? (
           <Badge variant="outline" className="font-mono">
-            rebased
+            {moved}
           </Badge>
         ) : null}
         <Meta>
-          {proposal.rebasedFrom ? "rebased" : "opened"}{" "}
-          {relativeTime((proposal.rebasedFrom ? proposal.endedAt : proposal.openedAt) ?? proposal.openedAt)}
+          {moved ?? "opened"} {relativeTime((moved ? proposal.endedAt : proposal.openedAt) ?? proposal.openedAt)}
         </Meta>
         <Meta>head {shortSha(proposal.headSha)}</Meta>
         {proposal.hasPush ? (
@@ -593,7 +597,7 @@ function FailedSection({ watch, proposal }: { watch: Watch; proposal: Proposal }
 function ConflictSection({ watch, proposal }: { watch: Watch; proposal: Proposal }) {
   const after =
     watch.approvalMode === "manual"
-      ? "Its resolution comes back as a new proposal, and that one asks you even with a clean rebase set to approve on its own, because nobody has read it."
+      ? "Its resolution comes back as a new proposal, and that one asks you even with a clean rebase or merge set to approve on its own, because nobody has read it."
       : "The watch runs in auto, so the daemon pushes its resolution when the turn of the agent ends.";
   return (
     <section aria-label="Proposal" className="flex flex-col gap-3 border-b px-5 py-3.5">

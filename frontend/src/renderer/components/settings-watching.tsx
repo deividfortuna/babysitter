@@ -14,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { BRANCH_UPDATES } from "@/lib/branch-update";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
 import { effortDefaultLabel, effortsOf } from "@/lib/watch-defaults";
 
@@ -232,10 +233,10 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
 
         <Field orientation="horizontal" data-disabled={draft.approvalMode === "auto" || undefined}>
           <FieldContent>
-            <FieldLabel htmlFor="auto-rebase">Approve a clean rebase on its own</FieldLabel>
+            <FieldLabel htmlFor="auto-rebase">Approve a clean rebase or merge on its own</FieldLabel>
             <FieldDescription>
-              Work you approved does not ask again because the branch moved under it. A rebase that conflicts always
-              asks. No effect in auto.
+              Work you approved does not ask again because the branch moved under it. A rebase or merge that conflicts
+              always asks. No effect in auto.
             </FieldDescription>
           </FieldContent>
           <Switch
@@ -267,6 +268,37 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
             <FieldDescription>Empty takes the first method the repository allows.</FieldDescription>
           </FieldContent>
           <MergeMethodSelect id="merge-method" value={draft.mergeMethod} onChange={(v) => edit({ mergeMethod: v })} />
+        </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="branch-update">Branch behind its base</FieldLabel>
+            <FieldDescription>
+              Rebase rewrites the branch on top of its base. Merge adds a merge commit and keeps the history. The agent
+              solves a conflict the same way.
+            </FieldDescription>
+          </FieldContent>
+          <OptionSelect
+            id="branch-update"
+            size="default"
+            options={BRANCH_UPDATES}
+            value={draft.branchUpdate}
+            onChange={(branchUpdate) => edit({ branchUpdate })}
+          />
+        </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="update-on-github">Update the branch on GitHub first</FieldLabel>
+            <FieldDescription>
+              GitHub updates the branch with no turn of the agent. The agent does it only when GitHub refuses.
+            </FieldDescription>
+          </FieldContent>
+          <Switch
+            id="update-on-github"
+            checked={draft.updateOnGitHub}
+            onCheckedChange={(on) => edit({ updateOnGitHub: on })}
+          />
         </Field>
 
         <Field orientation="horizontal">

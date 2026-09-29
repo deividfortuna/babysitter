@@ -42,6 +42,7 @@ type PullRequest struct {
 	Number             int                  `json:"number"`
 	Title              string               `json:"title"`
 	Author             string               `json:"author"`
+	Dependabot         bool                 `json:"dependabot" description:"Dependabot opened the pull request and owns its branch"`
 	State              store.PRState        `json:"state" enum:"open,closed,merged"`
 	Draft              bool                 `json:"draft"`
 	BaseRef            string               `json:"baseRef"`
@@ -110,6 +111,7 @@ func pullFromStore(p store.PullRequest) PullRequest {
 		Number:             p.Number,
 		Title:              p.Title,
 		Author:             p.Author,
+		Dependabot:         agent.IsDependabot(p.Author),
 		State:              p.State,
 		Draft:              p.Draft,
 		BaseRef:            p.BaseRef,
@@ -172,12 +174,15 @@ type Watch struct {
 	ReadySince        *time.Time              `json:"readySince,omitempty" description:"Since when the pull request is ready to merge; absent while something blocks it, and until the readiness stood a whole poll interval"`
 	ReadyBlockers     []string                `json:"readyBlockers" description:"What keeps the pull request from merging, one sentence each"`
 	ApprovalMode      store.ApprovalMode      `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent: the daemon on its own, or the author"`
-	AutoApproveRebase bool                    `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
+	AutoApproveRebase bool                    `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again"`
 	PendingProposal   int                     `json:"pendingProposal,omitempty" description:"The number of the proposal that waits on the author, absent when none waits"`
 	TakenOverAt       *time.Time              `json:"takenOverAt,omitempty" description:"Since when the session is with the author in their terminal; absent while the daemon has it"`
 	AutoReason        store.AutoReason        `json:"autoReason,omitempty" enum:",mine,assigned,dependabot" description:"Why auto start began the watch: the author opened the pull request, it is assigned to the author, or Dependabot opened it; absent for a watch started by hand"`
 	MergeWhenReady    bool                    `json:"mergeWhenReady" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge"`
 	KeepWorktree      bool                    `json:"keepWorktree" description:"A stop leaves the worktree of the watch on disk unless the stop says otherwise"`
+	BranchUpdate      store.BranchUpdate      `json:"branchUpdate" enum:"rebase,merge" description:"rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way"`
+	BranchUpdater     prwatch.BranchUpdater   `json:"branchUpdater" enum:"dependabot,session,github,agent" description:"Who updates a branch that fell behind its base: Dependabot, the session of the author for a self watch, GitHub first, or the agent"`
+	UpdateOnGitHub    bool                    `json:"updateOnGitHub" description:"When the branch falls behind its base, GitHub updates it first with the branch update, and the agent does it only when GitHub refuses"`
 	UpdateType        dependabot.Level        `json:"updateType,omitempty" enum:",patch,minor,major" description:"The highest update of a Dependabot pull request; a type the daemon cannot read counts as major"`
 	Session           Session                 `json:"session"`
 	Summary           *WatchSummary           `json:"summary,omitempty"`
@@ -213,20 +218,22 @@ type WatchQuery struct {
 }
 
 type StartWatchRequest struct {
-	Target            string        `json:"target"`
-	Repo              string        `json:"repo"`
-	Provider          string        `json:"provider,omitempty" enum:",claude,copilot,self" description:"The AI provider that runs the agent session, or self when the caller's own session is the agent; empty takes the repository, then the daemon"`
-	Model             string        `json:"model,omitempty" description:"The model of the provider; empty takes the model of the layer that gives the provider"`
-	Effort            string        `json:"effort,omitempty" description:"The effort level of that model, one the providers route lists for it; empty takes the effort of the layer that gives the model"`
-	SourceDir         string        `json:"sourceDir,omitempty" description:"A git checkout whose origin is the head repository of the pull request; absent makes the daemon clone the head repository into its data directory and use that clone, which needs a hosted provider and a target with the repository and the number"`
-	IncludeExisting   *bool         `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the repository, then the daemon"`
-	IncludeOwn        *bool         `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the repository, then the daemon"`
-	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent takes the repository, then the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds"`
-	MergeMethod       *string       `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the repository, then the daemon"`
-	ApprovalMode      *string       `json:"approvalMode,omitempty" enum:"auto,manual" description:"Who releases the work of a turn of the agent; absent takes the repository, then the daemon, and a self watch runs in auto"`
-	AutoApproveRebase *bool         `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase without asking again; absent takes the repository, then the daemon"`
-	MergeWhenReady    *bool         `json:"mergeWhenReady,omitempty" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge; absent means off"`
-	KeepWorktree      *bool         `json:"keepWorktree,omitempty" description:"A stop leaves the worktree of the watch on disk; absent takes the repository, then the daemon"`
+	Target            string              `json:"target"`
+	Repo              string              `json:"repo"`
+	Provider          string              `json:"provider,omitempty" enum:",claude,copilot,self" description:"The AI provider that runs the agent session, or self when the caller's own session is the agent; empty takes the repository, then the daemon"`
+	Model             string              `json:"model,omitempty" description:"The model of the provider; empty takes the model of the layer that gives the provider"`
+	Effort            string              `json:"effort,omitempty" description:"The effort level of that model, one the providers route lists for it; empty takes the effort of the layer that gives the model"`
+	SourceDir         string              `json:"sourceDir,omitempty" description:"A git checkout whose origin is the head repository of the pull request; absent makes the daemon clone the head repository into its data directory and use that clone, which needs a hosted provider and a target with the repository and the number"`
+	IncludeExisting   *bool               `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the repository, then the daemon"`
+	IncludeOwn        *bool               `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the repository, then the daemon"`
+	ApprovalsRequired Optional[int]       `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent takes the repository, then the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds"`
+	MergeMethod       *string             `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the repository, then the daemon"`
+	ApprovalMode      *string             `json:"approvalMode,omitempty" enum:"auto,manual" description:"Who releases the work of a turn of the agent; absent takes the repository, then the daemon, and a self watch runs in auto"`
+	AutoApproveRebase *bool               `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again; absent takes the repository, then the daemon"`
+	MergeWhenReady    *bool               `json:"mergeWhenReady,omitempty" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge; absent means off"`
+	KeepWorktree      *bool               `json:"keepWorktree,omitempty" description:"A stop leaves the worktree of the watch on disk; absent takes the repository, then the daemon"`
+	BranchUpdate      *store.BranchUpdate `json:"branchUpdate,omitempty" enum:"rebase,merge" description:"rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way; absent takes the repository, then the daemon"`
+	UpdateOnGitHub    *bool               `json:"updateOnGitHub,omitempty" description:"When the branch falls behind its base, GitHub updates it first with the branch update, and the agent does it only when GitHub refuses; absent takes the repository, then the daemon"`
 }
 
 type ReplyRequest struct {
@@ -253,7 +260,8 @@ type Proposal struct {
 	ApprovedAt   *time.Time           `json:"approvedAt,omitempty" description:"When the author approved it"`
 	DecidedAt    *time.Time           `json:"decidedAt,omitempty" description:"When the author approved or rejected it"`
 	PushRejected bool                 `json:"pushRejected" description:"The author let the replies go out without the commits"`
-	RebasedFrom  string               `json:"rebasedFrom,omitempty" description:"The work the daemon rebased onto a head that moved"`
+	RebasedFrom  string               `json:"rebasedFrom,omitempty" description:"The work before the daemon moved it onto a head that moved"`
+	MovedBy      store.BranchUpdate   `json:"movedBy,omitempty" enum:"rebase,merge" description:"How the daemon moved the work onto the head. rebase: the work is on new commits; merge: the head is merged into the work and its commits stay"`
 	Reason       string               `json:"reason,omitempty" description:"What the author said when they rejected it"`
 	Replies      []ProposalReply      `json:"replies"`
 }
@@ -332,7 +340,7 @@ func proposalFromStore(p store.Proposal) Proposal {
 	return Proposal{
 		Number: p.Number, Status: p.Status, HeadSHA: p.HeadSHA, BaseSHA: p.BaseSHA, WorkSHA: p.WorkSHA, HasPush: p.HasPush,
 		OpenedAt: p.OpenedAt, EndedAt: p.EndedAt, ReleasedAt: p.ReleasedAt, Error: p.Error,
-		ApprovedAt: p.ApprovedAt, DecidedAt: p.DecidedAt, PushRejected: p.PushRejected, RebasedFrom: p.RebasedFrom, Reason: p.Reason,
+		ApprovedAt: p.ApprovedAt, DecidedAt: p.DecidedAt, PushRejected: p.PushRejected, RebasedFrom: p.RebasedFrom, MovedBy: p.MovedBy, Reason: p.Reason,
 		Replies: []ProposalReply{},
 	}
 }
@@ -373,9 +381,11 @@ type MergeWatchRequest struct {
 }
 
 type UpdateWatchRequest struct {
-	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent keeps what the watch has, 0 asks for none, and null reads the rule of the base branch again"`
-	MergeMethod       *string       `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent keeps what the watch has"`
-	MergeWhenReady    *bool         `json:"mergeWhenReady,omitempty" description:"The daemon merges as soon as the watch is ready to merge; absent keeps what the watch has"`
+	ApprovalsRequired Optional[int]       `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent keeps what the watch has, 0 asks for none, and null reads the rule of the base branch again"`
+	MergeMethod       *string             `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent keeps what the watch has"`
+	MergeWhenReady    *bool               `json:"mergeWhenReady,omitempty" description:"The daemon merges as soon as the watch is ready to merge; absent keeps what the watch has"`
+	BranchUpdate      *store.BranchUpdate `json:"branchUpdate,omitempty" enum:"rebase,merge" description:"rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way; absent keeps what the watch has"`
+	UpdateOnGitHub    *bool               `json:"updateOnGitHub,omitempty" description:"When the branch falls behind its base, GitHub updates it first with the branch update, and the agent does it only when GitHub refuses; absent keeps what the watch has"`
 }
 
 type StopWatchRequest struct {
@@ -395,6 +405,7 @@ type TakeoverResponse struct {
 	Argv            []string `json:"argv" description:"The command that continues the conversation of the agent, with none of the rules of the daemon"`
 	Declined        []int    `json:"declined" description:"The numbers of the proposals the takeover declined"`
 	NewConversation bool     `json:"newConversation" description:"The watch had no conversation yet, so the command starts one"`
+	BranchUpdating  bool     `json:"branchUpdating" description:"GitHub is updating the branch; the worktree is still on the old head, so the author fetches before they push"`
 }
 
 type HandbackRequest struct {
@@ -427,10 +438,12 @@ type Settings struct {
 	NotificationSound       bool     `json:"notificationSound" description:"A notification makes a sound"`
 	MutedNotificationKinds  []string `json:"mutedNotificationKinds" items.enum:"agent,review,checks,watch,merge,auto" description:"The notification kinds that reach nobody. The history keeps them either way"`
 	ApprovalMode            string   `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent of a new watch: the daemon on its own, or the author"`
-	AutoApproveRebase       bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
+	AutoApproveRebase       bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again"`
 	Provider                string   `json:"provider" enum:"claude,copilot" description:"The AI provider of a new watch"`
 	Model                   string   `json:"model" description:"The model of that provider; empty takes the default of the provider"`
 	Effort                  string   `json:"effort" description:"The effort level of that model, one the providers route lists for it; empty takes the default of the model"`
+	BranchUpdate            string   `json:"branchUpdate" enum:"rebase,merge" description:"How a new watch updates a branch that fell behind its base. rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way"`
+	UpdateOnGitHub          bool     `json:"updateOnGitHub" description:"A new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses"`
 }
 
 type Notification struct {
@@ -538,7 +551,7 @@ type HookRequest struct {
 type Activity struct {
 	ID         int64              `json:"id"`
 	WatchID    int64              `json:"watchId"`
-	Kind       store.ActivityKind `json:"kind" enum:"comment,review_comment,review,check_failed,check_recovered,checks_green,commit,behind,conflict,merged,closed,heartbeat,watch_started,watch_stopped,session_started,session_exited,nudged,agent_failed,merge_ready,merge_failed,replied,review_requested,proposal,taken_over,handed_back,auto_started,approved,approval_asked"`
+	Kind       store.ActivityKind `json:"kind" enum:"comment,review_comment,review,check_failed,check_recovered,checks_green,commit,behind,conflict,merged,closed,heartbeat,watch_started,watch_stopped,session_started,session_exited,nudged,agent_failed,merge_ready,merge_failed,replied,review_requested,proposal,taken_over,handed_back,auto_started,approved,approval_asked,branch_updated,branch_update_failed"`
 	Ref        string             `json:"ref"`
 	At         time.Time          `json:"at"`
 	Actor      string             `json:"actor"`
@@ -574,6 +587,7 @@ func watchFromStore(w store.Watch, s prwatch.SessionInfo, readySince *time.Time,
 		ApprovalsRequired: w.ApprovalsRequired, MergeMethod: w.MergeMethod, ReadySince: readySince, ReadyBlockers: blockers,
 		ApprovalMode: w.ApprovalMode, AutoApproveRebase: w.AutoApproveRebase, TakenOverAt: w.TakenOverAt,
 		AutoReason: w.AutoReason, MergeWhenReady: w.MergeWhenReady, KeepWorktree: w.KeepWorktree, UpdateType: w.UpdateType,
+		BranchUpdate: w.BranchUpdate, UpdateOnGitHub: w.UpdateOnGitHub, BranchUpdater: prwatch.BranchUpdaterOf(w),
 		Session: Session{State: s.State, PID: s.PID, StartedAt: s.StartedAt, SignalAt: s.SignalAt, LogPath: s.LogPath},
 	}
 	if out.Session.State == "" {

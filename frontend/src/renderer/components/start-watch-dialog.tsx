@@ -5,7 +5,7 @@ import { useProviders, type Provider } from "@/hooks/useProviders";
 import type { ApprovalMode } from "@/hooks/useProposals";
 import { useSettings } from "@/hooks/useSettings";
 import { useRepoConfig, useRepos } from "@/hooks/useRepos";
-import { useStartWatch, useWatches, type MergeMethod, type Watch } from "@/hooks/useWatches";
+import { useStartWatch, useWatches, type BranchUpdate, type MergeMethod, type Watch } from "@/hooks/useWatches";
 import { AgentLogo } from "@/components/agent-logo";
 import { OptionSelect, toOptions, type Option } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
@@ -34,8 +34,10 @@ import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/appro
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
+import { BRANCH_UPDATES, DEPENDABOT_OWNS_BRANCH } from "@/lib/branch-update";
 import {
   agentLabel,
+  branchUpdateDefaultLabel,
   defaultLabel,
   effortDefaultLabel,
   effortsOf,
@@ -77,6 +79,8 @@ type StartChoices = {
   approvalMode: ApprovalMode | null;
   autoRebase: boolean | null;
   mergeWhenReady: boolean;
+  branchUpdate: BranchUpdate | null;
+  updateOnGitHub: boolean | null;
   noCheckout: boolean;
 };
 
@@ -89,6 +93,9 @@ function startCommand(target: string, choices: StartChoices): string {
   if (choices.autoRebase !== null)
     words.push(choices.autoRebase ? "--auto-approve-rebase" : "--auto-approve-rebase=false");
   if (choices.mergeWhenReady) words.push("--merge-when-ready");
+  if (choices.branchUpdate) words.push(`--branch-update ${choices.branchUpdate}`);
+  if (choices.updateOnGitHub !== null)
+    words.push(choices.updateOnGitHub ? "--update-on-github" : "--update-on-github=false");
   if (choices.noCheckout) words.push("--no-checkout");
   return words.join(" ");
 }
@@ -167,6 +174,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const [approvalMode, setApprovalMode] = useState<ApprovalMode | "">("");
   const [autoRebase, setAutoRebase] = useState<boolean | null>(null);
   const [mergeWhenReady, setMergeWhenReady] = useState<boolean | null>(null);
+  const [branchUpdate, setBranchUpdate] = useState<BranchUpdate | "">("");
+  const [updateOnGitHub, setUpdateOnGitHub] = useState<boolean | null>(null);
 
   const typed = query.trim();
   const byReference = !picked && TARGET_RE.test(typed);
@@ -206,6 +215,10 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const includeOwnValue = includeOwn ?? defaults?.includeOwn ?? false;
   const keepWorktreeValue = keepWorktree ?? defaults?.keepWorktree ?? false;
   const mergeMethodValue = mergeMethod ? mergeMethodOf(mergeMethod) : (defaults?.mergeMethod ?? "");
+  const updateOnGitHubValue = updateOnGitHub ?? defaults?.updateOnGitHub ?? true;
+  const ownedByDependabot = picked?.dependabot ?? false;
+  const branchUpdateChoice = ownedByDependabot ? "" : branchUpdate;
+  const updateOnGitHubChoice = ownedByDependabot ? null : updateOnGitHub;
   const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
   const badApprovals = approvalsInvalid(approvalsValue);
 
@@ -266,6 +279,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
         ...(approvalMode ? { approvalMode } : {}),
         ...(rebaseChosen ? { autoApproveRebase: autoRebase } : {}),
         ...(mergeWhenReady === null ? {} : { mergeWhenReady }),
+        ...(branchUpdateChoice ? { branchUpdate: branchUpdateChoice } : {}),
+        ...(updateOnGitHubChoice === null ? {} : { updateOnGitHub: updateOnGitHubChoice }),
       },
       {
         onSuccess: (watch) => {
@@ -481,7 +496,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
 
             <SwitchRow
               id="auto-rebase"
-              label="Approve a clean rebase on its own"
+              label="Approve a clean rebase or merge on its own"
               description="Approved work does not ask again because the branch moved."
               checked={asks && autoRebaseValue}
               disabled={!asks}
@@ -549,6 +564,37 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
                 <Switch id="merge-when-ready" checked={mergeWhenReady ?? false} onCheckedChange={setMergeWhenReady} />
               </div>
             </SettingRow>
+
+            <SettingRow
+              label="Branch behind its base"
+              htmlFor="branch-update"
+              description={ownedByDependabot ? DEPENDABOT_OWNS_BRANCH : "The agent solves a conflict the same way."}
+              className={ROW}
+            >
+              <div className={CONTROL}>
+                <OptionSelect
+                  id="branch-update"
+                  size="default"
+                  className="w-full"
+                  options={[
+                    { value: "", label: defaultLabel(defaults && branchUpdateDefaultLabel(defaults.branchUpdate)) },
+                    ...BRANCH_UPDATES,
+                  ]}
+                  value={branchUpdate}
+                  disabled={ownedByDependabot}
+                  onChange={setBranchUpdate}
+                />
+              </div>
+            </SettingRow>
+
+            <SwitchRow
+              id="update-on-github"
+              label="Update the branch on GitHub first"
+              description="The agent does it only when GitHub refuses."
+              checked={updateOnGitHubValue && !ownedByDependabot}
+              disabled={ownedByDependabot}
+              onChange={setUpdateOnGitHub}
+            />
 
             <SwitchRow
               id="include-existing"
@@ -621,6 +667,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               approvalMode: approvalMode || null,
               autoRebase: rebaseChosen ? autoRebaseValue : null,
               mergeWhenReady: mergeWhenReady ?? false,
+              branchUpdate: branchUpdateChoice || null,
+              updateOnGitHub: updateOnGitHubChoice,
               noCheckout: !checkout,
             })}
           </Meta>

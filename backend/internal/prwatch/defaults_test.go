@@ -19,6 +19,7 @@ func (fx *fixture) settings(s store.Settings) {
 	s.PollInterval, s.WatchInterval, s.WatchMaxInterval, s.CheckMaxInterval = time.Minute, time.Minute, time.Minute, time.Minute
 	s.ApprovalMode = cmp.Or(s.ApprovalMode, store.ApprovalAuto)
 	s.Provider = cmp.Or(s.Provider, ProviderClaude)
+	s.BranchUpdate = cmp.Or(s.BranchUpdate, store.BranchRebase)
 	if _, err := fx.st.SaveSettings(context.Background(), s); err != nil {
 		fx.t.Fatal(err)
 	}

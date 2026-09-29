@@ -332,6 +332,9 @@ func (f *fakeWatches) Send(ctx context.Context, id int64, message string) (store
 	if message == "pending" {
 		return store.Activity{}, fmt.Errorf("%w: proposal 1", prwatch.ErrProposalPending)
 	}
+	if message == "updating" {
+		return store.Activity{}, prwatch.ErrBranchUpdating
+	}
 	f.mu.Lock()
 	f.sent = append(f.sent, message)
 	f.mu.Unlock()

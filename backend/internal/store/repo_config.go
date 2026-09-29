@@ -43,6 +43,8 @@ type WatchOverrides struct {
 	AutoApproveRebase *bool
 	IncludeOwn        *bool
 	KeepWorktree      *bool
+	BranchUpdate      BranchUpdate
+	UpdateOnGitHub    *bool
 }
 
 type RepoConfig struct {
@@ -85,6 +87,8 @@ func (c RepoConfig) Validate() error {
 		return fmt.Errorf("%w: unknown approval mode %q: use auto or manual", ErrInvalidRepoConfig, o.ApprovalMode)
 	case o.MergeMethod != "" && !slices.Contains(ghclient.MergeMethodsKnown, o.MergeMethod):
 		return fmt.Errorf("%w: unknown merge method %q: use %s", ErrInvalidRepoConfig, o.MergeMethod, strings.Join(ghclient.MergeMethodsKnown, ", "))
+	case o.BranchUpdate != "" && !o.BranchUpdate.Valid():
+		return fmt.Errorf("%w: unknown branch update %q: use rebase or merge", ErrInvalidRepoConfig, o.BranchUpdate)
 	case o.Approvals != nil && *o.Approvals < 0:
 		return fmt.Errorf("%w: the approvals must be 0 or more, got %d", ErrInvalidRepoConfig, *o.Approvals)
 	}
@@ -93,7 +97,8 @@ func (c RepoConfig) Validate() error {
 
 const repoConfigColumns = `repo_id, checkout_dir, own_since, include_drafts, dependabot_since,
 	provider, model, approval_mode, merge_method, approvals_set, approvals_count, include_existing,
-	dependabot_scope, dependabot_approval, dependabot_limit, auto_approve_rebase, include_own, keep_worktree, effort`
+	dependabot_scope, dependabot_approval, dependabot_limit, auto_approve_rebase, include_own, keep_worktree, effort,
+	branch_update, update_on_github`
 
 func (s *Store) GetRepoConfig(ctx context.Context, repoID int64) (RepoConfig, error) {
 	row := s.db.QueryRowContext(ctx, "SELECT "+repoConfigColumns+" FROM repo_config WHERE repo_id = ?", repoID)
@@ -114,7 +119,7 @@ func (s *Store) SaveRepoConfig(ctx context.Context, c RepoConfig) (RepoConfig, e
 	o := c.Overrides
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO repo_config (`+repoConfigColumns+`)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (repo_id) DO UPDATE SET
 	checkout_dir = excluded.checkout_dir,
 	own_since = excluded.own_since,
@@ -133,10 +138,13 @@ ON CONFLICT (repo_id) DO UPDATE SET
 	auto_approve_rebase = excluded.auto_approve_rebase,
 	include_own = excluded.include_own,
 	keep_worktree = excluded.keep_worktree,
-	effort = excluded.effort`,
+	effort = excluded.effort,
+	branch_update = excluded.branch_update,
+	update_on_github = excluded.update_on_github`,
 		c.RepoID, c.CheckoutDir, timePtrToDB(c.OwnSince), c.IncludeDrafts, timePtrToDB(c.DependabotSince),
 		o.Provider, o.Model, o.ApprovalMode, o.MergeMethod, o.ApprovalsSet, o.Approvals, o.IncludeExisting,
-		c.DependabotScope, c.DependabotApproval, c.DependabotLimit, o.AutoApproveRebase, o.IncludeOwn, o.KeepWorktree, o.Effort)
+		c.DependabotScope, c.DependabotApproval, c.DependabotLimit, o.AutoApproveRebase, o.IncludeOwn, o.KeepWorktree, o.Effort,
+		o.BranchUpdate, o.UpdateOnGitHub)
 	if isForeignKeyFailure(err) {
 		return RepoConfig{}, ErrRepoNotFound
 	}
@@ -156,11 +164,13 @@ func scanRepoConfig(sc scanner) (RepoConfig, error) {
 		autoRebase         sql.NullBool
 		includeOwn         sql.NullBool
 		keepWorktree       sql.NullBool
+		updateOnGitHub     sql.NullBool
 		o                  = &c.Overrides
 	)
 	err := sc.Scan(&c.RepoID, &c.CheckoutDir, &ownSince, &c.IncludeDrafts, &depSince,
 		&o.Provider, &o.Model, &o.ApprovalMode, &o.MergeMethod, &o.ApprovalsSet, &approvals, &includeExisting,
-		&c.DependabotScope, &c.DependabotApproval, &c.DependabotLimit, &autoRebase, &includeOwn, &keepWorktree, &o.Effort)
+		&c.DependabotScope, &c.DependabotApproval, &c.DependabotLimit, &autoRebase, &includeOwn, &keepWorktree, &o.Effort,
+		&o.BranchUpdate, &updateOnGitHub)
 	if err != nil {
 		return RepoConfig{}, err
 	}
@@ -178,6 +188,7 @@ func scanRepoConfig(sc scanner) (RepoConfig, error) {
 	o.AutoApproveRebase = boolPtrFromDB(autoRebase)
 	o.IncludeOwn = boolPtrFromDB(includeOwn)
 	o.KeepWorktree = boolPtrFromDB(keepWorktree)
+	o.UpdateOnGitHub = boolPtrFromDB(updateOnGitHub)
 	return c, nil
 }
 

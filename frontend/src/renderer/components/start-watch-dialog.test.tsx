@@ -200,7 +200,7 @@ test("folds the additional settings, and names what the watch will use", async (
     "Model",
     "Effort",
     "Approval mode",
-    "Approve a clean rebase on its own",
+    "Approve a clean rebase or merge on its own",
     "Approvals before ready to merge",
     "Merge method",
     "Report existing review items",
@@ -223,6 +223,8 @@ const INHERITED_FIELDS = [
   "approvalMode",
   "autoApproveRebase",
   "mergeWhenReady",
+  "branchUpdate",
+  "updateOnGitHub",
 ];
 
 test("starts with the defaults while the additional settings stay folded", async () => {
@@ -265,7 +267,7 @@ test("each field opens on the value of the daemon", async () => {
   expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)");
   expect(screen.getByLabelText("Merge method")).toHaveTextContent("Default (rebase)");
   expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2);
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Report existing review items" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Include my own comments" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Keep the worktree when the watch stops" })).toBeChecked();
@@ -288,6 +290,7 @@ test("the override of the repository beats the daemon", async () => {
         effort: "",
         approvalMode: "auto",
         mergeMethod: "squash",
+        branchUpdate: "",
         approvalsRequired: null,
         keepWorktree: false,
       },
@@ -314,6 +317,66 @@ test("the override of the repository beats the daemon", async () => {
   for (const field of INHERITED_FIELDS) {
     expect(startBodies[0]).not.toHaveProperty(field);
   }
+});
+
+test("a watch can start with its own branch update", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ settings: buildSettings({ branchUpdate: "rebase", updateOnGitHub: true }), startBodies });
+  renderDialog();
+  const user = userEvent.setup();
+  await fillTarget(user);
+  await openAdditional(user);
+
+  expect(screen.getByLabelText("Branch behind its base")).toHaveTextContent("Default (rebase)");
+  await chooseOption(user, screen.getByLabelText("Branch behind its base"), "Merge");
+  await user.click(screen.getByRole("switch", { name: "Update the branch on GitHub first" }));
+  expect(screen.getByText(/--branch-update merge --update-on-github=false/)).toBeVisible();
+
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).toMatchObject({ branchUpdate: "merge", updateOnGitHub: false });
+});
+
+test("a Dependabot pull request leaves the branch update to the bot", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({ startBodies });
+  renderDialog(buildPullRequest({ author: "dependabot[bot]", dependabot: true }));
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Checkout to copy the worktree from"), "/Users/octo/code/babysitter");
+  await openAdditional(user);
+
+  expect(screen.getByText("Dependabot owns the branch, so only the bot updates it.")).toBeVisible();
+  expect(screen.getByLabelText("Branch behind its base")).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Update the branch on GitHub first" })).toBeDisabled();
+  expect(screen.queryByText(/--branch-update|--update-on-github/)).toBeNull();
+
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).not.toHaveProperty("branchUpdate");
+  expect(startBodies[0]).not.toHaveProperty("updateOnGitHub");
+});
+
+test("a Dependabot pull request drops the branch update chosen before it was picked", async () => {
+  const startBodies: Record<string, unknown>[] = [];
+  serveApi({
+    startBodies,
+    pullRequests: [buildPullRequest({ number: 7, title: "Bump lodash", author: "dependabot[bot]", dependabot: true })],
+  });
+  renderDialog(buildPullRequest());
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("Checkout to copy the worktree from"), "/Users/octo/code/babysitter");
+  await openAdditional(user);
+  await chooseOption(user, screen.getByLabelText("Branch behind its base"), "Merge");
+  await user.click(screen.getByRole("switch", { name: "Update the branch on GitHub first" }));
+
+  await user.click(screen.getByRole("button", { name: "Change" }));
+  await user.click(await screen.findByRole("option", { name: /#7 Bump lodash/ }));
+
+  expect(screen.queryByText(/--branch-update|--update-on-github/)).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Start watching" }));
+  await waitFor(() => expect(startBodies).toHaveLength(1));
+  expect(startBodies[0]).not.toHaveProperty("branchUpdate");
+  expect(startBodies[0]).not.toHaveProperty("updateOnGitHub");
 });
 
 test("holds the start until the list of repositories has landed", async () => {
@@ -678,7 +741,7 @@ test("the approval mode and the clean rebase go with the start when the author s
   await openAdditional(user);
 
   await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
-  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
+  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" });
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
   await fillTarget(user);
@@ -697,9 +760,9 @@ test("a new watch in auto sends its mode, and the clean rebase means nothing the
   await openAdditional(user);
 
   await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
-  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase on its own" }));
+  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" }));
   await chooseOption(user, screen.getByLabelText("Approval mode"), "auto");
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
   await fillTarget(user);
   await user.click(screen.getByRole("button", { name: "Start watching" }));
 
@@ -734,7 +797,7 @@ test("the command beside the start button carries the choices of the author", as
   expect(screen.getByText("babysitter watch start octo/babysitter#12")).toBeVisible();
 
   await chooseOption(user, screen.getByLabelText("Model"), "Sonnet");
-  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase on its own" }));
+  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" }));
   expect(
     screen.getByText("babysitter watch start octo/babysitter#12 --model sonnet --auto-approve-rebase"),
   ).toBeVisible();

@@ -179,11 +179,11 @@ func rereviewers(reviewed []string, botLogin string) []string {
 	return slices.DeleteFunc(out, func(login string) bool { return strings.EqualFold(login, botLogin) })
 }
 
-type rereviewTries struct {
+type refTries struct {
 	registry[map[string]int]
 }
 
-func (t *rereviewTries) count(id int64, ref string) int {
+func (t *refTries) count(id int64, ref string) int {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	rounds := t.m[id]
