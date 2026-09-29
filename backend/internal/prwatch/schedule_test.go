@@ -347,3 +347,23 @@ func TestAMessageToASelfAgentKeepsTheWatchAtTheShortestInterval(t *testing.T) {
 		t.Fatal("a watch whose self agent took a message is not due after the shortest interval")
 	}
 }
+
+func TestAPollWhoseHeartbeatFailsKeepsTheWait(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	WithHeartbeat(time.Minute)(fx.svc)
+	w := fx.start()
+	fx.agentIdle(w)
+	fx.poll(w)
+	before := fx.svc.schedule.waitOf(w.ID)
+	fx.refuse("heartbeat_refused", "INSERT ON watch_activity WHEN NEW.kind = 'heartbeat'")
+
+	fx.advance(before)
+	if err := fx.svc.Poll(context.Background(), w.ID); err == nil {
+		t.Fatal("Poll() error = nil, want the refused heartbeat")
+	}
+
+	if got := fx.svc.schedule.waitOf(w.ID); got != before {
+		t.Fatalf("wait after a failed heartbeat = %s, want the wait it had, %s", got, before)
+	}
+}

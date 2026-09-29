@@ -111,10 +111,12 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 	if merged, err := s.mergeWhenReady(ctx, client, w, snap, p.next, state); err != nil || merged {
 		return err
 	}
-	paced = p.pace(snap, state)
 	if len(p.inserted) == 0 {
-		return s.maybeHeartbeat(ctx, w, p.next, now)
+		if err := s.maybeHeartbeat(ctx, w, p.next, now); err != nil {
+			return err
+		}
 	}
+	paced = p.pace(snap, state)
 	return nil
 }
 
