@@ -325,3 +325,21 @@ func TestDiffRecordsBehindForANewHeadThatIsStillBehind(t *testing.T) {
 		t.Fatalf("activity = %v, want behind@def: the new head is still behind", items)
 	}
 }
+
+func TestDiffRecordsAConflictForANewHeadThatStillConflicts(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	s := greenSnapshot("abc")
+	s.PR.MergeableState = "dirty"
+	_, prev := Diff(State{}, s, now)
+
+	s.PR.HeadSHA = "def"
+	s.PR.MergeableState = "unknown"
+	_, prev = Diff(prev, s, now)
+
+	s.PR.MergeableState = "dirty"
+	items, _ := Diff(prev, s, now)
+	if !slices.ContainsFunc(items, func(a store.Activity) bool { return a.Ref == "conflict@def" }) {
+		t.Fatalf("activity = %v, want conflict@def: the new head still conflicts", items)
+	}
+}

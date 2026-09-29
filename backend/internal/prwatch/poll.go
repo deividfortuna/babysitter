@@ -417,7 +417,7 @@ func staleCheck(a store.Activity, headSHA string) bool {
 }
 
 func boundToHead(kind store.ActivityKind) bool {
-	return kind == store.ActivityCheckFailed || kind == store.ActivityBehind
+	return slices.Contains([]store.ActivityKind{store.ActivityCheckFailed, store.ActivityBehind, store.ActivityConflict}, kind)
 }
 
 func ids(as []store.Activity) []int64 {

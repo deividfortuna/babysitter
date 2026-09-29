@@ -646,3 +646,49 @@ func TestStartRefusesAnUnknownBranchUpdate(t *testing.T) {
 		t.Fatalf("Start() error = %v, want ErrBadBranchUpdate", err)
 	}
 }
+
+func TestAConflictOfAnOldHeadIsNotToldAfterTheBranchMoved(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.hook(w, agent.EventNotification, `{"notification_type":"agent_needs_input"}`)
+	fx.update(func() { fx.pr.MergeableState = "dirty" })
+	fx.poll(w)
+	if !slices.Contains(fx.kinds(w), string(store.ActivityConflict)) {
+		t.Fatalf("kinds = %v, want the conflict recorded", fx.kinds(w))
+	}
+
+	fx.update(func() { fx.pr.HeadSHA, fx.pr.MergeableState = "t1", "clean" })
+	fx.rel.moveRemote("abc", "t1")
+	fx.poll(w)
+	fx.agentIdle(w)
+	fx.poll(w)
+	for _, m := range h.messages()[1:] {
+		if strings.Contains(m, "merge conflicts") {
+			t.Fatalf("kinds = %v, messages = %q, want no conflict told for a head that is clean", fx.kinds(w), h.messages()[1:])
+		}
+	}
+}
+
+func TestANewHeadThatStillConflictsIsTold(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.hook(w, agent.EventNotification, `{"notification_type":"agent_needs_input"}`)
+	fx.update(func() { fx.pr.MergeableState = "dirty" })
+	fx.poll(w)
+
+	fx.update(func() { fx.pr.HeadSHA, fx.pr.MergeableState = "t1", "unknown" })
+	fx.rel.moveRemote("abc", "t1")
+	fx.poll(w)
+	fx.update(func() { fx.pr.MergeableState = "dirty" })
+	fx.poll(w)
+	fx.agentIdle(w)
+	fx.poll(w)
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "merge conflicts") {
+		t.Fatalf("kinds = %v, messages = %q, want the conflict of t1 told once", fx.kinds(w), msgs)
+	}
+}
