@@ -144,6 +144,16 @@ test("a Dependabot watch says the bot updates its branch", async () => {
   expect(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" })).toBeDisabled();
 });
 
+test.each<Partial<Watch>>([
+  { branchUpdater: "dependabot", author: "dependabot[bot]", dependabot: true },
+  { branchUpdater: "session", provider: "self" },
+])("a watch whose branch $branchUpdater updates shows GitHub off", async (watch) => {
+  const { user } = renderDetail({ ...watch, updateOnGitHub: true });
+
+  const panel = await openSettings(user);
+  expect(within(panel).getByRole("switch", { name: "Update the branch on GitHub first" })).not.toBeChecked();
+});
+
 test("a self watch shows a fixed auto badge", async () => {
   const { decisions, user } = renderDetail({
     provider: "self",

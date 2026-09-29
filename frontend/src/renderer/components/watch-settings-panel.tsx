@@ -116,7 +116,7 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       >
         <Switch
           id="watch-update-on-github"
-          checked={watch.updateOnGitHub}
+          checked={watch.updateOnGitHub && ownerText === undefined}
           disabled={branchRules.isPending || ownerText !== undefined}
           onCheckedChange={(updateOnGitHub) => branchRules.mutate({ id: watch.id, updateOnGitHub })}
         />
