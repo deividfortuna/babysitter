@@ -94,6 +94,20 @@ test("a new value from outside that matches the text keeps what was typed", () =
   expect(hook.result.current.text).toBe("030");
 });
 
+test("a new value from outside drops the value still waiting", () => {
+  const { commit, hook } = harness(180);
+
+  act(() => hook.result.current.change("90"));
+  hook.rerender({ value: 60 });
+  act(() => {
+    vi.advanceTimersByTime(1000);
+  });
+  act(() => hook.result.current.flush());
+
+  expect(hook.result.current.text).toBe("60");
+  expect(commit).not.toHaveBeenCalled();
+});
+
 test("a value still waiting is committed when the field goes away", () => {
   const { commit, hook } = harness();
 

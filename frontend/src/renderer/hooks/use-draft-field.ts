@@ -24,7 +24,7 @@ export function useDraftField<T>({ value, format, parse, commit }: Options<T>): 
     if (!Object.is(parse(text), value)) setText(format(value));
   }
 
-  const pending = useRef<{ timer: ReturnType<typeof setTimeout>; next: T } | null>(null);
+  const pending = useRef<{ timer: ReturnType<typeof setTimeout>; next: T; typedOver: T } | null>(null);
   const latest = useRef({ commit, value });
   useEffect(() => {
     latest.current = { commit, value };
@@ -35,7 +35,10 @@ export function useDraftField<T>({ value, format, parse, commit }: Options<T>): 
     if (!queued) return;
     clearTimeout(queued.timer);
     pending.current = null;
-    if (!Object.is(queued.next, latest.current.value)) latest.current.commit(queued.next);
+    const { value: current, commit: commitNext } = latest.current;
+    const replacedFromOutside = !Object.is(queued.typedOver, current);
+    if (replacedFromOutside || Object.is(queued.next, current)) return;
+    commitNext(queued.next);
   }, []);
 
   useEffect(() => flush, [flush]);
@@ -47,7 +50,7 @@ export function useDraftField<T>({ value, format, parse, commit }: Options<T>): 
       pending.current = null;
       const parsed = parse(next);
       if (parsed === undefined) return;
-      pending.current = { timer: setTimeout(flush, COMMIT_AFTER_MS), next: parsed };
+      pending.current = { timer: setTimeout(flush, COMMIT_AFTER_MS), next: parsed, typedOver: latest.current.value };
     },
     [parse, flush],
   );
