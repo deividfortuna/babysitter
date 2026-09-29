@@ -273,9 +273,29 @@ func TestTheRewriteMessageMergesWhenTheWatchMerges(t *testing.T) {
 			t.Errorf("rewrite message of a merging watch lacks %q:\n%s", want, msg)
 		}
 	}
-	for _, unwanted := range []string{"did not rebase", "git rebase", "git push"} {
+	for _, unwanted := range []string{"did not rebase", "git rebase", "git push", "your rebase replaces"} {
 		if strings.Contains(msg, unwanted) {
 			t.Errorf("rewrite message of a merging watch has %q:\n%s", unwanted, msg)
+		}
+	}
+}
+
+func TestTheConflictMessageMergesWhenTheWatchMerges(t *testing.T) {
+	t.Parallel()
+	merging := pr
+	merging.DaemonPushes, merging.MergesBase = true, true
+	msg, err := ConflictMessage(Conflict{PR: merging, Proposal: 3, Remote: "1d8e4f2", Files: "x.go"})
+	if err != nil {
+		t.Fatalf("ConflictMessage() error = %v", err)
+	}
+	for _, want := range []string{"git merge origin/fix", "Do not rebase.", "The replies of proposal 3 did not go out"} {
+		if !strings.Contains(msg, want) {
+			t.Errorf("conflict message of a merging watch lacks %q:\n%s", want, msg)
+		}
+	}
+	for _, unwanted := range []string{"git rebase", "your rebase replaces"} {
+		if strings.Contains(msg, unwanted) {
+			t.Errorf("conflict message of a merging watch has %q:\n%s", unwanted, msg)
 		}
 	}
 }

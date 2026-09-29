@@ -17,7 +17,7 @@ The daemon could not push your work on {{.PR.Identity}}: origin/{{sanitize .PR.H
 Run `git fetch origin {{shellword .PR.HeadRef}}` and `git rebase {{shellword (print "origin/" .PR.HeadRef)}}`, resolve each conflict on the merits of both sides, verify, finish the rebase and commit. The daemon pushes it when your turn ends.
 {{- end}}
 
-The replies of proposal {{.Proposal}} did not go out. They go out with the work of your next turn, as you recorded them. When a reply names a commit that your rebase replaces, record it again with the same --to and the new commit: the new reply takes the place of the old one.
+The replies of proposal {{.Proposal}} did not go out. They go out with the work of your next turn, as you recorded them.{{if not .PR.MergesBase}} When a reply names a commit that your rebase replaces, record it again with the same --to and the new commit: the new reply takes the place of the old one.{{end}}
 
 PR: {{sanitize .PR.URL}}
 {{- end}}
