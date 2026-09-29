@@ -62,8 +62,10 @@ the same budget the desktop app shows in the sidebar.
 When the budget runs low, the daemon pauses its polls until the reset and
 then goes on by itself. When GitHub refuses a call for its secondary rate
 limit, the polls wait for the retry GitHub asked for. A longer poll
-interval spends less: see 'babysitter settings set --watch-interval' and
-'--watch-max-interval', the longest wait of a watch where nothing happens.`,
+interval spends less: see 'babysitter settings set --watch-interval',
+'--watch-max-interval', the longest wait of a watch where nothing happens,
+and '--check-max-interval', the longest wait between reads of pending
+checks.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			c, err := opts.daemonClient(dataDirFlag)

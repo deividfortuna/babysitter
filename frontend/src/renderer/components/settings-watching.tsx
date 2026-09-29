@@ -19,9 +19,14 @@ import { effortDefaultLabel, effortsOf } from "@/lib/watch-defaults";
 
 type Draft = Omit<
   Settings,
-  "pollIntervalSeconds" | "watchIntervalSeconds" | "watchMaxIntervalSeconds" | "approvalsRequired"
+  | "pollIntervalSeconds"
+  | "checkMaxIntervalSeconds"
+  | "watchIntervalSeconds"
+  | "watchMaxIntervalSeconds"
+  | "approvalsRequired"
 > & {
   pollIntervalSeconds: string;
+  checkMaxIntervalSeconds: string;
   watchIntervalSeconds: string;
   watchMaxIntervalSeconds: string;
   approvalsRequired: string;
@@ -31,6 +36,7 @@ function toDraft(settings: Settings): Draft {
   return {
     ...settings,
     pollIntervalSeconds: String(settings.pollIntervalSeconds),
+    checkMaxIntervalSeconds: String(settings.checkMaxIntervalSeconds),
     watchIntervalSeconds: String(settings.watchIntervalSeconds),
     watchMaxIntervalSeconds: String(settings.watchMaxIntervalSeconds),
     approvalsRequired: approvalsField(settings.approvalsRequired),
@@ -41,6 +47,7 @@ function toSettings(draft: Draft): Settings {
   return {
     ...draft,
     pollIntervalSeconds: Number(draft.pollIntervalSeconds),
+    checkMaxIntervalSeconds: Number(draft.checkMaxIntervalSeconds),
     watchIntervalSeconds: Number(draft.watchIntervalSeconds),
     watchMaxIntervalSeconds: Number(draft.watchMaxIntervalSeconds),
     approvalsRequired: approvalsRequired(draft.approvalsRequired) ?? null,
@@ -48,7 +55,12 @@ function toSettings(draft: Draft): Settings {
 }
 
 function refusal(draft: Draft): string | null {
-  const intervals = [draft.pollIntervalSeconds, draft.watchIntervalSeconds, draft.watchMaxIntervalSeconds];
+  const intervals = [
+    draft.pollIntervalSeconds,
+    draft.checkMaxIntervalSeconds,
+    draft.watchIntervalSeconds,
+    draft.watchMaxIntervalSeconds,
+  ];
   if (intervals.some((field) => wholeNumber(field) === undefined)) {
     return "The poll intervals take a whole number of seconds.";
   }
@@ -111,6 +123,24 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
             className="w-24"
             value={draft.pollIntervalSeconds}
             onChange={(e) => edit({ pollIntervalSeconds: e.target.value })}
+          />
+        </Field>
+
+        <Field orientation="horizontal">
+          <FieldContent>
+            <FieldLabel htmlFor="check-max-interval">Longest check read interval</FieldLabel>
+            <FieldDescription>
+              Seconds the repository poll waits at most between two reads of checks that still run. The wait doubles
+              after each read, and a new commit or a manual sync starts it again.
+            </FieldDescription>
+          </FieldContent>
+          <Input
+            id="check-max-interval"
+            type="number"
+            inputMode="numeric"
+            className="w-24"
+            value={draft.checkMaxIntervalSeconds}
+            onChange={(e) => edit({ checkMaxIntervalSeconds: e.target.value })}
           />
         </Field>
 

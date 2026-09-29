@@ -662,6 +662,9 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE settings ADD COLUMN watch_max_interval_ms INTEGER NOT NULL DEFAULT 900000;
 	UPDATE settings SET watch_max_interval_ms = MAX(watch_max_interval_ms, watch_interval_ms);
 	`,
+	`
+	ALTER TABLE settings ADD COLUMN check_max_interval_ms INTEGER NOT NULL DEFAULT 900000;
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

@@ -20,6 +20,7 @@ test("the Watching panel shows the settings of the daemon", async () => {
       pollIntervalSeconds: 120,
       watchIntervalSeconds: 45,
       watchMaxIntervalSeconds: 600,
+      checkMaxIntervalSeconds: 300,
       approvalsRequired: 2,
       mergeMethod: "rebase",
       includeOwn: true,
@@ -32,6 +33,7 @@ test("the Watching panel shows the settings of the daemon", async () => {
   expect(await screen.findByLabelText("Repository poll interval")).toHaveValue(120);
   expect(screen.getByLabelText("Watch poll interval")).toHaveValue(45);
   expect(screen.getByLabelText("Longest watch poll interval")).toHaveValue(600);
+  expect(screen.getByLabelText("Longest check read interval")).toHaveValue(300);
   expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2);
   expect(screen.getByRole("switch", { name: "Report my own comments" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Report the review items that already exist" })).not.toBeChecked();
@@ -122,6 +124,23 @@ test("the longest watch poll interval is saved to the daemon", async () => {
   await waitFor(() => expect(savedSettings).toHaveLength(1));
   expect(savedSettings[0].watchMaxIntervalSeconds).toBe(1800);
   expect(savedSettings[0].watchIntervalSeconds).toBe(180);
+});
+
+test("the longest check read interval is saved to the daemon", async () => {
+  const savedSettings: Settings[] = [];
+  serveApi({ settings: buildSettings(), savedSettings });
+
+  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
+  const user = await openWatching();
+
+  const field = await screen.findByLabelText("Longest check read interval");
+  await user.clear(field);
+  await user.type(field, "300");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+
+  await waitFor(() => expect(savedSettings).toHaveLength(1));
+  expect(savedSettings[0].checkMaxIntervalSeconds).toBe(300);
+  expect(savedSettings[0].pollIntervalSeconds).toBe(60);
 });
 
 test("a longest watch poll interval below the watch poll interval is refused before it is sent", async () => {

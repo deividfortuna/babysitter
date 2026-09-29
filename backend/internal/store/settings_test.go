@@ -34,6 +34,7 @@ func TestSaveSettingsKeepsWhatItWasGiven(t *testing.T) {
 		PollInterval:      90 * time.Second,
 		WatchInterval:     30 * time.Second,
 		WatchMaxInterval:  10 * time.Minute,
+		CheckMaxInterval:  20 * time.Minute,
 		ApprovalsRequired: &approvals,
 		MergeMethod:       "rebase",
 		IncludeExisting:   true,
@@ -66,11 +67,11 @@ func TestSaveSettingsForgetsTheApprovalsAndTakesTheRuleOfTheBranch(t *testing.T)
 	s, _ := openTemp(t)
 	ctx := context.Background()
 	approvals := 3
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, CheckMaxInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, CheckMaxInterval: time.Minute, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -97,6 +98,8 @@ func TestSaveSettingsRejectsValuesTheDaemonCannotRun(t *testing.T) {
 		"approvals below zero":           {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, ApprovalsRequired: &approvals},
 		"longest below the watch":        {PollInterval: time.Minute, WatchInterval: 5 * time.Minute, WatchMaxInterval: time.Minute},
 		"longest above the roof":         {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: 25 * time.Hour},
+		"check wait below the floor":     {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, CheckMaxInterval: time.Second},
+		"check wait above the roof":      {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, CheckMaxInterval: 25 * time.Hour},
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -324,7 +327,7 @@ func TestUpgradeGivesTheWatchALongestIntervalNoShorterThanItsInterval(t *testing
 			if err != nil {
 				t.Fatal(err)
 			}
-			if err := migrateTo(ctx, db, len(migrations)-1); err != nil {
+			if err := migrateTo(ctx, db, 30); err != nil {
 				t.Fatal(err)
 			}
 			if _, err := db.ExecContext(ctx, "UPDATE settings SET watch_interval_ms = ? WHERE id = 1", c.watchMS); err != nil {

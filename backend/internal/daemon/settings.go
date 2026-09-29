@@ -16,6 +16,9 @@ func runningSettings(stored store.Settings, cfg Config) (store.Settings, error) 
 	if cfg.WatchMaxInterval != 0 {
 		next.WatchMaxInterval = cfg.WatchMaxInterval
 	}
+	if cfg.CheckMaxInterval != 0 {
+		next.CheckMaxInterval = cfg.CheckMaxInterval
+	}
 	if err := next.Validate(); err != nil {
 		return store.Settings{}, err
 	}
@@ -25,5 +28,6 @@ func runningSettings(stored store.Settings, cfg Config) (store.Settings, error) 
 func intervalsOverridden(running, stored store.Settings) bool {
 	return running.PollInterval != stored.PollInterval ||
 		running.WatchInterval != stored.WatchInterval ||
-		running.WatchMaxInterval != stored.WatchMaxInterval
+		running.WatchMaxInterval != stored.WatchMaxInterval ||
+		running.CheckMaxInterval != stored.CheckMaxInterval
 }

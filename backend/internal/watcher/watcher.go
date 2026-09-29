@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/checks"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/redact"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -29,10 +30,18 @@ const rateFloor = 10
 
 const defaultCheckTTL = 10 * time.Minute
 
+const firstCheckWait = time.Minute
+
 type checkKey struct {
 	repoID int64
 	number int
 	sha    string
+}
+
+type checkRead struct {
+	at     time.Time
+	wait   time.Duration
+	status checks.CIStatus
 }
 
 type Watcher struct {
@@ -46,8 +55,9 @@ type Watcher struct {
 	kick      chan struct{}
 	guard     *ghclient.RateGuard
 
-	checksMu sync.Mutex
-	checked  map[checkKey]time.Time
+	checksMu         sync.Mutex
+	checked          map[checkKey]checkRead
+	longestCheckWait time.Duration
 
 	afterPass func(ctx context.Context)
 }
@@ -60,6 +70,10 @@ func WithInterval(d time.Duration) Option {
 
 func WithCheckTTL(d time.Duration) Option {
 	return func(w *Watcher) { w.checkTTL = d }
+}
+
+func WithLongestCheckWait(d time.Duration) Option {
+	return func(w *Watcher) { w.SetLongestCheckWait(d) }
 }
 
 func WithLogger(l *slog.Logger) Option {
@@ -87,7 +101,9 @@ func New(st Store, newClient ClientFunc, opts ...Option) *Watcher {
 		now:       time.Now,
 		sleep:     ghclient.SleepCtx,
 		kick:      make(chan struct{}, 1),
-		checked:   map[checkKey]time.Time{},
+		checked:   map[checkKey]checkRead{},
+
+		longestCheckWait: store.DefaultSettings().WatchMaxInterval,
 	}
 	for _, o := range opts {
 		o(w)
@@ -109,6 +125,7 @@ func (w *Watcher) Run(ctx context.Context) error {
 		case <-ticker.C:
 			w.runPass(ctx)
 		case <-w.kick:
+			w.forgetPendingChecks()
 			w.runPass(ctx)
 			ticker.Reset(w.Interval())
 		case <-w.interval.Retuned():
@@ -120,6 +137,15 @@ func (w *Watcher) Run(ctx context.Context) error {
 func (w *Watcher) Interval() time.Duration { return w.interval.Duration() }
 
 func (w *Watcher) SetInterval(d time.Duration) { w.interval.Set(d) }
+
+func (w *Watcher) SetLongestCheckWait(d time.Duration) {
+	if d <= 0 {
+		return
+	}
+	w.checksMu.Lock()
+	defer w.checksMu.Unlock()
+	w.longestCheckWait = d
+}
 
 func (w *Watcher) Kick() {
 	select {

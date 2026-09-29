@@ -14,6 +14,7 @@ export function buildSettings(overrides: Partial<Settings> = {}): Settings {
     pollIntervalSeconds: 60,
     watchIntervalSeconds: 180,
     watchMaxIntervalSeconds: 900,
+    checkMaxIntervalSeconds: 900,
     approvalsRequired: null,
     mergeMethod: "",
     includeExisting: false,
