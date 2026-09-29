@@ -38,7 +38,7 @@ func (f *fakeWatches) Takeover(ctx context.Context, id int64, o prwatch.Takeover
 	}
 	return prwatch.Takeover{
 		Watch: w, WorktreeDir: "/data/worktrees/octo-hello-3", WorkBranch: "babysitter/fix", HeadRef: "fix",
-		Argv: []string{"claude", "--resume", "3f0c"}, Declined: []int{4},
+		Argv: []string{"claude", "--resume", "3f0c"}, Declined: []int{4}, BranchUpdating: true,
 	}, nil
 }
 
@@ -56,7 +56,7 @@ func TestTheTakeoverRouteGivesTheCommandOfTheAuthor(t *testing.T) {
 	if out.Watch.TakenOverAt == nil || out.WorktreeDir != "/data/worktrees/octo-hello-3" || out.WorkBranch != "babysitter/fix" || out.HeadRef != "fix" {
 		t.Fatalf("takeover = %+v", out)
 	}
-	if !slices.Equal(out.Argv, []string{"claude", "--resume", "3f0c"}) || !slices.Equal(out.Declined, []int{4}) || out.NewConversation {
+	if !slices.Equal(out.Argv, []string{"claude", "--resume", "3f0c"}) || !slices.Equal(out.Declined, []int{4}) || out.NewConversation || !out.BranchUpdating {
 		t.Fatalf("takeover = %+v", out)
 	}
 

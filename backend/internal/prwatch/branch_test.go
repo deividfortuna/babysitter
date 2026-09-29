@@ -802,3 +802,19 @@ func TestAStartBehindTellsNothingWhenTheAcceptedUpdateCannotBeRecorded(t *testin
 		t.Fatalf("kinds = %v, messages = %q, want only the opening message", fx.kinds(w), msgs)
 	}
 }
+
+func TestATakeoverSaysWhenGitHubIsUpdatingTheBranch(t *testing.T) {
+	t.Parallel()
+	for polls, want := range map[int]bool{1: true, 2: false} {
+		fx := newFixture(t)
+		w := fx.start()
+		fx.agentIdle(w)
+		fx.behind()
+		for range polls {
+			fx.poll(w)
+		}
+		if tk := fx.takeover(w); tk.BranchUpdating != want {
+			t.Errorf("after %d polls, BranchUpdating = %v, want %v", polls, tk.BranchUpdating, want)
+		}
+	}
+}

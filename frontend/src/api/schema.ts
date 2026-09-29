@@ -1288,6 +1288,8 @@ export interface components {
         HttpdTakeoverResponse: {
             /** @description The command that continues the conversation of the agent, with none of the rules of the daemon */
             argv: string[] | null;
+            /** @description GitHub is updating the branch; the worktree is still on the old head, so the author fetches before they push */
+            branchUpdating: boolean;
             /** @description The numbers of the proposals the takeover declined */
             declined: number[] | null;
             /** @description The branch of the pull request; push with git push origin HEAD:<headRef> */

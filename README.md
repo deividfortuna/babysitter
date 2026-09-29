@@ -1174,7 +1174,9 @@ the `dontAsk` of the daemon that the conversation would keep. Push with
 `git push origin HEAD:<head branch>`: a plain `git push` fails, because
 the work branch has another name. `--shell` runs your shell in the
 worktree instead of the agent. A watch with no conversation yet starts
-a new one, and the command says so. The takeover of a self watch, of a
+a new one, and the command says so. When GitHub is updating the branch,
+the takeover goes through and the command says that your worktree is
+still on the old head, so fetch before you push. The takeover of a self watch, of a
 stopped watch or of a watch that is already taken over is refused, and
 so is the takeover of a watch whose provider the daemon does not have,
 unless you pass `--shell`.

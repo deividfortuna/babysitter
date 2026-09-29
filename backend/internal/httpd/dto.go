@@ -405,6 +405,7 @@ type TakeoverResponse struct {
 	Argv            []string `json:"argv" description:"The command that continues the conversation of the agent, with none of the rules of the daemon"`
 	Declined        []int    `json:"declined" description:"The numbers of the proposals the takeover declined"`
 	NewConversation bool     `json:"newConversation" description:"The watch had no conversation yet, so the command starts one"`
+	BranchUpdating  bool     `json:"branchUpdating" description:"GitHub is updating the branch; the worktree is still on the old head, so the author fetches before they push"`
 }
 
 type HandbackRequest struct {

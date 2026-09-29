@@ -275,7 +275,7 @@ func (a *api) handleTakeoverWatch(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, TakeoverResponse{
 		Watch: a.watchOut(r.Context(), tk.Watch), WorktreeDir: tk.WorktreeDir, WorkBranch: tk.WorkBranch, HeadRef: tk.HeadRef,
-		Argv: tk.Argv, Declined: declined, NewConversation: tk.NewConversation,
+		Argv: tk.Argv, Declined: declined, NewConversation: tk.NewConversation, BranchUpdating: tk.BranchUpdating,
 	})
 }
 
