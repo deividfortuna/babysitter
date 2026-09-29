@@ -136,18 +136,19 @@ func (s *Service) catchStalledUpdate(ctx context.Context, w store.Watch) error {
 }
 
 func (s *Service) branchUpdateFailed(ctx context.Context, w store.Watch, failure error) error {
-	if errors.Is(failure, ghclient.ErrPaused) {
-		return failure
-	}
 	refusal, refused := errors.AsType[*ghclient.BranchRefusal](failure)
 	if refused {
 		return s.recordBranchRefused(ctx, w, refusal.Reason)
 	}
+	pause := rateLimitOf(failure)
 	if s.branchTries.count(w.ID, branchUpdateRef(w.HeadSHA)) < branchUpdateTries {
 		s.log.Warn("GitHub did not answer the update of the branch, the next poll tries again", "watch", w.ID, "pr", prLabel(w), "err", redact.Text(failure.Error()))
-		return nil
+		return pause
 	}
-	return s.recordBranchRefused(ctx, w, failure.Error())
+	if err := s.recordBranchRefused(ctx, w, failure.Error()); err != nil {
+		return err
+	}
+	return pause
 }
 
 func (s *Service) sessionBusy(w store.Watch) bool {

@@ -3,12 +3,15 @@ package prwatch
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/http"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/deividfortuna/babysitter/internal/agent"
+	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/gitrelease"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -330,6 +333,37 @@ func TestAFailedProposalLetsTheAgentUpdateTheBranch(t *testing.T) {
 	msgs := h.messages()
 	if last := msgs[len(msgs)-1]; !strings.Contains(last, "is behind main") {
 		t.Fatalf("last message = %q, want the agent told about the branch", last)
+	}
+}
+
+func TestARateLimitCountsAsAFailedTryOfTheUpdate(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.guard = (&ghclient.RateGuard{Floor: 10}).Pausing(func() time.Time { return fx.clock() })
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+	fx.api.React(ghfake.RouteGraphQL, func(a ghfake.Action) (ghfake.Response, bool) {
+		reset := fmt.Sprint(fx.clock().Add(time.Minute).Unix())
+		header := map[string]string{"X-RateLimit-Limit": "5000", "X-RateLimit-Remaining": "0", "X-RateLimit-Reset": reset}
+		limited := ghfake.Response{Status: http.StatusForbidden, Message: "API rate limit exceeded", Header: header}
+		return limited, strings.Contains(string(a.Body), "updatePullRequestBranch")
+	})
+
+	fx.behind()
+	for range 3 {
+		fx.advance(2 * time.Minute)
+		if err := fx.svc.Poll(context.Background(), w.ID); err != nil && !errors.Is(err, ghclient.ErrPaused) {
+			t.Fatalf("Poll() error = %v", err)
+		}
+	}
+	if !slices.Contains(fx.kinds(w), string(store.ActivityBranchNotUpdated)) {
+		t.Fatalf("kinds = %v, want the refusal after the third rate limited try", fx.kinds(w))
+	}
+	fx.advance(2 * time.Minute)
+	fx.poll(w)
+	if msgs := h.messages(); len(msgs) != 2 || !strings.Contains(msgs[1], "is behind main") {
+		t.Fatalf("messages = %q, want the agent told after the third rate limited try", msgs)
 	}
 }
 
