@@ -123,12 +123,12 @@ func (w *Watcher) nextCheckWait(last checkRead, status checks.CIStatus) time.Dur
 	case last.status != checks.CIPending:
 		return w.checkWaitFloor()
 	default:
-		return min(2*last.wait, max(w.longestCheckWait, w.checkWaitFloor()))
+		return min(2*last.wait, w.longestCheckWait)
 	}
 }
 
 func (w *Watcher) checkWaitFloor() time.Duration {
-	return min(firstCheckWait, w.Interval())
+	return min(firstCheckWait, w.Interval(), w.longestCheckWait)
 }
 
 func (w *Watcher) forgetPendingChecks() {

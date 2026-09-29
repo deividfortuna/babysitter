@@ -174,7 +174,7 @@ watch** are what a watch starts with:
 | Repository poll interval | Seconds between passes over the repositories you watch, 60 by default |
 | Watch poll interval | Seconds between polls of a pull request under watch, 180 by default |
 | Longest watch poll interval | Seconds a quiet pull request waits between polls at most, 900 by default. After each poll where nothing happens, the wait of that watch doubles up to this value. A new activity row, a check that runs or an agent that works brings it back to the watch poll interval. The same value as the watch poll interval keeps one fixed interval |
-| Longest check read interval | Seconds the repository poll waits at most between two reads of the checks of an open pull request while they run, 900 by default. The wait starts at one minute, or at the repository poll interval when that is shorter, and doubles after each read that finds the checks still pending. A new head commit or a manual sync starts it again |
+| Longest check read interval | Seconds the repository poll waits at most between two reads of the checks of an open pull request while they run, 900 by default. The wait starts at one minute, or at the repository poll interval or this value when one is shorter, and doubles after each read that finds the checks still pending. A new head commit or a manual sync starts it again |
 | Agent | The provider and the model of a new watch, Claude and its default model by default |
 | Effort | How much the model reasons before it acts: a level the model takes, such as `low`, `medium` or `high`. Empty takes the default of the model. A model can take no effort level, and then the field stays empty |
 | Approval mode | Who releases the work of each turn of the agent of a new watch: `manual` holds it until you approve it, `auto` pushes and posts as soon as the turn ends. A new install asks, `manual`; an install that upgrades keeps `auto`. A `--provider self` watch always runs in auto |
@@ -1310,8 +1310,8 @@ requests of each repository. The checks of an open pull request cost two
 more requests, read only when its head commit is new, when the wait since
 the last read has passed, or on a manual sync while its CI is pending.
 While CI is pending, the wait starts at one minute, or at the repository
-poll interval when that is shorter, and doubles after each read up to the
-longest check read interval. When CI has finished,
+poll interval or the longest check read interval when one is shorter, and
+doubles after each read up to the longest check read interval. When CI has finished,
 the wait is ten minutes. The time of the last read is
 kept in memory, so a process that starts reads the checks of every open
 pull request again. A pull request that changed, that is new to the

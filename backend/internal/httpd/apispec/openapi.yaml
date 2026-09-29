@@ -2984,9 +2984,9 @@ components:
         checkMaxIntervalSeconds:
           description: Longest time between two reads of the pending checks of an
             open pull request by the repository watcher. The wait starts at one minute,
-            or at pollIntervalSeconds when that is shorter, and doubles after each
-            read that finds the checks still pending, up to this value. A new head
-            commit or a manual sync starts it again
+            or at pollIntervalSeconds or this value when one is shorter, and doubles
+            after each read that finds the checks still pending, up to this value.
+            A new head commit or a manual sync starts it again
           maximum: 86400
           minimum: 10
           type: integer

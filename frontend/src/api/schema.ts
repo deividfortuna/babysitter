@@ -1184,7 +1184,7 @@ export interface components {
             approvalsRequired: number | null;
             /** @description Approved work goes out after a clean rebase without asking again */
             autoApproveRebase: boolean;
-            /** @description Longest time between two reads of the pending checks of an open pull request by the repository watcher. The wait starts at one minute, or at pollIntervalSeconds when that is shorter, and doubles after each read that finds the checks still pending, up to this value. A new head commit or a manual sync starts it again */
+            /** @description Longest time between two reads of the pending checks of an open pull request by the repository watcher. The wait starts at one minute, or at pollIntervalSeconds or this value when one is shorter, and doubles after each read that finds the checks still pending, up to this value. A new head commit or a manual sync starts it again */
             checkMaxIntervalSeconds: number;
             /** @description The effort level of that model, one the providers route lists for it; empty takes the default of the model */
             effort: string;

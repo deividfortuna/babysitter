@@ -19,12 +19,13 @@ import (
 )
 
 type fixture struct {
-	gh    *ghfake.GitHub
-	store *store.Store
-	w     *Watcher
-	slept []time.Duration
-	repo  store.Repo
-	now   time.Time
+	gh      *ghfake.GitHub
+	store   *store.Store
+	w       *Watcher
+	slept   []time.Duration
+	repo    store.Repo
+	now     time.Time
+	onSleep func(d time.Duration)
 }
 
 func (fx *fixture) advance(d time.Duration) { fx.now = fx.now.Add(d) }
@@ -53,6 +54,9 @@ func newFixture(t *testing.T) *fixture {
 		WithLogger(testutil.Logger(t)),
 		WithClock(func() time.Time { return fx.now }, func(ctx context.Context, d time.Duration) error {
 			fx.slept = append(fx.slept, d)
+			if fx.onSleep != nil {
+				fx.onSleep(d)
+			}
 			return nil
 		}),
 	)
@@ -225,6 +229,36 @@ func TestSyncKeepsTheBackOffWhenAPassStartsALittleEarly(t *testing.T) {
 
 	if got, want := fx.passesThatReadChecks(t, "sha1", time.Minute-100*time.Millisecond, 16), []int{0, 1, 3, 7, 15}; !slices.Equal(got, want) {
 		t.Fatalf("checks read on passes %v, want %v", got, want)
+	}
+}
+
+func TestSyncHonorsALongestCheckWaitShorterThanTheFirstWait(t *testing.T) {
+	fx := newFixture(t)
+	fx.w.SetLongestCheckWait(10 * time.Second)
+	fx.seedPendingPR()
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", 20*time.Second, 4), []int{0, 1, 2, 3}; !slices.Equal(got, want) {
+		t.Fatalf("checks read on passes %v, want %v: kicked passes 20s apart with a longest wait of 10s", got, want)
+	}
+}
+
+func TestSyncStartsTheBackOffWhenAReadThatWaitedForTheRateLimitEnds(t *testing.T) {
+	fx := newFixture(t)
+	fx.seedPendingPR()
+	fx.onSleep = func(time.Duration) {
+		actions := fx.gh.Actions()
+		if actions[len(actions)-1].Path == "/repos/o/r/commits/sha1/check-runs" {
+			fx.advance(30 * time.Minute)
+		}
+	}
+	fx.gh.SetRate(&ghfake.Rate{Limit: 5000, Remaining: 3, Reset: fx.now})
+	if err := fx.w.SyncAll(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	fx.gh.SetRate(nil)
+
+	if got, want := fx.passesThatReadChecks(t, "sha1", time.Minute, 2), []int{1}; !slices.Equal(got, want) {
+		t.Fatalf("checks read on passes %v after a read that waited 30m for the rate limit, want %v", got, want)
 	}
 }
 
