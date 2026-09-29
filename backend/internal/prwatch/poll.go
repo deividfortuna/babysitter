@@ -92,7 +92,10 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		s.tellHandback(ctx, w)
 	}
 	if err := s.updateBehind(ctx, client, w, snap.PR.NodeID); err != nil {
-		return err
+		if errors.Is(err, ghclient.ErrPaused) {
+			return err
+		}
+		s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
 	}
 	pending, err := s.tell(ctx, client, w)
 	if err != nil {

@@ -38,16 +38,22 @@ func (s *Service) syncWork(ctx context.Context, w store.Watch) {
 	if err != nil || work == remote {
 		return
 	}
-	if s.followsRemote(ctx, w, work) {
+	if !s.pushes(w) {
 		s.follow(ctx, w, remote)
 		return
 	}
 	behind, err := s.rel.Contains(ctx, w.WorktreeDir, remote, work)
-	if err != nil || !behind {
+	if err != nil {
 		return
 	}
-	if err := s.rel.FastForward(ctx, w.WorktreeDir, remote); err != nil {
-		s.log.Warn("bring the work branch up to the pull request branch", "watch", w.ID, "err", err)
+	if behind {
+		if err := s.rel.FastForward(ctx, w.WorktreeDir, remote); err != nil {
+			s.log.Warn("bring the work branch up to the pull request branch", "watch", w.ID, "err", err)
+		}
+		return
+	}
+	if s.knownHead(ctx, w, work) {
+		s.follow(ctx, w, remote)
 	}
 }
 

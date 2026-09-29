@@ -47,7 +47,7 @@ func (w watchOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(out, "Checks:    %s\n", checks.Summarize(w.CheckStates, w.HeadSHA, w.GreenSHA))
 	fmt.Fprintf(out, "Mergeable: %s\n", orDash(string(w.MergeableState)))
 	fmt.Fprintf(out, "Merge:     %s\n", mergeLine(httpd.Watch(w)))
-	fmt.Fprintf(out, "Behind:    %s\n", branchUpdateWord(string(w.BranchUpdate), w.UpdateOnGitHub))
+	fmt.Fprintf(out, "Behind:    %s\n", behindWord(httpd.Watch(w)))
 	if line := autoLine(httpd.Watch(w)); line != "" {
 		fmt.Fprintf(out, "Auto:      %s\n", line)
 	}

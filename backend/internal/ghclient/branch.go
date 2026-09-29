@@ -42,8 +42,11 @@ func UpdatePullBranch(ctx context.Context, c *github.Client, nodeID, method, exp
 	if err != nil {
 		return "", resp, fmt.Errorf("update the branch of %s: %w", nodeID, err)
 	}
-	if refusal := out.Errors.err(); refusal != nil {
-		return "", resp, &BranchRefusal{Reason: refusal.Error()}
+	if failure := out.Errors.err(); failure != nil {
+		if out.Errors.refusal() {
+			return "", resp, &BranchRefusal{Reason: failure.Error()}
+		}
+		return "", resp, fmt.Errorf("update the branch of %s: %w", nodeID, failure)
 	}
 	return out.Data.UpdatePullRequestBranch.PullRequest.HeadRefOid, resp, nil
 }

@@ -283,6 +283,56 @@ func TestARebaseThatConflictsIsAborted(t *testing.T) {
 	}
 }
 
+func TestAMergeKeepsTheCommitsOfBothSides(t *testing.T) {
+	t.Parallel()
+	_, work, other := repos(t)
+	ctx := context.Background()
+	g := New()
+	commit(t, other, "c.txt", "theirs\n", "their c")
+	git(t, other, "push", "-q", "origin", "fix")
+	mine := commit(t, work, "d.txt", "mine\n", "my d")
+	remote, err := g.Fetch(ctx, work, "fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if err := g.Merge(ctx, work, remote); err != nil {
+		t.Fatalf("Merge() error = %v", err)
+	}
+	head, _ := g.Head(ctx, work)
+	for _, want := range []string{mine, remote} {
+		if kept, err := g.Contains(ctx, work, head, want); err != nil || !kept {
+			t.Fatalf("the merge %s lost %s: %v, %v", head, want, kept, err)
+		}
+	}
+}
+
+func TestAMergeThatConflictsIsAborted(t *testing.T) {
+	t.Parallel()
+	_, work, other := repos(t)
+	ctx := context.Background()
+	g := New()
+	commit(t, other, "b.txt", "theirs\n", "their b")
+	git(t, other, "push", "-q", "origin", "fix")
+	mine := commit(t, work, "b.txt", "mine\n", "my b")
+	remote, err := g.Fetch(ctx, work, "fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	err = g.Merge(ctx, work, remote)
+	var conflict *ConflictError
+	if !errors.As(err, &conflict) || !slices.Equal(conflict.Files, []string{"b.txt"}) {
+		t.Fatalf("Merge() error = %v, want the file that conflicts", err)
+	}
+	if head, _ := g.Head(ctx, work); head != mine {
+		t.Fatalf("head = %s, want %s after the abort", head, mine)
+	}
+	if status := git(t, work, "status", "--porcelain"); status != "" {
+		t.Fatalf("the worktree is not clean after the abort: %q", status)
+	}
+}
+
 func TestARebaseThatNeverStartedSaysWhy(t *testing.T) {
 	t.Parallel()
 	_, work, other := repos(t)

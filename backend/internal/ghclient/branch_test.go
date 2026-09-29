@@ -69,6 +69,22 @@ func TestUpdatePullBranchRefusesAHeadThatMoved(t *testing.T) {
 	}
 }
 
+func TestUpdatePullBranchTakesARateLimitForATransientFailure(t *testing.T) {
+	t.Parallel()
+	gh := ghfake.New()
+	gh.PR("o/r", 5)
+	c := gh.Client(t)
+	id := nodeIDOf(t, c, 5)
+	gh.React(ghfake.RouteGraphQL, func(ghfake.Action) (ghfake.Response, bool) {
+		return ghfake.Response{Status: 200, Body: `{"data":null,"errors":[{"type":"RATE_LIMITED","message":"API rate limit exceeded"}]}`}, true
+	})
+
+	_, _, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
+	if err == nil || errors.Is(err, ErrBranchNotUpdated) {
+		t.Fatalf("UpdatePullBranch() error = %v, want a failure that is not a refusal", err)
+	}
+}
+
 func TestUpdatePullBranchKeepsATransportFailureApartFromARefusal(t *testing.T) {
 	t.Parallel()
 	gh := ghfake.New()

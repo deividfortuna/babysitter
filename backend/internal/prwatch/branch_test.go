@@ -11,6 +11,7 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
+	"github.com/deividfortuna/babysitter/internal/gitrelease"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
@@ -346,6 +347,73 @@ func TestAHeadThatIsStillBehindAfterTheUpdateGetsItsOwnTry(t *testing.T) {
 	got := fx.branchUpdates()
 	if len(got) != 2 || got[1].ExpectedHead != first {
 		t.Fatalf("branch updates = %+v, want a second update that expects %s", got, first)
+	}
+}
+
+func TestAnAnswerWithTheSameHeadIsNotAnUpdate(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	fx.agentIdle(w)
+	fx.api.React(ghfake.RouteGraphQL, func(a ghfake.Action) (ghfake.Response, bool) {
+		body := `{"data":{"updatePullRequestBranch":{"pullRequest":{"headRefOid":"abc"}}}}`
+		return ghfake.Response{Status: http.StatusOK, Body: body}, strings.Contains(string(a.Body), "updatePullRequestBranch")
+	})
+
+	fx.behind()
+	fx.poll(w)
+
+	kinds := fx.kinds(w)
+	if slices.Contains(kinds, string(store.ActivityBranchUpdated)) || slices.Contains(kinds, string(store.ActivityBranchNotUpdated)) {
+		t.Fatalf("kinds = %v, want no update and no refusal: the next poll tries again", kinds)
+	}
+}
+
+func TestTheWorkBranchFollowsABranchSomeoneElseRewrote(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	fx.agentIdle(w)
+	fx.update(func() { fx.pr.HeadSHA = "x1" })
+	fx.rel.set(func(f *fakeRelease) { f.history["x1"] = []string{"base"}; f.remote = "x1" })
+	fx.poll(w)
+
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:05:00Z"), Body: "one more thing", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+
+	if work, _ := fx.rel.Head(context.Background(), ""); work != "x1" {
+		t.Fatalf("work branch = %s, want x1: it had nothing that the rewritten branch lacks", work)
+	}
+}
+
+func TestAWatchThatMergesMergesTheBranchThatMovedUnderItsWork(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	req := fx.startRequest()
+	req.ApprovalMode = new(store.ApprovalManual)
+	req.BranchUpdate = new(store.BranchMerge)
+	w, err := fx.svc.Start(context.Background(), req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.propose(w)
+	fx.rel.set(func(f *fakeRelease) { f.merges = append(f.merges, "w1") })
+	fx.update(func() { fx.pr.HeadSHA = "t1" })
+	fx.rel.moveRemote("abc", "t1")
+
+	fx.poll(w)
+	p := fx.proposal(w, 1)
+	if p.Status != store.ProposalPending || p.WorkSHA != "w1-merge-t1" || len(fx.rel.rebases) != 0 {
+		t.Fatalf("proposal = %+v, rebases %v, want the work merged with t1 and offered again", p, fx.rel.rebases)
+	}
+
+	if _, err := fx.svc.Approve(context.Background(), w.ID, 1, Decision{}); err != nil {
+		t.Fatal(err)
+	}
+	if got := fx.rel.pushed(); !slices.Equal(got, []gitrelease.Push{{SHA: "w1-merge-t1", Branch: "fix"}}) {
+		t.Fatalf("pushes = %+v, want the merged work pushed without force", got)
 	}
 }
 

@@ -2,6 +2,7 @@ package prwatch
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"slices"
@@ -17,6 +18,8 @@ import (
 )
 
 var ErrBadBranchUpdate = errors.New("invalid branch update: use rebase or merge")
+
+var errHeadDidNotMove = errors.New("GitHub answered without a new head")
 
 const branchUpdateTries = 3
 
@@ -85,8 +88,12 @@ func (s *Service) updateBehind(ctx context.Context, client *github.Client, w sto
 		return err
 	}
 	behind, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBehind, "behind@"+w.HeadSHA)
-	if err != nil || !found || behind.NudgedAt != nil {
+	if err != nil {
 		return err
+	}
+	waiting := found && behind.NudgedAt == nil
+	if !waiting {
+		return nil
 	}
 	inFlight, err := s.workInFlight(ctx, w)
 	if err != nil || inFlight {
@@ -95,6 +102,10 @@ func (s *Service) updateBehind(ctx context.Context, client *github.Client, w sto
 	head, resp, err := ghclient.UpdatePullBranch(ctx, client, nodeID, string(w.BranchUpdate), w.HeadSHA)
 	if err := s.afterWrite(ctx, resp, err); err != nil {
 		return s.branchUpdateFailed(ctx, w, err)
+	}
+	moved := head != "" && head != w.HeadSHA
+	if !moved {
+		return s.branchUpdateFailed(ctx, w, errHeadDidNotMove)
 	}
 	s.tries.forget(w.ID)
 	if _, err := s.record(ctx, w, store.Activity{
@@ -148,6 +159,9 @@ func (s *Service) proposalFailed(ctx context.Context, w store.Watch) (bool, erro
 }
 
 func (s *Service) holdForGitHub(ctx context.Context, w store.Watch, todo []store.Activity) ([]store.Activity, error) {
+	if !slices.ContainsFunc(todo, isBehind) {
+		return todo, nil
+	}
 	owns, err := s.githubOwnsBehind(ctx, w)
 	if err != nil || !owns {
 		return todo, err
@@ -186,11 +200,24 @@ func branchUpdateWord(w store.Watch) string {
 	return "rebased " + w.HeadRef + " onto " + w.BaseRef
 }
 
-func (s *Service) followsRemote(ctx context.Context, w store.Watch, work string) bool {
-	return !s.pushes(w) || s.updatedOnGitHub(ctx, w, work)
+func (s *Service) knownHead(ctx context.Context, w store.Watch, sha string) bool {
+	seen, err := s.store.HasActivity(ctx, w.ID, store.ActivityCommit, sha)
+	if err == nil && seen {
+		return true
+	}
+	return s.startHead(ctx, w) == sha
 }
 
-func (s *Service) updatedOnGitHub(ctx context.Context, w store.Watch, work string) bool {
-	updated, err := s.store.HasActivity(ctx, w.ID, store.ActivityBranchUpdated, branchUpdateRef(work))
-	return err == nil && updated
+func (s *Service) startHead(ctx context.Context, w store.Watch) string {
+	start, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityWatchStarted, "start")
+	if err != nil || !found {
+		return ""
+	}
+	var p struct {
+		HeadSHA string `json:"head_sha"`
+	}
+	if json.Unmarshal(start.Payload, &p) != nil {
+		return ""
+	}
+	return p.HeadSHA
 }

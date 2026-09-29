@@ -18,7 +18,7 @@ type mergeRulesOutput httpd.Watch
 func (w mergeRulesOutput) writeText(out io.Writer) error {
 	_, err := fmt.Fprintf(out, "Watch %d needs %s before it is ready to merge, and merges with %s. %s A branch behind its base: %s.\n",
 		w.ID, approvalsCount(w.ApprovalsRequired), mergesWith(w.MergeMethod), mergeWhenReadyWord(w.MergeWhenReady),
-		branchUpdateWord(string(w.BranchUpdate), w.UpdateOnGitHub))
+		behindWord(httpd.Watch(w)))
 	return err
 }
 

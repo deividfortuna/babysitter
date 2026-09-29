@@ -46,8 +46,9 @@ func (s *Service) SetMergeRules(ctx context.Context, id int64, c MergeRulesChang
 	}
 	mergeWhenReady := *cmp.Or(c.MergeWhenReady, &w.MergeWhenReady)
 	onGitHub := *cmp.Or(c.UpdateOnGitHub, &w.UpdateOnGitHub)
-	turnedOn := mergeWhenReady && !w.MergeWhenReady || onGitHub && !w.UpdateOnGitHub
-	needsPoll := approvals != w.ApprovalsRequired || turnedOn
+	mergeTurnedOn := mergeWhenReady && !w.MergeWhenReady
+	branchRuleChanged := update != w.BranchUpdate || onGitHub != w.UpdateOnGitHub
+	needsPoll := approvals != w.ApprovalsRequired || mergeTurnedOn || branchRuleChanged
 	w, err = s.store.SetWatchMergeRules(ctx, w.ID, store.MergeRules{
 		ApprovalsRequired: approvals, MergeMethod: method, MergeWhenReady: mergeWhenReady,
 		BranchUpdate: update, UpdateOnGitHub: onGitHub,

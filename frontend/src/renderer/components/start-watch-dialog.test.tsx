@@ -337,6 +337,17 @@ test("a watch can start with its own branch update", async () => {
   expect(startBodies[0]).toMatchObject({ branchUpdate: "merge", updateOnGitHub: false });
 });
 
+test("a Dependabot pull request leaves the branch update to the bot", async () => {
+  serveApi();
+  renderDialog(buildPullRequest({ author: "dependabot[bot]" }));
+  const user = userEvent.setup();
+  await openAdditional(user);
+
+  expect(screen.getByText("Dependabot owns the branch, so only the bot updates it.")).toBeVisible();
+  expect(screen.getByLabelText("Branch behind its base")).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Update the branch on GitHub first" })).toBeDisabled();
+});
+
 test("holds the start until the list of repositories has landed", async () => {
   serveApi({ repos: [buildRepo()] });
   let answer: (() => void) | undefined;

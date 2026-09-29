@@ -456,6 +456,20 @@ func (f *fakeRelease) Rebase(_ context.Context, _, onto string) error {
 	return nil
 }
 
+func (f *fakeRelease) Merge(_ context.Context, _, sha string) error {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.rebaseErr != nil {
+		return f.rebaseErr
+	}
+	merged := f.work + "-merge-" + sha
+	f.merges = append(f.merges, merged)
+	f.history[merged] = append([]string{f.work, sha}, append(f.history[f.work], f.history[sha]...)...)
+	f.work = merged
+	f.missing = nil
+	return nil
+}
+
 func (f *fakeRelease) Discard(_ context.Context, _, sha string) error {
 	f.mu.Lock()
 	defer f.mu.Unlock()

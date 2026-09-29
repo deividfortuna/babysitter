@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/google/go-github/v91/github"
@@ -70,8 +71,19 @@ type reviewStateResponse struct {
 	Errors graphqlErrors `json:"errors"`
 }
 
-type graphqlErrors []struct {
+type graphqlError struct {
+	Type    string `json:"type"`
 	Message string `json:"message"`
+}
+
+type graphqlErrors []graphqlError
+
+var refusalTypes = []string{"UNPROCESSABLE", "FORBIDDEN", "NOT_FOUND"}
+
+func (e graphqlError) refuses() bool { return slices.Contains(refusalTypes, e.Type) }
+
+func (e graphqlErrors) refusal() bool {
+	return len(e) > 0 && !slices.ContainsFunc(e, func(m graphqlError) bool { return !m.refuses() })
 }
 
 func (e graphqlErrors) err() error {

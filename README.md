@@ -847,11 +847,15 @@ rebase on GitHub would move the branch under that work, so the daemon
 asks GitHub after the work is done, and until then the agent gets no
 message about the branch.
 The work branch of the worktree follows the new head before the next
-message. GitHub gets one try for each head, and a new head that is
+message. It follows any rewrite of the pull request branch, by GitHub,
+by you or by a force push, when it sits on a head that the daemon saw
+before, because then it holds no work that the branch lacks. GitHub gets one try for each head, and a new head that is
 still behind gets a new try. When GitHub refuses, for example on a
 conflict, the activity records `branch_update_failed` with the reason,
-and the agent updates the branch. A network error, a timeout or a 5xx
-answer is not a refusal: the next poll tries again, and after three
+and the agent updates the branch. Only a GraphQL error of the type
+`UNPROCESSABLE`, `FORBIDDEN` or `NOT_FOUND` is a refusal. A network
+error, a timeout, a 5xx answer, a rate limit, an error of another type,
+or an answer without a new head is not a refusal: the next poll tries again, and after three
 failures for the same head the agent updates the branch. When a
 proposal of the agent failed, the daemon does not ask GitHub: the agent
 gets the branch behind its base, and its next turn also solves the
@@ -860,6 +864,10 @@ failed proposal.
 The agent updates the branch in the worktree with the method of the
 watch: it rebases onto the base, or it merges the base into the branch.
 It resolves each conflict on the merits of both sides, and commits.
+When the pull request branch moves under work that did not go out yet,
+the daemon moves the work with the same method: it rebases the new
+commits of the work, or, with `merge`, it merges the branch into the
+work and pushes without force. A conflict goes back to the agent.
 GitHub cannot solve a conflict, so a branch in conflict goes to the agent
 at once. With `--update-on-github=false`, the agent also updates a branch
 that is only behind. A `--provider self` watch never asks GitHub: your

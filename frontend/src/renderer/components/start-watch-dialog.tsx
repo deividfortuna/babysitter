@@ -35,6 +35,7 @@ import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/appro
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
+import { isDependabotLogin } from "@/lib/watch-status";
 import {
   agentLabel,
   branchUpdateDefaultLabel,
@@ -216,6 +217,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const keepWorktreeValue = keepWorktree ?? defaults?.keepWorktree ?? false;
   const mergeMethodValue = mergeMethod ? mergeMethodOf(mergeMethod) : (defaults?.mergeMethod ?? "");
   const updateOnGitHubValue = updateOnGitHub ?? defaults?.updateOnGitHub ?? true;
+  const ownedByDependabot = isDependabotLogin(picked?.author);
   const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
   const badApprovals = approvalsInvalid(approvalsValue);
 
@@ -565,7 +567,11 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             <SettingRow
               label="Branch behind its base"
               htmlFor="branch-update"
-              description="The agent solves a conflict the same way."
+              description={
+                ownedByDependabot
+                  ? "Dependabot owns the branch, so only the bot updates it."
+                  : "The agent solves a conflict the same way."
+              }
               className={ROW}
             >
               <div className={CONTROL}>
@@ -578,6 +584,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
                     ...BRANCH_UPDATES,
                   ]}
                   value={branchUpdate}
+                  disabled={ownedByDependabot}
                   onChange={setBranchUpdate}
                 />
               </div>
@@ -587,7 +594,8 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
               id="update-on-github"
               label="Update the branch on GitHub first"
               description="The agent does it only when GitHub refuses."
-              checked={updateOnGitHubValue}
+              checked={updateOnGitHubValue && !ownedByDependabot}
+              disabled={ownedByDependabot}
               onChange={setUpdateOnGitHub}
             />
 

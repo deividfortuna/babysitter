@@ -137,6 +137,12 @@ export function stopWord(w: Pick<Watch, "stopReason">): { label: string; tone: T
   return { label, tone: w.stopReason === "merged" ? "done" : "neutral" };
 }
 
+const DEPENDABOT_LOGINS: ReadonlySet<string> = new Set(["dependabot[bot]", "dependabot-preview[bot]", "dependabot"]);
+
+export function isDependabotLogin(login: string | undefined): boolean {
+  return DEPENDABOT_LOGINS.has((login ?? "").trim().toLowerCase());
+}
+
 export function watchLabel(w: Pick<Watch, "repo" | "number">): string {
   return `${w.repo}#${w.number}`;
 }

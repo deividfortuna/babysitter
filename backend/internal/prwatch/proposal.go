@@ -604,8 +604,8 @@ func (s *Service) rebaseStale(ctx context.Context, w store.Watch) error {
 	if err != nil || landed {
 		return err
 	}
-	added, err := s.onlyAdded(ctx, w.WorktreeDir, p.HeadSHA, p.WorkSHA, remote)
-	if err != nil || !added {
+	movable, err := s.movable(ctx, w, w.WorktreeDir, p.HeadSHA, p.WorkSHA, remote)
+	if err != nil || !movable {
 		return err
 	}
 	approvedAgain := p.ApprovedAt != nil && w.AutoApproveRebase
@@ -616,7 +616,7 @@ func (s *Service) rebaseStale(ctx context.Context, w store.Watch) error {
 		_, err := s.release(ctx, w, p, false)
 		return err
 	}
-	work, err := s.rebaseOnto(ctx, w, p, remote)
+	work, err := s.moveOnto(ctx, w, p, remote)
 	if err != nil {
 		return s.staleConflict(ctx, w, p, err)
 	}
