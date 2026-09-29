@@ -188,6 +188,7 @@ test("only an unread notification that waits on you asks for attention", async (
   serveApi({
     watches: [buildWatch({ id: 42 })],
     notifications: [
+      buildNotification({ id: 5, kind: "auto", watchId: 41, action: "approve_merge", title: "Watch stopped" }),
       buildNotification({ id: 4, kind: "agent", title: "Agent asks" }),
       buildNotification({ id: 3, kind: "auto", watchId: 42, action: "approve_merge", title: "Review waits" }),
       buildNotification({ id: 2, kind: "merge", title: "Merged one" }),
@@ -202,4 +203,5 @@ test("only an unread notification that waits on you asks for attention", async (
   expect(await rowOf(/Review waits/)).toHaveAttribute("data-attention");
   expect(await rowOf(/Merged one/)).not.toHaveAttribute("data-attention");
   expect(await rowOf(/Answered/)).not.toHaveAttribute("data-attention");
+  expect(await rowOf(/Watch stopped/)).not.toHaveAttribute("data-attention");
 });

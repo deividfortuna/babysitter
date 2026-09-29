@@ -124,7 +124,8 @@ type RowProps = {
 function NotificationRow({ item, approveMergeId, onRead, onNavigate }: RowProps) {
   const Icon = KIND_ICON[item.kind] ?? BellIcon;
   const unread = !item.readAt;
-  const attention = unread && waitsOnYou(item);
+  const waitsOnYou = item.kind === "agent" || approveMergeId !== undefined;
+  const attention = unread && waitsOnYou;
   const open = () => {
     onRead();
     if (item.watchId) onNavigate({ kind: "watch", id: item.watchId });
@@ -158,10 +159,6 @@ function NotificationRow({ item, approveMergeId, onRead, onNavigate }: RowProps)
       }
     />
   );
-}
-
-function waitsOnYou(item: Notification): boolean {
-  return item.kind === "agent" || Boolean(item.action);
 }
 
 function UnreadDot() {
