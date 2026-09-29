@@ -14,6 +14,7 @@ import (
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/checks"
 	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
@@ -29,6 +30,7 @@ type StartRequest struct {
 	Target            snapshot.Target
 	Provider          string
 	Model             string
+	Effort            string
 	SourceDir         string
 	IncludeExisting   *bool
 	IncludeOwn        *bool
@@ -64,9 +66,8 @@ type source struct {
 
 type checkout struct {
 	source
-	provider string
-	model    string
-	method   string
+	method string
+	agentChoice
 }
 
 type access struct {
@@ -76,16 +77,15 @@ type access struct {
 }
 
 func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout, error) {
-	provider, ok := normalizeProvider(req.Provider)
-	if !ok {
-		return checkout{}, providerError(req.Provider)
+	chosen, err := normalizeAgent(req.Provider, req.Model, req.Effort)
+	if err != nil {
+		return checkout{}, err
 	}
-	model, ok := normalizeModel(provider, req.Model)
-	if !ok {
-		return checkout{}, modelError(provider, req.Model)
+	if _, err := normalizeEffort(chosen.provider, s.launchedModel(chosen), chosen.effort); err != nil {
+		return checkout{}, err
 	}
-	if hostedProvider(provider) && s.lacksRunner(provider) {
-		return checkout{}, fmt.Errorf("%w: %s", ErrNoAgent, provider)
+	if hostedProvider(chosen.provider) && s.lacksRunner(chosen.provider) {
+		return checkout{}, fmt.Errorf("%w: %s", ErrNoAgent, chosen.provider)
 	}
 	method, ok := normalizeMergeMethod(*req.MergeMethod)
 	if !ok {
@@ -94,11 +94,11 @@ func (s *Service) checkCheckout(ctx context.Context, req StartRequest) (checkout
 	if !req.ApprovalMode.Valid() {
 		return checkout{}, fmt.Errorf("%w: %q", ErrBadApprovalMode, *req.ApprovalMode)
 	}
-	src, err := givenSource(ctx, req.SourceDir, provider)
+	src, err := givenSource(ctx, req.SourceDir, chosen.provider)
 	if err != nil {
 		return checkout{}, err
 	}
-	return checkout{source: src, provider: provider, model: model, method: method}, nil
+	return checkout{source: src, method: method, agentChoice: chosen}, nil
 }
 
 func givenSource(ctx context.Context, dir, provider string) (source, error) {
@@ -146,6 +146,18 @@ func readSource(ctx context.Context, dir string) (source, error) {
 
 func (s *Service) lacksRunner(provider string) bool {
 	return len(s.agents) > 0 && s.agents[provider] == nil
+}
+
+func (s *Service) launchedModel(chosen agentChoice) string {
+	runner := s.agents[chosen.provider]
+	if runner == nil {
+		return chosen.model
+	}
+	launched := normalized(agent.PickModel(runner.DefaultModel(), chosen.model))
+	if _, known := modelOf(chosen.provider, launched); !known {
+		return chosen.model
+	}
+	return launched
 }
 
 func checkHeadRepo(pr snapshot.PR, c checkout) error {
@@ -284,7 +296,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 		BotLogin: acc.botLogin, HeadRef: headRef, BaseRef: snap.PR.BaseBranch,
 		SourceDir: co.dir, WorktreeDir: dir, WorkBranch: branch,
 		GitUserName: acc.userName, GitUserEmail: acc.userEmail,
-		Provider: co.provider, Model: co.model,
+		Provider: co.provider, Model: co.model, Effort: co.effort,
 		IncludeExisting: *req.IncludeExisting, IncludeOwn: *req.IncludeOwn, StartedAt: now,
 		ApprovalsRequired: approvals, MergeMethod: co.method,
 		ApprovalMode: req.approvalMode(co.provider), AutoApproveRebase: *req.AutoApproveRebase,

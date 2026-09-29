@@ -995,10 +995,16 @@ export interface components {
             label: string;
             models: components["schemas"]["HttpdProviderModel"][] | null;
         };
+        HttpdProviderEffort: {
+            id: string;
+            label: string;
+        };
         HttpdProviderList: {
             providers: components["schemas"]["HttpdProvider"][] | null;
         };
         HttpdProviderModel: {
+            /** @description The effort levels the model takes; empty when the model takes none */
+            efforts: components["schemas"]["HttpdProviderEffort"][] | null;
             id: string;
             label: string;
         };
@@ -1178,6 +1184,8 @@ export interface components {
             approvalsRequired: number | null;
             /** @description Approved work goes out after a clean rebase without asking again */
             autoApproveRebase: boolean;
+            /** @description The effort level of that model, one the providers route lists for it; empty takes the default of the model */
+            effort: string;
             /** @description A new watch reports the review items the pull request has already */
             includeExisting: boolean;
             /** @description A new watch reports the comments of the token's own user */
@@ -1217,6 +1225,8 @@ export interface components {
             approvalsRequired?: number | null;
             /** @description Approved work goes out after a clean rebase without asking again; absent takes the repository, then the daemon */
             autoApproveRebase?: boolean | null;
+            /** @description The effort level of that model, one the providers route lists for it; empty takes the effort of the layer that gives the model */
+            effort?: string;
             /** @description Report the review items the pull request has already; absent takes the repository, then the daemon */
             includeExisting?: boolean | null;
             /** @description Report the comments of the token's own user; absent takes the repository, then the daemon */
@@ -1289,6 +1299,8 @@ export interface components {
             } | null;
             /** @description Dependabot owns the branch of the pull request, so the daemon never pushes it and the agent only replies */
             dependabot: boolean;
+            /** @description The effort level the agent works at; empty takes the default of the model */
+            effort: string;
             greenSha: string;
             headRef: string;
             headSha: string;
@@ -1369,6 +1381,8 @@ export interface components {
             approvalsRequired?: number | null;
             /** @description Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon */
             autoApproveRebase?: boolean | null;
+            /** @description The effort level of that model, one the providers route lists for it; empty takes the default of the model. Needs a provider */
+            effort: string;
             /** @description Report the review items the pull request has already; absent takes the setting of the daemon */
             includeExisting?: boolean | null;
             /** @description Report the comments of the token's own user; absent takes the setting of the daemon */

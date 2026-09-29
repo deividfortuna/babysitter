@@ -10,6 +10,8 @@ import (
 	"github.com/deividfortuna/babysitter/internal/execx"
 )
 
+const effortFlag = "--effort"
+
 type Runner struct {
 	Bin        string
 	Model      string
@@ -41,8 +43,11 @@ func (c *Runner) Signals() bool { return true }
 
 func (c *Runner) Prelude() string { return "" }
 
+func (c *Runner) DefaultModel() string { return c.Model }
+
 func (c *Runner) AuthorCommand(l agent.Launch) ([]string, error) {
-	args, err := agent.AuthorArgs(c.bin(), c.Model, l, "--permission-mode", "manual")
+	flags := append([]string{"--permission-mode", "manual"}, agent.EffortArgs(effortFlag, l)...)
+	args, err := agent.AuthorArgs(c.bin(), c.Model, l, flags...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,6 +88,7 @@ func (c *Runner) Command(l agent.Launch) ([]string, []string, error) {
 	if model := agent.PickModel(c.Model, l.Model); model != "" {
 		args = append(args, "--model", model)
 	}
+	args = append(args, agent.EffortArgs(effortFlag, l)...)
 	env, err := agent.GitEnv(l)
 	if err != nil {
 		return nil, nil, err

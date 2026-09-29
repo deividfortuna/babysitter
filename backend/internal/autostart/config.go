@@ -32,7 +32,8 @@ func Configure(ctx context.Context, st ConfigStore, repo store.Repo, c Change, n
 		return store.RepoConfig{}, err
 	}
 	next := apply(cfg, c, now)
-	if err := checkAgent(next.Overrides); err != nil {
+	next.Overrides, err = normalizeAgent(next.Overrides)
+	if err != nil {
 		return store.RepoConfig{}, err
 	}
 	if c.checksCheckout(cfg) && next.CheckoutDir != "" {
@@ -50,14 +51,17 @@ func (c Change) checksCheckout(current store.RepoConfig) bool {
 
 func isOn(toggle *bool) bool { return toggle != nil && *toggle }
 
-func checkAgent(o store.WatchOverrides) error {
-	if o.Provider == "" && o.Model == "" {
-		return nil
+func normalizeAgent(o store.WatchOverrides) (store.WatchOverrides, error) {
+	inheritsAgent := o.Provider == "" && o.Model == "" && o.Effort == ""
+	if inheritsAgent {
+		return o, nil
 	}
-	if err := prwatch.CheckHostedAgent(o.Provider, o.Model); err != nil {
-		return fmt.Errorf("%w: %w", store.ErrInvalidRepoConfig, err)
+	model, effort, err := prwatch.NormalizeHostedAgent(o.Provider, o.Model, o.Effort)
+	if err != nil {
+		return o, fmt.Errorf("%w: %w", store.ErrInvalidRepoConfig, err)
 	}
-	return nil
+	o.Model, o.Effort = model, effort
+	return o, nil
 }
 
 func apply(cfg store.RepoConfig, c Change, now time.Time) store.RepoConfig {

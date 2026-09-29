@@ -26,7 +26,8 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "bad_request", "body must be the settings to change as JSON")
 		return
 	}
-	if err := prwatch.CheckHostedAgent(req.Provider, req.Model); err != nil {
+	model, effort, err := prwatch.NormalizeHostedAgent(req.Provider, req.Model, req.Effort)
+	if err != nil {
 		writeError(w, http.StatusBadRequest, "bad_request", err.Error())
 		return
 	}
@@ -45,7 +46,8 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		ApprovalMode:           store.ApprovalMode(req.ApprovalMode),
 		AutoApproveRebase:      req.AutoApproveRebase,
 		Provider:               req.Provider,
-		Model:                  req.Model,
+		Model:                  model,
+		Effort:                 effort,
 	})
 	if storeErrors.write(w, err) {
 		return
@@ -72,6 +74,7 @@ func settingsOut(s store.Settings) Settings {
 		AutoApproveRebase:      s.AutoApproveRebase,
 		Provider:               s.Provider,
 		Model:                  s.Model,
+		Effort:                 s.Effort,
 	}
 }
 

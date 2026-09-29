@@ -148,6 +148,7 @@ type Watch struct {
 	BaseRef           string                  `json:"baseRef"`
 	Provider          string                  `json:"provider" enum:"claude,copilot,self" description:"The AI provider of the agent session the daemon runs; self means the session that started the watch is its agent and takes each message with the next route"`
 	Model             string                  `json:"model"`
+	Effort            string                  `json:"effort" description:"The effort level the agent works at; empty takes the default of the model"`
 	SourceDir         string                  `json:"sourceDir"`
 	WorktreeDir       string                  `json:"worktreeDir"`
 	WorkBranch        string                  `json:"workBranch" description:"The private branch of the watch in its worktree"`
@@ -216,6 +217,7 @@ type StartWatchRequest struct {
 	Repo              string        `json:"repo"`
 	Provider          string        `json:"provider,omitempty" enum:",claude,copilot,self" description:"The AI provider that runs the agent session, or self when the caller's own session is the agent; empty takes the repository, then the daemon"`
 	Model             string        `json:"model,omitempty" description:"The model of the provider; empty takes the model of the layer that gives the provider"`
+	Effort            string        `json:"effort,omitempty" description:"The effort level of that model, one the providers route lists for it; empty takes the effort of the layer that gives the model"`
 	SourceDir         string        `json:"sourceDir,omitempty" description:"A git checkout whose origin is the head repository of the pull request; absent makes the daemon clone the head repository into its data directory and use that clone, which needs a hosted provider and a target with the repository and the number"`
 	IncludeExisting   *bool         `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the repository, then the daemon"`
 	IncludeOwn        *bool         `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the repository, then the daemon"`
@@ -426,6 +428,7 @@ type Settings struct {
 	AutoApproveRebase      bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
 	Provider               string   `json:"provider" enum:"claude,copilot" description:"The AI provider of a new watch"`
 	Model                  string   `json:"model" description:"The model of that provider; empty takes the default of the provider"`
+	Effort                 string   `json:"effort" description:"The effort level of that model, one the providers route lists for it; empty takes the default of the model"`
 }
 
 type Notification struct {
@@ -561,7 +564,7 @@ func watchFromStore(w store.Watch, s prwatch.SessionInfo, readySince *time.Time,
 	}
 	out := Watch{
 		ID: w.ID, Repo: w.Repo(), Number: w.Number, URL: w.URL, Title: w.Title, Author: w.Author, Dependabot: agent.IsDependabot(w.Author),
-		HeadRef: w.HeadRef, BaseRef: w.BaseRef, Provider: w.Provider, Model: w.Model, SourceDir: w.SourceDir, WorktreeDir: w.WorktreeDir,
+		HeadRef: w.HeadRef, BaseRef: w.BaseRef, Provider: w.Provider, Model: w.Model, Effort: w.Effort, SourceDir: w.SourceDir, WorktreeDir: w.WorktreeDir,
 		WorkBranch: w.WorkBranch, Status: w.Status, StopReason: w.StopReason, IncludeExisting: w.IncludeExisting, IncludeOwn: w.IncludeOwn,
 		StartedAt: w.StartedAt, StoppedAt: w.StoppedAt, LastPollAt: w.LastPollAt, LastHeartbeatAt: w.LastHeartbeatAt,
 		LastError: w.LastError, HeadSHA: w.HeadSHA, PRState: w.PRState, MergeableState: w.MergeableState,

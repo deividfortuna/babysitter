@@ -25,6 +25,7 @@ export function buildSettings(overrides: Partial<Settings> = {}): Settings {
     autoApproveRebase: false,
     provider: "claude",
     model: "",
+    effort: "",
     ...overrides,
   };
 }
@@ -62,6 +63,7 @@ export function buildWatch(overrides: Partial<Watch> = {}): Watch {
     headSha: "1234567890",
     provider: "claude",
     model: "",
+    effort: "",
     id: 42,
     includeExisting: false,
     includeOwn: false,
@@ -136,7 +138,7 @@ export function buildRepoConfig(overrides: Partial<RepoConfig> = {}): RepoConfig
     includeDrafts: false,
     autoWatchDependabot: false,
     autoWatchDependabotSince: null,
-    overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "" },
+    overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "" },
     dependabotScope: "patch",
     dependabotApproval: "never",
     dependabotLimit: 1,
@@ -279,6 +281,14 @@ export function buildActivity(overrides: Partial<Activity> = {}): Activity {
   };
 }
 
+const EFFORTS = [
+  { id: "low", label: "Low" },
+  { id: "medium", label: "Medium" },
+  { id: "high", label: "High" },
+  { id: "xhigh", label: "Extra high" },
+  { id: "max", label: "Max" },
+];
+
 export function buildProviders(overrides: Partial<Provider>[] = []): Provider[] {
   const base: Provider[] = [
     {
@@ -286,9 +296,10 @@ export function buildProviders(overrides: Partial<Provider>[] = []): Provider[] 
       label: "Claude",
       available: true,
       models: [
-        { id: "", label: "Provider default" },
-        { id: "opus", label: "Opus" },
-        { id: "sonnet", label: "Sonnet" },
+        { id: "", label: "Provider default", efforts: EFFORTS },
+        { id: "opus", label: "Opus", efforts: EFFORTS },
+        { id: "sonnet", label: "Sonnet", efforts: EFFORTS },
+        { id: "haiku", label: "Haiku", efforts: [] },
       ],
     },
     {
@@ -296,8 +307,8 @@ export function buildProviders(overrides: Partial<Provider>[] = []): Provider[] 
       label: "Copilot",
       available: true,
       models: [
-        { id: "", label: "Provider default" },
-        { id: "gpt-5.3-codex", label: "GPT-5.3 Codex" },
+        { id: "", label: "Provider default", efforts: [] },
+        { id: "gpt-5.3-codex", label: "GPT-5.3 Codex", efforts: EFFORTS.slice(0, 4) },
       ],
     },
   ];

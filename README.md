@@ -172,6 +172,7 @@ watch** are what a watch starts with:
 | Repository poll interval | Seconds between passes over the repositories you watch, 60 by default |
 | Watch poll interval | Seconds between polls of a pull request under watch, 180 by default |
 | Agent | The provider and the model of a new watch, Claude and its default model by default |
+| Effort | How much the model reasons before it acts: a level the model takes, such as `low`, `medium` or `high`. Empty takes the default of the model. A model can take no effort level, and then the field stays empty |
 | Approval mode | Who releases the work of each turn of the agent of a new watch: `manual` holds it until you approve it, `auto` pushes and posts as soon as the turn ends. A new install asks, `manual`; an install that upgrades keeps `auto`. A `--provider self` watch always runs in auto |
 | Approve a clean rebase on its own | Work you approved does not ask again because the branch moved under it. A rebase that conflicts always asks. No effect in auto |
 | Approvals before ready to merge | What a new watch wants before it calls a pull request ready; empty takes the rule of the base branch |
@@ -231,6 +232,7 @@ babysitter settings set --approval-mode auto       # push and post as soon as ea
 babysitter settings set --auto-approve-rebase      # approved work goes out again after a clean rebase
 babysitter settings set --include-existing --include-own
 babysitter settings set --provider copilot --model auto   # the agent of a new watch; a new provider alone takes its default model
+babysitter settings set --model opus --effort high        # the effort of that model; a new model alone takes its default effort
 ```
 
 The notification flags of `settings set` are in
@@ -325,6 +327,7 @@ babysitter watch start 42 --repo owner/name       # same
 babysitter watch start owner/name#42 --no-checkout   # from anywhere: the daemon clones the head repository and makes the worktree from that clone
 babysitter watch start --provider copilot         # choose the AI provider for this watch; without the flag the repository, then the daemon, decides
 babysitter watch start --model sonnet             # choose the model of that provider; alone it runs on the provider the repository or the daemon gives
+babysitter watch start --effort xhigh             # choose the effort of that model; alone it runs on the model the repository or the daemon gives
 babysitter watch start --provider self            # no agent session in the daemon: your own coding agent session takes the messages
 babysitter watch start --approvals 2              # approvals the pull request needs before it is ready to merge; without the flag the repository, then the daemon, decides, and 0 asks for none
 babysitter watch start --approvals branch         # the rule of the base branch, whatever the settings hold
@@ -709,7 +712,11 @@ Requirements:
   off on purpose, and `--copilot-bin` to run a Copilot CLI from elsewhere
   on disk. `--agent-model` and `--copilot-model` set the model of a
   watch that picks none; `watch start --model` and the model box of the
-  app pick one for that watch.
+  app pick one for that watch. `watch start --effort` and the effort box
+  of the app pick the effort level. The daemon gives it to Claude Code as
+  `--effort` and to Copilot CLI as `--reasoning-effort`. The models of
+  each provider, and the effort levels of each model, are in
+  `backend/internal/prwatch/model-manifest.json`.
 - The `origin` remote of the checkout is the head repository of the pull
   request. The start fails otherwise.
 - The token can push to the head branch, and git can push it from the
@@ -836,6 +843,7 @@ babysitter repo config acme/billing --dependabot-scope minor    # patch (default
 babysitter repo config acme/billing --dependabot-approval ask   # never (default), ask or green
 babysitter repo config acme/billing --dependabot-limit 2        # Dependabot watches at the same time, 1 by default
 babysitter repo config acme/billing --merge-method squash --approval-mode manual   # the overrides of each watch on the repository
+babysitter repo config acme/billing --provider claude --model opus --effort max   # the agent of each watch on the repository
 babysitter repo config acme/billing --keep-worktree --include-own=false            # a switch takes an override too
 babysitter repo config acme/billing --approvals default --reset-overrides           # back to the settings of the daemon
 babysitter repo config acme/billing --auto-start-mine=false     # turn a toggle off; the watches that run go on

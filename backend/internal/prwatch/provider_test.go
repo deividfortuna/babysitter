@@ -2,6 +2,7 @@ package prwatch
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -58,7 +59,8 @@ func TestNormalizeModel(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
-			got, ok := normalizeModel(tc.provider, tc.model)
+			got, err := normalizeModel(tc.provider, tc.model)
+			ok := err == nil
 			if got != tc.want || ok != tc.ok {
 				t.Fatalf("normalizeModel(%q, %q) = %q, %v; want %q, %v", tc.provider, tc.model, got, ok, tc.want, tc.ok)
 			}
@@ -80,5 +82,136 @@ func TestModelErrorNamesTheModelsOfThatProvider(t *testing.T) {
 	}
 	if strings.Contains(msg, `"auto"`) {
 		t.Errorf("message names a model of the other provider: %s", msg)
+	}
+}
+
+func TestCatalogCopiesTheEfforts(t *testing.T) {
+	t.Parallel()
+	Catalog()[0].Models[0].Efforts[0].ID = "tampered"
+	if id := Catalog()[0].Models[0].Efforts[0].ID; id != "low" {
+		t.Fatalf("the caller changed the catalog: effort = %q", id)
+	}
+}
+
+func TestNormalizeEffort(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		name     string
+		provider string
+		model    string
+		effort   string
+		want     string
+		ok       bool
+	}{
+		{"empty is the default of the model", ProviderClaude, "haiku", "", "", true},
+		{"a level of the model", ProviderClaude, "opus", "xhigh", "xhigh", true},
+		{"a level of the default model", ProviderClaude, "", "max", "max", true},
+		{"case and space do not matter", ProviderClaude, " Sonnet", " High ", "high", true},
+		{"a level of copilot", ProviderCopilot, "gpt-5.3-codex", "xhigh", "xhigh", true},
+		{"no reasoning is a level of its own", ProviderCopilot, "gpt-5.6-terra", "none", "none", true},
+		{"a level the model does not take", ProviderCopilot, "gpt-5.3-codex", "max", "", false},
+		{"copilot picks the model of auto, so no level fits it", ProviderCopilot, "auto", "low", "", false},
+		{"the default model of copilot is unknown, so no level fits it", ProviderCopilot, "", "low", "", false},
+		{"a model that takes no effort", ProviderClaude, "haiku", "low", "", false},
+		{"an unknown level", ProviderClaude, "opus", "ultra", "", false},
+		{"a self watch", ProviderSelf, "", "high", "", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			got, err := normalizeEffort(tc.provider, tc.model, tc.effort)
+			ok := err == nil
+			if got != tc.want || ok != tc.ok {
+				t.Fatalf("normalizeEffort(%q, %q, %q) = %q, %v; want %q, %v", tc.provider, tc.model, tc.effort, got, ok, tc.want, tc.ok)
+			}
+		})
+	}
+}
+
+func TestEffortErrorNamesTheLevelsOfThatModel(t *testing.T) {
+	t.Parallel()
+	err := effortError(ProviderCopilot, "gpt-5.3-codex", "max")
+	if !errors.Is(err, ErrBadEffort) {
+		t.Fatalf("error = %v", err)
+	}
+	if msg := err.Error(); !strings.Contains(msg, `one of "low", "medium", "high", "xhigh", got "max"`) {
+		t.Errorf("message does not name the levels of gpt-5.3-codex: %s", msg)
+	}
+	if msg := effortError(ProviderClaude, "haiku", "low").Error(); !strings.Contains(msg, "takes no effort") {
+		t.Errorf("message of a model without effort = %s", msg)
+	}
+}
+
+func TestNormalizeHostedAgentRefusesAnEffortTheModelDoesNotTake(t *testing.T) {
+	t.Parallel()
+	if _, _, err := NormalizeHostedAgent(ProviderClaude, "haiku", "high"); !errors.Is(err, ErrBadEffort) {
+		t.Fatalf("NormalizeHostedAgent() = %v, want ErrBadEffort", err)
+	}
+	if _, _, err := NormalizeHostedAgent(ProviderClaude, "opus", "high"); err != nil {
+		t.Fatalf("NormalizeHostedAgent() = %v, want nil", err)
+	}
+}
+
+func TestNormalizeHostedAgentGivesTheIDsOfTheManifest(t *testing.T) {
+	t.Parallel()
+	model, effort, err := NormalizeHostedAgent(ProviderClaude, " Opus ", " High ")
+	if err != nil {
+		t.Fatalf("NormalizeHostedAgent() = %v", err)
+	}
+	if model != "opus" || effort != "high" {
+		t.Fatalf("NormalizeHostedAgent() = %q, %q, want opus and high", model, effort)
+	}
+}
+
+func TestAManifestThatListsAModelTwiceIsRefused(t *testing.T) {
+	t.Parallel()
+	raw := `{"effortSets":{},"providers":[{"id":"copilot","label":"Copilot","models":[{"id":"auto","label":"Auto"},{"id":"auto","label":"Auto"}]}]}`
+	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"auto" of copilot is listed twice`) {
+		t.Fatalf("parseManifest() error = %v, want the repeated model named", err)
+	}
+}
+
+func TestCopilotOffersTheEffortsOfEachModel(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		model   string
+		efforts []string
+	}{
+		{"claude-opus-5.5", []string{"low", "medium", "high", "xhigh", "max"}},
+		{"gpt-6-sol", []string{"none", "low", "medium", "high", "xhigh", "max"}},
+		{"gemini-3.5-flash", []string{"minimal", "low", "medium", "high"}},
+		{"kimi-k3", []string{"low", "high", "max"}},
+		{"claude-opus-4.7", []string{"medium"}},
+		{"kimi-k2.7-code", nil},
+	}
+	for _, tc := range cases {
+		m, ok := modelOf(ProviderCopilot, tc.model)
+		if !ok {
+			t.Errorf("copilot does not offer %s", tc.model)
+			continue
+		}
+		var got []string
+		for _, level := range m.Efforts {
+			got = append(got, level.ID)
+		}
+		if !slices.Equal(got, tc.efforts) {
+			t.Errorf("efforts of %s = %v, want %v", tc.model, got, tc.efforts)
+		}
+	}
+}
+
+func TestAManifestThatNamesAnUnknownEffortSetIsRefused(t *testing.T) {
+	t.Parallel()
+	raw := `{"effortSets":{},"providers":[{"id":"claude","label":"Claude","models":[{"id":"","label":"Default","efforts":"missing"}]}]}`
+	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"missing"`) {
+		t.Fatalf("parseManifest() error = %v, want the unknown set named", err)
+	}
+}
+
+func TestAManifestThatNamesAnUnknownEffortLevelIsRefused(t *testing.T) {
+	t.Parallel()
+	raw := `{"effortLabels":{"low":"Low"},"effortSets":{"some":["low","ultra"]},"providers":[]}`
+	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"ultra"`) {
+		t.Fatalf("parseManifest() error = %v, want the unknown level named", err)
 	}
 }

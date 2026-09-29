@@ -13,6 +13,7 @@ import (
 type Launch struct {
 	WorktreeDir string
 	Model       string
+	Effort      string
 	SessionID   string
 	Resume      bool
 	Name        string
@@ -24,6 +25,7 @@ type Runner interface {
 	NewSessionID() string
 	Command(l Launch) (argv []string, env []string, err error)
 	Doctor(ctx context.Context) error
+	DefaultModel() string
 	Signals() bool
 	Prelude() string
 	AuthorCommand(l Launch) ([]string, error)
@@ -89,4 +91,11 @@ func PickModel(runner, launch string) string {
 		return launch
 	}
 	return runner
+}
+
+func EffortArgs(flag string, l Launch) []string {
+	if l.Effort == "" {
+		return nil
+	}
+	return []string{flag, l.Effort}
 }

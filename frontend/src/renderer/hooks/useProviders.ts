@@ -5,6 +5,7 @@ import { providersQueryKey } from "../lib/query-keys";
 
 export type Provider = components["schemas"]["HttpdProvider"];
 export type ProviderModel = components["schemas"]["HttpdProviderModel"];
+export type ProviderEffort = components["schemas"]["HttpdProviderEffort"];
 
 export function useProviders(enabled: boolean) {
   return useQuery({

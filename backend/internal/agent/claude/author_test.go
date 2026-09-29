@@ -15,12 +15,13 @@ func TestTheCommandOfTheAuthorContinuesTheConversationWithNoRules(t *testing.T) 
 	l := launch(t)
 	l.Resume = true
 	l.Model = "opus"
+	l.Effort = "max"
 
 	argv, err := c.AuthorCommand(l)
 	if err != nil {
 		t.Fatalf("AuthorCommand() error = %v", err)
 	}
-	want := []string{"claude", "--resume", l.SessionID, "--permission-mode", "manual", "--model", "opus"}
+	want := []string{"claude", "--resume", l.SessionID, "--permission-mode", "manual", "--effort", "max", "--model", "opus"}
 	if !slices.Equal(argv, want) {
 		t.Fatalf("argv = %v, want %v", argv, want)
 	}

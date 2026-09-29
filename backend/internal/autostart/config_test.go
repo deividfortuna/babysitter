@@ -118,6 +118,27 @@ func TestAnUnknownModelIsRefused(t *testing.T) {
 	}
 }
 
+func TestAnEffortTheModelDoesNotTakeIsRefused(t *testing.T) {
+	fx := newFixture(t)
+	for _, o := range []store.WatchOverrides{{Provider: "claude", Model: "haiku", Effort: "high"}, {Effort: "high"}} {
+		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); !errors.Is(err, store.ErrInvalidRepoConfig) {
+			t.Errorf("%+v: Configure() = %v, want ErrInvalidRepoConfig", o, err)
+		}
+	}
+}
+
+func TestTheAgentIsStoredWithTheIDsOfTheManifest(t *testing.T) {
+	fx := newFixture(t)
+	o := store.WatchOverrides{Provider: "claude", Model: " Opus ", Effort: " High "}
+	cfg, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now)
+	if err != nil {
+		t.Fatalf("Configure() = %v", err)
+	}
+	if cfg.Overrides.Model != "opus" || cfg.Overrides.Effort != "high" {
+		t.Fatalf("overrides = %+v, want model opus and effort high", cfg.Overrides)
+	}
+}
+
 func TestAnUnknownProviderIsRefused(t *testing.T) {
 	fx := newFixture(t)
 	for _, provider := range []string{"gemini", "self"} {

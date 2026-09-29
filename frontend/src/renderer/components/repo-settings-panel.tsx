@@ -13,7 +13,8 @@ import {
 import { useSettings } from "@/hooks/useSettings";
 import { AgentLogo } from "@/components/agent-logo";
 import { mergeMethodLabel } from "@/components/merge-method-select";
-import { OptionSelect, type Option } from "@/components/option-select";
+import { OptionSelect, toOptions, type Option } from "@/components/option-select";
+import { EffortSelect } from "@/components/effort-select";
 import { SettingRow } from "@/components/setting-row";
 import { Meta } from "@/components/status-badges";
 import { Alert, AlertTitle } from "@/components/ui/alert";
@@ -28,6 +29,8 @@ import {
   agentLabel,
   daemonDefaults,
   defaultLabel,
+  effortDefaultLabel,
+  effortsOf,
   mergeMethodDefaultLabel,
   modelLabel,
   overrideOf,
@@ -355,14 +358,16 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
   const provider: Provider["id"] = overrides.provider || daemon?.provider || "claude";
   const models = catalog.find((item) => item.id === provider)?.models ?? [];
   const summary = effective
-    ? [agentLabel(catalog, effective.provider, effective.model), effective.approvalMode].join(" · ")
+    ? [agentLabel(catalog, effective.provider, effective.model, effective.effort), effective.approvalMode].join(" · ")
     : "";
   const save = (next: Partial<WatchOverrides>) => onChange({ ...overrides, ...next });
   const inherited = <T,>(format: (defaults: Defaults) => T) => (daemon ? format(daemon) : undefined);
   const daemonProvider = inherited((d) => catalog.find((item) => item.id === d.provider)?.label ?? d.provider);
   const modelOptions: Option<string>[] = overrides.provider
-    ? models.map((item) => ({ value: item.id, label: item.label }))
+    ? toOptions(models)
     : [{ value: "", label: defaultLabel(inherited((d) => modelLabel(catalog, d.provider, d.model))) }];
+  const efforts = overrides.provider ? effortsOf(catalog, provider, overrides.model) : [];
+  const effortDefault = effortDefaultLabel(catalog, overrides.provider ? null : daemon);
 
   return (
     <Collapsible className="border-t pt-2">
@@ -399,7 +404,7 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
               value={toSelectValue(overrides.provider)}
               disabled={pending || catalog.length === 0}
               onValueChange={(next) =>
-                save({ provider: fromSelectValue(next) as WatchOverrides["provider"], model: "" })
+                save({ provider: fromSelectValue(next) as WatchOverrides["provider"], model: "", effort: "" })
               }
             >
               <SelectTrigger id="repo-override-provider" size="sm" className="w-full">
@@ -425,9 +430,24 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
               options={modelOptions}
               value={overrides.model}
               disabled={pending || !overrides.provider || models.length === 0}
-              onChange={(model) => save({ model })}
+              onChange={(model) => save({ model, effort: "" })}
             />
           </div>
+        </SettingRow>
+        <SettingRow
+          label="Effort"
+          htmlFor="repo-override-effort"
+          description="How much the model reasons before it acts."
+        >
+          <EffortSelect
+            id="repo-override-effort"
+            className={OVERRIDE_SELECT}
+            efforts={efforts}
+            defaultLabel={effortDefault}
+            value={overrides.effort}
+            disabled={pending}
+            onChange={(effort) => save({ effort })}
+          />
         </SettingRow>
         <SettingRow
           label="Approval mode"

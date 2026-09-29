@@ -1,6 +1,8 @@
 package prwatch
 
 import (
+	_ "embed"
+	"encoding/json"
 	"fmt"
 	"slices"
 	"strconv"
@@ -10,6 +12,8 @@ import (
 var ErrBadProvider = fmt.Errorf("invalid provider")
 
 var ErrBadModel = fmt.Errorf("invalid model")
+
+var ErrBadEffort = fmt.Errorf("invalid effort")
 
 const (
 	ProviderClaude  = "claude"
@@ -21,9 +25,15 @@ func hostedProvider(p string) bool {
 	return p != ProviderSelf
 }
 
-type Model struct {
+type Effort struct {
 	ID    string
 	Label string
+}
+
+type Model struct {
+	ID      string
+	Label   string
+	Efforts []Effort
 }
 
 type Provider struct {
@@ -33,27 +43,81 @@ type Provider struct {
 	Available bool
 }
 
-var catalog = []Provider{
-	{ID: ProviderClaude, Label: "Claude", Models: []Model{
-		{ID: "", Label: "Provider default"},
-		{ID: "fable", Label: "Fable"},
-		{ID: "opus", Label: "Opus"},
-		{ID: "sonnet", Label: "Sonnet"},
-		{ID: "haiku", Label: "Haiku"},
-	}},
-	{ID: ProviderCopilot, Label: "Copilot", Models: []Model{
-		{ID: "", Label: "Provider default"},
-		{ID: "auto", Label: "Auto"},
-		{ID: "gpt-5.6-terra", Label: "GPT-5.6 Terra"},
-		{ID: "gpt-5.3-codex", Label: "GPT-5.3 Codex"},
-		{ID: "claude-haiku-4.5", Label: "Claude Haiku 4.5"},
-	}},
+//go:embed model-manifest.json
+var manifestJSON []byte
+
+type manifest struct {
+	EffortLabels map[string]string   `json:"effortLabels"`
+	EffortSets   map[string][]string `json:"effortSets"`
+	Providers    []struct {
+		ID     string `json:"id"`
+		Label  string `json:"label"`
+		Models []struct {
+			ID      string `json:"id"`
+			Label   string `json:"label"`
+			Efforts string `json:"efforts"`
+		} `json:"models"`
+	} `json:"providers"`
+}
+
+var catalog = mustParseManifest(manifestJSON)
+
+func mustParseManifest(raw []byte) []Provider {
+	providers, err := parseManifest(raw)
+	if err != nil {
+		panic(err)
+	}
+	return providers
+}
+
+func parseManifest(raw []byte) ([]Provider, error) {
+	var m manifest
+	if err := json.Unmarshal(raw, &m); err != nil {
+		return nil, fmt.Errorf("model manifest: %w", err)
+	}
+	sets, err := m.effortSets()
+	if err != nil {
+		return nil, err
+	}
+	out := make([]Provider, 0, len(m.Providers))
+	for _, p := range m.Providers {
+		provider := Provider{ID: p.ID, Label: p.Label}
+		for _, model := range p.Models {
+			if _, found := modelIn(provider.Models, model.ID); found {
+				return nil, fmt.Errorf("model manifest: model %q of %s is listed twice", model.ID, p.ID)
+			}
+			efforts, known := sets[model.Efforts]
+			if model.Efforts != "" && !known {
+				return nil, fmt.Errorf("model manifest: model %q of %s names the unknown effort set %q", model.ID, p.ID, model.Efforts)
+			}
+			provider.Models = append(provider.Models, Model{ID: model.ID, Label: model.Label, Efforts: efforts})
+		}
+		out = append(out, provider)
+	}
+	return out, nil
+}
+
+func (m manifest) effortSets() (map[string][]Effort, error) {
+	sets := make(map[string][]Effort, len(m.EffortSets))
+	for name, ids := range m.EffortSets {
+		for _, id := range ids {
+			label, known := m.EffortLabels[id]
+			if !known {
+				return nil, fmt.Errorf("model manifest: effort set %q names the unknown level %q", name, id)
+			}
+			sets[name] = append(sets[name], Effort{ID: id, Label: label})
+		}
+	}
+	return sets, nil
 }
 
 func Catalog() []Provider {
 	out := slices.Clone(catalog)
 	for i := range out {
 		out[i].Models = slices.Clone(catalog[i].Models)
+		for j := range out[i].Models {
+			out[i].Models[j].Efforts = slices.Clone(catalog[i].Models[j].Efforts)
+		}
 	}
 	return out
 }
@@ -62,12 +126,24 @@ func normalized(s string) string {
 	return strings.ToLower(strings.TrimSpace(s))
 }
 
-func modelsOf(provider string) ([]Model, bool) {
+func modelsOf(provider string) []Model {
 	i := slices.IndexFunc(catalog, func(p Provider) bool { return p.ID == provider })
 	if i < 0 {
-		return nil, false
+		return nil
 	}
-	return catalog[i].Models, true
+	return catalog[i].Models
+}
+
+func modelOf(provider, model string) (Model, bool) {
+	return modelIn(modelsOf(provider), normalized(model))
+}
+
+func modelIn(models []Model, id string) (Model, bool) {
+	i := slices.IndexFunc(models, func(known Model) bool { return known.ID == id })
+	if i < 0 {
+		return Model{}, false
+	}
+	return models[i], true
 }
 
 func normalizeProvider(s string) (string, bool) {
@@ -85,45 +161,86 @@ func normalizeProvider(s string) (string, bool) {
 
 var hostedProviders = []string{ProviderClaude, ProviderCopilot}
 
-func CheckHostedAgent(provider, model string) error {
+func NormalizeHostedAgent(provider, model, effort string) (normalModel, normalEffort string, err error) {
 	if !slices.Contains(hostedProviders, provider) {
-		return fmt.Errorf("%w: provider must be %q or %q, got %q", ErrBadProvider, ProviderClaude, ProviderCopilot, provider)
+		return "", "", fmt.Errorf("%w: provider must be %q or %q, got %q", ErrBadProvider, ProviderClaude, ProviderCopilot, provider)
 	}
-	if _, ok := normalizeModel(provider, model); !ok {
-		return modelError(provider, model)
+	chosen, err := normalizeAgent(provider, model, effort)
+	return chosen.model, chosen.effort, err
+}
+
+func normalizeAgent(provider, model, effort string) (agentChoice, error) {
+	p, ok := normalizeProvider(provider)
+	if !ok {
+		return agentChoice{}, providerError(provider)
 	}
-	return nil
+	m, err := normalizeModel(p, model)
+	if err != nil {
+		return agentChoice{}, err
+	}
+	e, err := normalizeEffort(p, m, effort)
+	if err != nil {
+		return agentChoice{}, err
+	}
+	return agentChoice{provider: p, model: m, effort: e}, nil
 }
 
 func providerError(s string) error {
 	return fmt.Errorf("%w: provider must be %q, %q or %q, got %q", ErrBadProvider, ProviderClaude, ProviderCopilot, ProviderSelf, s)
 }
 
-func normalizeModel(provider, model string) (string, bool) {
+func normalizeModel(provider, model string) (string, error) {
 	m := normalized(model)
-	if !hostedProvider(provider) {
-		return "", m == ""
+	_, offered := modelOf(provider, m)
+	accepted := offered || (!hostedProvider(provider) && m == "")
+	if !accepted {
+		return "", modelError(provider, model)
 	}
-	models, ok := modelsOf(provider)
-	if !ok {
-		return "", false
+	return m, nil
+}
+
+func normalizeEffort(provider, model, effort string) (string, error) {
+	e := normalized(effort)
+	if e == "" {
+		return "", nil
 	}
-	if !slices.ContainsFunc(models, func(known Model) bool { return known.ID == m }) {
-		return "", false
+	known, _ := modelOf(provider, model)
+	if !slices.ContainsFunc(known.Efforts, func(level Effort) bool { return level.ID == e }) {
+		return "", effortError(provider, model, effort)
 	}
-	return m, true
+	return e, nil
 }
 
 func modelError(provider, model string) error {
 	if !hostedProvider(provider) {
 		return fmt.Errorf("%w: a watch of provider %s takes no model, got %q", ErrBadModel, provider, model)
 	}
-	models, _ := modelsOf(provider)
+	names := quotedIDs(modelsOf(provider), func(m Model) string { return m.ID })
+	return fmt.Errorf("%w: model of %s must be empty or one of %s, got %q", ErrBadModel, provider, names, model)
+}
+
+func effortError(provider, model, effort string) error {
+	if !hostedProvider(provider) {
+		return fmt.Errorf("%w: a watch of provider %s takes no effort, got %q", ErrBadEffort, provider, effort)
+	}
+	subject := provider + " with its default model"
+	if m := normalized(model); m != "" {
+		subject = provider + " model " + m
+	}
+	known, _ := modelOf(provider, model)
+	if len(known.Efforts) == 0 {
+		return fmt.Errorf("%w: %s takes no effort, got %q", ErrBadEffort, subject, effort)
+	}
+	names := quotedIDs(known.Efforts, func(level Effort) string { return level.ID })
+	return fmt.Errorf("%w: effort of %s must be empty or one of %s, got %q", ErrBadEffort, subject, names, effort)
+}
+
+func quotedIDs[T any](items []T, id func(T) string) string {
 	var names []string
-	for _, m := range models {
-		if m.ID != "" {
-			names = append(names, strconv.Quote(m.ID))
+	for _, item := range items {
+		if v := id(item); v != "" {
+			names = append(names, strconv.Quote(v))
 		}
 	}
-	return fmt.Errorf("%w: model of %s must be empty or one of %s, got %q", ErrBadModel, provider, strings.Join(names, ", "), model)
+	return strings.Join(names, ", ")
 }

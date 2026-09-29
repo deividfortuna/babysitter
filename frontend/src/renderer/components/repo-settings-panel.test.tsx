@@ -173,7 +173,7 @@ test("the limit of Dependabot watches takes a whole number from 1", async () => 
 test("an override sends every override of the repository at once", async () => {
   const { repoConfigBodies, user } = renderPanel({
     ...withCheckout,
-    overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "squash", approvalsRequired: 2 },
+    overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "squash", approvalsRequired: 2 },
   });
 
   await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
@@ -184,7 +184,14 @@ test("an override sends every override of the repository at once", async () => {
   await chooseOption(user, screen.getByLabelText("Approval mode"), "auto");
   await waitFor(() => expect(repoConfigBodies).toHaveLength(1));
   expect(repoConfigBodies[0]).toEqual({
-    overrides: { provider: "", model: "", approvalMode: "auto", mergeMethod: "squash", approvalsRequired: 2 },
+    overrides: {
+      provider: "",
+      model: "",
+      effort: "",
+      approvalMode: "auto",
+      mergeMethod: "squash",
+      approvalsRequired: 2,
+    },
   });
   await waitFor(() =>
     expect(within(panel()).getByRole("button", { name: /Watch defaults/ })).toHaveTextContent("Claude · auto"),
@@ -198,7 +205,7 @@ test("an override sends every override of the repository at once", async () => {
 test("the approvals store an override only when they differ from the daemon", async () => {
   const { repoConfigBodies, user } = renderPanel({
     ...withCheckout,
-    overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "", approvalsRequired: 2 },
+    overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "", approvalsRequired: 2 },
   });
   await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
   const approvals = await screen.findByLabelText("Approvals before ready to merge");
@@ -221,7 +228,7 @@ test("each field shows the value a watch takes", async () => {
   serveApi({
     repoConfig: buildRepoConfig({
       ...withCheckout,
-      overrides: { provider: "", model: "", approvalMode: "", mergeMethod: "", includeOwn: true },
+      overrides: { provider: "", model: "", effort: "", approvalMode: "", mergeMethod: "", includeOwn: true },
     }),
     repoConfigBodies,
     settings: buildSettings({
@@ -291,6 +298,30 @@ test("the agent of the watches takes a provider and one of its models", async ()
   await chooseOption(user, screen.getByLabelText("Model"), "GPT-5.3 Codex");
   await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
   expect(repoConfigBodies[1].overrides).toMatchObject({ provider: "copilot", model: "gpt-5.3-codex" });
+});
+
+test("the effort of the watches follows the agent of the repository", async () => {
+  const { repoConfigBodies, user } = renderPanel(withCheckout);
+
+  await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
+  await waitFor(() => expect(screen.getByLabelText("Agent")).toBeEnabled());
+  expect(screen.getByLabelText("Effort")).toBeDisabled();
+  expect(screen.getByLabelText("Effort")).toHaveTextContent("Default (model default)");
+
+  await chooseOption(user, screen.getByLabelText("Agent"), /Copilot/);
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(1));
+  expect(screen.getByLabelText("Effort")).toBeDisabled();
+
+  await waitFor(() => expect(screen.getByLabelText("Model")).toBeEnabled());
+  await chooseOption(user, screen.getByLabelText("Model"), "GPT-5.3 Codex");
+  await waitFor(() => expect(screen.getByLabelText("Effort")).toBeEnabled());
+  await chooseOption(user, screen.getByLabelText("Effort"), "High");
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(3));
+  expect(repoConfigBodies[2].overrides).toMatchObject({ provider: "copilot", model: "gpt-5.3-codex", effort: "high" });
+
+  await chooseOption(user, screen.getByLabelText("Model"), "Provider default");
+  await waitFor(() => expect(repoConfigBodies).toHaveLength(4));
+  expect(repoConfigBodies[3].overrides).toMatchObject({ model: "", effort: "" });
 });
 
 test("the agent of the watches does not offer a provider whose command the daemon did not find", async () => {

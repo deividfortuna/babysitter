@@ -553,7 +553,10 @@ type fakeRunner struct {
 	err       error
 	authorErr error
 	sessionID string
+	model     string
 }
+
+func (r *fakeRunner) DefaultModel() string { return r.model }
 
 func (r *fakeRunner) NewSessionID() string {
 	if r.sessionID != "" {
@@ -575,6 +578,7 @@ func (r *fakeRunner) Command(l agent.Launch) ([]string, []string, error) {
 	if l.Model != "" {
 		argv = append(argv, "--model", l.Model)
 	}
+	argv = append(argv, agent.EffortArgs("--effort", l)...)
 	argv = append(argv, l.Hook...)
 	return argv, []string{"FAKE=1"}, nil
 }
@@ -1655,6 +1659,75 @@ func TestStartStoresModel(t *testing.T) {
 	}
 	if argv := strings.Join(fx.host.last().spec.Argv, " "); !strings.Contains(argv, "--model sonnet") {
 		t.Fatalf("launch = %s", argv)
+	}
+}
+
+func TestStartStoresTheEffortAndLaunchesTheAgentWithIt(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w, err := fx.svc.Start(context.Background(), StartRequest{
+		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
+		SourceDir: fx.dir,
+		Provider:  ProviderClaude,
+		Model:     "opus",
+		Effort:    "XHigh",
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if w.Effort != "xhigh" {
+		t.Fatalf("watch effort = %q", w.Effort)
+	}
+	if argv := strings.Join(fx.host.last().spec.Argv, " "); !strings.Contains(argv, "--effort xhigh") {
+		t.Fatalf("launch = %s", argv)
+	}
+}
+
+func TestStartRejectsAnEffortTheModelDoesNotTake(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	_, err := fx.svc.Start(context.Background(), StartRequest{
+		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
+		SourceDir: fx.dir,
+		Provider:  ProviderClaude,
+		Model:     "haiku",
+		Effort:    "high",
+	})
+	if !errors.Is(err, ErrBadEffort) {
+		t.Fatalf("Start() error = %v, want ErrBadEffort", err)
+	}
+}
+
+func TestStartChecksTheEffortAgainstTheModelOfTheRunner(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.agents[ProviderClaude] = &fakeRunner{signals: true, model: "haiku"}
+	_, err := fx.svc.Start(context.Background(), StartRequest{
+		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
+		SourceDir: fx.dir,
+		Provider:  ProviderClaude,
+		Effort:    "high",
+	})
+	if !errors.Is(err, ErrBadEffort) {
+		t.Fatalf("Start() error = %v, want ErrBadEffort", err)
+	}
+}
+
+func TestStartKeepsTheEffortOfTheDefaultModelForARunnerModelTheManifestLacks(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.agents[ProviderClaude] = &fakeRunner{signals: true, model: "claude-opus-5-5"}
+	w, err := fx.svc.Start(context.Background(), StartRequest{
+		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
+		SourceDir: fx.dir,
+		Provider:  ProviderClaude,
+		Effort:    "high",
+	})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	if w.Effort != "high" {
+		t.Fatalf("watch effort = %q", w.Effort)
 	}
 }
 

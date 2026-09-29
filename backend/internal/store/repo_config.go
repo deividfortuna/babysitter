@@ -34,6 +34,7 @@ func (a DependabotApproval) Valid() bool { return slices.Contains(DependabotAppr
 type WatchOverrides struct {
 	Provider          string
 	Model             string
+	Effort            string
 	ApprovalMode      ApprovalMode
 	MergeMethod       string
 	ApprovalsSet      bool
@@ -92,7 +93,7 @@ func (c RepoConfig) Validate() error {
 
 const repoConfigColumns = `repo_id, checkout_dir, own_since, include_drafts, dependabot_since,
 	provider, model, approval_mode, merge_method, approvals_set, approvals_count, include_existing,
-	dependabot_scope, dependabot_approval, dependabot_limit, auto_approve_rebase, include_own, keep_worktree`
+	dependabot_scope, dependabot_approval, dependabot_limit, auto_approve_rebase, include_own, keep_worktree, effort`
 
 func (s *Store) GetRepoConfig(ctx context.Context, repoID int64) (RepoConfig, error) {
 	row := s.db.QueryRowContext(ctx, "SELECT "+repoConfigColumns+" FROM repo_config WHERE repo_id = ?", repoID)
@@ -113,7 +114,7 @@ func (s *Store) SaveRepoConfig(ctx context.Context, c RepoConfig) (RepoConfig, e
 	o := c.Overrides
 	_, err := s.db.ExecContext(ctx, `
 INSERT INTO repo_config (`+repoConfigColumns+`)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (repo_id) DO UPDATE SET
 	checkout_dir = excluded.checkout_dir,
 	own_since = excluded.own_since,
@@ -131,10 +132,11 @@ ON CONFLICT (repo_id) DO UPDATE SET
 	dependabot_limit = excluded.dependabot_limit,
 	auto_approve_rebase = excluded.auto_approve_rebase,
 	include_own = excluded.include_own,
-	keep_worktree = excluded.keep_worktree`,
+	keep_worktree = excluded.keep_worktree,
+	effort = excluded.effort`,
 		c.RepoID, c.CheckoutDir, timePtrToDB(c.OwnSince), c.IncludeDrafts, timePtrToDB(c.DependabotSince),
 		o.Provider, o.Model, o.ApprovalMode, o.MergeMethod, o.ApprovalsSet, o.Approvals, o.IncludeExisting,
-		c.DependabotScope, c.DependabotApproval, c.DependabotLimit, o.AutoApproveRebase, o.IncludeOwn, o.KeepWorktree)
+		c.DependabotScope, c.DependabotApproval, c.DependabotLimit, o.AutoApproveRebase, o.IncludeOwn, o.KeepWorktree, o.Effort)
 	if isForeignKeyFailure(err) {
 		return RepoConfig{}, ErrRepoNotFound
 	}
@@ -158,7 +160,7 @@ func scanRepoConfig(sc scanner) (RepoConfig, error) {
 	)
 	err := sc.Scan(&c.RepoID, &c.CheckoutDir, &ownSince, &c.IncludeDrafts, &depSince,
 		&o.Provider, &o.Model, &o.ApprovalMode, &o.MergeMethod, &o.ApprovalsSet, &approvals, &includeExisting,
-		&c.DependabotScope, &c.DependabotApproval, &c.DependabotLimit, &autoRebase, &includeOwn, &keepWorktree)
+		&c.DependabotScope, &c.DependabotApproval, &c.DependabotLimit, &autoRebase, &includeOwn, &keepWorktree, &o.Effort)
 	if err != nil {
 		return RepoConfig{}, err
 	}

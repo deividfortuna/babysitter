@@ -653,6 +653,11 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE watches ADD COLUMN keep_worktree INTEGER NOT NULL DEFAULT 0;
 	UPDATE watches SET keep_worktree = (SELECT keep_worktree FROM settings WHERE id = 1);
 	`,
+	`
+	ALTER TABLE settings ADD COLUMN effort TEXT NOT NULL DEFAULT '';
+	ALTER TABLE repo_config ADD COLUMN effort TEXT NOT NULL DEFAULT '';
+	ALTER TABLE watches ADD COLUMN effort TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

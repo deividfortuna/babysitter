@@ -12,6 +12,7 @@ import (
 type WatchOverrides struct {
 	Provider          string        `json:"provider" enum:",claude,copilot" description:"The AI provider of a watch on the repository; empty takes the provider of the daemon"`
 	Model             string        `json:"model" description:"The model of that provider; empty takes the default of the provider. Needs a provider"`
+	Effort            string        `json:"effort" description:"The effort level of that model, one the providers route lists for it; empty takes the default of the model. Needs a provider"`
 	ApprovalMode      string        `json:"approvalMode" enum:",auto,manual" description:"Who releases the work of a turn of the agent; empty takes the setting of the daemon"`
 	MergeMethod       string        `json:"mergeMethod" enum:",squash,merge,rebase" description:"The merge method of the watches; empty takes the setting of the daemon"`
 	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch"`
@@ -68,7 +69,7 @@ func repoConfigOut(repo store.Repo, c store.RepoConfig) RepoConfig {
 		AutoStartMine: c.OwnOn(), AutoStartMineSince: c.OwnSince, IncludeDrafts: c.IncludeDrafts,
 		AutoWatchDependabot: c.DependabotOn(), AutoWatchSince: c.DependabotSince,
 		Overrides: WatchOverrides{
-			Provider: o.Provider, Model: o.Model, ApprovalMode: string(o.ApprovalMode), MergeMethod: o.MergeMethod,
+			Provider: o.Provider, Model: o.Model, Effort: o.Effort, ApprovalMode: string(o.ApprovalMode), MergeMethod: o.MergeMethod,
 			ApprovalsRequired: Optional[int]{Set: o.ApprovalsSet, Value: o.Approvals}, IncludeExisting: o.IncludeExisting,
 			AutoApproveRebase: o.AutoApproveRebase, IncludeOwn: o.IncludeOwn, KeepWorktree: o.KeepWorktree,
 		},
@@ -83,7 +84,7 @@ func (req UpdateRepoConfigRequest) change() autostart.Change {
 	}
 	if o := req.Overrides; o != nil {
 		c.Overrides = &store.WatchOverrides{
-			Provider: o.Provider, Model: o.Model, ApprovalMode: store.ApprovalMode(o.ApprovalMode), MergeMethod: o.MergeMethod,
+			Provider: o.Provider, Model: o.Model, Effort: o.Effort, ApprovalMode: store.ApprovalMode(o.ApprovalMode), MergeMethod: o.MergeMethod,
 			ApprovalsSet: o.ApprovalsRequired.Set, Approvals: o.ApprovalsRequired.Value, IncludeExisting: o.IncludeExisting,
 			AutoApproveRebase: o.AutoApproveRebase, IncludeOwn: o.IncludeOwn, KeepWorktree: o.KeepWorktree,
 		}

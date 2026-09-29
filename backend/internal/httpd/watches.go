@@ -92,7 +92,7 @@ func (a *api) handleStartWatch(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	wt, err := a.watches.Start(r.Context(), prwatch.StartRequest{
-		Target: target, Provider: req.Provider, Model: req.Model, SourceDir: req.SourceDir,
+		Target: target, Provider: req.Provider, Model: req.Model, Effort: req.Effort, SourceDir: req.SourceDir,
 		IncludeExisting: req.IncludeExisting, IncludeOwn: req.IncludeOwn,
 		ApprovalsRequired: approvalsIn(req.ApprovalsRequired),
 		MergeMethod:       req.MergeMethod,

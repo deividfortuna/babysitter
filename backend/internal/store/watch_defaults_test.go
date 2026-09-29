@@ -7,6 +7,8 @@ import (
 	"testing"
 )
 
+const schemaBeforeKeepWorktree = 28
+
 func TestAnUpgradedWatchKeepsTheWorktreeRuleOfTheDaemon(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -15,7 +17,7 @@ func TestAnUpgradedWatchKeepsTheWorktreeRuleOfTheDaemon(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if err := migrateTo(ctx, db, len(migrations)-1); err != nil {
+	if err := migrateTo(ctx, db, schemaBeforeKeepWorktree); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := db.ExecContext(ctx, "UPDATE settings SET keep_worktree = 1 WHERE id = 1"); err != nil {

@@ -100,7 +100,7 @@ func TestWatchStartLeavesTheAgentAndTheWorktreeToTheChainWhenNobodyTypedThem(t *
 	if _, err := runWatch(t, d, "start", "octo/hello#3"); err != nil {
 		t.Fatalf("watch start error = %v", err)
 	}
-	for _, field := range []string{"provider", "model", "keepWorktree"} {
+	for _, field := range []string{"provider", "model", "effort", "keepWorktree"} {
 		if _, named := d.starts[0][field]; named {
 			t.Fatalf("body = %v, want no %s field so the repository, then the daemon, decides", d.starts[0], field)
 		}
@@ -132,6 +132,18 @@ func TestWatchStartSendsTheWorktreeRuleThatWasTyped(t *testing.T) {
 	}
 }
 
+func TestWatchStartSendsTheEffortThatWasTyped(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	if _, err := runWatch(t, d, "start", "octo/hello#3", "--model", "opus", "--effort", "max"); err != nil {
+		t.Fatalf("watch start error = %v", err)
+	}
+	if body := d.starts[0]; body["model"] != "opus" || body["effort"] != "max" {
+		t.Fatalf("body = %v, want opus at max effort", body)
+	}
+}
+
 func TestSettingsSetChangesTheAgentOfANewWatch(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
@@ -148,6 +160,32 @@ func TestSettingsSetChangesTheAgentOfANewWatch(t *testing.T) {
 	}
 	if got := d.settingsPut[1]; got["provider"] != "copilot" || got["model"] != "auto" {
 		t.Fatalf("body = %v, want copilot with the model of the flag", got)
+	}
+
+	if _, err := runSettings(t, d, "set", "--model", "gpt-5.3-codex", "--effort", "xhigh"); err != nil {
+		t.Fatalf("settings set error = %v", err)
+	}
+	if got := d.settingsPut[2]; got["model"] != "gpt-5.3-codex" || got["effort"] != "xhigh" {
+		t.Fatalf("body = %v, want the model and the effort of the flags", got)
+	}
+}
+
+func TestSettingsSetGivesANewModelItsDefaultEffort(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	if _, err := runSettings(t, d, "set", "--effort", "high"); err != nil {
+		t.Fatalf("settings set error = %v", err)
+	}
+	if got := d.settingsPut[0]; got["effort"] != "high" {
+		t.Fatalf("body = %v, want the effort of the flag", got)
+	}
+
+	if _, err := runSettings(t, d, "set", "--model", "haiku"); err != nil {
+		t.Fatalf("settings set error = %v", err)
+	}
+	if got := d.settingsPut[1]; got["model"] != "haiku" || got["effort"] != "" {
+		t.Fatalf("body = %v, want haiku at its default effort", got)
 	}
 }
 

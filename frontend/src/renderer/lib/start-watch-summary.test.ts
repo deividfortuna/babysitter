@@ -1,15 +1,15 @@
 import { expect, test } from "vite-plus/test";
 import { settingsSummary } from "./start-watch-summary";
 
-const defaults = { agent: "Claude", model: "", approvalMode: "manual", approvals: "", mergeMethod: "" } as const;
+const defaults = { agent: "Claude", approvalMode: "manual", approvals: "", mergeMethod: "" } as const;
 
 test("names the defaults of a new watch", () => {
   expect(settingsSummary(defaults)).toBe("Claude · manual · rule of the base branch · repository default");
 });
 
-test("names the model after the agent when it is not the default", () => {
-  expect(settingsSummary({ ...defaults, model: "Sonnet" })).toBe(
-    "Claude Sonnet · manual · rule of the base branch · repository default",
+test("starts with the label of the agent as it is given", () => {
+  expect(settingsSummary({ ...defaults, agent: "Claude Opus · extra high effort" })).toBe(
+    "Claude Opus · extra high effort · manual · rule of the base branch · repository default",
   );
 });
 

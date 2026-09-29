@@ -23,11 +23,15 @@ import (
 	"github.com/deividfortuna/babysitter/internal/textx"
 )
 
-func providerLabel(provider, model string) string {
-	if model == "" {
-		return provider
+func providerLabel(provider, model, effort string) string {
+	var details []string
+	if model != "" {
+		details = append(details, model)
 	}
-	return provider + " (" + model + ")"
+	if effort != "" {
+		details = append(details, effort+" effort")
+	}
+	return provider + suffix(" (", strings.Join(details, ", "), ")")
 }
 
 type watchOutput httpd.Watch
@@ -37,7 +41,7 @@ func (w watchOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(out, "PR:        %s#%d %s\n", w.Repo, w.Number, w.Title)
 	fmt.Fprintf(out, "URL:       %s\n", w.URL)
 	fmt.Fprintf(out, "Branch:    %s -> %s\n", w.HeadRef, w.BaseRef)
-	fmt.Fprintf(out, "Provider:  %s\n", providerLabel(w.Provider, w.Model))
+	fmt.Fprintf(out, "Provider:  %s\n", providerLabel(w.Provider, w.Model, w.Effort))
 	fmt.Fprintf(out, "Status:    %s%s\n", w.Status, suffix(" (", string(w.StopReason), ")"))
 	fmt.Fprintf(out, "Head:      %s\n", orDash(textx.ShortSHA(w.HeadSHA)))
 	fmt.Fprintf(out, "Checks:    %s\n", checks.Summarize(w.CheckStates, w.HeadSHA, w.GreenSHA))
@@ -148,7 +152,7 @@ func (l watchListOutput) writeText(out io.Writer) error {
 	tw := tabwriter.NewWriter(out, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(tw, "ID\tPULL REQUEST\tBRANCH\tPROVIDER\tSTATUS\tAGENT\tHEAD\tCHECKS\tLAST POLL")
 	for _, w := range l.Watches {
-		fmt.Fprintf(tw, "%d\t%s#%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", w.ID, w.Repo, w.Number, w.HeadRef, providerLabel(w.Provider, w.Model), w.Status, agentWord(w), textx.ShortSHA(w.HeadSHA), checks.Summarize(w.CheckStates, w.HeadSHA, w.GreenSHA), timeOrDash(w.LastPollAt))
+		fmt.Fprintf(tw, "%d\t%s#%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", w.ID, w.Repo, w.Number, w.HeadRef, providerLabel(w.Provider, w.Model, w.Effort), w.Status, agentWord(w), textx.ShortSHA(w.HeadSHA), checks.Summarize(w.CheckStates, w.HeadSHA, w.GreenSHA), timeOrDash(w.LastPollAt))
 	}
 	return tw.Flush()
 }
@@ -251,6 +255,7 @@ func newWatchStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		repo            string
 		provider        string
 		model           string
+		effort          string
 		includeExisting bool
 		includeOwn      bool
 		approvals       string
@@ -310,7 +315,7 @@ A flag you do not type takes the override of the repository
 			}
 			var w httpd.Watch
 			req := httpd.StartWatchRequest{
-				Target: target, Repo: repo, Provider: provider, Model: model, SourceDir: dir,
+				Target: target, Repo: repo, Provider: provider, Model: model, Effort: effort, SourceDir: dir,
 				MergeMethod:       typed(cmd, "merge-method", &mergeMethod),
 				IncludeExisting:   typed(cmd, "include-existing", &includeExisting),
 				IncludeOwn:        typed(cmd, "include-own", &includeOwn),
@@ -344,6 +349,7 @@ A flag you do not type takes the override of the repository
 	cmd.Flags().StringVar(&repo, "repo", "", "repository of a bare number, as owner/name")
 	cmd.Flags().StringVar(&provider, "provider", "", "AI provider that babysits the watch: claude, copilot, or self when your own session is the agent and takes each message with 'watch next'; without the flag the repository, then the daemon, decides")
 	cmd.Flags().StringVar(&model, "model", "", "model of that provider, empty for the model of the layer that gives the provider; none for self")
+	cmd.Flags().StringVar(&effort, "effort", "", "effort level of that model, for example low, medium or high; empty for the effort of the layer that gives the model; none for self")
 	cmd.Flags().BoolVar(&includeExisting, "include-existing", false, "also report the review items that already exist; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&includeOwn, "include-own", false, "also report your own comments to the agent, for a repository you review yourself; without the flag the repository, then the daemon, decides")
 	cmd.Flags().StringVar(&approvals, "approvals", "", "approvals the pull request needs before it is ready to merge: a number, 0 for none, or 'branch' for the rule of the base branch; without the flag the repository, then the daemon, decides")
