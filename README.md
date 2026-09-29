@@ -1036,10 +1036,10 @@ reply that names one of the old commits then names the rebased one.
 With the branch update `merge`, the daemon merges the pull request
 branch into the work instead: no commit is rewritten, the replies stay
 as they were, and a merge that conflicts goes to the agent the same
-way. In `manual`, a retry of work you never approved is refused. Work the daemon cannot rebase goes to the agent: a rebase
+way. In `manual`, a retry of work you never approved is refused. Work the daemon cannot rebase or merge goes to the agent: a rebase or merge
 that conflicts, at once, and a rewrite that lacks commits of the pull
 request branch, on a retry. These are the only failed pushes the agent
-hears about. The row of a rebase that conflicts names no retry, because
+hears about. The row of a rebase or merge that conflicts names no retry, because
 only the agent can resolve it. Its next turn brings the work up to the
 branch and takes over the replies that did not go out. The agent can
 record a reply again for the same comment, and the new reply takes the

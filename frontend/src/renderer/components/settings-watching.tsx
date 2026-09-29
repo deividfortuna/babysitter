@@ -235,8 +235,8 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
           <FieldContent>
             <FieldLabel htmlFor="auto-rebase">Approve a clean rebase or merge on its own</FieldLabel>
             <FieldDescription>
-              Work you approved does not ask again because the branch moved under it. A rebase that conflicts always
-              asks. No effect in auto.
+              Work you approved does not ask again because the branch moved under it. A rebase or merge that conflicts
+              always asks. No effect in auto.
             </FieldDescription>
           </FieldContent>
           <Switch

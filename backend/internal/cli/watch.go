@@ -723,8 +723,8 @@ func newWatchRetryCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		Long: `The daemon pushes the commits of each turn of the agent and posts its
 replies. When that fails, the activity of the watch says why and names
 this command. A retry pushes again, and when the pull request branch
-moved since, it rebases a turn that only added commits onto it first.
-Work the daemon cannot rebase, a rebase that conflicts or a rewrite
+moved since, it rebases a turn that only added commits onto it first, or merges the branch into the work when the watch merges.
+Work the daemon cannot rebase or merge, a rebase or merge that conflicts or a rewrite
 that lacks commits of the branch, goes to the agent, which brings it up
 to the branch in its next turn. Without a number, the newest proposal
 that failed is taken.`,
