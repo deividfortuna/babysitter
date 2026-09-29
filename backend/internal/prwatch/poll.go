@@ -50,48 +50,40 @@ func (s *Service) agentStatus(ctx context.Context, w store.Watch, pending []stor
 	return agentStatus{session: session, untold: untold(pending), proposal: proposal, author: s.authorBlocker(w)}, nil
 }
 
-var workingStates = []agent.State{agent.StateStarting, agent.StateActive}
-
-func (a agentStatus) working() bool { return slices.Contains(workingStates, a.session.State) }
-
 func (a agentStatus) done() bool {
 	_, busy := agentBusyWord(a.session.State)
 	return !busy && a.untold == "" && a.proposal == "" && a.author == ""
 }
 
 func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch) error {
-	s.schedule.calm(w.ID)
-	p, err := s.pollOnce(ctx, client, w)
-	s.schedule.polled(w.ID, p, s.cadence())
-	return err
-}
-
-func (s *Service) pollOnce(ctx context.Context, client *github.Client, w store.Watch) (pace, error) {
+	id, started, paced := w.ID, s.now(), keepPace
+	s.schedule.calm(id)
+	defer func() { s.schedule.polled(id, started, paced, s.cadence()) }()
 	w, err := s.store.GetWatch(ctx, w.ID)
 	if err != nil || w.Status != store.WatchActive {
-		return keepPace, err
+		return err
 	}
 	now := s.now()
 	snap, err := snapshot.Collect(ctx, client, s.store, target(w), s.watchOptions(w))
 	if err != nil {
-		return keepPace, s.pollFailed(ctx, w, err, now)
+		return s.pollFailed(ctx, w, err, now)
 	}
 	p, err := s.refresh(ctx, w, snap, now)
 	if err != nil {
-		return keepPace, err
+		return err
 	}
 	w = p.watch
 	if w, err = s.followUpdateType(ctx, w, snap); err != nil {
-		return keepPace, err
+		return err
 	}
 	if len(p.inserted) > 0 {
 		if err := s.store.SetWatchHeartbeat(ctx, w.ID, now); err != nil {
-			return keepPace, err
+			return err
 		}
 	}
 	if reason, ok := p.ended(); ok {
 		_, err := s.stop(ctx, w.ID, reason, "", StopOptions{})
-		return keepPace, err
+		return err
 	}
 	if err := s.rebaseStale(ctx, w); err != nil {
 		s.log.Error("rebase the proposal that waits", "watch", w.ID, "err", err)
@@ -101,29 +93,29 @@ func (s *Service) pollOnce(ctx context.Context, client *github.Client, w store.W
 	}
 	pending, err := s.tell(ctx, client, w)
 	if err != nil {
-		return keepPace, err
+		return err
 	}
 	state, err := s.agentStatus(ctx, w, pending)
 	if err != nil {
-		return keepPace, err
+		return err
 	}
 	if err := s.rereview(ctx, client, w, snap, state); err != nil {
-		return keepPace, err
+		return err
 	}
 	if err := s.dependabotPolicy(ctx, client, w, snap, state); err != nil {
 		s.log.Error("apply the Dependabot policy", "watch", w.ID, "pr", prLabel(w), "err", err)
 	}
 	if err := s.assess(ctx, w, snap, state, p.newHead()); err != nil {
-		return keepPace, err
+		return err
 	}
 	if merged, err := s.mergeWhenReady(ctx, client, w, snap, p.next, state); err != nil || merged {
-		return keepPace, err
+		return err
 	}
-	next := p.pace(state)
+	paced = p.pace(snap, state)
 	if len(p.inserted) == 0 {
-		return next, s.maybeHeartbeat(ctx, w, p.next, now)
+		return s.maybeHeartbeat(ctx, w, p.next, now)
 	}
-	return next, nil
+	return nil
 }
 
 type pass struct {
@@ -146,12 +138,9 @@ func (p pass) ended() (store.StopReason, bool) {
 
 func (p pass) newHead() bool { return hasKind(p.inserted, store.ActivityCommit) }
 
-func (p pass) quiet(state agentStatus) bool {
-	return len(p.inserted) == 0 && !checks.AnyPending(p.next.Checks) && !state.working()
-}
-
-func (p pass) pace(state agentStatus) pace {
-	if p.quiet(state) {
+func (p pass) pace(snap *snapshot.Snapshot, state agentStatus) pace {
+	quiet := len(p.inserted) == 0 && snap.Checks.AllTerminal && !state.session.State.Working()
+	if quiet {
 		return slowDown
 	}
 	return speedUp

@@ -89,9 +89,9 @@ func TestSaveSettingsRejectsValuesTheDaemonCannotRun(t *testing.T) {
 	ctx := context.Background()
 	approvals := -1
 	cases := map[string]Settings{
-		"poll interval below the floor":  {PollInterval: time.Second, WatchInterval: time.Minute, WatchMaxInterval: time.Hour},
-		"watch interval below the floor": {PollInterval: time.Minute, WatchInterval: time.Second, WatchMaxInterval: time.Hour},
-		"poll interval above the roof":   {PollInterval: 25 * time.Hour, WatchInterval: time.Minute, WatchMaxInterval: time.Hour},
+		"poll interval below the floor":  {PollInterval: time.Second, WatchInterval: time.Minute},
+		"watch interval below the floor": {PollInterval: time.Minute, WatchInterval: time.Second},
+		"poll interval above the roof":   {PollInterval: 25 * time.Hour, WatchInterval: time.Minute},
 		"watch interval above the roof":  {PollInterval: time.Minute, WatchInterval: 25 * time.Hour},
 		"merge method unknown":           {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, MergeMethod: "fast-forward"},
 		"approvals below zero":           {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, ApprovalsRequired: &approvals},

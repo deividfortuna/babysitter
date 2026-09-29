@@ -117,6 +117,7 @@ type Service struct {
 }
 
 func New(d Deps, opts ...Option) *Service {
+	defaults := store.DefaultSettings()
 	s := &Service{
 		store:         d.Store,
 		newClient:     d.NewClient,
@@ -130,9 +131,9 @@ func New(d Deps, opts ...Option) *Service {
 		bus:           d.Bus,
 		agents:        map[string]agent.Runner{},
 		host:          d.Host,
-		interval:      timex.NewInterval(3 * time.Minute),
-		maxInterval:   timex.NewInterval(defaultMaxInterval),
-		schedule:      newSchedule(time.Now),
+		interval:      timex.NewInterval(defaults.WatchInterval),
+		maxInterval:   timex.NewInterval(defaults.WatchMaxInterval),
+		schedule:      newSchedule(),
 		heartbeat:     time.Hour,
 		now:           time.Now,
 		alive:         processalive.Alive,
@@ -261,7 +262,7 @@ func (s *Service) untilNextPoll(reached bool) time.Duration {
 	if stalled {
 		return c.shortest
 	}
-	return s.schedule.untilNext(c)
+	return s.schedule.untilNext(s.now(), c)
 }
 
 func (s *Service) Kick(id int64) {
@@ -313,21 +314,21 @@ func (s *Service) pass(ctx context.Context) bool {
 		s.log.Error("list watches", "err", err)
 		return false
 	}
+	s.schedule.keep(watchIDs(watches))
+	due := s.dueWatches(watches)
+	if len(due) == 0 {
+		return true
+	}
 	client, err := s.newClient(ctx)
 	if err != nil {
 		s.log.Error("github client", "err", err)
 		return false
 	}
-	s.schedule.keep(watchIDs(watches))
-	c := s.cadence()
 	var g errgroup.Group
 	g.SetLimit(passWidth)
-	for _, w := range watches {
+	for _, w := range due {
 		if ctx.Err() != nil || s.guard.Paused() {
 			break
-		}
-		if !s.schedule.due(w.ID, c) {
-			continue
 		}
 		g.Go(func() error {
 			s.passOne(ctx, client, w)
@@ -336,6 +337,17 @@ func (s *Service) pass(ctx context.Context) bool {
 	}
 	_ = g.Wait()
 	return true
+}
+
+func (s *Service) dueWatches(watches []store.Watch) []store.Watch {
+	now, c := s.now(), s.cadence()
+	var due []store.Watch
+	for _, w := range watches {
+		if s.schedule.due(w.ID, now, c) {
+			due = append(due, w)
+		}
+	}
+	return due
 }
 
 func watchIDs(watches []store.Watch) map[int64]bool {

@@ -26,6 +26,8 @@ func (s State) NeedsInput() bool { return s == StateWaitingInput || s == StateBl
 
 func (s State) EndsTurn() bool { return s == StateIdle || s == StateExited }
 
+func (s State) Working() bool { return s == StateStarting || s == StateActive }
+
 const (
 	EventSessionStart      = "session-start"
 	EventUserPromptSubmit  = "user-prompt-submit"

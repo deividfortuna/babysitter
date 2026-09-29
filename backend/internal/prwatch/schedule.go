@@ -6,8 +6,6 @@ import (
 	"time"
 )
 
-const defaultMaxInterval = 15 * time.Minute
-
 type cadence struct {
 	shortest time.Duration
 	longest  time.Duration
@@ -17,13 +15,11 @@ func (c cadence) clamp(d time.Duration) time.Duration {
 	return min(max(d, c.shortest), c.longest)
 }
 
-func (c cadence) adaptive() bool { return c.longest > c.shortest }
-
 func (c cadence) String() string {
-	if !c.adaptive() {
-		return "every " + c.shortest.String()
+	if c.longest == c.shortest {
+		return "every " + interval(c.shortest)
 	}
-	return fmt.Sprintf("every %s, up to %s when quiet", c.shortest, c.longest)
+	return fmt.Sprintf("every %s, up to %s when quiet", interval(c.shortest), interval(c.longest))
 }
 
 type pace int
@@ -51,26 +47,25 @@ func (sl slot) slower(c cadence) time.Duration {
 
 type schedule struct {
 	mu    sync.Mutex
-	now   func() time.Time
 	slots map[int64]slot
 }
 
-func newSchedule(now func() time.Time) *schedule {
-	return &schedule{now: now, slots: map[int64]slot{}}
+func newSchedule() *schedule {
+	return &schedule{slots: map[int64]slot{}}
 }
 
-func (sc *schedule) due(id int64, c cadence) bool {
+func (sc *schedule) due(id int64, now time.Time, c cadence) bool {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	sl, ok := sc.slots[id]
-	return !ok || !sc.now().Before(sl.next(c))
+	return !ok || !now.Before(sl.next(c))
 }
 
-func (sc *schedule) polled(id int64, p pace, c cadence) {
+func (sc *schedule) polled(id int64, at time.Time, p pace, c cadence) {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
 	sl := sc.slots[id]
-	sl.polled = sc.now()
+	sl.polled = at
 	switch p {
 	case speedUp:
 		sl.wait = c.shortest
@@ -126,10 +121,9 @@ func (sc *schedule) keep(active map[int64]bool) {
 	}
 }
 
-func (sc *schedule) untilNext(c cadence) time.Duration {
+func (sc *schedule) untilNext(now time.Time, c cadence) time.Duration {
 	sc.mu.Lock()
 	defer sc.mu.Unlock()
-	now := sc.now()
 	wait := c.shortest
 	for _, sl := range sc.slots {
 		wait = min(wait, sl.next(c).Sub(now))
