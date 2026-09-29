@@ -200,8 +200,6 @@ app.on("browser-window-focus", cancelBounce);
 
 ipcMain.handle(NOTIFICATIONS_SHOW_CHANNEL, (_event, notification: DesktopNotification) => {
   const win = BrowserWindow.getAllWindows()[0];
-  if (win?.isFocused()) return;
-
   const shows = presentation(notification, Notification.isSupported(), process.platform);
   if (shows.toast) {
     const toast = new Notification({

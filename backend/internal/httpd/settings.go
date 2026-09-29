@@ -42,14 +42,15 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		IncludeOwn:        req.IncludeOwn,
 		KeepWorktree:      req.KeepWorktree,
 
-		NotificationsEnabled:   req.NotificationsEnabled,
-		NotificationSound:      req.NotificationSound,
-		MutedNotificationKinds: mutedKindsIn(req.MutedNotificationKinds),
-		ApprovalMode:           store.ApprovalMode(req.ApprovalMode),
-		AutoApproveRebase:      req.AutoApproveRebase,
-		Provider:               req.Provider,
-		Model:                  model,
-		Effort:                 effort,
+		NotificationsEnabled:        req.NotificationsEnabled,
+		NotificationsBackgroundOnly: req.NotificationsBackgroundOnly,
+		MutedNotificationKinds:      kindsIn(req.MutedNotificationKinds),
+		SilentNotificationKinds:     kindsIn(req.SilentNotificationKinds),
+		ApprovalMode:                store.ApprovalMode(req.ApprovalMode),
+		AutoApproveRebase:           req.AutoApproveRebase,
+		Provider:                    req.Provider,
+		Model:                       model,
+		Effort:                      effort,
 	})
 	if storeErrors.write(w, err) {
 		return
@@ -62,27 +63,28 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 
 func settingsOut(s store.Settings) Settings {
 	return Settings{
-		PollIntervalSeconds:     int(s.PollInterval.Seconds()),
-		WatchIntervalSeconds:    int(s.WatchInterval.Seconds()),
-		WatchMaxIntervalSeconds: int(s.WatchMaxInterval.Seconds()),
-		CheckMaxIntervalSeconds: int(s.CheckMaxInterval.Seconds()),
-		ApprovalsRequired:       s.ApprovalsRequired,
-		MergeMethod:             s.MergeMethod,
-		IncludeExisting:         s.IncludeExisting,
-		IncludeOwn:              s.IncludeOwn,
-		KeepWorktree:            s.KeepWorktree,
-		NotificationsEnabled:    s.NotificationsEnabled,
-		NotificationSound:       s.NotificationSound,
-		MutedNotificationKinds:  mutedKindsOut(s.MutedNotificationKinds),
-		ApprovalMode:            string(s.ApprovalMode),
-		AutoApproveRebase:       s.AutoApproveRebase,
-		Provider:                s.Provider,
-		Model:                   s.Model,
-		Effort:                  s.Effort,
+		PollIntervalSeconds:         int(s.PollInterval.Seconds()),
+		WatchIntervalSeconds:        int(s.WatchInterval.Seconds()),
+		WatchMaxIntervalSeconds:     int(s.WatchMaxInterval.Seconds()),
+		CheckMaxIntervalSeconds:     int(s.CheckMaxInterval.Seconds()),
+		ApprovalsRequired:           s.ApprovalsRequired,
+		MergeMethod:                 s.MergeMethod,
+		IncludeExisting:             s.IncludeExisting,
+		IncludeOwn:                  s.IncludeOwn,
+		KeepWorktree:                s.KeepWorktree,
+		NotificationsEnabled:        s.NotificationsEnabled,
+		NotificationsBackgroundOnly: s.NotificationsBackgroundOnly,
+		MutedNotificationKinds:      kindsOut(s.MutedNotificationKinds),
+		SilentNotificationKinds:     kindsOut(s.SilentNotificationKinds),
+		ApprovalMode:                string(s.ApprovalMode),
+		AutoApproveRebase:           s.AutoApproveRebase,
+		Provider:                    s.Provider,
+		Model:                       s.Model,
+		Effort:                      s.Effort,
 	}
 }
 
-func mutedKindsIn(kinds []string) []store.NotificationKind {
+func kindsIn(kinds []string) []store.NotificationKind {
 	out := make([]store.NotificationKind, 0, len(kinds))
 	for _, kind := range kinds {
 		out = append(out, store.NotificationKind(kind))
@@ -90,7 +92,7 @@ func mutedKindsIn(kinds []string) []store.NotificationKind {
 	return out
 }
 
-func mutedKindsOut(kinds []store.NotificationKind) []string {
+func kindsOut(kinds []store.NotificationKind) []string {
 	out := make([]string, 0, len(kinds))
 	for _, kind := range kinds {
 		out = append(out, string(kind))

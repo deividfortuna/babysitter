@@ -5,7 +5,7 @@ export type NotificationKind = components["schemas"]["HttpdNotification"]["kind"
 export const NOTIFICATION_KINDS: readonly NotificationKind[] = ["agent", "review", "checks", "watch", "merge", "auto"];
 
 export type DesktopNotification = {
-  id: number;
+  id?: number;
   title: string;
   body: string;
   kind?: string;
@@ -15,7 +15,7 @@ export type DesktopNotification = {
 };
 
 export type NotificationClick = {
-  id: number;
+  id?: number;
   watchId?: number;
 };
 
@@ -43,13 +43,21 @@ export function shouldReplaceBounce(pending: { critical: boolean } | null): bool
   return pending === null || !pending.critical;
 }
 
-export function isKindMuted(kind: string | undefined, muted: readonly string[] | null | undefined): boolean {
-  return kind !== undefined && (muted ?? []).includes(kind);
+export function hasKind(kind: string | undefined, kinds: readonly string[] | null | undefined): boolean {
+  return kind !== undefined && (kinds ?? []).includes(kind);
 }
 
-export function withKindMuted(muted: readonly string[], kind: NotificationKind, mute: boolean): NotificationKind[] {
-  const rest = muted.filter((k) => k !== kind) as NotificationKind[];
-  return mute ? [...rest, kind] : rest;
+export function withKind(kinds: readonly string[], kind: NotificationKind, listed: boolean): NotificationKind[] {
+  const rest = kinds.filter((k) => k !== kind) as NotificationKind[];
+  return listed ? [...rest, kind] : rest;
+}
+
+export function testNotification(): DesktopNotification {
+  return {
+    title: "babysitter",
+    body: "A notification of the system looks like this.",
+    silent: false,
+  };
 }
 
 export function shouldToast(notification: { title?: string; kind?: string }, supported: boolean): boolean {

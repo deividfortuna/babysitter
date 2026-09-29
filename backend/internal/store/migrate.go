@@ -665,6 +665,12 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	`
 	ALTER TABLE settings ADD COLUMN check_max_interval_ms INTEGER NOT NULL DEFAULT 900000;
 	`,
+	`
+	ALTER TABLE settings ADD COLUMN silent_notification_kinds TEXT NOT NULL DEFAULT '';
+	ALTER TABLE settings ADD COLUMN notifications_background_only INTEGER NOT NULL DEFAULT 1;
+	UPDATE settings SET silent_notification_kinds = 'agent,review,checks,watch,merge,auto' WHERE notification_sound = 0;
+	ALTER TABLE settings DROP COLUMN notification_sound;
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

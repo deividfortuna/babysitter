@@ -174,20 +174,17 @@ test("a stop declines the proposal that waits", async () => {
   await waitFor(() => expect(alert).toHaveTextContent("Its 2 commits and 2 replies never go out."));
 });
 
-test("the Watching panel holds the approval mode and the clean rebase", async () => {
+test("the Agent page holds the approval mode and the clean rebase", async () => {
   const savedSettings: Settings[] = [];
   serveApi({ settings: buildSettings({ approvalMode: "manual" }), savedSettings });
   const user = userEvent.setup();
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  await user.click(screen.getByRole("button", { name: "Watching" }));
+  renderWithProviders(<SettingsDialog open category="agent" onOpenChange={vi.fn()} />);
 
-  const mode = await screen.findByLabelText("Approval mode");
-  expect(mode).toHaveTextContent("manual");
+  expect(await screen.findByRole("radio", { name: /Manual/ })).toBeChecked();
   const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
-  await user.click(screen.getByRole("button", { name: "Save" }));
 
   await waitFor(() => expect(savedSettings).toHaveLength(1));
   expect(savedSettings[0]).toMatchObject({ approvalMode: "manual", autoApproveRebase: true });
@@ -195,12 +192,11 @@ test("the Watching panel holds the approval mode and the clean rebase", async ()
 
 test("the clean rebase means nothing in auto", async () => {
   serveApi({ settings: buildSettings({ approvalMode: "auto" }) });
-  const user = userEvent.setup();
 
-  renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
-  await user.click(screen.getByRole("button", { name: "Watching" }));
+  renderWithProviders(<SettingsDialog open category="agent" onOpenChange={vi.fn()} />);
 
   expect(await screen.findByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(screen.getByText("Auto approves every turn, so this has no effect.")).toBeVisible();
 });
 
 test("the panel sets the clean rebase of one watch", async () => {

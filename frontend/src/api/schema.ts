@@ -1203,8 +1203,8 @@ export interface components {
             model: string;
             /** @description The notification kinds that reach nobody. The history keeps them either way */
             mutedNotificationKinds: ("agent" | "review" | "checks" | "watch" | "merge" | "auto")[] | null;
-            /** @description A notification makes a sound */
-            notificationSound: boolean;
+            /** @description The app shows a notification only while none of its windows has the focus */
+            notificationsBackgroundOnly: boolean;
             /** @description What happens on a watched pull request is shown as a notification of the operating system */
             notificationsEnabled: boolean;
             /** @description Time between passes of the repository watcher */
@@ -1214,6 +1214,8 @@ export interface components {
              * @enum {string}
              */
             provider: "claude" | "copilot";
+            /** @description The notification kinds that arrive without a sound */
+            silentNotificationKinds: ("agent" | "review" | "checks" | "watch" | "merge" | "auto")[] | null;
             /** @description Time between polls of a watched pull request */
             watchIntervalSeconds: number;
             /** @description Longest time between polls of a watched pull request where nothing happens. After each quiet poll the time doubles up to this value; activity, running checks or a working agent bring it back to watchIntervalSeconds. The same value as watchIntervalSeconds keeps one fixed interval */

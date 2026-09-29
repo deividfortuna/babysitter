@@ -80,12 +80,16 @@ func (n Notification) Validate() error {
 	return nil
 }
 
-func JoinKinds() string {
+func KindNames() []string {
 	out := make([]string, 0, len(NotificationKinds))
 	for _, k := range NotificationKinds {
 		out = append(out, string(k))
 	}
-	return strings.Join(out, ", ")
+	return out
+}
+
+func JoinKinds() string {
+	return strings.Join(KindNames(), ", ")
 }
 
 type ListNotificationsOptions struct {

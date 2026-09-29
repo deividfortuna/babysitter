@@ -4,13 +4,14 @@ import {
   bounceType,
   clickPlan,
   clickTarget,
-  isKindMuted,
+  hasKind,
   presentation,
   shouldReplaceBounce,
   shouldSignalAttention,
   shouldToast,
   trayTooltip,
-  withKindMuted,
+  withKind,
+  testNotification,
 } from "./notifications";
 
 test("the badge is empty under one and stops at 99+", () => {
@@ -97,22 +98,22 @@ test("a notification with a title toasts, whatever its kind", () => {
 });
 
 test("a kind the settings do not mute reaches the screen", () => {
-  expect(isKindMuted("review", ["review", "checks"])).toBe(true);
-  expect(isKindMuted("merge", ["review", "checks"])).toBe(false);
-  expect(isKindMuted("agent", [])).toBe(false);
-  expect(isKindMuted(undefined, ["review"])).toBe(false);
+  expect(hasKind("review", ["review", "checks"])).toBe(true);
+  expect(hasKind("merge", ["review", "checks"])).toBe(false);
+  expect(hasKind("agent", [])).toBe(false);
+  expect(hasKind(undefined, ["review"])).toBe(false);
 });
 
 test("a switch mutes one kind and leaves the rest alone", () => {
-  expect(withKindMuted([], "checks", true)).toEqual(["checks"]);
-  expect(withKindMuted(["merge"], "review", true)).toEqual(["merge", "review"]);
-  expect(withKindMuted(["review", "checks"], "review", false)).toEqual(["checks"]);
-  expect(withKindMuted(["checks"], "checks", true)).toEqual(["checks"]);
+  expect(withKind([], "checks", true)).toEqual(["checks"]);
+  expect(withKind(["merge"], "review", true)).toEqual(["merge", "review"]);
+  expect(withKind(["review", "checks"], "review", false)).toEqual(["checks"]);
+  expect(withKind(["checks"], "checks", true)).toEqual(["checks"]);
 });
 
 test("a switch keeps a muted kind this build does not know", () => {
-  expect(withKindMuted(["rumour"], "checks", true)).toEqual(["rumour", "checks"]);
-  expect(withKindMuted(["checks", "rumour"], "checks", false)).toEqual(["rumour"]);
+  expect(withKind(["rumour"], "checks", true)).toEqual(["rumour", "checks"]);
+  expect(withKind(["checks", "rumour"], "checks", false)).toEqual(["rumour"]);
 });
 
 test("a platform that shows no banner bounces nothing and flashes nothing", () => {
@@ -151,5 +152,13 @@ test("the taskbar of the other platforms flashes only for what waits on the user
     toast: true,
     bounce: null,
     flash: false,
+  });
+});
+
+test("the test notification has a sound and no row of the history", () => {
+  expect(testNotification()).toEqual({
+    title: "babysitter",
+    body: "A notification of the system looks like this.",
+    silent: false,
   });
 });

@@ -49,7 +49,7 @@ function matches(record: LogRecord, min: LogLevel, needle: string): boolean {
   return formatLogLine(record).toLowerCase().includes(needle);
 }
 
-export function LogsViewer() {
+export function LogsViewer({ className }: { className?: string }) {
   const [source, setSource] = useState<Source>("daemon");
   const [min, setMin] = useState<LogLevel>("debug");
   const [search, setSearch] = useState("");
@@ -69,7 +69,7 @@ export function LogsViewer() {
   }
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className={cn("flex flex-col gap-2", className)}>
       <div className="flex flex-wrap items-center gap-2">
         <ToggleGroup
           type="single"
@@ -136,7 +136,7 @@ function LogLines({ records, empty }: { records: LogRecord[]; empty: string }) {
       role="log"
       aria-label="Log records"
       onScroll={trackEnd}
-      className="h-80 overflow-auto rounded-md border bg-muted/30 p-2 font-mono text-2xs/relaxed"
+      className="min-h-40 flex-1 overflow-auto rounded-md border bg-muted/30 p-2 font-mono text-2xs/relaxed"
     >
       {records.length === 0 ? (
         <p className="p-2 text-muted-foreground">{empty}</p>

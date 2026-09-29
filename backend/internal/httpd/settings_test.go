@@ -202,7 +202,7 @@ func TestPutSettingsMutesTheNotificationKindsTheBodyNames(t *testing.T) {
 
 	var got Settings
 	rec := call(t, h, http.MethodPut, "/settings",
-		`{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false,"notificationsEnabled":true,"notificationSound":true,"mutedNotificationKinds":["checks","review"]}`, &got)
+		`{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false,"notificationsEnabled":true,"mutedNotificationKinds":["checks","review"]}`, &got)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
 	}
@@ -252,7 +252,7 @@ func TestPutSettingsKeepsTheNotificationFieldsTheBodyLeavesOut(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !stored.NotificationsEnabled || !stored.NotificationSound {
+	if !stored.NotificationsEnabled || len(stored.SilentNotificationKinds) != 0 {
 		t.Fatalf("stored = %+v, want the notifications and the sound left on", stored)
 	}
 	if !stored.KeepWorktree {
@@ -287,7 +287,7 @@ func TestPutSettingsTurnsTheNotificationsOffWhenTheBodySaysSo(t *testing.T) {
 	t.Parallel()
 	h, st, _, _ := newTestAPISettings(t)
 
-	body := `{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false,"notificationsEnabled":false,"notificationSound":false,"mutedNotificationKinds":[]}`
+	body := `{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false,"notificationsEnabled":false,"mutedNotificationKinds":[]}`
 	if rec := call(t, h, http.MethodPut, "/settings", body, nil); rec.Code != http.StatusOK {
 		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
 	}
@@ -296,8 +296,59 @@ func TestPutSettingsTurnsTheNotificationsOffWhenTheBodySaysSo(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.NotificationsEnabled || stored.NotificationSound {
-		t.Fatalf("stored = %+v, want both off", stored)
+	if stored.NotificationsEnabled {
+		t.Fatalf("stored = %+v, want the notifications off", stored)
+	}
+}
+
+func TestPutSettingsTakesTheSilentKindsAndTheBackgroundSwitch(t *testing.T) {
+	t.Parallel()
+	h, st, _, _ := newTestAPISettings(t)
+
+	var got Settings
+	rec := call(t, h, http.MethodPut, "/settings", `{"silentNotificationKinds":["merge","agent"],"notificationsBackgroundOnly":true}`, &got)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
+	}
+	if !reflect.DeepEqual(got.SilentNotificationKinds, []string{"agent", "merge"}) || !got.NotificationsBackgroundOnly {
+		t.Fatalf("answer = %+v, want the two silent kinds in the order of the schema and the background switch on", got)
+	}
+
+	stored, err := st.Settings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored.PlaysSound(store.NotificationMerge) || !stored.PlaysSound(store.NotificationReview) {
+		t.Fatalf("stored = %+v, want the merge silent and the review with a sound", stored)
+	}
+}
+
+func TestPutSettingsKeepsTheSilentKindsTheBodyLeavesOut(t *testing.T) {
+	t.Parallel()
+	h, st, _, _ := newTestAPISettings(t)
+
+	if rec := call(t, h, http.MethodPut, "/settings", `{"silentNotificationKinds":["checks"],"notificationsBackgroundOnly":true}`, nil); rec.Code != http.StatusOK {
+		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(t, h, http.MethodPut, "/settings", `{"watchIntervalSeconds":600}`, nil); rec.Code != http.StatusOK {
+		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
+	}
+
+	stored, err := st.Settings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Contains(stored.SilentNotificationKinds, store.NotificationChecks) || !stored.NotificationsBackgroundOnly {
+		t.Fatalf("stored = %+v, want the checks still silent and the background switch still on", stored)
+	}
+}
+
+func TestPutSettingsRejectsAnUnknownSilentNotificationKind(t *testing.T) {
+	t.Parallel()
+	h, _, _, _ := newTestAPISettings(t)
+
+	if rec := call(t, h, http.MethodPut, "/settings", `{"silentNotificationKinds":["rumour"]}`, nil); rec.Code != http.StatusBadRequest {
+		t.Fatalf("put settings: %d %s, want 400", rec.Code, rec.Body)
 	}
 }
 
@@ -321,5 +372,8 @@ func TestGetSettingsAnswersAnEmptyListOfMutedKinds(t *testing.T) {
 	}
 	if got.MutedNotificationKinds == nil {
 		t.Fatal("muted kinds = null, want an empty list so the client never reads null")
+	}
+	if got.SilentNotificationKinds == nil {
+		t.Fatal("silent kinds = null, want an empty list so the client never reads null")
 	}
 }

@@ -1,13 +1,17 @@
-import { CircleAlertIcon } from "lucide-react";
 import { useAppUpdate, useUpdateSettings } from "@/hooks/useAppUpdate";
-import { Alert, AlertTitle } from "@/components/ui/alert";
+import { SettingsCard, SettingsError, SettingsRow, SettingsSection, useTrackSave } from "@/components/settings-page";
 import { Button } from "@/components/ui/button";
-import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
 import { relativeTime } from "@/lib/time";
-import { isBusy, isUpdateChannel, type UpdateChannel, type UpdateStatus } from "../../shared/updates";
+import {
+  isBusy,
+  isUpdateChannel,
+  type UpdateChannel,
+  type UpdateSettings,
+  type UpdateStatus,
+} from "../../shared/updates";
 
 const CHANNELS: { value: UpdateChannel; label: string }[] = [
   { value: "stable", label: "Stable" },
@@ -39,68 +43,60 @@ function describe(status: UpdateStatus): string {
 export function UpdatesPanel() {
   const { status, check } = useAppUpdate();
   const { settings, save } = useUpdateSettings();
+  const track = useTrackSave();
 
   if (!status) return <Spinner />;
 
   if (status.state === "unsupported") {
     return (
-      <FieldGroup>
-        <Field>
-          <FieldContent>
-            <FieldTitle>Babysitter {status.currentVersion}</FieldTitle>
-            <FieldDescription>
-              This build does not update itself. Install a new version with Homebrew or from the release page.
-            </FieldDescription>
-          </FieldContent>
-        </Field>
-      </FieldGroup>
+      <SettingsCard>
+        <SettingsRow
+          label={`Babysitter ${status.currentVersion}`}
+          description="This build does not update itself. Install a new version with Homebrew or from the release page."
+        />
+      </SettingsCard>
     );
   }
 
   const checking = status.state === "checking";
+  const write = (patch: Partial<UpdateSettings>) => track(save(patch));
 
   return (
-    <div className="flex flex-col gap-6">
-      <FieldGroup>
-        <Field orientation="horizontal">
-          <FieldContent>
-            <FieldTitle>Babysitter {status.currentVersion}</FieldTitle>
-            <FieldDescription>{describe(status)}</FieldDescription>
-          </FieldContent>
-          <Button variant="outline" size="sm" disabled={isBusy(status.state)} onClick={() => void check()}>
-            {checking ? <Spinner data-icon="inline-start" /> : null}
-            {checking ? "Checking…" : "Check for updates"}
-          </Button>
-        </Field>
+    <div className="flex flex-col gap-4.5">
+      <SettingsSection label="This version">
+        <SettingsCard>
+          <SettingsRow label={`Babysitter ${status.currentVersion}`} description={describe(status)}>
+            <Button variant="outline" size="sm" disabled={isBusy(status.state)} onClick={() => void check()}>
+              {checking ? <Spinner data-icon="inline-start" /> : null}
+              {checking ? "Checking…" : "Check for updates"}
+            </Button>
+          </SettingsRow>
+        </SettingsCard>
+      </SettingsSection>
 
-        {settings ? (
-          <>
-            <Field orientation="horizontal">
-              <FieldContent>
-                <FieldLabel htmlFor="updates-auto-download">Download updates automatically</FieldLabel>
-                <FieldDescription>
-                  When off, the app still checks every hour and asks before it downloads.
-                </FieldDescription>
-              </FieldContent>
+      {settings ? (
+        <SettingsSection label="New versions">
+          <SettingsCard>
+            <SettingsRow
+              label="Download updates automatically"
+              htmlFor="updates-auto-download"
+              description="When off, the app still checks every hour and asks before it downloads."
+            >
               <Switch
                 id="updates-auto-download"
                 checked={settings.autoDownload}
-                onCheckedChange={(on) => void save({ autoDownload: on })}
+                onCheckedChange={(on) => write({ autoDownload: on })}
               />
-            </Field>
-
-            <Field orientation="horizontal">
-              <FieldContent>
-                <FieldLabel htmlFor="updates-channel">Channel</FieldLabel>
-                <FieldDescription>
-                  Nightly installs a build of main at most every six hours. A change back to Stable does not install an
-                  older version: the app stays on this one until a newer stable version is out.
-                </FieldDescription>
-              </FieldContent>
+            </SettingsRow>
+            <SettingsRow
+              label="Channel"
+              htmlFor="updates-channel"
+              description="Nightly installs a build of main at most every six hours. A change back to Stable does not install an older version: the app stays on this one until a newer stable version is out."
+            >
               <Select
                 value={settings.channel}
                 onValueChange={(next) => {
-                  if (isUpdateChannel(next)) void save({ channel: next });
+                  if (isUpdateChannel(next)) write({ channel: next });
                 }}
               >
                 <SelectTrigger id="updates-channel" className="w-36">
@@ -114,17 +110,12 @@ export function UpdatesPanel() {
                   ))}
                 </SelectContent>
               </Select>
-            </Field>
-          </>
-        ) : null}
-      </FieldGroup>
-
-      {status.message ? (
-        <Alert variant="destructive">
-          <CircleAlertIcon />
-          <AlertTitle>{status.message}</AlertTitle>
-        </Alert>
+            </SettingsRow>
+          </SettingsCard>
+        </SettingsSection>
       ) : null}
+
+      <SettingsError message={status.message} />
     </div>
   );
 }

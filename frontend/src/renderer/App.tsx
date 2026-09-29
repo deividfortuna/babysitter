@@ -48,7 +48,7 @@ export function App() {
   const [startPull, setStartPull] = useState<PullRequest | null>(null);
   const [addRepoOpen, setAddRepoOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("general");
+  const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("appearance");
   const [stopped, setStopped] = useState<Watch | null>(null);
 
   const supported = useNotificationsPresent();
@@ -70,7 +70,7 @@ export function App() {
     setStartOpen(true);
   }, []);
   const openAddRepo = useCallback(() => setAddRepoOpen(true), []);
-  const openSettings = useCallback((category: SettingsCategory = "general") => {
+  const openSettings = useCallback((category: SettingsCategory = "appearance") => {
     setSettingsCategory(category);
     setSettingsOpen(true);
   }, []);

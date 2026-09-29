@@ -82,8 +82,9 @@ func newFakeDaemon() *fakeDaemon {
 				badSettings(w, fmt.Sprintf("unknown merge method %q: use squash, merge, rebase", method))
 				return
 			}
-			kinds, _ := body["mutedNotificationKinds"].([]any)
-			for _, kind := range kinds {
+			muted, _ := body["mutedNotificationKinds"].([]any)
+			silent, _ := body["silentNotificationKinds"].([]any)
+			for _, kind := range slices.Concat(muted, silent) {
 				if name, _ := kind.(string); !store.NotificationKind(name).Valid() {
 					badSettings(w, fmt.Sprintf("unknown notification kind %q: use %s", name, store.JoinKinds()))
 					return

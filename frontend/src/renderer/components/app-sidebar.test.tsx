@@ -85,7 +85,7 @@ test("opens the settings from the account row", async () => {
   expect(onOpenSettings).toHaveBeenCalledWith();
 });
 
-test("opens the Watching settings to poll less often when the rate limit runs low", async () => {
+test("opens the Polling settings to poll less often when the rate limit runs low", async () => {
   serveApi({ watches: [], repos: [], pullRequests: [], rateLimit: buildRateLimit({ state: "low", remaining: 312 }) });
   const onOpenSettings = vi.fn();
   const user = userEvent.setup();
@@ -93,7 +93,7 @@ test("opens the Watching settings to poll less often when the rate limit runs lo
   renderSidebar({ onOpenSettings });
   await user.click(await screen.findByRole("button", { name: "Poll less often" }));
 
-  expect(onOpenSettings).toHaveBeenCalledWith("watching");
+  expect(onOpenSettings).toHaveBeenCalledWith("polling");
 });
 
 test("highlights how many pull requests are watched", async () => {

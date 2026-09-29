@@ -210,13 +210,14 @@ the approvals and the merge method of one running watch and leave the
 defaults alone. The worktree switch applies when the watch stops, and
 the stop dialog or `watch stop --keep-worktree` can still say otherwise.
 
-The **Notifications** pane holds three more:
+The **Notifications** pane holds four more:
 
 | Setting | What it does |
 | --- | --- |
 | Show notifications | What happens on a watched pull request reaches you as a notification of the system; the history keeps it either way |
-| Play a sound | Off makes every notification silent |
-| What to tell you about | One switch per kind: Agent requests, Review comments, Checks, Watches and Merges. A kind you turn off stays in the history and only leaves the screen |
+| Only while the app is in the background | The app shows a notification only while none of its windows has the focus. Off shows it while you use the app too. On by default |
+| What to tell you about | One switch per kind: Agent requests, Review comments, Checks, Watches, Merges and Auto watch. A kind you turn off stays in the history and only leaves the screen |
+| Sound | One switch per kind. A kind with its sound off still shows, without a sound |
 
 The daemon stores them in the database, so the CLI takes the same
 defaults: a flag of `watch start` that you do not type is left out of the
@@ -598,8 +599,9 @@ Where it is shown depends on who is there:
   on the watch it belongs to, or opens the pull request in the browser
   when it belongs to none and carries its link. The unread count sits on
   the dock icon.
-  Nothing is shown at all while the window has the focus: the screen
-  already says it. A notification of kind `agent`, what the agent
+  With **Only while the app is in the background** on, nothing is shown
+  while a window of the app has the focus: the screen already says it.
+  A notification of kind `agent`, what the agent
   asks for and a proposal that waits on you, keeps the dock of macOS
   bouncing until you come back, and every other kind bounces once. The
   kinds `agent` and `merge` flash the taskbar of Windows and Linux; a
@@ -620,21 +622,32 @@ The history keeps the newest 5000 rows: one of a watch goes when that
 watch is removed, and the oldest fall out of the bottom as new ones
 arrive.
 
-Three settings govern them, in the **Notifications** pane of the app or
+Four settings govern them, in the **Notifications** pane of the app or
 from the terminal:
 
 ```sh
-babysitter settings set --notifications=false             # only the history, nothing on screen
-babysitter settings set --notification-sound=false        # on screen, without a sound
+babysitter settings set --notifications=false               # only the history, nothing on screen
+babysitter settings set --notifications-background-only     # the app shows nothing while one of its windows has the focus
 babysitter settings set --mute-notifications review,checks  # every kind but these two
 babysitter settings set --mute-notifications ""             # every kind again
+babysitter settings set --silent-notifications watch,auto   # these two kinds without a sound
+babysitter settings set --silent-notifications ""           # every kind with a sound again
+babysitter settings set --notification-sound=false          # every kind without a sound
+babysitter settings set --notification-sound                # every kind with a sound
 ```
 
-`--mute-notifications` takes the kinds of the history: `agent`,
-`review`, `checks`, `watch`, `merge` and `auto`. `auto` says that a
-watch started on its own, or that a Dependabot update waits on your
-approval; in the app that row has an **Approve and merge** button. A kind you mute stays in the
-history and only leaves the screen.
+`--mute-notifications` and `--silent-notifications` take the kinds of
+the history: `agent`, `review`, `checks`, `watch`, `merge` and `auto`.
+`auto` says that a watch started on its own, or that a Dependabot update
+waits on your approval; in the app that row has an **Approve and merge**
+button. A kind you mute stays in the history and only leaves the screen.
+A silent kind still shows, without a sound. `--notification-sound`
+writes the silent kinds too: `false` makes every kind silent and `true`
+makes none silent, so do not give it with `--silent-notifications`.
+
+`--notifications-background-only` applies to the app only. The daemon
+shows a notification only while no app shows them, so it has no window
+that can have the focus.
 
 Read the history from the terminal:
 
