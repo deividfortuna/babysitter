@@ -6,32 +6,31 @@ import (
 	"strings"
 )
 
+type graphqlVariables struct {
+	Owner  string `json:"owner"`
+	Name   string `json:"name"`
+	Number int    `json:"number"`
+	ID     string `json:"id"`
+	Head   string `json:"head"`
+	Method string `json:"method"`
+}
+
 func (c *call) graphql() {
 	var req struct {
-		Query string `json:"query"`
+		Query     string           `json:"query"`
+		Variables graphqlVariables `json:"variables"`
 	}
 	if !c.decode(&req) {
 		return
 	}
 	if strings.Contains(req.Query, "updatePullRequestBranch") {
-		c.updateBranch()
+		c.updateBranch(req.Variables)
 		return
 	}
-	c.reviewState()
+	c.reviewState(req.Variables)
 }
 
-func (c *call) pullOfQuery() *PR {
-	var req struct {
-		Variables struct {
-			Owner  string `json:"owner"`
-			Name   string `json:"name"`
-			Number int    `json:"number"`
-		} `json:"variables"`
-	}
-	if !c.decode(&req) {
-		return nil
-	}
-	v := req.Variables
+func (c *call) pullOfQuery(v graphqlVariables) *PR {
 	r, ok := c.g.repos[strings.ToLower(v.Owner+"/"+v.Name)]
 	var p *PR
 	if ok {
@@ -54,18 +53,7 @@ func nodeID(r *Repo, p *PR) string {
 	return fmt.Sprintf("PR_%s#%d", r.FullName(), p.Number)
 }
 
-func (c *call) updateBranch() {
-	var req struct {
-		Variables struct {
-			ID     string `json:"id"`
-			Head   string `json:"head"`
-			Method string `json:"method"`
-		} `json:"variables"`
-	}
-	if !c.decode(&req) {
-		return
-	}
-	v := req.Variables
+func (c *call) updateBranch(v graphqlVariables) {
 	p := c.g.pullOfNode(v.ID)
 	if p == nil {
 		c.graphqlError("NOT_FOUND", "Could not resolve to a node with the global id of '"+v.ID+"'")
@@ -99,8 +87,8 @@ func (g *GitHub) pullOfNode(id string) *PR {
 	return nil
 }
 
-func (c *call) reviewState() {
-	p := c.pullOfQuery()
+func (c *call) reviewState(v graphqlVariables) {
+	p := c.pullOfQuery(v)
 	if p == nil {
 		return
 	}

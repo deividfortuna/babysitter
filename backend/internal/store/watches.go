@@ -435,9 +435,6 @@ type MergeRules struct {
 }
 
 func (s *Store) SetWatchMergeRules(ctx context.Context, id int64, r MergeRules) (Watch, error) {
-	if !r.BranchUpdate.Valid() {
-		return Watch{}, fmt.Errorf("unknown branch update %q: use rebase or merge", r.BranchUpdate)
-	}
 	return s.updateWatch(ctx, id, "set watch merge rules",
 		`UPDATE watches SET approvals_required = ?, merge_method = ?, merge_when_ready = ?, branch_update = ?, update_on_github = ?
 WHERE id = ? AND (approvals_required != ? OR merge_method != ? OR merge_when_ready != ? OR branch_update != ? OR update_on_github != ?)`,

@@ -1,11 +1,8 @@
 package cli
 
 import (
-	"github.com/spf13/cobra"
-
 	"github.com/deividfortuna/babysitter/internal/httpd"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
-	"github.com/deividfortuna/babysitter/internal/store"
 )
 
 const (
@@ -13,22 +10,14 @@ const (
 	updateOnGitHubFlag = "update-on-github"
 )
 
-func typedBranchUpdate(cmd *cobra.Command, value string) *store.BranchUpdate {
-	if !cmd.Flags().Changed(branchUpdateFlag) {
-		return nil
-	}
-	update := store.BranchUpdate(value)
-	return &update
-}
-
 func behindWord(w httpd.Watch) string {
-	switch {
-	case w.Dependabot:
+	switch w.BranchUpdater {
+	case prwatch.UpdaterDependabot:
 		return "Dependabot rebases it on @dependabot rebase"
-	case w.Provider == prwatch.ProviderSelf:
+	case prwatch.UpdaterSession:
 		return string(w.BranchUpdate) + ", by your session"
 	default:
-		return branchUpdateWord(string(w.BranchUpdate), w.UpdateOnGitHub)
+		return branchUpdateWord(string(w.BranchUpdate), w.BranchUpdater == prwatch.UpdaterGitHub)
 	}
 }
 

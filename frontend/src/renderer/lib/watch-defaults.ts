@@ -3,7 +3,7 @@ import type { ApprovalMode } from "@/hooks/useProposals";
 import type { WatchOverrides } from "@/hooks/useRepos";
 import type { Settings } from "@/hooks/useSettings";
 import type { BranchUpdate, MergeMethod } from "@/hooks/useWatches";
-import { branchUpdateLabel } from "@/components/branch-update-select";
+import { branchUpdateLabel } from "@/lib/branch-update";
 import { mergeMethodLabel } from "@/components/merge-method-select";
 
 export type WatchDefaults = {

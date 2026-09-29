@@ -2612,6 +2612,9 @@ components:
           type: string
         deletions:
           type: integer
+        dependabot:
+          description: Dependabot opened the pull request and owns its branch
+          type: boolean
         draft:
           type: boolean
         fork:
@@ -2678,6 +2681,7 @@ components:
       - number
       - title
       - author
+      - dependabot
       - state
       - draft
       - baseRef
@@ -3297,6 +3301,15 @@ components:
           - rebase
           - merge
           type: string
+        branchUpdater:
+          description: 'Who updates a branch that fell behind its base: Dependabot,
+            the session of the author for a self watch, GitHub first, or the agent'
+          enum:
+          - dependabot
+          - session
+          - github
+          - agent
+          type: string
         checkStates:
           additionalProperties:
             type: string
@@ -3476,6 +3489,7 @@ components:
       - mergeWhenReady
       - keepWorktree
       - branchUpdate
+      - branchUpdater
       - updateOnGitHub
       - session
       type: object

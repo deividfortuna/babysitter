@@ -42,6 +42,7 @@ type PullRequest struct {
 	Number             int                  `json:"number"`
 	Title              string               `json:"title"`
 	Author             string               `json:"author"`
+	Dependabot         bool                 `json:"dependabot" description:"Dependabot opened the pull request and owns its branch"`
 	State              store.PRState        `json:"state" enum:"open,closed,merged"`
 	Draft              bool                 `json:"draft"`
 	BaseRef            string               `json:"baseRef"`
@@ -110,6 +111,7 @@ func pullFromStore(p store.PullRequest) PullRequest {
 		Number:             p.Number,
 		Title:              p.Title,
 		Author:             p.Author,
+		Dependabot:         agent.IsDependabot(p.Author),
 		State:              p.State,
 		Draft:              p.Draft,
 		BaseRef:            p.BaseRef,
@@ -179,6 +181,7 @@ type Watch struct {
 	MergeWhenReady    bool                    `json:"mergeWhenReady" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge"`
 	KeepWorktree      bool                    `json:"keepWorktree" description:"A stop leaves the worktree of the watch on disk unless the stop says otherwise"`
 	BranchUpdate      store.BranchUpdate      `json:"branchUpdate" enum:"rebase,merge" description:"rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way"`
+	BranchUpdater     prwatch.BranchUpdater   `json:"branchUpdater" enum:"dependabot,session,github,agent" description:"Who updates a branch that fell behind its base: Dependabot, the session of the author for a self watch, GitHub first, or the agent"`
 	UpdateOnGitHub    bool                    `json:"updateOnGitHub" description:"When the branch falls behind its base, GitHub updates it first with the branch update, and the agent does it only when GitHub refuses"`
 	UpdateType        dependabot.Level        `json:"updateType,omitempty" enum:",patch,minor,major" description:"The highest update of a Dependabot pull request; a type the daemon cannot read counts as major"`
 	Session           Session                 `json:"session"`
@@ -582,7 +585,7 @@ func watchFromStore(w store.Watch, s prwatch.SessionInfo, readySince *time.Time,
 		ApprovalsRequired: w.ApprovalsRequired, MergeMethod: w.MergeMethod, ReadySince: readySince, ReadyBlockers: blockers,
 		ApprovalMode: w.ApprovalMode, AutoApproveRebase: w.AutoApproveRebase, TakenOverAt: w.TakenOverAt,
 		AutoReason: w.AutoReason, MergeWhenReady: w.MergeWhenReady, KeepWorktree: w.KeepWorktree, UpdateType: w.UpdateType,
-		BranchUpdate: w.BranchUpdate, UpdateOnGitHub: w.UpdateOnGitHub,
+		BranchUpdate: w.BranchUpdate, UpdateOnGitHub: w.UpdateOnGitHub, BranchUpdater: prwatch.BranchUpdaterOf(w),
 		Session: Session{State: s.State, PID: s.PID, StartedAt: s.StartedAt, SignalAt: s.SignalAt, LogPath: s.LogPath},
 	}
 	if out.Session.State == "" {

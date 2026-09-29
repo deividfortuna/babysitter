@@ -85,20 +85,14 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		_, err := s.stop(ctx, w.ID, reason, "", StopOptions{})
 		return err
 	}
-	pushed, err := s.rebaseStale(ctx, w)
-	if err != nil {
+	if err := s.githubStep(ctx, client, w, snap.PR.NodeID); err != nil {
+		return err
+	}
+	if err := s.rebaseStale(ctx, w); err != nil {
 		s.log.Error("rebase the proposal that waits", "watch", w.ID, "err", err)
 	}
 	if s.hostsSession(w) {
 		s.tellHandback(ctx, w)
-	}
-	if !pushed {
-		if err := s.githubStep(ctx, client, w, snap.PR.NodeID); err != nil {
-			if errors.Is(err, ghclient.ErrPaused) {
-				return err
-			}
-			s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
-		}
 	}
 	pending, err := s.tell(ctx, client, w)
 	if err != nil {

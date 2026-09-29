@@ -51,7 +51,7 @@ func TestUpdatePullBranchReportsTheRefusalOfGitHub(t *testing.T) {
 	c := gh.Client(t)
 
 	_, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "abc")
-	if !errors.Is(err, ErrBranchNotUpdated) || !strings.Contains(err.Error(), "merge conflict") {
+	if refusal, ok := errors.AsType[*BranchRefusal](err); !ok || !strings.Contains(refusal.Reason, "merge conflict") {
 		t.Fatalf("UpdatePullBranch() error = %v, want the refusal with the reason of GitHub", err)
 	}
 }
@@ -63,7 +63,7 @@ func TestUpdatePullBranchRefusesAHeadThatMoved(t *testing.T) {
 	c := gh.Client(t)
 
 	_, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "old")
-	if !errors.Is(err, ErrBranchNotUpdated) {
+	if _, ok := errors.AsType[*BranchRefusal](err); !ok {
 		t.Fatalf("UpdatePullBranch() error = %v, want a refusal", err)
 	}
 }
@@ -79,7 +79,7 @@ func TestUpdatePullBranchTakesARateLimitForATransientFailure(t *testing.T) {
 	})
 
 	_, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
-	if err == nil || errors.Is(err, ErrBranchNotUpdated) {
+	if _, refused := errors.AsType[*BranchRefusal](err); err == nil || refused {
 		t.Fatalf("UpdatePullBranch() error = %v, want a failure that is not a refusal", err)
 	}
 }
@@ -93,7 +93,7 @@ func TestUpdatePullBranchKeepsATransportFailureApartFromARefusal(t *testing.T) {
 	gh.Fail(ghfake.RouteGraphQL, 502, "Bad Gateway")
 
 	_, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
-	if err == nil || errors.Is(err, ErrBranchNotUpdated) {
+	if _, refused := errors.AsType[*BranchRefusal](err); err == nil || refused {
 		t.Fatalf("UpdatePullBranch() error = %v, want a failure that is not a refusal", err)
 	}
 }

@@ -7,7 +7,6 @@ import { OptionSelect, toOptions } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { ApprovalModeSelect } from "@/components/approval-mode-select";
-import { BranchUpdateSelect } from "@/components/branch-update-select";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Field, FieldContent, FieldDescription, FieldGroup, FieldLabel, FieldTitle } from "@/components/ui/field";
@@ -15,6 +14,7 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
+import { BRANCH_UPDATES } from "@/lib/branch-update";
 import { approvalsField, approvalsInvalid, approvalsRequired, wholeNumber } from "@/lib/approvals";
 import { effortDefaultLabel, effortsOf } from "@/lib/watch-defaults";
 
@@ -278,8 +278,10 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
               solves a conflict the same way.
             </FieldDescription>
           </FieldContent>
-          <BranchUpdateSelect
+          <OptionSelect
             id="branch-update"
+            size="default"
+            options={BRANCH_UPDATES}
             value={draft.branchUpdate}
             onChange={(branchUpdate) => edit({ branchUpdate })}
           />

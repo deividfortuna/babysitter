@@ -425,7 +425,7 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 	}
 	unlock := s.locks.Lock(w.ID)
 	defer unlock()
-	if err := s.updateBehind(ctx, client, w, snap.PR.NodeID); err != nil {
+	if err := s.githubStep(ctx, client, w, snap.PR.NodeID); err != nil {
 		s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
 	}
 	if !s.runs(w) {
@@ -484,7 +484,6 @@ type Summary struct {
 }
 
 func (s *Service) stop(ctx context.Context, id int64, reason store.StopReason, detail string, o StopOptions) (store.Watch, error) {
-	s.tries.forget(id)
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {
 		return store.Watch{}, err
@@ -509,6 +508,7 @@ func (s *Service) stop(ctx context.Context, id int64, reason store.StopReason, d
 	declined := proposalNumbers(waiting)
 	s.work.clear(w.ID)
 	s.rereviewTries.drop(w.ID)
+	s.branchTries.drop(w.ID)
 	fate := worktreeNotTried
 	keep := s.keepsWorktree(w, o)
 	if !keep {

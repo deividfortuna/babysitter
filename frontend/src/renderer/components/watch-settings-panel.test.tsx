@@ -136,7 +136,7 @@ test("the branch update of the watch changes", async () => {
 });
 
 test("a Dependabot watch says the bot updates its branch", async () => {
-  const { user } = renderDetail({ author: "dependabot[bot]", dependabot: true });
+  const { user } = renderDetail({ author: "dependabot[bot]", dependabot: true, branchUpdater: "dependabot" });
 
   const panel = await openSettings(user);
   expect(within(panel).getAllByText("Dependabot owns the branch, so only the bot updates it.")).toHaveLength(2);

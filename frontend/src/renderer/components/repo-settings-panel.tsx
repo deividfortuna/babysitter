@@ -12,7 +12,6 @@ import {
 } from "@/hooks/useRepos";
 import { useSettings } from "@/hooks/useSettings";
 import { AgentLogo } from "@/components/agent-logo";
-import { BRANCH_UPDATES } from "@/components/branch-update-select";
 import { mergeMethodLabel } from "@/components/merge-method-select";
 import { OptionSelect, toOptions, type Option } from "@/components/option-select";
 import { EffortSelect } from "@/components/effort-select";
@@ -39,6 +38,7 @@ import {
   repositoryDefaults,
   type WatchDefaults as Defaults,
 } from "@/lib/watch-defaults";
+import { BRANCH_UPDATES } from "@/lib/branch-update";
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { shortDate } from "@/lib/time";

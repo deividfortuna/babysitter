@@ -269,27 +269,20 @@ func wholeFiles(patch string, limit int) string {
 }
 
 func (g *Runner) Rebase(ctx context.Context, dir, onto string) error {
-	_, err := g.git(ctx, dir, "rebase", "-q", onto)
-	if err == nil || !g.rebasing(ctx, dir) {
-		return err
-	}
-	files, _ := g.git(ctx, dir, "diff", "--name-only", "--diff-filter=U")
-	if _, abortErr := g.git(ctx, dir, "rebase", "--abort"); abortErr != nil {
-		return fmt.Errorf("%w, and the abort failed: %w", err, abortErr)
-	}
-	if files == "" {
-		return err
-	}
-	return &ConflictError{Files: strings.Fields(files)}
+	return g.bringIn(ctx, dir, "rebase", g.rebasing, "-q", onto)
 }
 
 func (g *Runner) Merge(ctx context.Context, dir, sha string) error {
-	_, err := g.git(ctx, dir, "merge", "-q", "--no-edit", sha)
-	if err == nil || !g.merging(ctx, dir) {
+	return g.bringIn(ctx, dir, "merge", g.merging, "-q", "--no-edit", sha)
+}
+
+func (g *Runner) bringIn(ctx context.Context, dir, command string, inProgress func(context.Context, string) bool, args ...string) error {
+	_, err := g.git(ctx, dir, append([]string{command}, args...)...)
+	if err == nil || !inProgress(ctx, dir) {
 		return err
 	}
 	files, _ := g.git(ctx, dir, "diff", "--name-only", "--diff-filter=U")
-	if _, abortErr := g.git(ctx, dir, "merge", "--abort"); abortErr != nil {
+	if _, abortErr := g.git(ctx, dir, command, "--abort"); abortErr != nil {
 		return fmt.Errorf("%w, and the abort failed: %w", err, abortErr)
 	}
 	if files == "" {

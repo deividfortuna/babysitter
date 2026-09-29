@@ -340,7 +340,7 @@ test("a watch can start with its own branch update", async () => {
 test("a Dependabot pull request leaves the branch update to the bot", async () => {
   const startBodies: Record<string, unknown>[] = [];
   serveApi({ startBodies });
-  renderDialog(buildPullRequest({ author: "dependabot[bot]" }));
+  renderDialog(buildPullRequest({ author: "dependabot[bot]", dependabot: true }));
   const user = userEvent.setup();
   await user.type(screen.getByLabelText("Checkout to copy the worktree from"), "/Users/octo/code/babysitter");
   await openAdditional(user);
@@ -360,7 +360,7 @@ test("a Dependabot pull request drops the branch update chosen before it was pic
   const startBodies: Record<string, unknown>[] = [];
   serveApi({
     startBodies,
-    pullRequests: [buildPullRequest({ number: 7, title: "Bump lodash", author: "dependabot[bot]" })],
+    pullRequests: [buildPullRequest({ number: 7, title: "Bump lodash", author: "dependabot[bot]", dependabot: true })],
   });
   renderDialog(buildPullRequest());
   const user = userEvent.setup();

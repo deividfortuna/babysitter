@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"slices"
-	"sync"
 
 	"github.com/google/go-github/v91/github"
 
@@ -19,11 +18,33 @@ import (
 
 var ErrBadBranchUpdate = errors.New("invalid branch update: use rebase or merge")
 
-var errBranchStalled = errors.New("GitHub accepted the update, but the branch did not move")
+const (
+	stallPolls        = 3
+	branchUpdateTries = 3
+	stallReason       = "GitHub accepted the update, but the branch did not move"
+)
 
-const stallPolls = 3
+type BranchUpdater string
 
-const branchUpdateTries = 3
+const (
+	UpdaterDependabot BranchUpdater = "dependabot"
+	UpdaterSession    BranchUpdater = "session"
+	UpdaterGitHub     BranchUpdater = "github"
+	UpdaterAgent      BranchUpdater = "agent"
+)
+
+func BranchUpdaterOf(w store.Watch) BranchUpdater {
+	switch {
+	case agent.IsDependabot(w.Author):
+		return UpdaterDependabot
+	case !hostedProvider(w.Provider):
+		return UpdaterSession
+	case w.UpdateOnGitHub:
+		return UpdaterGitHub
+	default:
+		return UpdaterAgent
+	}
+}
 
 func branchUpdateAfter(current store.BranchUpdate, change *store.BranchUpdate) (store.BranchUpdate, error) {
 	if change == nil {
@@ -35,104 +56,68 @@ func branchUpdateAfter(current store.BranchUpdate, change *store.BranchUpdate) (
 	return *change, nil
 }
 
+func behindRef(head string) string { return "behind@" + head }
+
 func branchUpdateRef(head string) string { return "branch_update@" + head }
 
-type headTries struct {
-	head  string
-	count int
-}
-
-type branchTries struct {
-	mu      sync.Mutex
-	byWatch map[int64]headTries
-}
-
-func (t *branchTries) again(id int64, head string) bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	if t.byWatch == nil {
-		t.byWatch = map[int64]headTries{}
-	}
-	tries := t.byWatch[id]
-	if tries.head != head {
-		tries = headTries{head: head}
-	}
-	tries.count++
-	t.byWatch[id] = tries
-	return tries.count < branchUpdateTries
-}
-
-func (t *branchTries) forget(id int64) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	delete(t.byWatch, id)
+func branchPayload(w store.Watch) map[string]any {
+	return map[string]any{"method": w.BranchUpdate, "from": w.HeadSHA, "base": w.BaseRef}
 }
 
 func (s *Service) updatesOnGitHub(w store.Watch) bool {
-	return w.UpdateOnGitHub && s.hosted(w) && !agent.IsDependabot(w.Author)
-}
-
-func (s *Service) githubOwnsBehind(ctx context.Context, w store.Watch) (bool, error) {
-	if !s.updatesOnGitHub(w) {
-		return false, nil
-	}
-	failed, err := s.proposalFailed(ctx, w)
-	if err != nil || failed {
-		return false, err
-	}
-	tried, err := s.triedOnGitHub(ctx, w)
-	return !tried, err
+	return BranchUpdaterOf(w) == UpdaterGitHub
 }
 
 func (s *Service) githubStep(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
-	if err := s.catchStalledUpdate(ctx, w); err != nil {
-		return err
-	}
-	return s.updateBehind(ctx, client, w, nodeID)
-}
-
-func (s *Service) updateBehind(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
 	candidate := w.MergeableState == store.MergeableBehind && s.updatesOnGitHub(w)
 	if !candidate {
 		return nil
 	}
-	behind, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBehind, "behind@"+w.HeadSHA)
+	if err := s.catchStalledUpdate(ctx, w); err != nil {
+		return s.keepPolling(w, err)
+	}
+	return s.keepPolling(w, s.updateBehind(ctx, client, w, nodeID))
+}
+
+func (s *Service) keepPolling(w store.Watch, err error) error {
+	if err == nil || errors.Is(err, ghclient.ErrPaused) {
+		return err
+	}
+	s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
+	return nil
+}
+
+func (s *Service) updateBehind(ctx context.Context, client *github.Client, w store.Watch, nodeID string) error {
+	behind, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBehind, behindRef(w.HeadSHA))
 	if err != nil {
 		return err
 	}
-	waiting := found && behind.NudgedAt == nil
-	if !waiting {
+	ready := found && behind.NudgedAt == nil && !s.sessionBusy(w)
+	if !ready {
 		return nil
 	}
-	owns, err := s.githubOwnsBehind(ctx, w)
-	if err != nil || !owns {
+	tried, err := s.triedOnGitHub(ctx, w)
+	if err != nil || tried {
 		return err
 	}
-	inFlight, err := s.workInFlight(ctx, w)
-	if err != nil || inFlight {
+	blocker, err := s.proposalBlocker(ctx, w)
+	if err != nil || blocker != "" {
 		return err
 	}
 	resp, err := ghclient.UpdatePullBranch(ctx, client, nodeID, string(w.BranchUpdate), w.HeadSHA)
 	if err := s.afterWrite(ctx, resp, err); err != nil {
 		return s.branchUpdateFailed(ctx, w, err)
 	}
-	s.tries.forget(w.ID)
-	if _, err := s.record(ctx, w, store.Activity{
+	_, err = s.record(ctx, w, store.Activity{
 		Kind: store.ActivityBranchUpdated, Ref: branchUpdateRef(w.HeadSHA),
 		Summary: "GitHub accepted the request to " + branchUpdateWord(w) + " at " + textx.ShortSHA(w.HeadSHA),
-		Payload: mustJSON(map[string]any{"method": w.BranchUpdate, "from": w.HeadSHA, "base": w.BaseRef}),
-	}); err != nil {
-		return err
-	}
-	return s.store.MarkActivityNudged(ctx, []int64{behind.ID}, s.now())
+		Payload: mustJSON(branchPayload(w)),
+	})
+	return err
 }
 
 func (s *Service) catchStalledUpdate(ctx context.Context, w store.Watch) error {
-	if !s.updatesOnGitHub(w) {
-		return nil
-	}
-	ref := branchUpdateRef(w.HeadSHA)
-	sent, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBranchUpdated, ref)
+	sent, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBranchUpdated, branchUpdateRef(w.HeadSHA))
 	if err != nil || !found {
 		return err
 	}
@@ -140,50 +125,42 @@ func (s *Service) catchStalledUpdate(ctx context.Context, w store.Watch) error {
 	if !stalled {
 		return nil
 	}
-	refused, err := s.store.HasActivity(ctx, w.ID, store.ActivityBranchNotUpdated, ref)
+	refused, err := s.refusedOnGitHub(ctx, w)
 	if err != nil || refused {
 		return err
 	}
-	if err := s.recordBranchRefused(ctx, w, errBranchStalled); err != nil {
-		return err
-	}
-	behind, found, err := s.store.ActivityByRef(ctx, w.ID, store.ActivityBehind, "behind@"+w.HeadSHA)
-	if err != nil || !found {
-		return err
-	}
-	return s.store.UnmarkActivityNudged(ctx, []int64{behind.ID})
+	return s.recordBranchRefused(ctx, w, stallReason)
 }
 
 func (s *Service) branchUpdateFailed(ctx context.Context, w store.Watch, failure error) error {
 	if errors.Is(failure, ghclient.ErrPaused) {
 		return failure
 	}
-	transient := !errors.Is(failure, ghclient.ErrBranchNotUpdated)
-	if transient && s.tries.again(w.ID, w.HeadSHA) {
+	refusal, refused := errors.AsType[*ghclient.BranchRefusal](failure)
+	if refused {
+		return s.recordBranchRefused(ctx, w, refusal.Reason)
+	}
+	if s.branchTries.count(w.ID, branchUpdateRef(w.HeadSHA)) < branchUpdateTries {
 		s.log.Warn("GitHub did not answer the update of the branch, the next poll tries again", "watch", w.ID, "pr", prLabel(w), "err", redact.Text(failure.Error()))
 		return nil
 	}
-	s.tries.forget(w.ID)
-	return s.recordBranchRefused(ctx, w, failure)
-}
-
-func (s *Service) workInFlight(ctx context.Context, w store.Watch) (bool, error) {
-	if s.sessionBusy(w) {
-		return true, nil
-	}
-	if !s.gates(w) {
-		return false, nil
-	}
-	_, open, err := s.store.ActiveProposal(ctx, w.ID)
-	if err != nil || open {
-		return open, err
-	}
-	_, pending, err := s.pendingProposal(ctx, w)
-	return pending, err
+	return s.recordBranchRefused(ctx, w, failure.Error())
 }
 
 func (s *Service) sessionBusy(w store.Watch) bool {
 	return !s.quiet(w) || s.withAuthor(w)
+}
+
+func (s *Service) githubOwnsBehind(ctx context.Context, w store.Watch) (bool, error) {
+	if !s.updatesOnGitHub(w) {
+		return false, nil
+	}
+	refused, err := s.refusedOnGitHub(ctx, w)
+	if err != nil || refused {
+		return false, err
+	}
+	failed, err := s.proposalFailed(ctx, w)
+	return !failed, err
 }
 
 func (s *Service) proposalFailed(ctx context.Context, w store.Watch) (bool, error) {
@@ -211,20 +188,19 @@ func (s *Service) triedOnGitHub(ctx context.Context, w store.Watch) (bool, error
 	return s.store.HasActivityOfKinds(ctx, w.ID, branchUpdateRef(w.HeadSHA), store.ActivityBranchUpdated, store.ActivityBranchNotUpdated)
 }
 
-func refusalReason(failure error) string {
-	if refusal, ok := errors.AsType[*ghclient.BranchRefusal](failure); ok {
-		return refusal.Reason
-	}
-	return failure.Error()
+func (s *Service) refusedOnGitHub(ctx context.Context, w store.Watch) (bool, error) {
+	return s.store.HasActivity(ctx, w.ID, store.ActivityBranchNotUpdated, branchUpdateRef(w.HeadSHA))
 }
 
-func (s *Service) recordBranchRefused(ctx context.Context, w store.Watch, refusal error) error {
-	reason := redact.Text(refusalReason(refusal))
+func (s *Service) recordBranchRefused(ctx context.Context, w store.Watch, reason string) error {
+	reason = redact.Text(reason)
 	s.log.Warn("GitHub did not update the branch, the agent does it", "watch", w.ID, "pr", prLabel(w), "err", reason)
+	payload := branchPayload(w)
+	payload["error"] = reason
 	_, err := s.record(ctx, w, store.Activity{
 		Kind: store.ActivityBranchNotUpdated, Ref: branchUpdateRef(w.HeadSHA),
 		Summary: fmt.Sprintf("GitHub could not update %s, so the agent does it: %s", w.HeadRef, firstLine(reason)),
-		Payload: mustJSON(map[string]any{"method": w.BranchUpdate, "from": w.HeadSHA, "base": w.BaseRef, "error": reason}),
+		Payload: mustJSON(payload),
 	})
 	return err
 }

@@ -5,7 +5,7 @@ import { useUpdateWatch, type Watch } from "@/hooks/useWatches";
 import { useProposalDecision } from "@/components/proposal-decision";
 import { SwitchToAutoDialog } from "@/components/proposal-dialogs";
 import { ApprovalModeSelect } from "@/components/approval-mode-select";
-import { BranchUpdateSelect } from "@/components/branch-update-select";
+import { OptionSelect } from "@/components/option-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { SettingRow } from "@/components/setting-row";
 import { ToneBadge } from "@/components/status-badges";
@@ -14,6 +14,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/approvals";
+import { BRANCH_UPDATES, branchOwnerText } from "@/lib/branch-update";
 import { isSelfWatch, watchLabel } from "@/lib/watch-status";
 
 type Props = { watch: Watch; onClose: () => void };
@@ -26,6 +27,8 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
   const branchRules = useUpdateWatch();
   const failure =
     setApproval.error ?? approvalsRules.error ?? methodRules.error ?? readyRules.error ?? branchRules.error;
+  const ownerText = branchOwnerText(watch);
+  const dependabotText = watch.branchUpdater === "dependabot" ? ownerText : undefined;
 
   return (
     <aside
@@ -94,18 +97,14 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       <SettingRow
         label="Branch behind its base"
         htmlFor="watch-branch-update"
-        description={
-          watch.dependabot
-            ? "Dependabot owns the branch, so only the bot updates it."
-            : "The agent solves a conflict the same way."
-        }
+        description={dependabotText ?? "The agent solves a conflict the same way."}
       >
-        <BranchUpdateSelect
+        <OptionSelect
           id="watch-branch-update"
-          size="sm"
           className="w-32 shrink-0"
+          options={BRANCH_UPDATES}
           value={watch.branchUpdate}
-          disabled={branchRules.isPending || watch.dependabot}
+          disabled={branchRules.isPending || watch.branchUpdater === "dependabot"}
           onChange={(branchUpdate) => branchRules.mutate({ id: watch.id, branchUpdate })}
         />
       </SettingRow>
@@ -113,12 +112,12 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       <SettingRow
         label="Update the branch on GitHub first"
         htmlFor="watch-update-on-github"
-        description={updateOnGitHubText(watch)}
+        description={ownerText ?? "The agent does it only when GitHub refuses."}
       >
         <Switch
           id="watch-update-on-github"
           checked={watch.updateOnGitHub}
-          disabled={branchRules.isPending || !githubUpdates(watch)}
+          disabled={branchRules.isPending || ownerText !== undefined}
           onCheckedChange={(updateOnGitHub) => branchRules.mutate({ id: watch.id, updateOnGitHub })}
         />
       </SettingRow>
@@ -131,17 +130,6 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       ) : null}
     </aside>
   );
-}
-
-function githubUpdates(watch: Watch): boolean {
-  const branchOfSomeoneElse = watch.dependabot || isSelfWatch(watch);
-  return !branchOfSomeoneElse;
-}
-
-function updateOnGitHubText(watch: Watch): string {
-  if (watch.dependabot) return "Dependabot owns the branch, so only the bot updates it.";
-  if (isSelfWatch(watch)) return "Your own coding session pushes the branch, so it updates the branch itself.";
-  return "The agent does it only when GitHub refuses.";
 }
 
 function mergeWhenReadyText(watch: Watch): string {

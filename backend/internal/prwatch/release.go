@@ -134,28 +134,15 @@ func rebaseAsks(w store.Watch) bool {
 }
 
 func (s *Service) movable(ctx context.Context, w store.Watch, dir, head, work, remote string) (bool, error) {
-	if w.BranchUpdate == store.BranchMerge {
-		return s.builtOn(ctx, dir, head, work, remote)
-	}
-	return s.onlyAdded(ctx, dir, head, work, remote)
-}
-
-func (s *Service) builtOn(ctx context.Context, dir, head, work, remote string) (bool, error) {
 	workOnHead, err := s.rel.Contains(ctx, dir, work, head)
 	if err != nil || !workOnHead {
 		return false, err
 	}
-	return s.rel.Contains(ctx, dir, remote, head)
-}
-
-func (s *Service) onlyAdded(ctx context.Context, dir, head, work, remote string) (bool, error) {
-	workOnHead, err := s.rel.Contains(ctx, dir, work, head)
-	if err != nil || !workOnHead {
-		return false, err
-	}
-	merges, err := s.rel.HasMerges(ctx, dir, head, work)
-	if err != nil || merges {
-		return false, err
+	if w.BranchUpdate != store.BranchMerge {
+		merges, err := s.rel.HasMerges(ctx, dir, head, work)
+		if err != nil || merges {
+			return false, err
+		}
 	}
 	return s.rel.Contains(ctx, dir, remote, head)
 }
@@ -180,24 +167,12 @@ func (s *Service) moveWork(ctx context.Context, w store.Watch, p *store.Proposal
 }
 
 func (s *Service) moveOnto(ctx context.Context, w store.Watch, p store.Proposal, remote string) (string, error) {
-	if w.BranchUpdate == store.BranchMerge {
-		return s.mergeOnto(ctx, w, remote)
+	merges := w.BranchUpdate == store.BranchMerge
+	move := s.rel.Rebase
+	if merges {
+		move = s.rel.Merge
 	}
-	return s.rebaseOnto(ctx, w, p, remote)
-}
-
-func (s *Service) mergeOnto(ctx context.Context, w store.Watch, remote string) (string, error) {
-	if err := s.rel.Merge(ctx, w.WorktreeDir, remote); err != nil {
-		if conflict, ok := errors.AsType[*gitrelease.ConflictError](err); ok {
-			return "", &rebaseConflict{remote: remote, err: conflict}
-		}
-		return "", err
-	}
-	return s.rel.Head(ctx, w.WorktreeDir)
-}
-
-func (s *Service) rebaseOnto(ctx context.Context, w store.Watch, p store.Proposal, remote string) (string, error) {
-	if err := s.rel.Rebase(ctx, w.WorktreeDir, remote); err != nil {
+	if err := move(ctx, w.WorktreeDir, remote); err != nil {
 		if conflict, ok := errors.AsType[*gitrelease.ConflictError](err); ok {
 			return "", &rebaseConflict{remote: remote, err: conflict}
 		}
@@ -206,6 +181,9 @@ func (s *Service) rebaseOnto(ctx context.Context, w store.Watch, p store.Proposa
 	work, err := s.rel.Head(ctx, w.WorktreeDir)
 	if err != nil {
 		return "", err
+	}
+	if merges {
+		return work, nil
 	}
 	if err := s.renameReplies(ctx, w, p, remote, work); err != nil {
 		return "", err

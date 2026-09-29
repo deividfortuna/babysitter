@@ -8,6 +8,13 @@ import (
 	"testing"
 )
 
+func updaterOf(onGitHub any) string {
+	if onGitHub == true {
+		return "github"
+	}
+	return "agent"
+}
+
 func (d *fakeDaemon) mergeRulesRoute() {
 	d.mux.HandleFunc("PATCH /api/v1/watches/1", func(w http.ResponseWriter, r *http.Request) {
 		var body map[string]any
@@ -34,7 +41,7 @@ func (d *fakeDaemon) mergeRulesRoute() {
 			method = v
 		}
 		one := strings.TrimSuffix(strings.TrimPrefix(d.watches, "["), "]")
-		fmt.Fprint(w, strings.Replace(one, `"status":"active"`, fmt.Sprintf(`"status":"active","approvalsRequired":%v,"mergeMethod":%q,"mergeWhenReady":%v,"branchUpdate":%q,"updateOnGitHub":%v`, approvals, method, whenReady, update, onGitHub), 1))
+		fmt.Fprint(w, strings.Replace(one, `"status":"active"`, fmt.Sprintf(`"status":"active","approvalsRequired":%v,"mergeMethod":%q,"mergeWhenReady":%v,"branchUpdate":%q,"updateOnGitHub":%v,"branchUpdater":%q`, approvals, method, whenReady, update, onGitHub, updaterOf(onGitHub)), 1))
 	})
 }
 

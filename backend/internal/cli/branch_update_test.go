@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/deividfortuna/babysitter/internal/httpd"
+	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
@@ -13,10 +14,10 @@ func TestBehindWordNamesWhoUpdatesTheBranch(t *testing.T) {
 		watch httpd.Watch
 		want  string
 	}{
-		"GitHub first": {httpd.Watch{Provider: "claude", BranchUpdate: store.BranchRebase, UpdateOnGitHub: true}, "rebase, on GitHub first"},
-		"agent only":   {httpd.Watch{Provider: "claude", BranchUpdate: store.BranchMerge}, "merge, by the agent"},
-		"Dependabot":   {httpd.Watch{Provider: "claude", Dependabot: true, BranchUpdate: store.BranchRebase, UpdateOnGitHub: true}, "Dependabot rebases it on @dependabot rebase"},
-		"self":         {httpd.Watch{Provider: "self", BranchUpdate: store.BranchRebase, UpdateOnGitHub: true}, "rebase, by your session"},
+		"GitHub first": {httpd.Watch{BranchUpdate: store.BranchRebase, BranchUpdater: prwatch.UpdaterGitHub}, "rebase, on GitHub first"},
+		"agent only":   {httpd.Watch{BranchUpdate: store.BranchMerge, BranchUpdater: prwatch.UpdaterAgent}, "merge, by the agent"},
+		"Dependabot":   {httpd.Watch{BranchUpdate: store.BranchRebase, BranchUpdater: prwatch.UpdaterDependabot}, "Dependabot rebases it on @dependabot rebase"},
+		"self":         {httpd.Watch{BranchUpdate: store.BranchRebase, BranchUpdater: prwatch.UpdaterSession}, "rebase, by your session"},
 	}
 	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {

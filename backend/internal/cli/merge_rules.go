@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/deividfortuna/babysitter/internal/httpd"
+	"github.com/deividfortuna/babysitter/internal/store"
 	"github.com/deividfortuna/babysitter/internal/textx"
 )
 
@@ -45,8 +46,9 @@ func approvalsCount(n int) string {
 
 func newWatchMergeRulesCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	var (
-		approvals, mergeMethod, branchUpdate string
-		mergeWhenReady, updateOnGitHub       bool
+		approvals, mergeMethod         string
+		branchUpdate                   store.BranchUpdate
+		mergeWhenReady, updateOnGitHub bool
 	)
 	cmd := &cobra.Command{
 		Use:   "merge-rules <watch>",
@@ -73,7 +75,7 @@ request against the new approvals.`,
 				ApprovalsRequired: wanted,
 				MergeMethod:       typed(cmd, "merge-method", &mergeMethod),
 				MergeWhenReady:    typed(cmd, "merge-when-ready", &mergeWhenReady),
-				BranchUpdate:      typedBranchUpdate(cmd, branchUpdate),
+				BranchUpdate:      typed(cmd, branchUpdateFlag, &branchUpdate),
 				UpdateOnGitHub:    typed(cmd, updateOnGitHubFlag, &updateOnGitHub),
 			}
 			if !anyChanged(cmd, "approvals", "merge-method", "merge-when-ready", branchUpdateFlag, updateOnGitHubFlag) {
@@ -89,7 +91,7 @@ request against the new approvals.`,
 	cmd.Flags().StringVar(&approvals, "approvals", "", "approvals the pull request needs before it is ready to merge: a number, 0 for none, or 'branch' for the rule of the base branch")
 	cmd.Flags().StringVar(&mergeMethod, "merge-method", "", "merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows")
 	cmd.Flags().BoolVar(&mergeWhenReady, "merge-when-ready", false, "the daemon merges with the method of the watch as soon as the watch is ready to merge")
-	cmd.Flags().StringVar(&branchUpdate, branchUpdateFlag, "", "how the branch is updated when it falls behind its base: rebase or merge. The agent solves a conflict the same way")
+	cmd.Flags().StringVar((*string)(&branchUpdate), branchUpdateFlag, "", "how the branch is updated when it falls behind its base: rebase or merge. The agent solves a conflict the same way")
 	cmd.Flags().BoolVar(&updateOnGitHub, updateOnGitHubFlag, false, "ask GitHub to update a branch that fell behind its base before the agent does it")
 	return cmd
 }

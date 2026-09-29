@@ -81,7 +81,6 @@ func WithProcessAlive(alive func(pid int) bool) Option {
 }
 
 type Service struct {
-	tries         branchTries
 	store         *store.Store
 	newClient     watcher.ClientFunc
 	git           worktree.Manager
@@ -110,7 +109,8 @@ type Service struct {
 	turns         keyedQueues
 	work          selfWork
 	waiting       waiting
-	rereviewTries rereviewTries
+	rereviewTries refTries
+	branchTries   refTries
 
 	bgMu sync.Mutex
 	bg   context.Context

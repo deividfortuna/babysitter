@@ -1022,6 +1022,8 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
             deletions: number;
+            /** @description Dependabot opened the pull request and owns its branch */
+            dependabot: boolean;
             draft: boolean;
             /** @description The head branch lives in another repository, so auto start skips the pull request */
             fork: boolean;
@@ -1317,6 +1319,11 @@ export interface components {
              * @enum {string}
              */
             branchUpdate: "rebase" | "merge";
+            /**
+             * @description Who updates a branch that fell behind its base: Dependabot, the session of the author for a self watch, GitHub first, or the agent
+             * @enum {string}
+             */
+            branchUpdater: "dependabot" | "session" | "github" | "agent";
             checkStates: {
                 [key: string]: string;
             } | null;

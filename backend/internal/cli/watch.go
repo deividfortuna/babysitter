@@ -265,7 +265,7 @@ func newWatchStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		autoRebase      bool
 		mergeWhenReady  bool
 		keepWorktree    bool
-		branchUpdate    string
+		branchUpdate    store.BranchUpdate
 		updateOnGitHub  bool
 		noCheckout      bool
 	)
@@ -333,7 +333,7 @@ A flag you do not type takes the override of the repository
 				AutoApproveRebase: typed(cmd, "auto-approve-rebase", &autoRebase),
 				MergeWhenReady:    typed(cmd, "merge-when-ready", &mergeWhenReady),
 				KeepWorktree:      typed(cmd, "keep-worktree", &keepWorktree),
-				BranchUpdate:      typedBranchUpdate(cmd, branchUpdate),
+				BranchUpdate:      typed(cmd, branchUpdateFlag, &branchUpdate),
 				UpdateOnGitHub:    typed(cmd, updateOnGitHubFlag, &updateOnGitHub),
 			}
 			if req.ApprovalsRequired, err = typedApprovals(cmd, approvals); err != nil {
@@ -370,7 +370,7 @@ A flag you do not type takes the override of the repository
 	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&mergeWhenReady, "merge-when-ready", false, "the daemon merges with the method of the watch as soon as the watch is ready to merge; off without the flag")
 	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "a stop leaves the worktree of the watch on disk; without the flag the repository, then the daemon, decides")
-	cmd.Flags().StringVar(&branchUpdate, branchUpdateFlag, "", "how the branch is updated when it falls behind its base: rebase or merge. The agent solves a conflict the same way; without the flag the repository, then the daemon, decides")
+	cmd.Flags().StringVar((*string)(&branchUpdate), branchUpdateFlag, "", "how the branch is updated when it falls behind its base: rebase or merge. The agent solves a conflict the same way; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&updateOnGitHub, updateOnGitHubFlag, false, "ask GitHub to update a branch that fell behind its base before the agent does it; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&noCheckout, "no-checkout", false, "do not use the current folder: the daemon clones the head repository into its data directory and makes the worktree from that clone")
 	return cmd

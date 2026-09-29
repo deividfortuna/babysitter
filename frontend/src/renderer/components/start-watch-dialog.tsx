@@ -29,13 +29,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Spinner } from "@/components/ui/spinner";
 import { Switch } from "@/components/ui/switch";
-import { BRANCH_UPDATES } from "@/components/branch-update-select";
 import { mergeMethodLabel } from "@/components/merge-method-select";
 import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/approvals";
 import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
-import { isDependabotLogin } from "@/lib/watch-status";
+import { BRANCH_UPDATES, DEPENDABOT_OWNS_BRANCH } from "@/lib/branch-update";
 import {
   agentLabel,
   branchUpdateDefaultLabel,
@@ -217,7 +216,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const keepWorktreeValue = keepWorktree ?? defaults?.keepWorktree ?? false;
   const mergeMethodValue = mergeMethod ? mergeMethodOf(mergeMethod) : (defaults?.mergeMethod ?? "");
   const updateOnGitHubValue = updateOnGitHub ?? defaults?.updateOnGitHub ?? true;
-  const ownedByDependabot = isDependabotLogin(picked?.author);
+  const ownedByDependabot = picked?.dependabot ?? false;
   const branchUpdateChoice = ownedByDependabot ? "" : branchUpdate;
   const updateOnGitHubChoice = ownedByDependabot ? null : updateOnGitHub;
   const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
@@ -569,11 +568,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
             <SettingRow
               label="Branch behind its base"
               htmlFor="branch-update"
-              description={
-                ownedByDependabot
-                  ? "Dependabot owns the branch, so only the bot updates it."
-                  : "The agent solves a conflict the same way."
-              }
+              description={ownedByDependabot ? DEPENDABOT_OWNS_BRANCH : "The agent solves a conflict the same way."}
               className={ROW}
             >
               <div className={CONTROL}>
