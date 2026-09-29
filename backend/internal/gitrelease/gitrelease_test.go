@@ -344,6 +344,8 @@ func TestAMergeMakesAMergeCommitWhenTheCheckoutOnlyFastForwards(t *testing.T) {
 	}
 	work := t.TempDir()
 	git(t, work, "init", "-q", "-b", "fix")
+	git(t, work, "config", "user.name", "t")
+	git(t, work, "config", "user.email", "t@example.com")
 	commit(t, work, "a.txt", "one\n", "add a")
 	git(t, work, "checkout", "-q", "-b", "moved")
 	theirs := commit(t, work, "c.txt", "theirs\n", "their c")
