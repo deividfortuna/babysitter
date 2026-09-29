@@ -32,21 +32,22 @@ const supervisorGrace = 5 * time.Second
 var bannerGrace = supervisorGrace
 
 type Config struct {
-	DataDir       string
-	DBPath        string
-	Port          int
-	Interval      time.Duration
-	WatchInterval time.Duration
-	AgentBin      string
-	AgentModel    string
-	CopilotBin    string
-	CopilotModel  string
-	Notifier      notify.Notifier
-	Owner         string
-	Version       string
-	NewClient     watcher.ClientFunc
-	Log           *slog.Logger
-	Logs          *logbook.Book
+	DataDir          string
+	DBPath           string
+	Port             int
+	Interval         time.Duration
+	WatchInterval    time.Duration
+	WatchMaxInterval time.Duration
+	AgentBin         string
+	AgentModel       string
+	CopilotBin       string
+	CopilotModel     string
+	Notifier         notify.Notifier
+	Owner            string
+	Version          string
+	NewClient        watcher.ClientFunc
+	Log              *slog.Logger
+	Logs             *logbook.Book
 }
 
 var ErrAlreadyRunning = errors.New("a daemon is already running")
@@ -86,10 +87,9 @@ func Run(ctx context.Context, cfg Config) error {
 	if err != nil {
 		return err
 	}
-	intervalsOverridden := settings.PollInterval != stored.PollInterval || settings.WatchInterval != stored.WatchInterval
-	if intervalsOverridden {
+	if intervalsOverridden(settings, stored) {
 		log.Info("the command line asked for other intervals than the settings hold; they hold for this run only",
-			"interval", settings.PollInterval, "watchInterval", settings.WatchInterval)
+			"interval", settings.PollInterval, "watchInterval", settings.WatchInterval, "watchMaxInterval", settings.WatchMaxInterval)
 	}
 
 	notifications := notify.NewCenter(notify.CenterDeps{
@@ -100,7 +100,7 @@ func Run(ctx context.Context, cfg Config) error {
 	var autoStart func(ctx context.Context)
 	w := watcher.New(st, cfg.NewClient, watcher.WithInterval(settings.PollInterval), watcher.WithLogger(log),
 		watcher.WithAfterPass(func(ctx context.Context) { autoStart(ctx) }))
-	watchOpts := []prwatch.Option{prwatch.WithInterval(settings.WatchInterval)}
+	watchOpts := []prwatch.Option{prwatch.WithInterval(settings.WatchInterval), prwatch.WithMaxInterval(settings.WatchMaxInterval)}
 	exe, err := os.Executable()
 	if err != nil {
 		log.Warn("the agent sessions report nothing: the babysitter command is not known", "err", err)
@@ -156,6 +156,7 @@ func Run(ctx context.Context, cfg Config) error {
 		ApplySettings: func(s store.Settings) {
 			w.SetInterval(s.PollInterval)
 			watches.SetInterval(s.WatchInterval)
+			watches.SetMaxInterval(s.WatchMaxInterval)
 		},
 		Log:      log,
 		Version:  cfg.Version,

@@ -64,6 +64,10 @@ func WithInterval(d time.Duration) Option {
 	return func(s *Service) { s.interval.Set(d) }
 }
 
+func WithMaxInterval(d time.Duration) Option {
+	return func(s *Service) { s.maxInterval.Set(d) }
+}
+
 func WithHeartbeat(d time.Duration) Option {
 	return func(s *Service) { s.heartbeat = d }
 }
@@ -91,6 +95,8 @@ type Service struct {
 	agents        map[string]agent.Runner
 	host          session.Host
 	interval      *timex.Interval
+	maxInterval   *timex.Interval
+	schedule      *schedule
 	heartbeat     time.Duration
 	now           func() time.Time
 	alive         func(pid int) bool
@@ -125,6 +131,8 @@ func New(d Deps, opts ...Option) *Service {
 		agents:        map[string]agent.Runner{},
 		host:          d.Host,
 		interval:      timex.NewInterval(3 * time.Minute),
+		maxInterval:   timex.NewInterval(defaultMaxInterval),
+		schedule:      newSchedule(time.Now),
 		heartbeat:     time.Hour,
 		now:           time.Now,
 		alive:         processalive.Alive,
@@ -204,22 +212,24 @@ func (s *Service) Run(ctx context.Context) error {
 	s.bgMu.Unlock()
 	s.recover(ctx)
 	s.pass(ctx)
-	ticker := time.NewTicker(s.Interval())
-	defer ticker.Stop()
+	timer := time.NewTimer(s.untilNextPoll())
+	defer timer.Stop()
 	for {
 		select {
 		case <-ctx.Done():
 			s.wg.Wait()
 			s.stopSessions()
 			return ctx.Err()
-		case <-ticker.C:
+		case <-timer.C:
 			s.pass(ctx)
 		case <-s.kick:
 			s.pass(ctx)
-			ticker.Reset(s.Interval())
 		case <-s.interval.Retuned():
-			ticker.Reset(s.Interval())
+			s.schedule.restart()
+		case <-s.maxInterval.Retuned():
+			s.schedule.restart()
 		}
+		timer.Reset(s.untilNextPoll())
 	}
 }
 
@@ -227,7 +237,25 @@ func (s *Service) Interval() time.Duration { return s.interval.Duration() }
 
 func (s *Service) SetInterval(d time.Duration) { s.interval.Set(d) }
 
-func (s *Service) Kick() {
+func (s *Service) MaxInterval() time.Duration { return s.maxInterval.Duration() }
+
+func (s *Service) SetMaxInterval(d time.Duration) { s.maxInterval.Set(d) }
+
+func (s *Service) cadence() cadence {
+	shortest := s.Interval()
+	return cadence{shortest: shortest, longest: max(s.MaxInterval(), shortest)}
+}
+
+func (s *Service) untilNextPoll() time.Duration {
+	c := s.cadence()
+	if s.guard.Paused() {
+		return c.shortest
+	}
+	return s.schedule.untilNext(c)
+}
+
+func (s *Service) Kick(id int64) {
+	s.schedule.wake(id)
 	select {
 	case s.kick <- struct{}{}:
 	default:
@@ -280,11 +308,16 @@ func (s *Service) pass(ctx context.Context) {
 		s.log.Error("github client", "err", err)
 		return
 	}
+	s.schedule.keep(watchIDs(watches))
+	c := s.cadence()
 	var g errgroup.Group
 	g.SetLimit(passWidth)
 	for _, w := range watches {
 		if ctx.Err() != nil || s.guard.Paused() {
 			break
+		}
+		if !s.schedule.due(w.ID, c) {
+			continue
 		}
 		g.Go(func() error {
 			s.passOne(ctx, client, w)
@@ -292,6 +325,14 @@ func (s *Service) pass(ctx context.Context) {
 		})
 	}
 	_ = g.Wait()
+}
+
+func watchIDs(watches []store.Watch) map[int64]bool {
+	out := make(map[int64]bool, len(watches))
+	for _, w := range watches {
+		out[w.ID] = true
+	}
+	return out
 }
 
 func (s *Service) passOne(ctx context.Context, client *github.Client, w store.Watch) {

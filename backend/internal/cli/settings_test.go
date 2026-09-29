@@ -29,7 +29,7 @@ func TestSettingsSetWritesOnlyTheFlagsThatWereTyped(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
 
-	out, err := runSettings(t, d, "set", "--watch-interval", "45s", "--keep-worktree")
+	out, err := runSettings(t, d, "set", "--watch-interval", "45s", "--watch-max-interval", "10m", "--keep-worktree")
 	if err != nil {
 		t.Fatalf("settings set error = %v", err)
 	}
@@ -37,8 +37,8 @@ func TestSettingsSetWritesOnlyTheFlagsThatWereTyped(t *testing.T) {
 		t.Fatalf("the daemon got %d writes, want 1", len(d.settingsPut))
 	}
 	got := d.settingsPut[0]
-	if got["watchIntervalSeconds"] != float64(45) || got["keepWorktree"] != true {
-		t.Fatalf("body = %v, want the watch interval and the worktree of the flags", got)
+	if got["watchIntervalSeconds"] != float64(45) || got["watchMaxIntervalSeconds"] != float64(600) || got["keepWorktree"] != true {
+		t.Fatalf("body = %v, want the watch intervals and the worktree of the flags", got)
 	}
 	if got["pollIntervalSeconds"] != float64(60) {
 		t.Fatalf("body = %v, want the poll interval the daemon already had", got)

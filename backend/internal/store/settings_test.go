@@ -2,7 +2,9 @@ package store
 
 import (
 	"context"
+	"database/sql"
 	"errors"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -31,6 +33,7 @@ func TestSaveSettingsKeepsWhatItWasGiven(t *testing.T) {
 	want := Settings{
 		PollInterval:      90 * time.Second,
 		WatchInterval:     30 * time.Second,
+		WatchMaxInterval:  10 * time.Minute,
 		ApprovalsRequired: &approvals,
 		MergeMethod:       "rebase",
 		IncludeExisting:   true,
@@ -63,11 +66,11 @@ func TestSaveSettingsForgetsTheApprovalsAndTakesTheRuleOfTheBranch(t *testing.T)
 	s, _ := openTemp(t)
 	ctx := context.Background()
 	approvals := 3
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, ApprovalsRequired: &approvals, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 
-	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
+	if _, err := s.SaveSettings(ctx, Settings{PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Minute, ApprovalMode: ApprovalManual, Provider: "claude"}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -86,12 +89,14 @@ func TestSaveSettingsRejectsValuesTheDaemonCannotRun(t *testing.T) {
 	ctx := context.Background()
 	approvals := -1
 	cases := map[string]Settings{
-		"poll interval below the floor":  {PollInterval: time.Second, WatchInterval: time.Minute},
-		"watch interval below the floor": {PollInterval: time.Minute, WatchInterval: time.Second},
-		"poll interval above the roof":   {PollInterval: 25 * time.Hour, WatchInterval: time.Minute},
+		"poll interval below the floor":  {PollInterval: time.Second, WatchInterval: time.Minute, WatchMaxInterval: time.Hour},
+		"watch interval below the floor": {PollInterval: time.Minute, WatchInterval: time.Second, WatchMaxInterval: time.Hour},
+		"poll interval above the roof":   {PollInterval: 25 * time.Hour, WatchInterval: time.Minute, WatchMaxInterval: time.Hour},
 		"watch interval above the roof":  {PollInterval: time.Minute, WatchInterval: 25 * time.Hour},
-		"merge method unknown":           {PollInterval: time.Minute, WatchInterval: time.Minute, MergeMethod: "fast-forward"},
-		"approvals below zero":           {PollInterval: time.Minute, WatchInterval: time.Minute, ApprovalsRequired: &approvals},
+		"merge method unknown":           {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, MergeMethod: "fast-forward"},
+		"approvals below zero":           {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, ApprovalsRequired: &approvals},
+		"longest below the watch":        {PollInterval: time.Minute, WatchInterval: 5 * time.Minute, WatchMaxInterval: time.Minute},
+		"longest above the roof":         {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: 25 * time.Hour},
 	}
 	for name, in := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -298,5 +303,49 @@ func TestSaveSettingsCleansTheUnknownKindsItKeeps(t *testing.T) {
 	}
 	if muted != "checks,rumour" {
 		t.Fatalf("the row holds %q, want each unknown kind once and trimmed", muted)
+	}
+}
+
+func TestUpgradeGivesTheWatchALongestIntervalNoShorterThanItsInterval(t *testing.T) {
+	t.Parallel()
+	cases := map[string]struct {
+		watchMS int64
+		want    time.Duration
+	}{
+		"the default interval": {watchMS: 180000, want: 15 * time.Minute},
+		"a long interval":      {watchMS: 1800000, want: 30 * time.Minute},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			ctx := context.Background()
+			path := filepath.Join(t.TempDir(), "babysitter.db")
+			db, err := sql.Open("sqlite3", "file:"+path+"?_foreign_keys=on")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := migrateTo(ctx, db, len(migrations)-1); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := db.ExecContext(ctx, "UPDATE settings SET watch_interval_ms = ? WHERE id = 1", c.watchMS); err != nil {
+				t.Fatal(err)
+			}
+			if err := db.Close(); err != nil {
+				t.Fatal(err)
+			}
+
+			s, err := Open(path)
+			if err != nil {
+				t.Fatalf("Open() after the upgrade error = %v", err)
+			}
+			defer s.Close()
+			got, err := s.Settings(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got.WatchMaxInterval != c.want {
+				t.Fatalf("WatchMaxInterval = %s, want %s", got.WatchMaxInterval, c.want)
+			}
+		})
 	}
 }

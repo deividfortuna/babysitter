@@ -1214,6 +1214,8 @@ export interface components {
             provider: "claude" | "copilot";
             /** @description Time between polls of a watched pull request */
             watchIntervalSeconds: number;
+            /** @description Longest time between polls of a watched pull request where nothing happens. After each quiet poll the time doubles up to this value; activity, running checks or a working agent bring it back to watchIntervalSeconds. The same value as watchIntervalSeconds keeps one fixed interval */
+            watchMaxIntervalSeconds: number;
         };
         HttpdStartWatchRequest: {
             /**

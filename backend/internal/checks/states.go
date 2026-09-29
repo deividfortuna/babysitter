@@ -84,6 +84,15 @@ func CountPassed(states map[string]State) int {
 	return n
 }
 
+func AnyPending(states map[string]State) bool {
+	for _, state := range states {
+		if state == Pending {
+			return true
+		}
+	}
+	return false
+}
+
 func Summarize(states map[string]State, headSHA, greenSHA string) string {
 	var failed []string
 	pending := 0

@@ -16,6 +16,7 @@ import (
 type Settings struct {
 	PollInterval           time.Duration
 	WatchInterval          time.Duration
+	WatchMaxInterval       time.Duration
 	ApprovalsRequired      *int
 	MergeMethod            string
 	IncludeExisting        bool
@@ -55,6 +56,7 @@ func DefaultSettings() Settings {
 	return Settings{
 		PollInterval:         time.Minute,
 		WatchInterval:        3 * time.Minute,
+		WatchMaxInterval:     15 * time.Minute,
 		NotificationsEnabled: true,
 		NotificationSound:    true,
 		ApprovalMode:         ApprovalManual,
@@ -68,6 +70,9 @@ func (s Settings) Validate() error {
 	}
 	if s.WatchInterval < MinInterval || s.WatchInterval > MaxInterval {
 		return fmt.Errorf("%w: the watch poll interval must be between %s and %s, got %s", ErrInvalidSettings, MinInterval, MaxInterval, s.WatchInterval)
+	}
+	if s.WatchMaxInterval < s.WatchInterval || s.WatchMaxInterval > MaxInterval {
+		return fmt.Errorf("%w: the longest watch poll interval must be between the watch poll interval %s and %s, got %s", ErrInvalidSettings, s.WatchInterval, MaxInterval, s.WatchMaxInterval)
 	}
 	if s.MergeMethod != "" && !slices.Contains(ghclient.MergeMethodsKnown, s.MergeMethod) {
 		return fmt.Errorf("%w: unknown merge method %q: use %s", ErrInvalidSettings, s.MergeMethod, strings.Join(ghclient.MergeMethodsKnown, ", "))
@@ -128,18 +133,19 @@ func parseMutedKinds(value string) []NotificationKind {
 	return out
 }
 
-const settingsColumns = "poll_interval_ms, watch_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notification_sound, muted_notification_kinds, approval_mode, auto_approve_rebase, provider, model, effort"
+const settingsColumns = "poll_interval_ms, watch_interval_ms, watch_max_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notification_sound, muted_notification_kinds, approval_mode, auto_approve_rebase, provider, model, effort"
 
 func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	var (
 		out       Settings
 		pollMS    int64
 		watchMS   int64
+		maxMS     int64
 		approvals sql.NullInt64
 		muted     string
 	)
 	err := s.db.QueryRowContext(ctx, "SELECT "+settingsColumns+" FROM settings WHERE id = 1").
-		Scan(&pollMS, &watchMS, &approvals, &out.MergeMethod, &out.IncludeExisting, &out.IncludeOwn, &out.KeepWorktree,
+		Scan(&pollMS, &watchMS, &maxMS, &approvals, &out.MergeMethod, &out.IncludeExisting, &out.IncludeOwn, &out.KeepWorktree,
 			&out.NotificationsEnabled, &out.NotificationSound, &muted, &out.ApprovalMode, &out.AutoApproveRebase,
 			&out.Provider, &out.Model, &out.Effort)
 	if err != nil {
@@ -147,6 +153,7 @@ func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	}
 	out.PollInterval = time.Duration(pollMS) * time.Millisecond
 	out.WatchInterval = time.Duration(watchMS) * time.Millisecond
+	out.WatchMaxInterval = time.Duration(maxMS) * time.Millisecond
 	out.MutedNotificationKinds = parseMutedKinds(muted)
 	if approvals.Valid {
 		n := int(approvals.Int64)
@@ -179,6 +186,7 @@ func (s *Store) SaveSettings(ctx context.Context, next Settings) (Settings, erro
 UPDATE settings SET
     poll_interval_ms   = ?,
     watch_interval_ms  = ?,
+    watch_max_interval_ms = ?,
     approvals_required = ?,
     merge_method       = ?,
     include_existing   = ?,
@@ -193,7 +201,7 @@ UPDATE settings SET
     model               = ?,
     effort              = ?
 WHERE id = 1`,
-		next.PollInterval.Milliseconds(), next.WatchInterval.Milliseconds(), approvals,
+		next.PollInterval.Milliseconds(), next.WatchInterval.Milliseconds(), next.WatchMaxInterval.Milliseconds(), approvals,
 		next.MergeMethod, next.IncludeExisting, next.IncludeOwn, next.KeepWorktree,
 		next.NotificationsEnabled, next.NotificationSound, muted, next.ApprovalMode, next.AutoApproveRebase,
 		next.Provider, next.Model, next.Effort)

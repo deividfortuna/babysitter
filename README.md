@@ -163,7 +163,7 @@ The Settings dialog of the app has four panes: **General**, **Watching**,
 **Notifications** and **Updates**. **General** holds the theme of the app:
 light, dark or system.
 
-**Watching** holds the preferences of the daemon. The two intervals
+**Watching** holds the preferences of the daemon. The three intervals
 apply to the daemon as a whole. The rows under **Defaults of a new
 watch** are what a watch starts with:
 
@@ -171,6 +171,7 @@ watch** are what a watch starts with:
 | --- | --- |
 | Repository poll interval | Seconds between passes over the repositories you watch, 60 by default |
 | Watch poll interval | Seconds between polls of a pull request under watch, 180 by default |
+| Longest watch poll interval | Seconds a quiet pull request waits between polls at most, 900 by default. After each poll where nothing happens, the wait of that watch doubles up to this value. A new activity row, a check that runs or an agent that works brings it back to the watch poll interval. The same value as the watch poll interval keeps one fixed interval |
 | Agent | The provider and the model of a new watch, Claude and its default model by default |
 | Effort | How much the model reasons before it acts: a level the model takes, such as `low`, `medium` or `high`. Empty takes the default of the model. A model can take no effort level, and then the field stays empty |
 | Approval mode | Who releases the work of each turn of the agent of a new watch: `manual` holds it until you approve it, `auto` pushes and posts as soon as the turn ends. A new install asks, `manual`; an install that upgrades keeps `auto`. A `--provider self` watch always runs in auto |
@@ -217,13 +218,16 @@ The **Notifications** pane holds three more:
 The daemon stores them in the database, so the CLI takes the same
 defaults: a flag of `watch start` that you do not type is left out of the
 request, and the repository, then the daemon, decides. An interval takes effect
-at once, with no restart. Both intervals accept 10 seconds to 24 hours.
+at once, with no restart, and every watch starts again from the watch poll
+interval. The intervals accept 10 seconds to 24 hours, and the longest
+watch poll interval cannot be shorter than the watch poll interval.
 
 Read and write them from the terminal too:
 
 ```sh
 babysitter settings get                            # what the daemon holds
 babysitter settings set --watch-interval 45s       # only the flags you type change
+babysitter settings set --watch-max-interval 30m   # the longest wait of a quiet watch; the watch interval itself turns the back off off
 babysitter settings set --poll-interval 5m         # the repository poll interval
 babysitter settings set --approvals 2              # a number, 0 for none
 babysitter settings set --approvals branch         # give the decision back to the base branch
@@ -251,8 +255,9 @@ A build that does not update itself shows only its version there, and
 tells you to install a new version with Homebrew or from the release
 page.
 
-`daemon start --interval` and `--watch-interval` hold for that run only.
-They do not change the stored settings, so the app keeps showing the
+`daemon start --interval`, `--watch-interval` and `--watch-max-interval`
+hold for that run only. A `--watch-interval` above the stored longest
+interval raises the longest interval to it for that run. They do not change the stored settings, so the app keeps showing the
 stored value while such a daemon runs at another rate; the daemon says so
 in its log at start. Saving from the app wins over the flag. An interval
 outside the bounds stops the start.
@@ -1302,7 +1307,10 @@ store, or whose mergeable state is still unknown costs two more, and one
 that left the open list costs one more to see how it ended.
 
 Each watch takes a full snapshot of its pull request on every watch
-poll, see [Snapshot](#snapshot). A watch poll also reads the log of each
+poll, see [Snapshot](#snapshot). A watch where nothing happens polls less
+often: its wait doubles after each quiet poll, up to the longest watch
+poll interval. A kick, such as the start of a watch or a decision on a
+proposal, polls only the watch it concerns. A watch poll also reads the log of each
 failed job it hands to the agent, and the rule of the base branch when
 the approvals of the watch follow it.
 
@@ -1313,9 +1321,9 @@ serves the body from the cache it keeps in the database.
 When fewer than 10 requests remain in the hour, babysitter waits for the
 limit to reset. If you watch many active repositories or pull requests,
 raise the intervals in the Watching pane of the settings, or with
-`babysitter settings set --poll-interval` and `--watch-interval`.
-`daemon start --interval` and `--watch-interval` hold for that run
-only.
+`babysitter settings set --poll-interval`, `--watch-interval` and
+`--watch-max-interval`. `daemon start --interval`, `--watch-interval` and
+`--watch-max-interval` hold for that run only.
 
 The daemon reads the budget from the headers of each GitHub answer.
 `babysitter ratelimit` prints it, and the sidebar of the desktop app

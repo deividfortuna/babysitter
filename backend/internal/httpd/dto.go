@@ -414,21 +414,22 @@ type HandbackRefusal struct {
 }
 
 type Settings struct {
-	PollIntervalSeconds    int      `json:"pollIntervalSeconds" minimum:"10" maximum:"86400" description:"Time between passes of the repository watcher"`
-	WatchIntervalSeconds   int      `json:"watchIntervalSeconds" minimum:"10" maximum:"86400" description:"Time between polls of a watched pull request"`
-	ApprovalsRequired      *int     `json:"approvalsRequired" minimum:"0" description:"How many approvals a new watch wants before it calls the pull request ready to merge; null takes the rule of the base branch"`
-	MergeMethod            string   `json:"mergeMethod" enum:",squash,merge,rebase" description:"The merge method of a new watch; empty takes the first one the repository allows"`
-	IncludeExisting        bool     `json:"includeExisting" description:"A new watch reports the review items the pull request has already"`
-	IncludeOwn             bool     `json:"includeOwn" description:"A new watch reports the comments of the token's own user"`
-	KeepWorktree           bool     `json:"keepWorktree" description:"A watch that stops leaves its worktree on disk"`
-	NotificationsEnabled   bool     `json:"notificationsEnabled" description:"What happens on a watched pull request is shown as a notification of the operating system"`
-	NotificationSound      bool     `json:"notificationSound" description:"A notification makes a sound"`
-	MutedNotificationKinds []string `json:"mutedNotificationKinds" items.enum:"agent,review,checks,watch,merge,auto" description:"The notification kinds that reach nobody. The history keeps them either way"`
-	ApprovalMode           string   `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent of a new watch: the daemon on its own, or the author"`
-	AutoApproveRebase      bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
-	Provider               string   `json:"provider" enum:"claude,copilot" description:"The AI provider of a new watch"`
-	Model                  string   `json:"model" description:"The model of that provider; empty takes the default of the provider"`
-	Effort                 string   `json:"effort" description:"The effort level of that model, one the providers route lists for it; empty takes the default of the model"`
+	PollIntervalSeconds     int      `json:"pollIntervalSeconds" minimum:"10" maximum:"86400" description:"Time between passes of the repository watcher"`
+	WatchIntervalSeconds    int      `json:"watchIntervalSeconds" minimum:"10" maximum:"86400" description:"Time between polls of a watched pull request"`
+	WatchMaxIntervalSeconds int      `json:"watchMaxIntervalSeconds" minimum:"10" maximum:"86400" description:"Longest time between polls of a watched pull request where nothing happens. After each quiet poll the time doubles up to this value; activity, running checks or a working agent bring it back to watchIntervalSeconds. The same value as watchIntervalSeconds keeps one fixed interval"`
+	ApprovalsRequired       *int     `json:"approvalsRequired" minimum:"0" description:"How many approvals a new watch wants before it calls the pull request ready to merge; null takes the rule of the base branch"`
+	MergeMethod             string   `json:"mergeMethod" enum:",squash,merge,rebase" description:"The merge method of a new watch; empty takes the first one the repository allows"`
+	IncludeExisting         bool     `json:"includeExisting" description:"A new watch reports the review items the pull request has already"`
+	IncludeOwn              bool     `json:"includeOwn" description:"A new watch reports the comments of the token's own user"`
+	KeepWorktree            bool     `json:"keepWorktree" description:"A watch that stops leaves its worktree on disk"`
+	NotificationsEnabled    bool     `json:"notificationsEnabled" description:"What happens on a watched pull request is shown as a notification of the operating system"`
+	NotificationSound       bool     `json:"notificationSound" description:"A notification makes a sound"`
+	MutedNotificationKinds  []string `json:"mutedNotificationKinds" items.enum:"agent,review,checks,watch,merge,auto" description:"The notification kinds that reach nobody. The history keeps them either way"`
+	ApprovalMode            string   `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent of a new watch: the daemon on its own, or the author"`
+	AutoApproveRebase       bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
+	Provider                string   `json:"provider" enum:"claude,copilot" description:"The AI provider of a new watch"`
+	Model                   string   `json:"model" description:"The model of that provider; empty takes the default of the provider"`
+	Effort                  string   `json:"effort" description:"The effort level of that model, one the providers route lists for it; empty takes the default of the model"`
 }
 
 type Notification struct {

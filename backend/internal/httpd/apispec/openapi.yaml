@@ -3044,9 +3044,18 @@ components:
           maximum: 86400
           minimum: 10
           type: integer
+        watchMaxIntervalSeconds:
+          description: Longest time between polls of a watched pull request where
+            nothing happens. After each quiet poll the time doubles up to this value;
+            activity, running checks or a working agent bring it back to watchIntervalSeconds.
+            The same value as watchIntervalSeconds keeps one fixed interval
+          maximum: 86400
+          minimum: 10
+          type: integer
       required:
       - pollIntervalSeconds
       - watchIntervalSeconds
+      - watchMaxIntervalSeconds
       - approvalsRequired
       - mergeMethod
       - includeExisting

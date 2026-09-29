@@ -99,7 +99,7 @@ func (s *Service) Handback(ctx context.Context, id int64, o HandbackOptions) (st
 		return store.Watch{}, errors.Join(err, undoErr)
 	}
 	s.tellHandback(ctx, w)
-	s.Kick()
+	s.Kick(w.ID)
 	back, err := s.store.GetWatch(ctx, id)
 	if err != nil {
 		s.log.Warn("read the watch after the hand-back", "watch", id, "err", err)
