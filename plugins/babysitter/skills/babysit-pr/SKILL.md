@@ -234,6 +234,13 @@ first layer that sets it: watch, then repository, then daemon.
 the settings of the daemon. Turn a toggle off with `=false`, for example
 `--auto-start-mine=false`.
 
+`--update-on-github` is on by default: when a branch falls behind its
+base, the daemon first asks GitHub to update it with the method of
+`--branch-update`, and the agent of the watch does it only when GitHub
+refuses. `--update-on-github=false` leaves the update to the agent. It
+changes nothing for a watch with `--provider self`, because your session
+updates its own branch.
+
 What to tell the user:
 
 - A toggle takes only the pull requests created after it went on. A
