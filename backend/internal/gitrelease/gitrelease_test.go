@@ -307,6 +307,36 @@ func TestAMergeKeepsTheCommitsOfBothSides(t *testing.T) {
 	}
 }
 
+func TestAMergeSkipsTheHooksOfTheRepository(t *testing.T) {
+	hooks := t.TempDir()
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "core.hooksPath")
+	t.Setenv("GIT_CONFIG_VALUE_0", hooks)
+	_, work, other := repos(t)
+	ctx := context.Background()
+	g := New()
+	commit(t, other, "c.txt", "theirs\n", "their c")
+	git(t, other, "push", "-q", "origin", "fix")
+	commit(t, work, "d.txt", "mine\n", "my d")
+	remote, err := g.Fetch(ctx, work, "fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"pre-merge-commit", "commit-msg"} {
+		if err := os.WriteFile(filepath.Join(hooks, name), []byte("#!/bin/sh\nexit 1\n"), 0o750); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := g.Merge(ctx, work, remote); err != nil {
+		t.Fatalf("Merge() error = %v, want the hooks skipped", err)
+	}
+	head, _ := g.Head(ctx, work)
+	if kept, err := g.Contains(ctx, work, head, remote); err != nil || !kept {
+		t.Fatalf("the merge %s lacks %s: %v, %v", head, remote, kept, err)
+	}
+}
+
 func TestAMergeThatConflictsIsAborted(t *testing.T) {
 	t.Parallel()
 	_, work, other := repos(t)
