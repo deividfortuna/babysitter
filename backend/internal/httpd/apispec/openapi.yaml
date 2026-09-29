@@ -3000,8 +3000,8 @@ components:
           nullable: true
           type: integer
         autoApproveRebase:
-          description: Approved work goes out after a clean rebase without asking
-            again
+          description: Approved work goes out after a clean rebase or merge onto a
+            branch that moved, without asking again
           type: boolean
         branchUpdate:
           description: 'How a new watch updates a branch that fell behind its base.
@@ -3135,8 +3135,9 @@ components:
           nullable: true
           type: integer
         autoApproveRebase:
-          description: Approved work goes out after a clean rebase without asking
-            again; absent takes the repository, then the daemon
+          description: Approved work goes out after a clean rebase or merge onto a
+            branch that moved, without asking again; absent takes the repository,
+            then the daemon
           nullable: true
           type: boolean
         branchUpdate:
@@ -3295,8 +3296,8 @@ components:
         author:
           type: string
         autoApproveRebase:
-          description: Approved work goes out after a clean rebase without asking
-            again
+          description: Approved work goes out after a clean rebase or merge onto a
+            branch that moved, without asking again
           type: boolean
         autoReason:
           description: 'Why auto start began the watch: the author opened the pull

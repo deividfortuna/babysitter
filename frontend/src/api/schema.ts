@@ -1194,7 +1194,7 @@ export interface components {
             approvalMode: "auto" | "manual";
             /** @description How many approvals a new watch wants before it calls the pull request ready to merge; null takes the rule of the base branch */
             approvalsRequired: number | null;
-            /** @description Approved work goes out after a clean rebase without asking again */
+            /** @description Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again */
             autoApproveRebase: boolean;
             /**
              * @description How a new watch updates a branch that fell behind its base. rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way
@@ -1246,7 +1246,7 @@ export interface components {
             approvalMode?: "auto" | "manual" | null;
             /** @description How many approvals the pull request needs before the watch calls it ready to merge; absent takes the repository, then the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds */
             approvalsRequired?: number | null;
-            /** @description Approved work goes out after a clean rebase without asking again; absent takes the repository, then the daemon */
+            /** @description Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again; absent takes the repository, then the daemon */
             autoApproveRebase?: boolean | null;
             /**
              * @description rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way; absent takes the repository, then the daemon
@@ -1316,7 +1316,7 @@ export interface components {
             /** @description How many approvals the pull request needs before the watch calls it ready to merge */
             approvalsRequired: number;
             author: string;
-            /** @description Approved work goes out after a clean rebase without asking again */
+            /** @description Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again */
             autoApproveRebase: boolean;
             /**
              * @description Why auto start began the watch: the author opened the pull request, it is assigned to the author, or Dependabot opened it; absent for a watch started by hand

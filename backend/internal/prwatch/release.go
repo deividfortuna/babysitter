@@ -23,6 +23,7 @@ var (
 	ErrProposalMoved      = errors.New("the work branch moved since the proposal was made")
 	ErrHeadCommitsMissing = errors.New("the pull request branch has commits the work branch lacks")
 	ErrRebaseAsks         = errors.New("the pull request branch moved; the next poll rebases the work and offers it again")
+	ErrMergeAsks          = errors.New("the pull request branch moved; the next poll merges it into the work and offers it again")
 )
 
 type releaseError struct {
@@ -146,13 +147,20 @@ func (s *Service) pushWork(ctx context.Context, w store.Watch, p *store.Proposal
 		return &headCommitsMissing{remote: remote, missing: missing}
 	}
 	if rebaseAsks(w) {
-		return fmt.Errorf("%w: it is at %s", ErrRebaseAsks, textx.ShortSHA(remote))
+		return fmt.Errorf("%w: it is at %s", asksAgain(w), textx.ShortSHA(remote))
 	}
 	return s.rebaseWork(ctx, w, p, remote)
 }
 
 func rebaseAsks(w store.Watch) bool {
 	return w.Asks() && !w.AutoApproveRebase
+}
+
+func asksAgain(w store.Watch) error {
+	if w.BranchUpdate == store.BranchMerge {
+		return ErrMergeAsks
+	}
+	return ErrRebaseAsks
 }
 
 func (s *Service) movable(ctx context.Context, w store.Watch, dir, head, work, remote string) (bool, error) {

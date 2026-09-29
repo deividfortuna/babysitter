@@ -486,6 +486,23 @@ func TestAMergedProposalSaysItWasMerged(t *testing.T) {
 	}
 }
 
+func TestApprovedWorkOnABranchThatMovedSaysTheNextPollMergesIt(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.startWith(func(r *StartRequest) {
+		r.ApprovalMode, r.BranchUpdate, r.AutoApproveRebase = new(store.ApprovalManual), new(store.BranchMerge), new(false)
+	})
+	fx.propose(w)
+	fx.update(func() { fx.pr.HeadSHA = "t1" })
+	fx.rel.moveRemote("abc", "t1")
+	fx.rel.set(func(f *fakeRelease) { f.missing = []string{"t1"} })
+
+	p, err := fx.svc.Approve(context.Background(), w.ID, 1, Decision{})
+	if err != nil || p.Status != store.ProposalFailed || !strings.Contains(p.Error, "merges") || strings.Contains(p.Error, "rebase") {
+		t.Fatalf("Approve() = %+v, %v, want an error that names the merge of the next poll", p, err)
+	}
+}
+
 func TestAMergeThatConflictsSaysItIsAMerge(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

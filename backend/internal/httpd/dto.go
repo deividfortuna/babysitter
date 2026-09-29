@@ -174,7 +174,7 @@ type Watch struct {
 	ReadySince        *time.Time              `json:"readySince,omitempty" description:"Since when the pull request is ready to merge; absent while something blocks it, and until the readiness stood a whole poll interval"`
 	ReadyBlockers     []string                `json:"readyBlockers" description:"What keeps the pull request from merging, one sentence each"`
 	ApprovalMode      store.ApprovalMode      `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent: the daemon on its own, or the author"`
-	AutoApproveRebase bool                    `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
+	AutoApproveRebase bool                    `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again"`
 	PendingProposal   int                     `json:"pendingProposal,omitempty" description:"The number of the proposal that waits on the author, absent when none waits"`
 	TakenOverAt       *time.Time              `json:"takenOverAt,omitempty" description:"Since when the session is with the author in their terminal; absent while the daemon has it"`
 	AutoReason        store.AutoReason        `json:"autoReason,omitempty" enum:",mine,assigned,dependabot" description:"Why auto start began the watch: the author opened the pull request, it is assigned to the author, or Dependabot opened it; absent for a watch started by hand"`
@@ -229,7 +229,7 @@ type StartWatchRequest struct {
 	ApprovalsRequired Optional[int]       `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs before the watch calls it ready to merge; absent takes the repository, then the daemon, 0 asks for none, and null asks for the rule of the base branch whatever the setting holds"`
 	MergeMethod       *string             `json:"mergeMethod,omitempty" enum:",squash,merge,rebase" description:"The merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; absent takes the repository, then the daemon"`
 	ApprovalMode      *string             `json:"approvalMode,omitempty" enum:"auto,manual" description:"Who releases the work of a turn of the agent; absent takes the repository, then the daemon, and a self watch runs in auto"`
-	AutoApproveRebase *bool               `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase without asking again; absent takes the repository, then the daemon"`
+	AutoApproveRebase *bool               `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again; absent takes the repository, then the daemon"`
 	MergeWhenReady    *bool               `json:"mergeWhenReady,omitempty" description:"The daemon merges with the method of the watch as soon as the watch is ready to merge; absent means off"`
 	KeepWorktree      *bool               `json:"keepWorktree,omitempty" description:"A stop leaves the worktree of the watch on disk; absent takes the repository, then the daemon"`
 	BranchUpdate      *store.BranchUpdate `json:"branchUpdate,omitempty" enum:"rebase,merge" description:"rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way; absent takes the repository, then the daemon"`
@@ -437,7 +437,7 @@ type Settings struct {
 	NotificationSound       bool     `json:"notificationSound" description:"A notification makes a sound"`
 	MutedNotificationKinds  []string `json:"mutedNotificationKinds" items.enum:"agent,review,checks,watch,merge,auto" description:"The notification kinds that reach nobody. The history keeps them either way"`
 	ApprovalMode            string   `json:"approvalMode" enum:"auto,manual" description:"Who releases the work of a turn of the agent of a new watch: the daemon on its own, or the author"`
-	AutoApproveRebase       bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase without asking again"`
+	AutoApproveRebase       bool     `json:"autoApproveRebase" description:"Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again"`
 	Provider                string   `json:"provider" enum:"claude,copilot" description:"The AI provider of a new watch"`
 	Model                   string   `json:"model" description:"The model of that provider; empty takes the default of the provider"`
 	Effort                  string   `json:"effort" description:"The effort level of that model, one the providers route lists for it; empty takes the default of the model"`
