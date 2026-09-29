@@ -66,7 +66,11 @@ func newServeCmd(opts *options) *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "the interval %s is outside %s..%s; polling every %s\n",
 					interval, store.MinInterval, store.MaxInterval, every)
 			}
-			w := opts.watcherOn(cmd, st, watcher.WithInterval(every))
+			watcherOpts, err := serveWatcherOptions(cmd.Context(), st, every)
+			if err != nil {
+				return err
+			}
+			w := opts.watcherOn(cmd, st, watcherOpts...)
 			ctx, stop := context.WithCancel(cmd.Context())
 			defer stop()
 			if !typed {
@@ -81,6 +85,14 @@ func newServeCmd(opts *options) *cobra.Command {
 	}
 	cmd.Flags().DurationVar(&interval, "interval", defaultInterval, "time between polls; unset takes the setting of the daemon")
 	return cmd
+}
+
+func serveWatcherOptions(ctx context.Context, st *store.Store, every time.Duration) ([]watcher.Option, error) {
+	settings, err := st.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return []watcher.Option{watcher.WithInterval(every), watcher.WithLongestCheckWait(settings.CheckMaxInterval)}, nil
 }
 
 func endedByContext(err error) bool {
@@ -118,6 +130,10 @@ func followInterval(ctx context.Context, st *store.Store, w *watcher.Watcher, ev
 		if settings.PollInterval != w.Interval() {
 			log.Info("poll interval changed", "was", w.Interval(), "now", settings.PollInterval)
 			w.SetInterval(settings.PollInterval)
+		}
+		if settings.CheckMaxInterval != w.LongestCheckWait() {
+			log.Info("longest check read interval changed", "was", w.LongestCheckWait(), "now", settings.CheckMaxInterval)
+			w.SetLongestCheckWait(settings.CheckMaxInterval)
 		}
 	}
 }

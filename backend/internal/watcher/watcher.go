@@ -142,6 +142,12 @@ func (w *Watcher) Interval() time.Duration { return w.interval.Duration() }
 
 func (w *Watcher) SetInterval(d time.Duration) { w.interval.Set(d) }
 
+func (w *Watcher) LongestCheckWait() time.Duration {
+	w.checksMu.Lock()
+	defer w.checksMu.Unlock()
+	return w.longestCheckWait
+}
+
 func (w *Watcher) SetLongestCheckWait(d time.Duration) {
 	if d <= 0 {
 		return

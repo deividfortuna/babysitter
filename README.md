@@ -1269,10 +1269,12 @@ babysitter service uninstall
 
 `service install` passes the `--db` and `--token` flags to the service when
 you give them. Without a token, the service uses `GITHUB_TOKEN` or the `gh`
-CLI. Without `--interval`, the service follows the poll interval of the
-settings, so the Watching pane of the app and `babysitter settings set
---poll-interval` reach it; with `--interval` it polls at that rate for
-as long as it stays installed.
+CLI. Without `--interval`, the service follows the poll interval and the
+longest check read interval of the settings, so the Watching pane of the
+app and `babysitter settings set --poll-interval` and
+`--check-max-interval` reach it; with `--interval` it polls at that rate
+for as long as it stays installed, and takes the longest check read
+interval of the settings when it starts.
 
 `service install` takes an interval between 10 seconds and 24 hours, the
 bound of the settings, because the definition it writes holds that value
