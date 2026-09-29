@@ -80,7 +80,7 @@ func (a *api) handleListPulls(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *api) handleSync(w http.ResponseWriter, r *http.Request) {
-	a.syncer.Kick()
+	a.syncer.Sync()
 	writeJSON(w, http.StatusAccepted, SyncAccepted{Accepted: true})
 }
 

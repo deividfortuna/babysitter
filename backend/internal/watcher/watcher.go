@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log/slog"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/go-github/v91/github"
@@ -58,6 +59,7 @@ type Watcher struct {
 	checksMu         sync.Mutex
 	checked          map[checkKey]checkRead
 	longestCheckWait time.Duration
+	manualSync       atomic.Bool
 
 	afterPass func(ctx context.Context)
 }
@@ -103,7 +105,7 @@ func New(st Store, newClient ClientFunc, opts ...Option) *Watcher {
 		kick:      make(chan struct{}, 1),
 		checked:   map[checkKey]checkRead{},
 
-		longestCheckWait: store.DefaultSettings().WatchMaxInterval,
+		longestCheckWait: store.DefaultSettings().CheckMaxInterval,
 	}
 	for _, o := range opts {
 		o(w)
@@ -125,7 +127,9 @@ func (w *Watcher) Run(ctx context.Context) error {
 		case <-ticker.C:
 			w.runPass(ctx)
 		case <-w.kick:
-			w.forgetPendingChecks()
+			if w.manualSync.Swap(false) {
+				w.forgetPendingChecks()
+			}
 			w.runPass(ctx)
 			ticker.Reset(w.Interval())
 		case <-w.interval.Retuned():
@@ -152,6 +156,11 @@ func (w *Watcher) Kick() {
 	case w.kick <- struct{}{}:
 	default:
 	}
+}
+
+func (w *Watcher) Sync() {
+	w.manualSync.Store(true)
+	w.Kick()
 }
 
 func (w *Watcher) runPass(ctx context.Context) {

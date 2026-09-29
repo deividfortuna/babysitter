@@ -228,7 +228,7 @@ func TestSyncKeepsTheBackOffWhenAPassStartsALittleEarly(t *testing.T) {
 	}
 }
 
-func TestSyncReadsPendingChecksAfterAKickAndStartsTheBackOffAgain(t *testing.T) {
+func TestForgettingPendingChecksStartsTheBackOffAgain(t *testing.T) {
 	fx := newFixture(t)
 	fx.seedPendingPR()
 	fx.passesThatReadChecks(t, "sha1", time.Minute, 5)
@@ -236,7 +236,38 @@ func TestSyncReadsPendingChecksAfterAKickAndStartsTheBackOffAgain(t *testing.T) 
 	fx.w.forgetPendingChecks()
 
 	if got, want := fx.passesThatReadChecks(t, "sha1", time.Minute, 4), []int{0, 1, 3}; !slices.Equal(got, want) {
-		t.Fatalf("checks read on passes %v after the kick, want %v", got, want)
+		t.Fatalf("checks read on passes %v after they were forgotten, want %v", got, want)
+	}
+}
+
+func TestRunReadsPendingChecksOnAManualSyncAndNotOnAKick(t *testing.T) {
+	fx := newFixture(t)
+	passes := make(chan struct{}, 1)
+	WithAfterPass(func(context.Context) { passes <- struct{}{} })(fx.w)
+	fx.seedPendingPR()
+	checkReads := func() int { return fx.gh.CountPath("/repos/o/r/commits/sha1/check-runs") }
+	waitPass := func(after string) {
+		t.Helper()
+		select {
+		case <-passes:
+		case <-time.After(testutil.Timeout):
+			t.Fatalf("no pass after %s", after)
+		}
+	}
+
+	go func() { _ = fx.w.Run(t.Context()) }()
+	waitPass("the start")
+
+	fx.w.Kick()
+	waitPass("the kick")
+	if got := checkReads(); got != 1 {
+		t.Fatalf("checks read %d times after a kick, want 1: a kick keeps the wait of pending checks", got)
+	}
+
+	fx.w.Sync()
+	waitPass("the manual sync")
+	if got := checkReads(); got != 2 {
+		t.Fatalf("checks read %d times after a manual sync, want 2", got)
 	}
 }
 
