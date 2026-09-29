@@ -327,3 +327,24 @@ func TestAPassThatCannotReachGitHubWaitsOneIntervalBeforeItTriesAgain(t *testing
 		t.Fatalf("the loop made %d GitHub clients at once, want it to wait one interval after a failed pass", tries.Load())
 	}
 }
+
+func TestAMessageToASelfAgentKeepsTheWatchAtTheShortestInterval(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.schedule.now = fx.clock
+	w := fx.startSelf()
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "please add a test", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+
+	out, err := fx.svc.Next(context.Background(), w.ID, 0)
+	if err != nil || out.Message == nil {
+		t.Fatalf("Next() = %+v, %v, want the comment as a message", out, err)
+	}
+
+	fx.advance(time.Minute)
+	if !fx.svc.schedule.due(w.ID, fx.svc.cadence()) {
+		t.Fatal("a watch whose self agent took a message is not due after the shortest interval")
+	}
+}
