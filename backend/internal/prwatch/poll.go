@@ -252,6 +252,10 @@ func (s *Service) tell(ctx context.Context, client *github.Client, w store.Watch
 		s.log.Info("the agent waits on you, the message waits for the next poll", "watch", w.ID)
 		return todo, nil
 	}
+	if s.waitsForGitHub(ctx, w) {
+		s.log.Info("GitHub updates the branch, the message waits for the new head", "watch", w.ID)
+		return todo, nil
+	}
 	m, err := s.compose(ctx, client, w, todo)
 	if err != nil {
 		return todo, err

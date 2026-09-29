@@ -69,6 +69,45 @@ func TestABranchBehindItsBaseIsRebasedOnGitHubAndTheAgentHearsNothing(t *testing
 	}
 }
 
+func TestACommentWaitsForTheBranchGitHubIsUpdating(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+
+	fx.behind()
+	fx.comment()
+	fx.poll(w)
+	if kinds := fx.kinds(w); !slices.Contains(kinds, string(store.ActivityBranchUpdated)) || len(h.messages()) != 1 {
+		t.Fatalf("kinds = %v, messages = %q, want the comment held while GitHub moves the branch", kinds, h.messages())
+	}
+
+	fx.poll(w)
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "rename this") || strings.Contains(msgs[1], "is behind main") {
+		t.Fatalf("messages = %q, want the comment told on the head GitHub made", msgs)
+	}
+}
+
+func TestAWatchThatStartsBehindTellsNothingWhileGitHubUpdatesTheBranch(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.behind()
+	fx.failBuild("")
+	w := fx.start()
+	h := fx.host.last()
+	if kinds := fx.kinds(w); !slices.Contains(kinds, string(store.ActivityBranchUpdated)) || len(h.messages()) != 1 {
+		t.Fatalf("kinds = %v, messages = %q, want only the opening message while GitHub moves the branch", kinds, h.messages())
+	}
+
+	fx.poll(w)
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "build") {
+		t.Fatalf("messages = %q, want the failed build told on the head GitHub made", msgs)
+	}
+}
+
 func TestAWatchThatMergesTheBaseAsksGitHubForAMerge(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

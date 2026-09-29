@@ -188,6 +188,15 @@ func (s *Service) triedOnGitHub(ctx context.Context, w store.Watch) (bool, error
 	return s.store.HasActivityOfKinds(ctx, w.ID, branchUpdateRef(w.HeadSHA), store.ActivityBranchUpdated, store.ActivityBranchNotUpdated)
 }
 
+func (s *Service) waitsForGitHub(ctx context.Context, w store.Watch) bool {
+	accepted, err := s.store.HasActivity(ctx, w.ID, store.ActivityBranchUpdated, branchUpdateRef(w.HeadSHA))
+	if err != nil || !accepted {
+		return err != nil
+	}
+	refused, err := s.refusedOnGitHub(ctx, w)
+	return err != nil || !refused
+}
+
 func (s *Service) refusedOnGitHub(ctx context.Context, w store.Watch) (bool, error) {
 	return s.store.HasActivity(ctx, w.ID, store.ActivityBranchNotUpdated, branchUpdateRef(w.HeadSHA))
 }
