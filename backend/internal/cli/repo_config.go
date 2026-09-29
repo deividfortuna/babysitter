@@ -229,7 +229,7 @@ The daemon starts nothing with 'babysitter serve'; auto start runs in
 	fl.StringVar(&f.mergeMethod, "merge-method", "", "merge method of the watches on the repository: squash, merge or rebase; empty takes the setting of the daemon")
 	fl.StringVar(&f.approvals, "approvals", "", "approvals the watches on the repository need: a number, 0 for none, 'branch' for the rule of the base branch, or 'default' for the setting of the daemon")
 	fl.BoolVar(&f.includeExisting, "include-existing", false, "the watches on the repository also report the review items that already exist")
-	fl.BoolVar(&f.autoRebase, "auto-approve-rebase", false, "the watches on the repository let approved work go out after a clean rebase without asking again")
+	fl.BoolVar(&f.autoRebase, "auto-approve-rebase", false, "the watches on the repository let approved work go out after a clean rebase or merge without asking again")
 	fl.BoolVar(&f.includeOwn, "include-own", false, "the watches on the repository also report your own comments")
 	fl.BoolVar(&f.keepWorktree, "keep-worktree", false, "a stop leaves the worktree of a watch on the repository on disk")
 	fl.StringVar(&f.branchUpdate, branchUpdateFlag, "", "how the watches on the repository update a branch that fell behind its base: rebase or merge; empty takes the setting of the daemon")

@@ -200,7 +200,7 @@ test("folds the additional settings, and names what the watch will use", async (
     "Model",
     "Effort",
     "Approval mode",
-    "Approve a clean rebase on its own",
+    "Approve a clean rebase or merge on its own",
     "Approvals before ready to merge",
     "Merge method",
     "Report existing review items",
@@ -267,7 +267,7 @@ test("each field opens on the value of the daemon", async () => {
   expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)");
   expect(screen.getByLabelText("Merge method")).toHaveTextContent("Default (rebase)");
   expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2);
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Report existing review items" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Include my own comments" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Keep the worktree when the watch stops" })).toBeChecked();
@@ -741,7 +741,7 @@ test("the approval mode and the clean rebase go with the start when the author s
   await openAdditional(user);
 
   await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
-  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase on its own" });
+  const rebase = screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" });
   expect(rebase).not.toBeChecked();
   await user.click(rebase);
   await fillTarget(user);
@@ -760,9 +760,9 @@ test("a new watch in auto sends its mode, and the clean rebase means nothing the
   await openAdditional(user);
 
   await waitFor(() => expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (manual)"));
-  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase on its own" }));
+  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" }));
   await chooseOption(user, screen.getByLabelText("Approval mode"), "auto");
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeDisabled();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
   await fillTarget(user);
   await user.click(screen.getByRole("button", { name: "Start watching" }));
 
@@ -797,7 +797,7 @@ test("the command beside the start button carries the choices of the author", as
   expect(screen.getByText("babysitter watch start octo/babysitter#12")).toBeVisible();
 
   await chooseOption(user, screen.getByLabelText("Model"), "Sonnet");
-  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase on its own" }));
+  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" }));
   expect(
     screen.getByText("babysitter watch start octo/babysitter#12 --model sonnet --auto-approve-rebase"),
   ).toBeVisible();

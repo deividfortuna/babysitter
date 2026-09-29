@@ -229,7 +229,7 @@ func TestSettingsSetTheApprovalMode(t *testing.T) {
 	if put := d.settingsPut[0]; put["approvalMode"] != "auto" || put["autoApproveRebase"] != true {
 		t.Fatalf("put = %v", put)
 	}
-	if !strings.Contains(out, "Approval mode") || !strings.Contains(out, "Approve a clean rebase on its own") {
+	if !strings.Contains(out, "Approval mode") || !strings.Contains(out, "Approve a clean rebase or merge on its own") {
 		t.Fatalf("settings = %q", out)
 	}
 }
@@ -284,7 +284,7 @@ func TestWatchStatusNamesTheCleanRebaseWhileAProposalWaits(t *testing.T) {
 	d := newFakeDaemon()
 	d.watches = strings.Replace(d.watches, `"status":"active"`, `"status":"active","approvalMode":"manual","autoApproveRebase":true,"pendingProposal":2`, 1)
 	out, err := runWatch(t, d, "status", "1")
-	want := "Approval:  manual, and approved work goes out after a clean rebase; proposal 2 waits on you: babysitter watch proposals 1 2"
+	want := "Approval:  manual, and approved work goes out after a clean rebase or merge; proposal 2 waits on you: babysitter watch proposals 1 2"
 	if err != nil || !strings.Contains(out, want) {
 		t.Fatalf("status = %q, %v", out, err)
 	}

@@ -178,7 +178,7 @@ watch** are what a watch starts with:
 | Agent | The provider and the model of a new watch, Claude and its default model by default |
 | Effort | How much the model reasons before it acts: a level the model takes, such as `low`, `medium` or `high`. Empty takes the default of the model. A model can take no effort level, and then the field stays empty |
 | Approval mode | Who releases the work of each turn of the agent of a new watch: `manual` holds it until you approve it, `auto` pushes and posts as soon as the turn ends. A new install asks, `manual`; an install that upgrades keeps `auto`. A `--provider self` watch always runs in auto |
-| Approve a clean rebase on its own | Work you approved does not ask again because the branch moved under it. A rebase that conflicts always asks. No effect in auto |
+| Approve a clean rebase or merge on its own | Work you approved does not ask again because the branch moved under it. A rebase or merge that conflicts always asks. No effect in auto |
 | Approvals before ready to merge | What a new watch wants before it calls a pull request ready; empty takes the rule of the base branch |
 | Merge method | The merge method of a new watch; empty takes the first one the repository allows |
 | Report the review items that already exist | A new watch hands the agent what is on the pull request already |
@@ -241,7 +241,7 @@ babysitter settings set --approvals 2              # a number, 0 for none
 babysitter settings set --approvals branch         # give the decision back to the base branch
 babysitter settings set --merge-method rebase --keep-worktree
 babysitter settings set --approval-mode auto       # push and post as soon as each turn ends
-babysitter settings set --auto-approve-rebase      # approved work goes out again after a clean rebase
+babysitter settings set --auto-approve-rebase      # approved work goes out again after a clean rebase or merge
 babysitter settings set --include-existing --include-own
 babysitter settings set --provider copilot --model auto   # the agent of a new watch; a new provider alone takes its default model
 babysitter settings set --model opus --effort high        # the effort of that model; a new model alone takes its default effort
@@ -375,13 +375,13 @@ babysitter watch approve 1 --stop-asking          # release it and run the watch
 babysitter watch approve 1 --reject-push          # post the replies without the commits
 babysitter watch reject 1 --reason "use a table test" --discard # nothing goes out; the agent works on your reason
 babysitter watch mode 1 auto --release            # switch a running watch to auto, which releases what waits
-babysitter watch mode 1 manual --auto-approve-rebase # back to manual, and let a clean rebase of approved work go out on its own
+babysitter watch mode 1 manual --auto-approve-rebase # back to manual, and let a clean rebase or merge of approved work go out on its own
 babysitter watch merge-rules 1 --approvals 0      # change the approvals of a running watch; branch reads the rule of the base branch again
 babysitter watch merge-rules 1 --merge-method rebase # change the merge method of a running watch; empty takes the first method the repository allows
 babysitter watch merge-rules 1 --merge-when-ready # let the daemon merge watch 1 when it is ready; =false turns it off
 babysitter watch merge-rules 1 --branch-update merge --update-on-github=false # change how a running watch updates a branch behind its base
 babysitter watch start --approval-mode auto       # the approval mode of this watch; without the flag the settings decide
-babysitter watch start --auto-approve-rebase      # approved work goes out again after a clean rebase, without asking
+babysitter watch start --auto-approve-rebase      # approved work goes out again after a clean rebase or merge, without asking
 babysitter watch stop 1                           # stop with a summary, and delete the worktree unless the settings keep it
 babysitter watch stop 1 --keep-worktree           # stop but leave the worktree on disk; without the flag the rule the watch started with decides
 babysitter watch merge 1                          # merge the pull request once the watch says it is ready, and stop
@@ -1027,7 +1027,7 @@ hooks of the repository either, and with `GIT_TERMINAL_PROMPT=0` and
 A release that fails is an `agent_failed` row in the activity, with the
 reason and the command that retries it, and a notification of kind
 `watch`. `babysitter watch retry <watch> [proposal]` pushes and posts
-again. In `auto`, or with **Approve a clean rebase on its own**, it
+again. In `auto`, or with **Approve a clean rebase or merge on its own**, it
 rebases a turn that only added commits onto a pull request branch that
 moved; otherwise the next poll rebases it and asks you again. Each
 reply that names one of the old commits then names the rebased one. In
@@ -1089,7 +1089,7 @@ decision carries all of them. `watch send` is refused with the reason.
 When the pull request branch moves while you read, the daemon rebases
 the proposal itself. A clean rebase comes back to you marked rebased,
 with the commits it now names, and a reply that named an old commit
-names the new one; with **Approve a clean rebase on its own**, work you
+names the new one; with **Approve a clean rebase or merge on its own**, work you
 approved goes out without asking again. A rebase that conflicts goes to
 the agent, and in `manual` its resolution asks you, because nobody read
 it. Work that rewrote the branch is not rebased: its release fails, and
@@ -1108,7 +1108,7 @@ rejection, **Approve and stop asking** and a switch to auto each ask
 first. The
 **Watch settings** button at the far right of the header, after
 **Merge**, opens a panel docked on the right with the copy of the
-defaults of that watch: the approval mode, **Approve a clean rebase on
+defaults of that watch: the approval mode, **Approve a clean rebase or merge on
 its own**, the approvals before ready to merge and the merge method.
 Each one saves when you change it, and an empty approvals field reads
 the rule of the base branch again. The dialog that starts a watch sets

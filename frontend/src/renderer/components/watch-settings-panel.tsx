@@ -172,7 +172,7 @@ function ApprovalRows({ watch, setApproval }: { watch: Watch; setApproval: Retur
         />
       </SettingRow>
       <SettingRow
-        label="Approve a clean rebase on its own"
+        label="Approve a clean rebase or merge on its own"
         htmlFor="watch-auto-rebase"
         description="Approved work does not ask again because the branch moved. No effect in auto."
       >

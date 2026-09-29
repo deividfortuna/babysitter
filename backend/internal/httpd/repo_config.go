@@ -17,7 +17,7 @@ type WatchOverrides struct {
 	MergeMethod       string        `json:"mergeMethod" enum:",squash,merge,rebase" description:"The merge method of the watches; empty takes the setting of the daemon"`
 	ApprovalsRequired Optional[int] `json:"approvalsRequired,omitzero" minimum:"0" nullable:"true" description:"How many approvals the pull request needs; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch"`
 	IncludeExisting   *bool         `json:"includeExisting,omitempty" description:"Report the review items the pull request has already; absent takes the setting of the daemon"`
-	AutoApproveRebase *bool         `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon"`
+	AutoApproveRebase *bool         `json:"autoApproveRebase,omitempty" description:"Approved work goes out after a clean rebase or merge without asking again; absent takes the setting of the daemon"`
 	IncludeOwn        *bool         `json:"includeOwn,omitempty" description:"Report the comments of the token's own user; absent takes the setting of the daemon"`
 	KeepWorktree      *bool         `json:"keepWorktree,omitempty" description:"A stop leaves the worktree of the watch on disk; absent takes the setting of the daemon"`
 	BranchUpdate      string        `json:"branchUpdate" enum:",rebase,merge" description:"How a watch updates a branch that fell behind its base: rebase or merge; empty takes the setting of the daemon"`

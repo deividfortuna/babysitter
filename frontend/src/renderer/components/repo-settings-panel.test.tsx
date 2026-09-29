@@ -294,7 +294,7 @@ test("each field shows the value a watch takes", async () => {
   expect(screen.getByLabelText("Approval mode")).toHaveTextContent("Default (auto)");
   expect(screen.getByLabelText("Merge method")).toHaveTextContent("Default (rebase)");
   expect(screen.getByLabelText("Approvals before ready to merge")).toHaveValue(2);
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Report existing review items" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Report my own comments" })).toBeChecked();
   expect(screen.getByRole("switch", { name: "Keep the worktree when a watch stops" })).not.toBeChecked();
@@ -314,7 +314,7 @@ test("a switch stores an override only while it differs from the daemon", async 
   expect(repoConfigBodies[0].overrides).toMatchObject({ keepWorktree: true });
   await waitFor(() => expect(keep).toBeChecked());
 
-  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase on its own" }));
+  await user.click(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" }));
   await waitFor(() => expect(repoConfigBodies).toHaveLength(2));
   expect(repoConfigBodies[1].overrides).toMatchObject({ keepWorktree: true, autoApproveRebase: true });
 

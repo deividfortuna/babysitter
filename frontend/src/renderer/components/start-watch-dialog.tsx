@@ -496,7 +496,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
 
             <SwitchRow
               id="auto-rebase"
-              label="Approve a clean rebase on its own"
+              label="Approve a clean rebase or merge on its own"
               description="Approved work does not ask again because the branch moved."
               checked={asks && autoRebaseValue}
               disabled={!asks}

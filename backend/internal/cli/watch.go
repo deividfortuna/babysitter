@@ -367,7 +367,7 @@ A flag you do not type takes the override of the repository
 	cmd.Flags().StringVar(&approvals, "approvals", "", "approvals the pull request needs before it is ready to merge: a number, 0 for none, or 'branch' for the rule of the base branch; without the flag the repository, then the daemon, decides")
 	cmd.Flags().StringVar(&mergeMethod, "merge-method", "", "merge method of the watch: squash, merge, rebase, or empty for the first method the repository allows; without the flag the repository, then the daemon, decides")
 	cmd.Flags().StringVar(&approvalMode, "approval-mode", "", "manual holds the work of each turn of the agent until you approve it, auto pushes and posts when the turn ends; without the flag the repository, then the daemon, decides")
-	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase without asking again; without the flag the repository, then the daemon, decides")
+	cmd.Flags().BoolVar(&autoRebase, "auto-approve-rebase", false, "let approved work go out after a clean rebase or merge without asking again; without the flag the repository, then the daemon, decides")
 	cmd.Flags().BoolVar(&mergeWhenReady, "merge-when-ready", false, "the daemon merges with the method of the watch as soon as the watch is ready to merge; off without the flag")
 	cmd.Flags().BoolVar(&keepWorktree, "keep-worktree", false, "a stop leaves the worktree of the watch on disk; without the flag the repository, then the daemon, decides")
 	cmd.Flags().StringVar((*string)(&branchUpdate), branchUpdateFlag, "", "how the branch is updated when it falls behind its base: rebase or merge. The agent solves a conflict the same way; without the flag the repository, then the daemon, decides")

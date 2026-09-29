@@ -471,7 +471,7 @@ function WatchDefaults({ overrides, pending, onChange }: WatchDefaultsProps) {
         </SettingRow>
         <SwitchOverride
           id="repo-override-auto-rebase"
-          label="Approve a clean rebase on its own"
+          label="Approve a clean rebase or merge on its own"
           description="Approved work does not ask again because the branch moved. No effect in auto."
           checked={effective?.autoApproveRebase}
           disabled={pending || !daemon}

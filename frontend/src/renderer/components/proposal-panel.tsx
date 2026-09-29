@@ -597,7 +597,7 @@ function FailedSection({ watch, proposal }: { watch: Watch; proposal: Proposal }
 function ConflictSection({ watch, proposal }: { watch: Watch; proposal: Proposal }) {
   const after =
     watch.approvalMode === "manual"
-      ? "Its resolution comes back as a new proposal, and that one asks you even with a clean rebase set to approve on its own, because nobody has read it."
+      ? "Its resolution comes back as a new proposal, and that one asks you even with a clean rebase or merge set to approve on its own, because nobody has read it."
       : "The watch runs in auto, so the daemon pushes its resolution when the turn of the agent ends.";
   return (
     <section aria-label="Proposal" className="flex flex-col gap-3 border-b px-5 py-3.5">

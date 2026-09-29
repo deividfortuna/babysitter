@@ -1421,7 +1421,7 @@ export interface components {
             approvalMode: "" | "auto" | "manual";
             /** @description How many approvals the pull request needs; absent takes the setting of the daemon, 0 asks for none, and null asks for the rule of the base branch */
             approvalsRequired?: number | null;
-            /** @description Approved work goes out after a clean rebase without asking again; absent takes the setting of the daemon */
+            /** @description Approved work goes out after a clean rebase or merge without asking again; absent takes the setting of the daemon */
             autoApproveRebase?: boolean | null;
             /**
              * @description How a watch updates a branch that fell behind its base: rebase or merge; empty takes the setting of the daemon

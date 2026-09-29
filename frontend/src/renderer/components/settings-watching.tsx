@@ -233,7 +233,7 @@ function WatchingForm({ settings, onSaved }: { settings: Settings; onSaved: () =
 
         <Field orientation="horizontal" data-disabled={draft.approvalMode === "auto" || undefined}>
           <FieldContent>
-            <FieldLabel htmlFor="auto-rebase">Approve a clean rebase on its own</FieldLabel>
+            <FieldLabel htmlFor="auto-rebase">Approve a clean rebase or merge on its own</FieldLabel>
             <FieldDescription>
               Work you approved does not ask again because the branch moved under it. A rebase that conflicts always
               asks. No effect in auto.

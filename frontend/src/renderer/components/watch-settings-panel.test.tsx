@@ -56,7 +56,7 @@ test("the panel holds the copy of the defaults of this watch", async () => {
 
   const panel = await openSettings(user);
   expect(within(panel).getByLabelText("Approval mode")).toHaveTextContent("manual");
-  expect(within(panel).getByRole("switch", { name: "Approve a clean rebase on its own" })).toBeChecked();
+  expect(within(panel).getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
   expect(within(panel).getByLabelText("Approvals before ready to merge")).toHaveValue(3);
   expect(within(panel).getByLabelText("Merge method")).toHaveTextContent("Squash");
 });
@@ -154,7 +154,7 @@ test("a self watch shows a fixed auto badge", async () => {
   const panel = await openSettings(user);
   expect(within(panel).getByTitle("A watch your own coding session drives has no gate")).toHaveTextContent("auto");
   expect(within(panel).queryByLabelText("Approval mode")).toBeNull();
-  expect(within(panel).queryByRole("switch", { name: "Approve a clean rebase on its own" })).toBeNull();
+  expect(within(panel).queryByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeNull();
 
   await chooseOption(user, within(panel).getByLabelText("Merge method"), "Merge commit");
   await waitFor(() => expect(decisions).toHaveLength(1));
