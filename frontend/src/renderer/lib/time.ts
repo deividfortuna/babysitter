@@ -50,3 +50,18 @@ export function shortDate(iso: string): string {
   if (Number.isNaN(d.getTime())) return "";
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+
+function dayOf(iso: string | null | undefined, today: string): string {
+  const isToday = iso ? new Date(iso).toDateString() === today : false;
+  return isToday ? "Today" : "Earlier";
+}
+
+export function groupByDay<T>(items: T[], dateOf: (item: T) => string | null | undefined): [string, T[]][] {
+  const today = new Date().toDateString();
+  const days = new Map<string, T[]>([
+    ["Today", []],
+    ["Earlier", []],
+  ]);
+  for (const item of items) days.get(dayOf(dateOf(item), today))?.push(item);
+  return [...days].filter(([, list]) => list.length > 0);
+}

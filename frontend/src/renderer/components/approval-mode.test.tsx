@@ -158,9 +158,11 @@ test("a watch with a proposal waiting needs you in the list", async () => {
 
   renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
 
-  const row = (await screen.findByText("Retry webhooks")).closest("button") as HTMLElement;
+  const needsYou = await screen.findByRole("region", { name: "Needs you · 1" });
+  const row = within(needsYou).getByRole("button", { name: /Retry webhooks/ });
   expect(within(row).getByText("approval needed")).toBeVisible();
-  expect(screen.getByText("2 active · 1 needs you")).toBeVisible();
+  expect(within(needsYou).getByRole("button", { name: "Review proposal 3" })).toBeVisible();
+  expect(within(needsYou).queryByText("Quiet one")).toBeNull();
 });
 
 test("a stop declines the proposal that waits", async () => {

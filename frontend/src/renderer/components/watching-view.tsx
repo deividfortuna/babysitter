@@ -1,8 +1,9 @@
-import { useMemo } from "react";
-import { CircleAlertIcon, EyeIcon } from "lucide-react";
+import { useMemo, useState } from "react";
+import { CircleAlertIcon, EyeIcon, SearchIcon } from "lucide-react";
 import { usePullsByLabel } from "@/hooks/usePulls";
 import { useWatches, type Watch } from "@/hooks/useWatches";
 import { FirstRun } from "@/components/first-run";
+import { SearchInput } from "@/components/search-input";
 import { InboxGroup, PullsErrorAlert } from "@/components/inbox-row";
 import { Meta } from "@/components/status-badges";
 import { ViewHeader } from "@/components/view-header";
@@ -12,10 +13,71 @@ import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
 import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Navigate } from "@/lib/navigation";
-import { needsAttention, watchLabel } from "@/lib/watch-status";
+import {
+  countByFilter,
+  isWatchFilter,
+  searchNeedle,
+  watchFilterValues,
+  watchFilters,
+  watchSearchText,
+  type WatchFilter,
+} from "@/lib/watch-filter";
+import { needsAttention, needsYouFirst, watchLabel } from "@/lib/watch-status";
 
 const ALL = "__all__";
+
+function byRepo(watches: Watch[]): [string, Watch[]][] {
+  const map = new Map<string, Watch[]>();
+  for (const w of watches) {
+    const list = map.get(w.repo) ?? [];
+    list.push(w);
+    map.set(w.repo, list);
+  }
+  return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
+type FilterBarProps = {
+  counts: ReadonlyMap<WatchFilter, number>;
+  filter: WatchFilter;
+  query: string;
+  onFilterChange: (filter: WatchFilter) => void;
+  onQueryChange: (query: string) => void;
+};
+
+function FilterBar({ counts, filter, query, onFilterChange, onQueryChange }: FilterBarProps) {
+  return (
+    <div className="flex flex-wrap items-center gap-1.5 px-6.5 pt-3">
+      <ToggleGroup
+        type="single"
+        spacing={1.5}
+        aria-label="Filter by state"
+        value={filter}
+        onValueChange={(value) => {
+          if (isWatchFilter(value)) onFilterChange(value);
+        }}
+      >
+        {watchFilterValues.map((value) => (
+          <ToggleGroupItem
+            key={value}
+            value={value}
+            className="h-7 gap-1.5 rounded-full border border-border px-3 text-body font-medium text-muted-foreground hover:bg-accent hover:text-foreground data-[state=on]:border-transparent data-[state=on]:bg-foreground data-[state=on]:text-background data-[state=on]:hover:bg-foreground/90"
+          >
+            {watchFilters[value].label} <span className="font-mono text-2xs opacity-80">{counts.get(value)}</span>
+          </ToggleGroupItem>
+        ))}
+      </ToggleGroup>
+      <SearchInput
+        aria-label="Filter by title, number, author, repository or label"
+        placeholder="Filter by title, #number, author or label"
+        value={query}
+        onChange={(event) => onQueryChange(event.target.value)}
+        className="ml-auto w-70"
+      />
+    </div>
+  );
+}
 
 type Props = {
   enabled: boolean;
@@ -29,18 +91,39 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
   const watches = useWatches(enabled);
   const pulls = usePullsByLabel(enabled);
 
+  const [filter, setFilter] = useState<WatchFilter>("all");
+  const [query, setQuery] = useState("");
+
   const repos = useMemo(() => [...new Set((watches.data ?? []).map((w) => w.repo))].sort(), [watches.data]);
-  const groups = useMemo(() => {
-    const map = new Map<string, Watch[]>();
-    for (const w of watches.data ?? []) {
-      if (repo && w.repo !== repo) continue;
-      const list = map.get(w.repo) ?? [];
-      list.push(w);
-      map.set(w.repo, list);
-    }
-    for (const list of map.values()) list.sort((a, b) => b.number - a.number);
-    return [...map.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [watches.data, repo]);
+  const inRepo = useMemo(
+    () => (watches.data ?? []).filter((w) => !repo || w.repo === repo).sort(needsYouFirst),
+    [watches.data, repo],
+  );
+  const { counts, pinned, groups } = useMemo(() => {
+    const needle = searchNeedle(query);
+    const found = inRepo.filter((w) => watchSearchText(w, pulls.byLabel.get(watchLabel(w))).includes(needle));
+    const needsYou: Watch[] = [];
+    const rest: Watch[] = [];
+    for (const w of found.filter(watchFilters[filter].matches)) (needsAttention(w) ? needsYou : rest).push(w);
+    return { counts: countByFilter(found), pinned: needsYou, groups: byRepo(rest) };
+  }, [inRepo, filter, query, pulls.byLabel]);
+  const nothingMatches = pinned.length + groups.length === 0;
+
+  function clearFilters() {
+    setFilter("all");
+    setQuery("");
+  }
+
+  function renderRow(w: Watch) {
+    return (
+      <WatchRow
+        key={w.id}
+        watch={w}
+        pull={pulls.byLabel.get(watchLabel(w))}
+        onOpen={() => onNavigate({ kind: "watch", id: w.id })}
+      />
+    );
+  }
 
   const title = <h1 className="text-lg font-medium tracking-tight">Watched pull requests</h1>;
 
@@ -79,15 +162,12 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
       </>
     );
   }
-  const needYou = all.filter(needsAttention).length;
 
   return (
     <div className="flex flex-col">
       <ViewHeader>
         {title}
-        <Meta>
-          {all.length} active · {needYou} need{needYou === 1 ? "s" : ""} you
-        </Meta>
+        <Meta>{all.length} active</Meta>
         <div className="ml-auto">
           <Select
             value={repo ?? ALL}
@@ -112,7 +192,7 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
 
       <PullsErrorAlert error={pulls.error} />
 
-      {groups.length === 0 ? (
+      {inRepo.length === 0 ? (
         <Empty className="py-16">
           <EmptyHeader>
             <EmptyMedia variant="icon">
@@ -128,31 +208,53 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="flex flex-col gap-3 p-3">
-          {groups.map(([name, list]) => (
-            <InboxGroup
-              key={name}
-              heading={
-                <button
-                  type="button"
-                  onClick={() => onNavigate({ kind: "repo", name })}
-                  className="transition-colors hover:text-foreground"
+        <>
+          <FilterBar
+            counts={counts}
+            filter={filter}
+            query={query}
+            onFilterChange={setFilter}
+            onQueryChange={setQuery}
+          />
+          {nothingMatches ? (
+            <Empty className="py-16">
+              <EmptyHeader>
+                <EmptyMedia variant="icon">
+                  <SearchIcon />
+                </EmptyMedia>
+                <EmptyTitle>No watch matches</EmptyTitle>
+                <EmptyDescription>No watched pull request has this state or text.</EmptyDescription>
+              </EmptyHeader>
+              <EmptyContent>
+                <Button variant="outline" onClick={clearFilters}>
+                  Clear the filters
+                </Button>
+              </EmptyContent>
+            </Empty>
+          ) : (
+            <div className="flex flex-col gap-3 p-3">
+              {pinned.length > 0 ? (
+                <InboxGroup heading={`Needs you · ${pinned.length}`}>{pinned.map(renderRow)}</InboxGroup>
+              ) : null}
+              {groups.map(([name, list]) => (
+                <InboxGroup
+                  key={name}
+                  heading={
+                    <button
+                      type="button"
+                      onClick={() => onNavigate({ kind: "repo", name })}
+                      className="transition-colors hover:text-foreground"
+                    >
+                      {name} · {list.length}
+                    </button>
+                  }
                 >
-                  {name} · {list.length}
-                </button>
-              }
-            >
-              {list.map((w) => (
-                <WatchRow
-                  key={w.id}
-                  watch={w}
-                  pull={pulls.byLabel.get(watchLabel(w))}
-                  onOpen={() => onNavigate({ kind: "watch", id: w.id })}
-                />
+                  {list.map(renderRow)}
+                </InboxGroup>
               ))}
-            </InboxGroup>
-          ))}
-        </div>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

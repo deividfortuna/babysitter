@@ -5,7 +5,6 @@ import {
   ChevronRightIcon,
   FolderIcon,
   FolderOpenIcon,
-  SearchIcon,
   SquareDotIcon,
   SquareIcon,
   SquareMinusIcon,
@@ -16,10 +15,10 @@ import { fileTree, type TreeNode } from "@/lib/file-tree";
 import type { ProposalDiff } from "@/lib/proposal-diff";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { cn } from "@/lib/utils";
 import { count } from "@/components/proposal-dialogs";
+import { SearchInput } from "@/components/search-input";
 
 type Change = "new" | "deleted" | "change" | "missing";
 
@@ -112,20 +111,12 @@ export function FileTree({ diff, ...rows }: Rows & { diff: ProposalDiff }) {
       aria-label="Changed files"
       className="flex w-65 shrink-0 flex-col gap-2 overflow-y-auto border-r p-2 text-body"
     >
-      <div className="relative">
-        <SearchIcon
-          aria-hidden
-          className="pointer-events-none absolute top-1/2 left-2 size-3.5 -translate-y-1/2 text-muted-foreground"
-        />
-        <Input
-          type="search"
-          aria-label="Filter files"
-          placeholder="Filter files"
-          value={filter}
-          onChange={(e) => setFilter(e.target.value)}
-          className="h-8 pl-7 text-body md:text-body"
-        />
-      </div>
+      <SearchInput
+        aria-label="Filter files"
+        placeholder="Filter files"
+        value={filter}
+        onChange={(e) => setFilter(e.target.value)}
+      />
       {tree.length > 0 ? (
         <Level nodes={tree} {...rows} />
       ) : (
