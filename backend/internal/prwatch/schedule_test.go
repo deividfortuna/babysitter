@@ -118,6 +118,21 @@ func TestAFixedCadenceNeverSlowsDown(t *testing.T) {
 	}
 }
 
+func TestARowBetweenPollsBringsASlowWatchBackToTheShortestInterval(t *testing.T) {
+	t.Parallel()
+	sc, clock := newTestSchedule()
+	for range 3 {
+		sc.polled(1, slowDown, testCadence)
+	}
+
+	sc.stir(1)
+	sc.calm(1)
+
+	if got := dueAfter(t, sc, clock, 1, testCadence); got != time.Minute {
+		t.Fatalf("wait after a row between polls = %s, want the shortest interval, 1m0s", got)
+	}
+}
+
 func TestAWakeMakesOnlyThatWatchDue(t *testing.T) {
 	t.Parallel()
 	sc, _ := newTestSchedule()

@@ -87,6 +87,7 @@ func (sc *schedule) stir(id int64) {
 	defer sc.mu.Unlock()
 	sl := sc.slots[id]
 	sl.stirred = true
+	sl.wait = 0
 	sc.slots[id] = sl
 }
 
