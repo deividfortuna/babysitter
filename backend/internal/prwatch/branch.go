@@ -16,7 +16,10 @@ import (
 	"github.com/deividfortuna/babysitter/internal/textx"
 )
 
-var ErrBadBranchUpdate = errors.New("invalid branch update: use rebase or merge")
+var (
+	ErrBadBranchUpdate = errors.New("invalid branch update: use rebase or merge")
+	ErrBranchUpdating  = errors.New("GitHub is updating the branch; send the message again after the next poll")
+)
 
 const (
 	stallPolls        = 3

@@ -845,7 +845,9 @@ GitHub accepts the request and moves the branch a moment later, so the
 answer still names the old head and the next poll sees the new one. A
 conflict is refused at once. When the head did not move three poll
 intervals after GitHub accepted the request, the activity records
-`branch_update_failed` and the agent updates the branch.
+`branch_update_failed` and the agent updates the branch. Until the head
+moves or the update is recorded as failed, the agent gets no message,
+and `watch send` is refused with the reason.
 The daemon waits while work is in flight: while the agent works, while a
 proposal is open or waits for you, or while the session is with you. A
 rebase on GitHub would move the branch under that work, so the daemon

@@ -692,3 +692,26 @@ func TestANewHeadThatStillConflictsIsTold(t *testing.T) {
 		t.Fatalf("kinds = %v, messages = %q, want the conflict of t1 told once", fx.kinds(w), msgs)
 	}
 }
+
+func TestASendWaitsForTheBranchGitHubIsUpdating(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+	fx.behind()
+	fx.poll(w)
+
+	_, err := fx.svc.Send(context.Background(), w.ID, "rename the helper")
+	if !errors.Is(err, ErrBranchUpdating) || len(h.messages()) != 1 {
+		t.Fatalf("Send() error = %v, messages = %q, want the send refused while GitHub moves the branch", err, h.messages())
+	}
+
+	fx.poll(w)
+	if _, err := fx.svc.Send(context.Background(), w.ID, "rename the helper"); err != nil {
+		t.Fatalf("Send() on the head GitHub made = %v", err)
+	}
+	if msgs := h.messages(); len(msgs) != 2 || !strings.Contains(msgs[1], "rename the helper") {
+		t.Fatalf("messages = %q, want the send told on the new head", msgs)
+	}
+}

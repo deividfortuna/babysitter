@@ -300,3 +300,13 @@ func TestSendIsRefusedWhileAProposalWaits(t *testing.T) {
 		t.Fatalf("send: %d %s", rec.Code, rec.Body)
 	}
 }
+
+func TestSendIsRefusedWhileGitHubUpdatesTheBranch(t *testing.T) {
+	t.Parallel()
+	h, st, _ := newTestAPI(t)
+	seedWatch(t, st)
+	rec := call(t, h, http.MethodPost, "/watches/1/send", `{"message":"updating"}`, nil)
+	if rec.Code != http.StatusConflict || errorCode(t, rec) != "branch_updating" {
+		t.Fatalf("send: %d %s", rec.Code, rec.Body)
+	}
+}

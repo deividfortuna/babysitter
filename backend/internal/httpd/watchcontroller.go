@@ -159,6 +159,7 @@ var (
 		conflict("agent_busy", prwatch.ErrAgentBusy),
 		conflict("proposal_pending", prwatch.ErrProposalPending),
 		conflict("taken_over", prwatch.ErrTakenOver),
+		conflict("branch_updating", prwatch.ErrBranchUpdating),
 		badRequest("no_agent", prwatch.ErrNoAgent),
 		badRequest("self_watch", prwatch.ErrSelfWatch),
 		unavailable("watch_unavailable", errWatchUnavailable),
