@@ -35,11 +35,19 @@ const (
 )
 
 type slot struct {
-	polled time.Time
-	wait   time.Duration
+	polled  time.Time
+	wait    time.Duration
+	stirred bool
 }
 
 func (sl slot) next(c cadence) time.Time { return sl.polled.Add(c.clamp(sl.wait)) }
+
+func (sl slot) slower(c cadence) time.Duration {
+	if sl.stirred {
+		return c.shortest
+	}
+	return c.clamp(2 * c.clamp(sl.wait))
+}
 
 type schedule struct {
 	mu    sync.Mutex
@@ -67,9 +75,26 @@ func (sc *schedule) polled(id int64, p pace, c cadence) {
 	case speedUp:
 		sl.wait = c.shortest
 	case slowDown:
-		sl.wait = c.clamp(2 * c.clamp(sl.wait))
+		sl.wait = sl.slower(c)
 	case keepPace:
 	}
+	sl.stirred = false
+	sc.slots[id] = sl
+}
+
+func (sc *schedule) stir(id int64) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sl := sc.slots[id]
+	sl.stirred = true
+	sc.slots[id] = sl
+}
+
+func (sc *schedule) calm(id int64) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	sl := sc.slots[id]
+	sl.stirred = false
 	sc.slots[id] = sl
 }
 

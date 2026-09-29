@@ -2,11 +2,16 @@ package prwatch
 
 import (
 	"context"
+	"errors"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
+	"github.com/google/go-github/v91/github"
+
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
+	"github.com/deividfortuna/babysitter/internal/testutil"
 )
 
 type scheduleClock struct {
@@ -251,5 +256,83 @@ func TestAWatchWithRunningChecksStaysAtTheShortestInterval(t *testing.T) {
 	fx.advance(time.Minute)
 	if !fx.svc.schedule.due(w.ID, fx.svc.cadence()) {
 		t.Fatal("a watch with a check that runs is not due after the shortest interval")
+	}
+}
+
+func (sc *schedule) waitOf(id int64) time.Duration {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+	return sc.slots[id].wait
+}
+
+func TestARowThePollRecordsAfterTheDiffKeepsTheWatchAtTheShortestInterval(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.schedule.now = fx.clock
+	fx.good()
+	w := fx.start()
+	fx.agentIdle(w)
+	fx.poll(w)
+
+	fx.poll(w)
+	if kinds := fx.kinds(w); kinds[len(kinds)-1] != "merge_ready" {
+		t.Fatalf("activity = %v, want the second poll to record merge_ready", kinds)
+	}
+
+	fx.advance(time.Minute)
+	if !fx.svc.schedule.due(w.ID, fx.svc.cadence()) {
+		t.Fatal("a watch whose poll recorded merge_ready is not due after the shortest interval")
+	}
+}
+
+func TestTheIntervalsOfTheStartDoNotResetTheWaitOfTheFirstPass(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.schedule.now = fx.clock
+	w := fx.start()
+	fx.agentIdle(w)
+
+	go func() { _ = fx.svc.Run(t.Context()) }()
+
+	quiet := 2 * time.Minute
+	testutil.Eventually(t, func() bool { return fx.svc.schedule.waitOf(w.ID) == quiet }, "the quiet first pass to double the wait")
+	if testutil.Within(100*time.Millisecond, func() bool { return fx.svc.schedule.waitOf(w.ID) != quiet }) {
+		t.Fatalf("wait = %s after the start, want the %s of the quiet first pass", fx.svc.schedule.waitOf(w.ID), quiet)
+	}
+}
+
+func TestSettingsWithTheSameIntervalsKeepTheWaits(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.schedule.now = fx.clock
+	w := fx.start()
+	fx.agentIdle(w)
+	go func() { _ = fx.svc.Run(t.Context()) }()
+	quiet := 2 * time.Minute
+	testutil.Eventually(t, func() bool { return fx.svc.schedule.waitOf(w.ID) == quiet }, "the quiet first pass to double the wait")
+
+	fx.svc.SetInterval(fx.svc.Interval())
+	fx.svc.SetMaxInterval(fx.svc.MaxInterval())
+
+	if testutil.Within(100*time.Millisecond, func() bool { return fx.svc.schedule.waitOf(w.ID) != quiet }) {
+		t.Fatalf("wait = %s after the same intervals again, want %s", fx.svc.schedule.waitOf(w.ID), quiet)
+	}
+}
+
+func TestAPassThatCannotReachGitHubWaitsOneIntervalBeforeItTriesAgain(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	WithInterval(time.Hour)(fx.svc)
+	fx.start()
+	var tries atomic.Int32
+	fx.svc.newClient = func(context.Context) (*github.Client, error) {
+		tries.Add(1)
+		return nil, errors.New("no token")
+	}
+
+	go func() { _ = fx.svc.Run(t.Context()) }()
+
+	if testutil.Within(200*time.Millisecond, func() bool { return tries.Load() > 3 }) {
+		t.Fatalf("the loop made %d GitHub clients at once, want it to wait one interval after a failed pass", tries.Load())
 	}
 }

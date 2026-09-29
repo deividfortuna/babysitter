@@ -39,6 +39,7 @@ func (s *Service) record(ctx context.Context, w store.Watch, a store.Activity) (
 		return store.Activity{}, err
 	}
 	if isNew {
+		s.schedule.stir(w.ID)
 		s.report(ctx, w, []store.Activity{row})
 	}
 	return row, nil

@@ -211,8 +211,9 @@ func (s *Service) Run(ctx context.Context) error {
 	s.bg = ctx
 	s.bgMu.Unlock()
 	s.recover(ctx)
-	s.pass(ctx)
-	timer := time.NewTimer(s.untilNextPoll())
+	tuned := s.cadence()
+	reached := s.pass(ctx)
+	timer := time.NewTimer(s.untilNextPoll(reached))
 	defer timer.Stop()
 	for {
 		select {
@@ -221,16 +222,24 @@ func (s *Service) Run(ctx context.Context) error {
 			s.stopSessions()
 			return ctx.Err()
 		case <-timer.C:
-			s.pass(ctx)
+			reached = s.pass(ctx)
 		case <-s.kick:
-			s.pass(ctx)
+			reached = s.pass(ctx)
 		case <-s.interval.Retuned():
-			s.schedule.restart()
+			tuned = s.retune(tuned)
 		case <-s.maxInterval.Retuned():
-			s.schedule.restart()
+			tuned = s.retune(tuned)
 		}
-		timer.Reset(s.untilNextPoll())
+		timer.Reset(s.untilNextPoll(reached))
 	}
+}
+
+func (s *Service) retune(tuned cadence) cadence {
+	c := s.cadence()
+	if c != tuned {
+		s.schedule.restart()
+	}
+	return c
 }
 
 func (s *Service) Interval() time.Duration { return s.interval.Duration() }
@@ -246,9 +255,10 @@ func (s *Service) cadence() cadence {
 	return cadence{shortest: shortest, longest: max(s.MaxInterval(), shortest)}
 }
 
-func (s *Service) untilNextPoll() time.Duration {
+func (s *Service) untilNextPoll(reached bool) time.Duration {
 	c := s.cadence()
-	if s.guard.Paused() {
+	stalled := !reached || s.guard.Paused()
+	if stalled {
 		return c.shortest
 	}
 	return s.schedule.untilNext(c)
@@ -297,16 +307,16 @@ func (s *Service) recover(ctx context.Context) {
 	}
 }
 
-func (s *Service) pass(ctx context.Context) {
+func (s *Service) pass(ctx context.Context) bool {
 	watches, err := s.store.ListWatches(ctx, store.ListWatchesOptions{Status: store.WatchActive})
 	if err != nil {
 		s.log.Error("list watches", "err", err)
-		return
+		return false
 	}
 	client, err := s.newClient(ctx)
 	if err != nil {
 		s.log.Error("github client", "err", err)
-		return
+		return false
 	}
 	s.schedule.keep(watchIDs(watches))
 	c := s.cadence()
@@ -325,6 +335,7 @@ func (s *Service) pass(ctx context.Context) {
 		})
 	}
 	_ = g.Wait()
+	return true
 }
 
 func watchIDs(watches []store.Watch) map[int64]bool {

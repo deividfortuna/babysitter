@@ -227,7 +227,7 @@ Read and write them from the terminal too:
 ```sh
 babysitter settings get                            # what the daemon holds
 babysitter settings set --watch-interval 45s       # only the flags you type change
-babysitter settings set --watch-max-interval 30m   # the longest wait of a quiet watch; the watch interval itself turns the back off off
+babysitter settings set --watch-max-interval 30m   # the longest wait of a quiet watch; the watch interval itself keeps one fixed interval
 babysitter settings set --poll-interval 5m         # the repository poll interval
 babysitter settings set --approvals 2              # a number, 0 for none
 babysitter settings set --approvals branch         # give the decision back to the base branch

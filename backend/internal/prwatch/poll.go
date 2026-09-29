@@ -60,6 +60,7 @@ func (a agentStatus) done() bool {
 }
 
 func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch) error {
+	s.schedule.calm(w.ID)
 	p, err := s.pollOnce(ctx, client, w)
 	s.schedule.polled(w.ID, p, s.cadence())
 	return err
