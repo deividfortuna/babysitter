@@ -6,8 +6,22 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/google/go-github/v91/github"
+
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 )
+
+func nodeIDOf(t *testing.T, c *github.Client, number int) string {
+	t.Helper()
+	pr, _, err := c.PullRequests.Get(context.Background(), "o", "r", number)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if pr.GetNodeID() == "" {
+		t.Fatal("the pull request has no node ID")
+	}
+	return pr.GetNodeID()
+}
 
 func TestUpdatePullBranchRebasesTheHeadItExpects(t *testing.T) {
 	t.Parallel()
@@ -15,7 +29,7 @@ func TestUpdatePullBranchRebasesTheHeadItExpects(t *testing.T) {
 	p := gh.PR("o/r", 5)
 	c := gh.Client(t)
 
-	head, _, err := UpdatePullBranch(context.Background(), c, "o", "r", 5, "rebase", "abc")
+	head, _, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "rebase", "abc")
 	if err != nil {
 		t.Fatalf("UpdatePullBranch() error = %v", err)
 	}
@@ -37,7 +51,7 @@ func TestUpdatePullBranchReportsTheRefusalOfGitHub(t *testing.T) {
 	gh.Update(func() { p.RefuseBranchUpdate = "merge conflict between base and head" })
 	c := gh.Client(t)
 
-	_, _, err := UpdatePullBranch(context.Background(), c, "o", "r", 5, "merge", "abc")
+	_, _, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "abc")
 	if !errors.Is(err, ErrBranchNotUpdated) || !strings.Contains(err.Error(), "merge conflict") {
 		t.Fatalf("UpdatePullBranch() error = %v, want the refusal with the reason of GitHub", err)
 	}
@@ -49,8 +63,22 @@ func TestUpdatePullBranchRefusesAHeadThatMoved(t *testing.T) {
 	gh.PR("o/r", 5)
 	c := gh.Client(t)
 
-	_, _, err := UpdatePullBranch(context.Background(), c, "o", "r", 5, "merge", "old")
+	_, _, err := UpdatePullBranch(context.Background(), c, nodeIDOf(t, c, 5), "merge", "old")
 	if !errors.Is(err, ErrBranchNotUpdated) {
 		t.Fatalf("UpdatePullBranch() error = %v, want a refusal", err)
+	}
+}
+
+func TestUpdatePullBranchKeepsATransportFailureApartFromARefusal(t *testing.T) {
+	t.Parallel()
+	gh := ghfake.New()
+	gh.PR("o/r", 5)
+	c := gh.Client(t)
+	id := nodeIDOf(t, c, 5)
+	gh.Fail(ghfake.RouteGraphQL, 502, "Bad Gateway")
+
+	_, _, err := UpdatePullBranch(context.Background(), c, id, "rebase", "abc")
+	if err == nil || errors.Is(err, ErrBranchNotUpdated) {
+		t.Fatalf("UpdatePullBranch() error = %v, want a failure that is not a refusal", err)
 	}
 }

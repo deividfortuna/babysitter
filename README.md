@@ -495,7 +495,7 @@ snapshot keys the pull request by the owner and name GitHub returns.
 The snapshot holds:
 
 - `snapshot_at`: when the snapshot was taken
-- `pr`: repository, number, URL, title, author, state, draft, merged and
+- `pr`: repository, number, `node_id`, URL, title, author, state, draft, merged and
   closed flags, head and base branch, the `head_repo` of a fork, head
   commit, `mergeable` (`null`
   while GitHub computes it), `mergeable_state`, `review_decision`, the
@@ -847,9 +847,15 @@ rebase on GitHub would move the branch under that work, so the daemon
 asks GitHub after the work is done, and until then the agent gets no
 message about the branch.
 The work branch of the worktree follows the new head before the next
-message. GitHub tries once for each head. When GitHub refuses, for
-example on a conflict, the activity records `branch_update_failed` with
-the reason, and the agent updates the branch.
+message. GitHub gets one try for each head, and a new head that is
+still behind gets a new try. When GitHub refuses, for example on a
+conflict, the activity records `branch_update_failed` with the reason,
+and the agent updates the branch. A network error, a timeout or a 5xx
+answer is not a refusal: the next poll tries again, and after three
+failures for the same head the agent updates the branch. When a
+proposal of the agent failed, the daemon does not ask GitHub: the agent
+gets the branch behind its base, and its next turn also solves the
+failed proposal.
 
 The agent updates the branch in the worktree with the method of the
 watch: it rebases onto the base, or it merges the base into the branch.

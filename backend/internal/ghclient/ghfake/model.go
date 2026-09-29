@@ -97,17 +97,12 @@ type PR struct {
 	// Refuse holds the logins GitHub refuses as reviewers, with a 422.
 	Refuse []string
 	// ReviewRequests holds the reviewers of every review request, in order.
-	ReviewRequests [][]string
-	// BranchUpdates holds every update of the branch the fake received.
-	BranchUpdates []BranchUpdate
-	// RefuseBranchUpdate makes an update of the branch fail with this
-	// GraphQL error message.
+	ReviewRequests     [][]string
+	BranchUpdates      []BranchUpdate
 	RefuseBranchUpdate string
 }
 
-// BranchUpdate is one update of the head branch the fake received.
 type BranchUpdate struct {
-	// Method is MERGE or REBASE.
 	Method       string
 	ExpectedHead string
 }

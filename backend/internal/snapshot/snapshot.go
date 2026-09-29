@@ -82,6 +82,7 @@ type Snapshot struct {
 type PR struct {
 	Repo                string               `json:"repo"`
 	Number              int                  `json:"number"`
+	NodeID              string               `json:"node_id"`
 	URL                 string               `json:"url"`
 	Title               string               `json:"title"`
 	Author              string               `json:"author"`
@@ -375,6 +376,7 @@ func toPR(t Target, pr *github.PullRequest) PR {
 	out := PR{
 		Repo:           t.Repo(),
 		Number:         pr.GetNumber(),
+		NodeID:         pr.GetNodeID(),
 		URL:            pr.GetHTMLURL(),
 		Title:          pr.GetTitle(),
 		Author:         pr.GetUser().GetLogin(),

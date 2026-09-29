@@ -2,6 +2,7 @@ package prwatch
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -205,7 +206,7 @@ func TestDiffMergeabilityAndEnd(t *testing.T) {
 	items, next = Diff(next, s, now)
 	equalKinds(t, items, "behind:behind@abc")
 	items, next = Diff(next, s, now)
-	equalKinds(t, items)
+	equalKinds(t, items, "behind:behind@abc")
 
 	s.PR.MergeableState = "dirty"
 	items, next = Diff(next, s, now)
@@ -301,5 +302,26 @@ func TestAFailedRunTakesTheJobOfItsOwnRun(t *testing.T) {
 	}
 	if p.RunID != 90 || p.JobID != 30 || p.LogsEndpoint != "repos/octo/hello/actions/jobs/30/logs" {
 		t.Fatalf("the check of run 90 took job %d of run %d (%s), want job 30 of run 90", p.JobID, p.RunID, p.LogsEndpoint)
+	}
+}
+
+func TestDiffRecordsBehindForANewHeadThatIsStillBehind(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	s := greenSnapshot("abc")
+	s.PR.MergeableState = "behind"
+	_, prev := Diff(State{}, s, now)
+
+	s.PR.HeadSHA = "def"
+	s.PR.MergeableState = "unknown"
+	items, prev := Diff(prev, s, now)
+	if slices.ContainsFunc(items, isBehind) {
+		t.Fatalf("activity = %v, want no behind row while GitHub computes the state", items)
+	}
+
+	s.PR.MergeableState = "behind"
+	items, _ = Diff(prev, s, now)
+	if !slices.ContainsFunc(items, func(a store.Activity) bool { return a.Ref == "behind@def" }) {
+		t.Fatalf("activity = %v, want behind@def: the new head is still behind", items)
 	}
 }

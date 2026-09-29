@@ -4,10 +4,12 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
 	"slices"
 	"strings"
 	"testing"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
@@ -271,17 +273,95 @@ func TestGitHubWaitsUntilTheProposalIsDecided(t *testing.T) {
 	}
 }
 
+func TestAFailedProposalLetsTheAgentUpdateTheBranch(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.turn(w)
+	fx.rel.commit("abc", "w1")
+	fx.rel.set(func(f *fakeRelease) { f.pushErr = errors.New("no credential") })
+	fx.hook(w, agent.EventStop, `{}`)
+	fx.poll(w)
+	if p := fx.proposal(w, 1); p.Status != store.ProposalFailed {
+		t.Fatalf("proposal = %+v, want it failed", p)
+	}
+
+	fx.behind()
+	fx.poll(w)
+
+	if got := fx.branchUpdates(); len(got) != 0 {
+		t.Fatalf("branch updates = %+v, want none: a rebase on GitHub would fail the retry too", got)
+	}
+	msgs := h.messages()
+	if last := msgs[len(msgs)-1]; !strings.Contains(last, "is behind main") {
+		t.Fatalf("last message = %q, want the agent told about the branch", last)
+	}
+}
+
+func TestATransientFailureIsTriedThreeTimesBeforeTheAgentTakesOver(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+	fx.api.React(ghfake.RouteGraphQL, func(a ghfake.Action) (ghfake.Response, bool) {
+		return ghfake.Response{Status: http.StatusBadGateway, Message: "Bad Gateway"}, strings.Contains(string(a.Body), "updatePullRequestBranch")
+	})
+
+	fx.behind()
+	fx.poll(w)
+	fx.poll(w)
+	if slices.Contains(fx.kinds(w), string(store.ActivityBranchNotUpdated)) || len(h.messages()) != 1 {
+		t.Fatalf("kinds = %v, messages = %d, want no refusal and no message after two transient failures", fx.kinds(w), len(h.messages()))
+	}
+
+	fx.poll(w)
+	if !slices.Contains(fx.kinds(w), string(store.ActivityBranchNotUpdated)) {
+		t.Fatalf("kinds = %v, want the refusal after the third failure", fx.kinds(w))
+	}
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "is behind main") {
+		t.Fatalf("messages = %q, want the agent told after the third failure", msgs)
+	}
+}
+
+func TestAHeadThatIsStillBehindAfterTheUpdateGetsItsOwnTry(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	fx.agentIdle(w)
+	fx.behind()
+	fx.poll(w)
+	var first string
+	fx.update(func() { first = fx.pr.HeadSHA })
+
+	fx.poll(w)
+	if got := fx.branchUpdates(); len(got) != 1 {
+		t.Fatalf("branch updates = %+v, want one while GitHub computes the state of %s", got, first)
+	}
+
+	fx.behind()
+	fx.poll(w)
+	got := fx.branchUpdates()
+	if len(got) != 2 || got[1].ExpectedHead != first {
+		t.Fatalf("branch updates = %+v, want a second update that expects %s", got, first)
+	}
+}
+
 func TestAWatchChangesHowItUpdatesItsBranch(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
 	w := fx.start()
 
-	got, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{BranchUpdate: new(store.BranchUpdate("Merge")), UpdateOnGitHub: new(false)})
+	got, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{BranchUpdate: new(store.BranchMerge), UpdateOnGitHub: new(false)})
 	if err != nil || got.BranchUpdate != store.BranchMerge || got.UpdateOnGitHub {
 		t.Fatalf("SetMergeRules() = %+v, %v, want a merge by the agent", got, err)
 	}
-	if _, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{BranchUpdate: new(store.BranchUpdate("squash"))}); !errors.Is(err, ErrBadBranchUpdate) {
-		t.Fatalf("SetMergeRules(squash) error = %v, want ErrBadBranchUpdate", err)
+	for _, bad := range []store.BranchUpdate{"squash", "Merge", ""} {
+		if _, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{BranchUpdate: new(bad)}); !errors.Is(err, ErrBadBranchUpdate) {
+			t.Fatalf("SetMergeRules(%q) error = %v, want ErrBadBranchUpdate", bad, err)
+		}
 	}
 }
 

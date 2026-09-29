@@ -91,7 +91,7 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 	if s.hostsSession(w) {
 		s.tellHandback(ctx, w)
 	}
-	if err := s.updateBehind(ctx, client, w); err != nil {
+	if err := s.updateBehind(ctx, client, w, snap.PR.NodeID); err != nil {
 		return err
 	}
 	pending, err := s.tell(ctx, client, w)
@@ -400,7 +400,7 @@ func currentItems(items []store.Activity, headSHA string) (current, stale []stor
 }
 
 func staleCheck(a store.Activity, headSHA string) bool {
-	if a.Kind != store.ActivityCheckFailed || headSHA == "" {
+	if !boundToHead(a.Kind) || headSHA == "" {
 		return false
 	}
 	var p struct {
@@ -410,6 +410,10 @@ func staleCheck(a store.Activity, headSHA string) bool {
 		return false
 	}
 	return p.SHA != "" && p.SHA != headSHA
+}
+
+func boundToHead(kind store.ActivityKind) bool {
+	return kind == store.ActivityCheckFailed || kind == store.ActivityBehind
 }
 
 func ids(as []store.Activity) []int64 {

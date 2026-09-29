@@ -121,6 +121,22 @@ func (s *Store) HasActivity(ctx context.Context, watchID int64, kind ActivityKin
 	return has, nil
 }
 
+func (s *Store) HasActivityOfKinds(ctx context.Context, watchID int64, ref string, kinds ...ActivityKind) (bool, error) {
+	var has bool
+	placeholders := strings.TrimSuffix(strings.Repeat("?, ", len(kinds)), ", ")
+	args := []any{watchID, ref}
+	for _, k := range kinds {
+		args = append(args, k)
+	}
+	err := s.db.QueryRowContext(ctx,
+		"SELECT EXISTS (SELECT 1 FROM watch_activity WHERE watch_id = ? AND ref = ? AND kind IN ("+placeholders+"))",
+		args...).Scan(&has)
+	if err != nil {
+		return false, fmt.Errorf("has activity: %w", err)
+	}
+	return has, nil
+}
+
 func (s *Store) ActivityByRef(ctx context.Context, watchID int64, kind ActivityKind, ref string) (Activity, bool, error) {
 	row := s.db.QueryRowContext(ctx,
 		"SELECT "+activityColumns+" FROM watch_activity WHERE watch_id = ? AND kind = ? AND ref = ?", watchID, kind, ref)

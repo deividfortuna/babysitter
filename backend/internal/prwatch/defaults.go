@@ -30,7 +30,7 @@ func (s *Service) withDefaults(ctx context.Context, req StartRequest) (StartRequ
 	req.ApprovalMode = cmp.Or(req.ApprovalMode, setOrNil(repo.ApprovalMode), &set.ApprovalMode)
 	req.AutoApproveRebase = cmp.Or(req.AutoApproveRebase, repo.AutoApproveRebase, &set.AutoApproveRebase)
 	req.KeepWorktree = cmp.Or(req.KeepWorktree, repo.KeepWorktree, &set.KeepWorktree)
-	req.BranchUpdate = cmp.Or(normalizedUpdate(req.BranchUpdate), setOrNil(repo.BranchUpdate), &set.BranchUpdate)
+	req.BranchUpdate = cmp.Or(req.BranchUpdate, setOrNil(repo.BranchUpdate), &set.BranchUpdate)
 	req.UpdateOnGitHub = cmp.Or(req.UpdateOnGitHub, repo.UpdateOnGitHub, &set.UpdateOnGitHub)
 	req.ApprovalsRequired = approvalsOf(req.ApprovalsRequired, repo, set)
 	return req, nil
@@ -85,13 +85,6 @@ func approvalsOf(asked Approvals, repo store.WatchOverrides, set store.Settings)
 	default:
 		return Approvals{Set: true, Count: set.ApprovalsRequired}
 	}
-}
-
-func normalizedUpdate(asked *store.BranchUpdate) *store.BranchUpdate {
-	if asked == nil {
-		return nil
-	}
-	return setOrNil(store.BranchUpdate(normalized(string(*asked))))
 }
 
 func setOrNil[T comparable](v T) *T {

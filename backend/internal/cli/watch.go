@@ -283,8 +283,10 @@ the worktree from that clone. The target must then name the repository
 and the number, and the provider must be claude or copilot.
 
 Only activity after the start goes to the agent, except that a branch
-already behind its base or in conflict with it, or a check that already
-failed, is told at once.
+already in conflict with its base, or a check that already failed, is
+told at once. A branch already behind its base goes to GitHub first, as
+the next paragraph says, and to the agent when GitHub does not update
+it.
 
 When the branch falls behind its base, the daemon first asks GitHub to
 update it with --branch-update (rebase or merge), and the agent does it

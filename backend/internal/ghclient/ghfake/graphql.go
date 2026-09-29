@@ -6,9 +6,6 @@ import (
 	"strings"
 )
 
-// graphql answers the queries of ghclient: the review state of one pull
-// request on one page, the node ID of a pull request, and the update of its
-// branch.
 func (c *call) graphql() {
 	var req struct {
 		Query string `json:"query"`
@@ -16,14 +13,11 @@ func (c *call) graphql() {
 	if !c.decode(&req) {
 		return
 	}
-	switch {
-	case strings.Contains(req.Query, "updatePullRequestBranch"):
+	if strings.Contains(req.Query, "updatePullRequestBranch") {
 		c.updateBranch()
-	case strings.Contains(req.Query, "reviewThreads"):
-		c.reviewState()
-	default:
-		c.pullRequestID()
+		return
 	}
+	c.reviewState()
 }
 
 func (c *call) pullOfQuery() *PR {
@@ -60,25 +54,6 @@ func nodeID(r *Repo, p *PR) string {
 	return fmt.Sprintf("PR_%s#%d", r.FullName(), p.Number)
 }
 
-func (c *call) pullRequestID() {
-	var req struct {
-		Variables struct {
-			Owner string `json:"owner"`
-			Name  string `json:"name"`
-		} `json:"variables"`
-	}
-	p := c.pullOfQuery()
-	if p == nil || !c.decode(&req) {
-		return
-	}
-	r := c.g.repos[strings.ToLower(req.Variables.Owner+"/"+req.Variables.Name)]
-	c.json(http.StatusOK, map[string]any{"data": map[string]any{"repository": map[string]any{
-		"pullRequest": map[string]any{"id": nodeID(r, p)},
-	}}})
-}
-
-// updateBranch applies the update of the branch: the head moves to a new
-// commit and GitHub has yet to compute the mergeable state.
 func (c *call) updateBranch() {
 	var req struct {
 		Variables struct {

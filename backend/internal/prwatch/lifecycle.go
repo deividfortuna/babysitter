@@ -425,7 +425,7 @@ func (s *Service) finishStart(ctx context.Context, client *github.Client, w stor
 	}
 	unlock := s.locks.Lock(w.ID)
 	defer unlock()
-	if err := s.updateBehind(ctx, client, w); err != nil {
+	if err := s.updateBehind(ctx, client, w, snap.PR.NodeID); err != nil {
 		s.log.Error("update the branch on GitHub", "watch", w.ID, "pr", prLabel(w), "err", err)
 	}
 	if !s.runs(w) {

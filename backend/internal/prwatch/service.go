@@ -81,6 +81,7 @@ func WithProcessAlive(alive func(pid int) bool) Option {
 }
 
 type Service struct {
+	tries         branchTries
 	store         *store.Store
 	newClient     watcher.ClientFunc
 	git           worktree.Manager
