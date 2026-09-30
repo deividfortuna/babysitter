@@ -115,6 +115,8 @@ func positionalWords(args []shellWord, flagsTakeValues bool) []string {
 	for i := 0; i < len(args); i++ {
 		text := args[i].text
 		switch {
+		case args[i].redirect:
+			i++
 		case text == "--":
 			return out
 		case !strings.HasPrefix(text, "-"):
