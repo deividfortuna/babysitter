@@ -163,8 +163,9 @@ comes from, in this order:
 
 The Settings dialog of the app has three groups of pages:
 
-- **App**: **Appearance** (the theme, light, dark or system, and the
-  rate limit card), **Notifications** and **Updates**.
+- **App**: **Appearance** (the theme, light, dark or system, the rate
+  limit card, and the screen reader mode of the agent), **Notifications**
+  and **Updates**.
 - **New watches**: **Agent** and **Review and merge**, what a watch
   starts with.
 - **Daemon**: **Polling** and **Logs**.
@@ -261,6 +262,7 @@ babysitter settings set --provider copilot --model auto   # the agent of a new w
 babysitter settings set --model opus --effort high        # the effort of that model; a new model alone takes its default effort
 babysitter settings set --branch-update merge      # a branch behind its base gets a merge of the base, not a rebase
 babysitter settings set --update-on-github=false   # the agent updates a branch behind its base, GitHub does not
+babysitter settings set --screen-reader=false      # the agent draws its full terminal interface from the next session start
 ```
 
 The notification flags of `settings set` are in

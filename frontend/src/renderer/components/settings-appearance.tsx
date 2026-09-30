@@ -1,7 +1,8 @@
 import { ThemeToggle } from "@/components/theme-toggle";
-import { SettingsCard, SettingsRow, useTrackSave } from "@/components/settings-page";
+import { SettingsCard, SettingsRow, useTrackedWrite, useTrackSave } from "@/components/settings-page";
 import { Switch } from "@/components/ui/switch";
 import { useAlwaysShowRateLimit } from "@/hooks/use-always-show-rate-limit";
+import { useSettings } from "@/hooks/useSettings";
 
 export function AppearancePanel() {
   const { alwaysShow, setAlwaysShow } = useAlwaysShowRateLimit();
@@ -27,6 +28,27 @@ export function AppearancePanel() {
           }}
         />
       </SettingsRow>
+      <ScreenReaderRow />
     </SettingsCard>
+  );
+}
+
+function ScreenReaderRow() {
+  const settings = useSettings();
+  const save = useTrackedWrite();
+
+  return (
+    <SettingsRow
+      label="Screen reader mode of the agent"
+      htmlFor="screen-reader"
+      description="The agent draws plain text in place of its full terminal interface. A session that runs keeps its mode until it starts again."
+    >
+      <Switch
+        id="screen-reader"
+        checked={settings.data?.screenReader ?? false}
+        disabled={!settings.data}
+        onCheckedChange={(on) => save({ screenReader: on })}
+      />
+    </SettingsRow>
   );
 }

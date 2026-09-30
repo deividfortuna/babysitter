@@ -3,6 +3,7 @@ package prwatch
 import (
 	"cmp"
 	"context"
+	"slices"
 	"testing"
 	"time"
 
@@ -22,6 +23,22 @@ func (fx *fixture) settings(s store.Settings) {
 	s.BranchUpdate = cmp.Or(s.BranchUpdate, store.BranchRebase)
 	if _, err := fx.st.SaveSettings(context.Background(), s); err != nil {
 		fx.t.Fatal(err)
+	}
+}
+
+func TestStartWithoutScreenReaderLaunchesTheFullInterface(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.settings(store.Settings{ScreenReader: false})
+
+	fx.start()
+
+	h := fx.host.last()
+	if h == nil {
+		t.Fatal("no session started")
+	}
+	if slices.Contains(h.spec.Argv, "--screen-reader") {
+		t.Fatalf("the screen reader mode is on when the setting is off: %v", h.spec.Argv)
 	}
 }
 

@@ -31,6 +31,7 @@ export function buildSettings(overrides: Partial<Settings> = {}): Settings {
     effort: "",
     branchUpdate: "rebase",
     updateOnGitHub: true,
+    screenReader: true,
     ...overrides,
   };
 }

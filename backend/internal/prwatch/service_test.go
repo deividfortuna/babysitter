@@ -593,6 +593,9 @@ func (r *fakeRunner) Command(l agent.Launch) ([]string, []string, error) {
 		argv = append(argv, "--model", l.Model)
 	}
 	argv = append(argv, agent.EffortArgs("--effort", l)...)
+	if l.ScreenReader {
+		argv = append(argv, "--screen-reader")
+	}
 	argv = append(argv, l.Hook...)
 	return argv, []string{"FAKE=1"}, nil
 }
@@ -949,7 +952,7 @@ func TestStartOpensASessionAndIntroducesThePullRequest(t *testing.T) {
 		t.Fatalf("agent session = %q", stored.AgentSession)
 	}
 	argv := strings.Join(h.spec.Argv, " ")
-	if h.spec.Dir != w.WorktreeDir || !strings.Contains(argv, "--session-id "+stored.AgentSession) || strings.Contains(argv, "--resume") ||
+	if h.spec.Dir != w.WorktreeDir || !strings.Contains(argv, "--session-id "+stored.AgentSession) || strings.Contains(argv, "--resume") || !strings.Contains(argv, "--screen-reader") ||
 		!strings.Contains(argv, "/opt/babysitter watch hook --data-dir "+fx.data+" --watch "+fmt.Sprint(w.ID)) {
 		t.Fatalf("launch = %s in %s", argv, h.spec.Dir)
 	}

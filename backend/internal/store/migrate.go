@@ -719,6 +719,9 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	ALTER TABLE pull_requests ADD COLUMN author_avatar_url TEXT NOT NULL DEFAULT '';
 	ALTER TABLE watches ADD COLUMN author_avatar_url TEXT NOT NULL DEFAULT '';
 	`,
+	`
+	ALTER TABLE settings ADD COLUMN screen_reader INTEGER NOT NULL DEFAULT 1;
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

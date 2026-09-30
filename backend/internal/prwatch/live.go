@@ -149,6 +149,10 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	if err != nil {
 		return nil, err
 	}
+	set, err := s.store.Settings(ctx)
+	if err != nil {
+		return nil, err
+	}
 	sessionID, resume := w.AgentSession, w.AgentSession != ""
 	if !resume {
 		sessionID = runner.NewSessionID()
@@ -156,7 +160,7 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	argv, env, err := runner.Command(agent.Launch{
 		WorktreeDir: w.WorktreeDir, Model: w.Model, Effort: w.Effort, SessionID: sessionID, Resume: resume,
 		Name: fmt.Sprintf("babysitter %s#%d", w.Repo(), w.Number),
-		Hook: s.hook(w.ID), HooksDir: filepath.Join(s.dataDir, "git-hooks"),
+		Hook: s.hook(w.ID), HooksDir: filepath.Join(s.dataDir, "git-hooks"), ScreenReader: set.ScreenReader,
 	})
 	if err != nil {
 		return nil, err

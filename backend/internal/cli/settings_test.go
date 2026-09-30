@@ -51,6 +51,22 @@ func TestSettingsSetWritesOnlyTheFlagsThatWereTyped(t *testing.T) {
 	}
 }
 
+func TestSettingsSetTurnsTheScreenReaderModeOff(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	out, err := runSettings(t, d, "set", "--screen-reader=false")
+	if err != nil {
+		t.Fatalf("settings set error = %v", err)
+	}
+	if got := d.settingsPut[0]["screenReader"]; got != false {
+		t.Fatalf("screen reader = %v, want false", got)
+	}
+	if !regexp.MustCompile(`Screen reader mode of the agent\s+no`).MatchString(out) {
+		t.Fatalf("settings set = %q, want the screen reader mode off", out)
+	}
+}
+
 func TestSettingsSetTakesTheApprovalsAndGivesThemBackToTheBranch(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()

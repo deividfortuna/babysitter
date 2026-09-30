@@ -15,6 +15,7 @@ func launch(t *testing.T) agent.Launch {
 	return agent.Launch{
 		WorktreeDir: t.TempDir(), Model: "", SessionID: "0d5f4b5e-6f1e-4f8e-9c9a-2d4b7e1c3a10", Name: "PR #3",
 		Hook: []string{"/usr/local/bin/babysitter", "watch", "hook", "--watch", "7"}, HooksDir: filepath.Join(t.TempDir(), "hooks"),
+		ScreenReader: true,
 	}
 }
 
@@ -71,6 +72,21 @@ func TestCommandPassesTheReasoningEffortOfTheWatch(t *testing.T) {
 	}
 	if v, _ := flag(argv, "--reasoning-effort"); v != "xhigh" {
 		t.Fatalf("reasoning effort = %q in %v", v, argv)
+	}
+}
+
+func TestCommandWithoutScreenReader(t *testing.T) {
+	t.Parallel()
+	c := New("", "")
+	l := launch(t)
+	l.WorktreeDir, _ = linkedWorktree(t)
+	l.ScreenReader = false
+	argv, _, err := c.Command(l)
+	if err != nil {
+		t.Fatalf("Command() error = %v", err)
+	}
+	if slices.Contains(argv, "--screen-reader") {
+		t.Fatalf("the screen reader mode is on when the setting is off: %v", argv)
 	}
 }
 
