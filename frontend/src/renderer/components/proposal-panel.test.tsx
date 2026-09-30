@@ -553,6 +553,16 @@ test("the push comes back with restore", async () => {
   expect(within(panel).getByRole("button", { name: "More ways to reject" })).toBeVisible();
 });
 
+test("the chevron of a decision marks its menu as open", async () => {
+  const { user } = renderPending();
+  const panel = await section();
+
+  const chevron = await within(panel).findByRole("button", { name: "More ways to approve" });
+  await openMenu(user, chevron);
+
+  expect(chevron).toHaveAttribute("data-state", "open");
+});
+
 test("a rejection takes a reason, and discards the commits only when asked", async () => {
   const { decisions, user } = renderPending();
   const panel = await section();

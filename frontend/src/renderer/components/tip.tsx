@@ -3,10 +3,14 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 
 type Side = ComponentProps<typeof TooltipContent>["side"];
 
-export function Tip({ label, side, children }: { label: ReactNode; side?: Side; children: ReactNode }) {
+type TipProps = ComponentProps<typeof TooltipTrigger> & { label: ReactNode; side?: Side };
+
+export function Tip({ label, side, children, ...triggerProps }: TipProps) {
   return (
     <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
+      <TooltipTrigger asChild {...triggerProps}>
+        {children}
+      </TooltipTrigger>
       <TooltipContent side={side}>{label}</TooltipContent>
     </Tooltip>
   );

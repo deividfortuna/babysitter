@@ -383,13 +383,13 @@ function SplitButton({
         <>
           {variant === "default" ? <ButtonGroupSeparator className="bg-primary-foreground/30" /> : null}
           <DropdownMenu>
-            <Tip label={label}>
-              <DropdownMenuTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Tip label={label}>
                 <Button size="icon-sm" variant={variant} className="w-7" aria-label={label}>
                   <ChevronDownIcon />
                 </Button>
-              </DropdownMenuTrigger>
-            </Tip>
+              </Tip>
+            </DropdownMenuTrigger>
             <DropdownMenuContent align="end">{more}</DropdownMenuContent>
           </DropdownMenu>
         </>

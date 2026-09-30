@@ -210,14 +210,14 @@ export function AppSidebar({
                       ) : null}
                     </SidebarMenuButton>
                     <DropdownMenu>
-                      <Tip label="More actions">
-                        <DropdownMenuTrigger asChild>
+                      <DropdownMenuTrigger asChild>
+                        <Tip label="More actions">
                           <SidebarMenuAction showOnHover>
                             <MoreHorizontalIcon />
                             <span className="sr-only">More</span>
                           </SidebarMenuAction>
-                        </DropdownMenuTrigger>
-                      </Tip>
+                        </Tip>
+                      </DropdownMenuTrigger>
                       <DropdownMenuContent side="right" align="start">
                         <DropdownMenuGroup>
                           <DropdownMenuItem disabled={requestSync.isPending} onClick={() => requestSync.mutate()}>
