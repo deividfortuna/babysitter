@@ -84,11 +84,11 @@ export function AgentTerminal({ output, onResize }: Props) {
   const emulated = surface !== null;
 
   return (
-    <div ref={frame} className="relative rounded-md border bg-background">
-      <div ref={scroller} aria-hidden className={emulated ? "overflow-x-auto p-3" : "hidden"} />
+    <div ref={frame} className="relative bg-background">
+      <div ref={scroller} aria-hidden className={emulated ? "overflow-x-auto px-5 py-2" : "hidden"} />
       <pre
         aria-label="Agent output"
-        className={emulated ? "sr-only" : "p-3 font-mono text-2xs/relaxed whitespace-pre-wrap"}
+        className={emulated ? "sr-only" : "px-5 py-2 font-mono text-2xs/relaxed whitespace-pre-wrap"}
       >
         {text}
       </pre>
