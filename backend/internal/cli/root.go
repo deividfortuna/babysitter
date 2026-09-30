@@ -172,3 +172,12 @@ The database path comes from, in this order:
 
 	return root
 }
+
+type ExitCodeError struct {
+	Code int
+	Err  error
+}
+
+func (e *ExitCodeError) Error() string { return e.Err.Error() }
+
+func (e *ExitCodeError) Unwrap() error { return e.Err }

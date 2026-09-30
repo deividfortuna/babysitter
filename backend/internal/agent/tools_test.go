@@ -40,6 +40,67 @@ func TestAuthorPatternsTakeEverySpellingOfADecision(t *testing.T) {
 	}
 }
 
+func TestIsAuthorDecisionTakesEverySpellingOfADecision(t *testing.T) {
+	t.Parallel()
+	for _, command := range []string{
+		"babysitter watch mode 1 auto",
+		"babysitter -o json watch reject 1 --reason x",
+		"babysitter --data-dir /tmp/x watch stop",
+		"/usr/local/bin/babysitter --output json watch approve 1",
+		"'/opt/my tools/babysitter' watch merge 1",
+		"sh -c 'babysitter -o text watch retry 1'",
+		"cd /repo && babysitter watch takeover 1",
+		"babysitter watch\thandback 1",
+		"babysitter \\\n  watch merge 1",
+	} {
+		if !IsAuthorDecision(command) {
+			t.Errorf("IsAuthorDecision(%q) = false", command)
+		}
+	}
+	for _, command := range []string{
+		"babysitter watch reply 1 fixed in the last commit",
+		"babysitter -o json watch status 1",
+		"babysitter watch modes",
+		"go test ./internal/prwatch/ -run TestWatchMerge",
+		"git commit -m 'watch merge readiness'",
+		"",
+	} {
+		if IsAuthorDecision(command) {
+			t.Errorf("IsAuthorDecision(%q) = true", command)
+		}
+	}
+}
+
+func TestRefusesToolUseReadsTheCommandOfEveryAgent(t *testing.T) {
+	t.Parallel()
+	const decision = "babysitter -o json watch reject 1 --reason x"
+	refused := []map[string]any{
+		{"toolName": "bash", "toolArgs": map[string]any{"command": decision}},
+		{"toolName": "bash", "toolArgs": `{"command":"` + decision + `"}`},
+		{"tool_name": "Bash", "tool_input": map[string]any{"command": decision}},
+	}
+	for _, payload := range refused {
+		if !RefusesToolUse(EventPreToolUse, payload) {
+			t.Errorf("RefusesToolUse(%v) = false", payload)
+		}
+		if RefusesToolUse(EventPostToolUse, payload) {
+			t.Errorf("RefusesToolUse() refuses a tool that already ran: %v", payload)
+		}
+	}
+	allowed := []map[string]any{
+		{"toolName": "bash", "toolArgs": map[string]any{"command": "babysitter watch reply 1 done"}},
+		{"tool_name": "Read", "tool_input": map[string]any{"file_path": decision}},
+		{"toolName": "bash", "toolArgs": "not json"},
+		{},
+		nil,
+	}
+	for _, payload := range allowed {
+		if RefusesToolUse(EventPreToolUse, payload) {
+			t.Errorf("RefusesToolUse(%v) = true", payload)
+		}
+	}
+}
+
 func TestThePrePushHookRefusesEveryPush(t *testing.T) {
 	t.Parallel()
 	if _, err := exec.LookPath("sh"); err != nil {

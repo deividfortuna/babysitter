@@ -784,8 +784,18 @@ func newWatchHookCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if err := reportHook(cmd, opts, *dataDirFlag, watch, args[0]); err != nil {
+			event, payload := args[0], hookPayload(cmd.InOrStdin())
+			refused := agent.RefusesToolUse(event, payload)
+			if refused {
+				if err := writeRefusal(cmd.OutOrStdout()); err != nil {
+					return err
+				}
+			}
+			if err := reportHook(cmd, opts, *dataDirFlag, watch, event, payload); err != nil {
 				fmt.Fprintln(cmd.ErrOrStderr(), "babysitter hook:", err)
+			}
+			if refused {
+				return &ExitCodeError{Code: refusedToolExitCode, Err: errors.New(agent.AuthorDecisionRefusal)}
 			}
 			return nil
 		},
@@ -794,7 +804,25 @@ func newWatchHookCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	return cmd
 }
 
-func reportHook(cmd *cobra.Command, opts *options, dataDir string, watch int64, event string) error {
+const refusedToolExitCode = 2
+
+func hookPayload(r io.Reader) map[string]any {
+	payload := map[string]any{}
+	data, err := io.ReadAll(io.LimitReader(r, 1<<20))
+	if err == nil && len(strings.TrimSpace(string(data))) > 0 {
+		_ = json.Unmarshal(data, &payload)
+	}
+	return payload
+}
+
+func writeRefusal(w io.Writer) error {
+	return json.NewEncoder(w).Encode(map[string]string{
+		"permissionDecision":       "deny",
+		"permissionDecisionReason": agent.AuthorDecisionRefusal,
+	})
+}
+
+func reportHook(cmd *cobra.Command, opts *options, dataDir string, watch int64, event string, payload map[string]any) error {
 	if watch <= 0 {
 		return fmt.Errorf("a watch is required")
 	}
@@ -803,11 +831,6 @@ func reportHook(cmd *cobra.Command, opts *options, dataDir string, watch int64, 
 		return err
 	}
 	c.http.Timeout = hookTimeout
-	payload := map[string]any{}
-	data, err := io.ReadAll(io.LimitReader(cmd.InOrStdin(), 1<<20))
-	if err == nil && len(strings.TrimSpace(string(data))) > 0 {
-		_ = json.Unmarshal(data, &payload)
-	}
 	ctx, cancel := context.WithTimeout(cmd.Context(), hookTimeout)
 	defer cancel()
 	return c.post(ctx, fmt.Sprintf("/watches/%d/hook", watch), httpd.HookRequest{Event: event, Payload: payload}, nil)

@@ -1,10 +1,13 @@
 package agent
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
+	"strings"
 )
 
 var authorDecisions = []string{
@@ -34,6 +37,46 @@ func AuthorPatterns() []string {
 		out = append(out, "*babysitter* "+decision)
 	}
 	return out
+}
+
+const AuthorDecisionRefusal = "babysitter: only the author runs this command; do not run it again, " +
+	"and say in your final message what the author has to decide"
+
+var authorDecisionCall = regexp.MustCompile(`(?s)babysitter.*\bwatch\s+(?:` + decisionWords() + `)\b`)
+
+func decisionWords() string {
+	words := make([]string, 0, len(authorDecisions))
+	for _, decision := range authorDecisions {
+		words = append(words, strings.TrimPrefix(decision, "watch "))
+	}
+	return strings.Join(words, "|")
+}
+
+func IsAuthorDecision(command string) bool {
+	return authorDecisionCall.MatchString(command)
+}
+
+func RefusesToolUse(event string, payload map[string]any) bool {
+	return event == EventPreToolUse && IsAuthorDecision(toolCommand(payload))
+}
+
+func toolCommand(payload map[string]any) string {
+	for _, key := range []string{"toolArgs", "tool_input"} {
+		if command, ok := toolArgs(payload[key])["command"].(string); ok {
+			return command
+		}
+	}
+	return ""
+}
+
+func toolArgs(value any) map[string]any {
+	if encoded, ok := value.(string); ok {
+		var args map[string]any
+		_ = json.Unmarshal([]byte(encoded), &args)
+		return args
+	}
+	args, _ := value.(map[string]any)
+	return args
 }
 
 const prePushHook = `#!/bin/sh
