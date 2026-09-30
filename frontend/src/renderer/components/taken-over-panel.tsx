@@ -5,6 +5,7 @@ import { useCopy } from "@/hooks/useCopy";
 import { HandbackError, useHandback } from "@/hooks/useHandback";
 import { HandbackDialog, type AuthorWork } from "@/components/handback-dialog";
 import { Meta } from "@/components/status-badges";
+import { Tip } from "@/components/tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
@@ -18,16 +19,18 @@ function CopyRow({ label, value }: { label: string; value: string }) {
       <code className="truncate font-mono text-xs" title={value}>
         {value}
       </code>
-      <Button
-        type="button"
-        variant="ghost"
-        size="icon-xs"
-        aria-label={`Copy ${label}`}
-        className="text-muted-foreground"
-        onClick={() => void copy(value)}
-      >
-        {copied ? <CheckIcon /> : <CopyIcon />}
-      </Button>
+      <Tip label={copied ? "Copied" : `Copy ${label}`}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Copy ${label}`}
+          className="text-muted-foreground"
+          onClick={() => void copy(value)}
+        >
+          {copied ? <CheckIcon /> : <CopyIcon />}
+        </Button>
+      </Tip>
     </div>
   );
 }

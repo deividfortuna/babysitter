@@ -2,6 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { renderWithProviders } from "@test/test-utils";
+import { useSidebar } from "@/components/ui/sidebar";
 import type { HistoryControls } from "@/hooks/use-view-history";
 import { AppHeader, TitlebarNav } from "./app-header";
 
@@ -75,6 +76,51 @@ test("shows the shortcut in the tooltip of back", async () => {
   await user.hover(screen.getByRole("button", { name: "Go back" }));
 
   expect(await screen.findByRole("tooltip")).toHaveTextContent("Go back Alt+←");
+});
+
+function SidebarState() {
+  const { open } = useSidebar();
+  return <output>{open ? "open" : "collapsed"}</output>;
+}
+
+test("shows the shortcut in the tooltip of the sidebar toggle", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<AppHeader {...history()} />, { withSidebar: true });
+
+  await user.hover(screen.getByRole("button", { name: "Toggle Sidebar" }));
+
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Toggle sidebar Ctrl+B");
+});
+
+test("on macOS shows the command key in the tooltip of the sidebar toggle", async () => {
+  platform.isMac = true;
+  const user = userEvent.setup();
+  renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });
+
+  await user.hover(screen.getByRole("button", { name: "Toggle Sidebar" }));
+
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Toggle sidebar ⌘B");
+});
+
+test.each([
+  ["Ctrl", "{Control>}b{/Control}"],
+  ["⌘", "{Meta>}b{/Meta}"],
+])("the %s+B shortcut collapses and opens the sidebar", async (_, keys) => {
+  const user = userEvent.setup();
+  renderWithProviders(
+    <>
+      <AppHeader {...history()} />
+      <SidebarState />
+    </>,
+    { withSidebar: true },
+  );
+  expect(screen.getByRole("status")).toHaveTextContent("open");
+
+  await user.keyboard(keys);
+  expect(screen.getByRole("status")).toHaveTextContent("collapsed");
+
+  await user.keyboard(keys);
+  expect(screen.getByRole("status")).toHaveTextContent("open");
 });
 
 test("on macOS keeps the sidebar toggle, back and forward beside the window buttons when the sidebar is open or collapsed", async () => {

@@ -17,6 +17,7 @@ import { AuthorName, DiffStat, InboxGroup, InboxItem, LabelBadges } from "@/comp
 import { CheckIcon, Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
 import { ViewHeader } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
+import { Tip } from "@/components/tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -90,17 +91,17 @@ function PullRow({ pr, queued, onWatch }: PullRowProps) {
             {queuePlace(queued.position)} · {queued.updateType}
           </span>
         ) : null,
-        <a
-          key="github"
-          href={pr.htmlUrl}
-          target="_blank"
-          rel="noreferrer"
-          title="Open on GitHub"
-          className="inline-flex transition-colors hover:text-foreground"
-        >
-          <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
-          <span className="sr-only">Open on GitHub</span>
-        </a>,
+        <Tip key="github" label="Open on GitHub">
+          <a
+            href={pr.htmlUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="inline-flex transition-colors hover:text-foreground"
+          >
+            <ExternalLinkIcon aria-hidden="true" className="size-3.5" />
+            <span className="sr-only">Open on GitHub</span>
+          </a>
+        </Tip>,
       ]}
       time={`updated ${relativeTime(pr.updatedAt)}`}
       actions={
@@ -231,16 +232,17 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
               Watch by URL
             </Button>
             {settingsOpen ? null : (
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Repository settings"
-                title="Repository settings"
-                className="size-7"
-                onClick={() => setSettingsOpen(true)}
-              >
-                <PanelRightIcon />
-              </Button>
+              <Tip label="Repository settings">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  aria-label="Repository settings"
+                  className="size-7"
+                  onClick={() => setSettingsOpen(true)}
+                >
+                  <PanelRightIcon />
+                </Button>
+              </Tip>
             )}
           </div>
         </ViewHeader>

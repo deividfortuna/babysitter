@@ -9,6 +9,7 @@ import { OptionSelect } from "@/components/option-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { SettingRow } from "@/components/setting-row";
 import { ToneBadge } from "@/components/status-badges";
+import { Tip } from "@/components/tip";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -35,16 +36,17 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
       aria-labelledby="watch-settings-title"
       className="relative flex w-90 shrink-0 flex-col gap-5 overflow-y-auto border-l bg-background p-5"
     >
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-2.5 right-5 size-7"
-        aria-label="Close watch settings"
-        title="Close watch settings"
-        onClick={onClose}
-      >
-        <PanelRightDashedIcon />
-      </Button>
+      <Tip label="Close watch settings" side="left">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2.5 right-5 size-7"
+          aria-label="Close watch settings"
+          onClick={onClose}
+        >
+          <PanelRightDashedIcon />
+        </Button>
+      </Tip>
       <div className="flex flex-col gap-1.5 pr-6">
         <h2 id="watch-settings-title" className="text-base font-semibold">
           Watch settings

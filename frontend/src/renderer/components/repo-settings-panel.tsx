@@ -17,6 +17,7 @@ import { OptionSelect, toOptions, type Option } from "@/components/option-select
 import { EffortSelect } from "@/components/effort-select";
 import { SettingRow } from "@/components/setting-row";
 import { Meta } from "@/components/status-badges";
+import { Tip } from "@/components/tip";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
@@ -75,16 +76,17 @@ export function RepoSettingsPanel({ repo, onClose }: Props) {
       aria-labelledby="repo-settings-title"
       className="relative flex w-90 shrink-0 flex-col gap-5 overflow-y-auto border-l bg-background p-5"
     >
-      <Button
-        variant="ghost"
-        size="icon"
-        className="absolute top-2.5 right-5 size-7"
-        aria-label="Close repository settings"
-        title="Close repository settings"
-        onClick={onClose}
-      >
-        <PanelRightDashedIcon />
-      </Button>
+      <Tip label="Close repository settings" side="left">
+        <Button
+          variant="ghost"
+          size="icon"
+          className="absolute top-2.5 right-5 size-7"
+          aria-label="Close repository settings"
+          onClick={onClose}
+        >
+          <PanelRightDashedIcon />
+        </Button>
+      </Tip>
       <div className="flex flex-col gap-1.5 pr-6">
         <h2 id="repo-settings-title" className="text-base font-semibold">
           Repository settings

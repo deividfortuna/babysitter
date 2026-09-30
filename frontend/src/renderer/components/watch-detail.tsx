@@ -50,6 +50,7 @@ import { MergeWatchDialog } from "@/components/merge-watch-dialog";
 import { StopWatchDialog } from "@/components/stop-watch-dialog";
 import { TakenOverPanel } from "@/components/taken-over-panel";
 import { TakeoverDialog } from "@/components/takeover-dialog";
+import { Tip } from "@/components/tip";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -205,16 +206,17 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
                     Merge
                   </Button>
                   {settingsOpen ? null : (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      aria-label="Watch settings"
-                      title="Watch settings"
-                      className="size-7"
-                      onClick={() => setSettingsOpen(true)}
-                    >
-                      <PanelRightIcon />
-                    </Button>
+                    <Tip label="Watch settings">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        aria-label="Watch settings"
+                        className="size-7"
+                        onClick={() => setSettingsOpen(true)}
+                      >
+                        <PanelRightIcon />
+                      </Button>
+                    </Tip>
                   )}
                 </div>
               ) : null}

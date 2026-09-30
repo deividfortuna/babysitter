@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, render, screen, type RenderOptions as TestingLibraryRenderOptions } from "@testing-library/react";
 import { expect, vi } from "vite-plus/test";
 import { SidebarProvider } from "@/components/ui/sidebar";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/hooks/use-theme";
 
 type MediaListener = (event: MediaQueryListEvent) => void;
@@ -60,7 +61,11 @@ export function renderWithProviders(
   { queryClient = createQueryClientForTests(), withSidebar = false, ...options }: RenderOptions = {},
 ) {
   function Wrapper({ children }: { children: ReactNode }) {
-    const content = withSidebar ? <SidebarProvider>{children}</SidebarProvider> : children;
+    const content = withSidebar ? (
+      <SidebarProvider>{children}</SidebarProvider>
+    ) : (
+      <TooltipProvider>{children}</TooltipProvider>
+    );
     return (
       <ThemeProvider>
         <QueryClientProvider client={queryClient}>{content}</QueryClientProvider>
