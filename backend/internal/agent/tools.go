@@ -52,8 +52,10 @@ func decisionWords() string {
 	return strings.Join(words, "|")
 }
 
+var shellQuoting = strings.NewReplacer(`'`, "", `"`, "", `\`, "")
+
 func IsAuthorDecision(command string) bool {
-	return authorDecisionCall.MatchString(command)
+	return authorDecisionCall.MatchString(shellQuoting.Replace(command))
 }
 
 func RefusesToolUse(event string, payload map[string]any) bool {

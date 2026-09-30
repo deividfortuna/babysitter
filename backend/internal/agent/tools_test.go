@@ -52,6 +52,11 @@ func TestIsAuthorDecisionTakesEverySpellingOfADecision(t *testing.T) {
 		"cd /repo && babysitter watch takeover 1",
 		"babysitter watch\thandback 1",
 		"babysitter \\\n  watch merge 1",
+		"baby''sitter watch reject 1",
+		`baby""sitter watch approve 1`,
+		`babysitter watch "reject" 1`,
+		`babysitter wat'ch' mer""ge 1`,
+		`baby\sitter watch st\op 1`,
 	} {
 		if !IsAuthorDecision(command) {
 			t.Errorf("IsAuthorDecision(%q) = false", command)
