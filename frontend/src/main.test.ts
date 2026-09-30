@@ -3,6 +3,7 @@ import {
   NOTIFICATIONS_CLICK_CHANNEL,
   NOTIFICATIONS_OPEN_READY_CHANNEL,
   NOTIFICATIONS_SHOW_CHANNEL,
+  QUIT_SHORTCUT_CHANNEL,
   UPDATES_GET_STATUS_CHANNEL,
   UPDATES_SET_SETTINGS_CHANNEL,
 } from "./shared/ipc";
@@ -13,7 +14,7 @@ type Handler = (...args: never[]) => unknown;
 const appDir = vi.hoisted(() => process.cwd());
 
 const electron = vi.hoisted(() => ({
-  windows: [] as { webContents: unknown; shown: boolean; focused: boolean }[],
+  windows: [] as { webContents: { inputListeners: Handler[] }; shown: boolean; focused: boolean }[],
   toasts: [] as { click: () => void }[],
   sent: [] as { channel: string; payload: unknown }[],
   opened: [] as string[],
@@ -65,8 +66,12 @@ vi.mock("./main/daemon-supervisor", () => ({
 
 vi.mock("electron", () => {
   class FakeWebContents {
+    inputListeners: Handler[] = [];
     send(channel: string, payload: unknown) {
       electron.sent.push({ channel, payload });
+    }
+    on(name: string, fn: Handler) {
+      if (name === "before-input-event") this.inputListeners.push(fn);
     }
     setWindowOpenHandler() {}
     openDevTools() {}
@@ -89,6 +94,9 @@ vi.mock("electron", () => {
       return this.focused;
     }
     isMinimized() {
+      return false;
+    }
+    isDestroyed() {
       return false;
     }
     restore() {}
@@ -329,4 +337,21 @@ test("a quit that the daemon lets go of quits at once", async () => {
   await vi.waitFor(() => expect(electron.quits).toBe(1));
 
   expect(electron.exits).toEqual([]);
+});
+
+test("a double press of the quit shortcut in the window shows the hint and quits", () => {
+  electron.appEvents.get("activate")?.();
+  const [listener] = electron.windows[0].webContents.inputListeners;
+  const press = { type: "keyDown", key: "q", meta: true, control: true, alt: false, shift: false, isAutoRepeat: false };
+  const event = { preventDefault: vi.fn() };
+
+  (listener as (event: unknown, input: unknown) => void)(event, press);
+  (listener as (event: unknown, input: unknown) => void)(event, press);
+
+  expect(event.preventDefault).toHaveBeenCalledTimes(2);
+  expect(electron.sent.filter((sent) => sent.channel === QUIT_SHORTCUT_CHANNEL)).toEqual([
+    { channel: QUIT_SHORTCUT_CHANNEL, payload: { state: "down" } },
+    { channel: QUIT_SHORTCUT_CHANNEL, payload: { state: "up" } },
+  ]);
+  expect(electron.quits).toBe(1);
 });

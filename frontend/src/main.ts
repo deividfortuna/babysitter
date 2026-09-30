@@ -22,6 +22,7 @@ import { DaemonSupervisor } from "./main/daemon-supervisor";
 import { readUpdateSettings, writeUpdateSettings } from "./main/update-settings";
 import { killLoginShells, shellRunner } from "./main/login-shell";
 import { openQueue } from "./main/pending-open";
+import { concealWindow, quitShortcut } from "./main/quit-shortcut";
 import { defaultDataDir } from "./shared/daemon-discovery";
 import { resolveDaemonLaunch } from "./shared/daemon-launch";
 import { daemonEnvOnce } from "./shared/shell-env";
@@ -40,6 +41,7 @@ import {
   NOTIFICATIONS_OPEN_READY_CHANNEL,
   NOTIFICATIONS_SHOW_CHANNEL,
   NOTIFICATIONS_SUPPORTED_CHANNEL,
+  QUIT_SHORTCUT_CHANNEL,
   THEME_FOLLOW_CHANNEL,
   UPDATES_CHECK_CHANNEL,
   UPDATES_DOWNLOAD_CHANNEL,
@@ -350,6 +352,18 @@ function createWindow() {
   });
 
   mainWindow.on("closed", () => opens.gone());
+
+  mainWindow.webContents.on(
+    "before-input-event",
+    quitShortcut({
+      platform: process.platform,
+      notify: (hint) => {
+        if (!mainWindow.isDestroyed()) mainWindow.webContents.send(QUIT_SHORTCUT_CHANNEL, hint);
+      },
+      conceal: () => concealWindow(mainWindow),
+      quit: () => app.quit(),
+    }),
+  );
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     if (url.startsWith("https://")) void shell.openExternal(url);

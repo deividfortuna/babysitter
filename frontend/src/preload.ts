@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { DaemonStatus } from "./shared/daemon-status";
 import type { LogRecord, OpenLogFolderResult } from "./shared/logs";
 import type { DesktopNotification, NotificationClick } from "./shared/notifications";
+import { isQuitShortcutHint, type QuitShortcutHint } from "./shared/quit";
 import type { ThemePreference } from "./shared/theme";
 import {
   APP_GET_VERSION_CHANNEL,
@@ -18,6 +19,7 @@ import {
   NOTIFICATIONS_OPEN_READY_CHANNEL,
   NOTIFICATIONS_SHOW_CHANNEL,
   NOTIFICATIONS_SUPPORTED_CHANNEL,
+  QUIT_SHORTCUT_CHANNEL,
   THEME_FOLLOW_CHANNEL,
   UPDATES_CHECK_CHANNEL,
   UPDATES_DOWNLOAD_CHANNEL,
@@ -65,6 +67,9 @@ export type BabysitterBridge = {
     appRecords(): Promise<LogRecord[]>;
     onAppRecord(listener: (record: LogRecord) => void): () => void;
     openFolder(): Promise<OpenLogFolderResult>;
+  };
+  quit: {
+    onShortcut(listener: (hint: QuitShortcutHint) => void): () => void;
   };
 };
 
@@ -125,6 +130,15 @@ const bridge: BabysitterBridge = {
       return () => ipcRenderer.off(LOGS_APP_RECORD_CHANNEL, handler);
     },
     openFolder: () => ipcRenderer.invoke(LOGS_OPEN_FOLDER_CHANNEL),
+  },
+  quit: {
+    onShortcut: (listener) => {
+      const handler = (_event: IpcRendererEvent, hint: unknown) => {
+        if (isQuitShortcutHint(hint)) listener(hint);
+      };
+      ipcRenderer.on(QUIT_SHORTCUT_CHANNEL, handler);
+      return () => ipcRenderer.off(QUIT_SHORTCUT_CHANNEL, handler);
+    },
   },
 };
 
