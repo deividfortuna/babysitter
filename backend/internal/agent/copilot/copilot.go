@@ -55,7 +55,10 @@ func (c *Runner) Command(l agent.Launch) ([]string, []string, error) {
 		c.bin(),
 		"--session-id", l.SessionID,
 		"--allow-all-tools",
-		"--disable-builtin-mcps", "--no-auto-update", "--screen-reader",
+		"--disable-builtin-mcps", "--no-auto-update",
+	}
+	if l.ScreenReader {
+		args = append(args, "--screen-reader")
 	}
 	for _, deny := range append(slices.Clone(denied), authorRules(l)...) {
 		args = append(args, "--deny-tool", deny)

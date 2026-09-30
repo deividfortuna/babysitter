@@ -1233,6 +1233,8 @@ export interface components {
              * @enum {string}
              */
             provider: "claude" | "copilot";
+            /** @description The agent runs in the screen reader mode of its command line, which draws plain text in place of the full terminal interface. A change takes effect the next time an agent session starts */
+            screenReader: boolean;
             /** @description The notification kinds that arrive without a sound */
             silentNotificationKinds: ("agent" | "review" | "checks" | "watch" | "merge" | "auto")[] | null;
             /** @description A new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses */

@@ -53,6 +53,7 @@ func (a *api) handlePutSettings(w http.ResponseWriter, r *http.Request) {
 		Effort:                      effort,
 		BranchUpdate:                store.BranchUpdate(req.BranchUpdate),
 		UpdateOnGitHub:              req.UpdateOnGitHub,
+		ScreenReader:                req.ScreenReader,
 	})
 	if storeErrors.write(w, err) {
 		return
@@ -85,6 +86,7 @@ func settingsOut(s store.Settings) Settings {
 		Effort:                      s.Effort,
 		BranchUpdate:                string(s.BranchUpdate),
 		UpdateOnGitHub:              s.UpdateOnGitHub,
+		ScreenReader:                s.ScreenReader,
 	}
 }
 

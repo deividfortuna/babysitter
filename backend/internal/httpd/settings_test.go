@@ -61,7 +61,7 @@ func TestPutSettingsStoresThemAndHandsThemToTheDaemon(t *testing.T) {
 
 	var got Settings
 	rec := call(t, h, http.MethodPut, "/settings",
-		`{"pollIntervalSeconds":120,"watchIntervalSeconds":45,"watchMaxIntervalSeconds":600,"checkMaxIntervalSeconds":1200,"approvalsRequired":2,"mergeMethod":"rebase","includeExisting":true,"includeOwn":true,"keepWorktree":true,"provider":"copilot","model":"gpt-5.6-terra","effort":"none","branchUpdate":"merge","updateOnGitHub":false}`, &got)
+		`{"pollIntervalSeconds":120,"watchIntervalSeconds":45,"watchMaxIntervalSeconds":600,"checkMaxIntervalSeconds":1200,"approvalsRequired":2,"mergeMethod":"rebase","includeExisting":true,"includeOwn":true,"keepWorktree":true,"provider":"copilot","model":"gpt-5.6-terra","effort":"none","branchUpdate":"merge","updateOnGitHub":false,"screenReader":false}`, &got)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
 	}
@@ -75,7 +75,7 @@ func TestPutSettingsStoresThemAndHandsThemToTheDaemon(t *testing.T) {
 	}
 	if stored.PollInterval != 2*time.Minute || stored.WatchInterval != 45*time.Second || stored.WatchMaxInterval != 10*time.Minute || stored.CheckMaxInterval != 20*time.Minute || !stored.KeepWorktree ||
 		stored.Provider != "copilot" || stored.Model != "gpt-5.6-terra" || stored.Effort != "none" ||
-		stored.BranchUpdate != store.BranchMerge || stored.UpdateOnGitHub {
+		stored.BranchUpdate != store.BranchMerge || stored.UpdateOnGitHub || stored.ScreenReader {
 		t.Fatalf("stored = %+v, want what was sent", stored)
 	}
 	if len(applied()) != 1 || applied()[0].WatchInterval != 45*time.Second || applied()[0].WatchMaxInterval != 10*time.Minute || applied()[0].CheckMaxInterval != 20*time.Minute {

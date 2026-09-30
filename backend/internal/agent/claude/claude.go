@@ -74,11 +74,13 @@ func (c *Runner) Command(l agent.Launch) ([]string, []string, error) {
 		"--permission-mode", "dontAsk",
 		"--setting-sources", "user",
 		"--strict-mcp-config",
-		"--ax-screen-reader",
 		"--allowedTools", strings.Join(allowedTools, ","),
 		"--disallowedTools", strings.Join(append(slices.Clone(deniedTools), authorRules(l)...), ","),
 		"--append-system-prompt", agent.SystemPrompt(),
 	)
+	if l.ScreenReader {
+		args = append(args, "--ax-screen-reader")
+	}
 	if l.Name != "" {
 		args = append(args, "--name", l.Name)
 	}

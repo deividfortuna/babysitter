@@ -448,6 +448,7 @@ type Settings struct {
 	Effort                      string   `json:"effort" description:"The effort level of that model, one the providers route lists for it; empty takes the default of the model"`
 	BranchUpdate                string   `json:"branchUpdate" enum:"rebase,merge" description:"How a new watch updates a branch that fell behind its base. rebase: the branch is rebased onto its base; merge: the base is merged into the branch. The agent solves a conflict the same way"`
 	UpdateOnGitHub              bool     `json:"updateOnGitHub" description:"A new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses"`
+	ScreenReader                bool     `json:"screenReader" description:"The agent runs in the screen reader mode of its command line, which draws plain text in place of the full terminal interface. A change takes effect the next time an agent session starts"`
 }
 
 type Notification struct {

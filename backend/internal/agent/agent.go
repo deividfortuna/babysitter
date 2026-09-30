@@ -11,14 +11,15 @@ import (
 )
 
 type Launch struct {
-	WorktreeDir string
-	Model       string
-	Effort      string
-	SessionID   string
-	Resume      bool
-	Name        string
-	Hook        []string
-	HooksDir    string
+	WorktreeDir  string
+	Model        string
+	Effort       string
+	SessionID    string
+	Resume       bool
+	Name         string
+	Hook         []string
+	HooksDir     string
+	ScreenReader bool
 }
 
 type Runner interface {

@@ -46,6 +46,7 @@ func TestSaveSettingsKeepsWhatItWasGiven(t *testing.T) {
 		Model:             "auto",
 		BranchUpdate:      BranchMerge,
 		UpdateOnGitHub:    false,
+		ScreenReader:      false,
 	}
 
 	saved, err := s.SaveSettings(ctx, want)

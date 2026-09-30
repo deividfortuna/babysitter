@@ -3083,6 +3083,11 @@ components:
           - claude
           - copilot
           type: string
+        screenReader:
+          description: The agent runs in the screen reader mode of its command line,
+            which draws plain text in place of the full terminal interface. A change
+            takes effect the next time an agent session starts
+          type: boolean
         silentNotificationKinds:
           description: The notification kinds that arrive without a sound
           items:
@@ -3134,6 +3139,7 @@ components:
       - effort
       - branchUpdate
       - updateOnGitHub
+      - screenReader
       type: object
     HttpdStartWatchRequest:
       properties:

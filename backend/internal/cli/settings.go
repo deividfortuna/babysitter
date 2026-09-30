@@ -38,6 +38,7 @@ func (s settingsOutput) writeText(out io.Writer) error {
 	fmt.Fprintf(tw, "Approve a clean rebase or merge on its own\t%s\n", yesNo(s.AutoApproveRebase))
 	fmt.Fprintf(tw, "Branch behind its base\t%s\n", branchUpdateWord(s.BranchUpdate, s.UpdateOnGitHub))
 	fmt.Fprintf(tw, "Agent\t%s\n", providerLabel(s.Provider, s.Model, s.Effort))
+	fmt.Fprintf(tw, "Screen reader mode of the agent\t%s\n", yesNo(s.ScreenReader))
 	return tw.Flush()
 }
 
@@ -128,6 +129,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		effort          string
 		branchUpdate    string
 		updateOnGitHub  bool
+		screenReader    bool
 	)
 	cmd := &cobra.Command{
 		Use:   "set",
@@ -168,6 +170,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				{"effort", func(s *httpd.Settings) { s.Effort = effort }},
 				{branchUpdateFlag, func(s *httpd.Settings) { s.BranchUpdate = branchUpdate }},
 				{updateOnGitHubFlag, func(s *httpd.Settings) { s.UpdateOnGitHub = updateOnGitHub }},
+				{"screen-reader", func(s *httpd.Settings) { s.ScreenReader = screenReader }},
 			}
 
 			var asked []func(*httpd.Settings)
@@ -217,6 +220,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().StringVar(&effort, "effort", "", "effort level of that model, empty for its default, for example low, medium or high")
 	cmd.Flags().StringVar(&branchUpdate, branchUpdateFlag, "", "how a new watch updates a branch that fell behind its base: rebase or merge. The agent solves a conflict the same way")
 	cmd.Flags().BoolVar(&updateOnGitHub, updateOnGitHubFlag, true, "a new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses")
+	cmd.Flags().BoolVar(&screenReader, "screen-reader", true, "the agent runs in the screen reader mode of its command line, which draws plain text in place of the full terminal interface. A change takes effect the next time an agent session starts")
 	cmd.Flags().StringVar(&mutedKinds, "mute-notifications", "", "notification kinds that reach nobody, separated by commas: "+store.JoinKinds()+". An empty list shows them all again")
 	cmd.Flags().StringVar(&silentKinds, "silent-notifications", "", "notification kinds that arrive without a sound, separated by commas: "+store.JoinKinds()+". An empty list lets them all make a sound again")
 	cmd.MarkFlagsMutuallyExclusive("notification-sound", "silent-notifications")

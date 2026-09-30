@@ -34,6 +34,7 @@ type Settings struct {
 	Effort                      string
 	BranchUpdate                BranchUpdate
 	UpdateOnGitHub              bool
+	ScreenReader                bool
 }
 
 type ApprovalMode string
@@ -79,6 +80,7 @@ func DefaultSettings() Settings {
 		Provider:                    "claude",
 		BranchUpdate:                BranchRebase,
 		UpdateOnGitHub:              true,
+		ScreenReader:                true,
 	}
 }
 
@@ -168,7 +170,7 @@ func parseKinds(value string) []NotificationKind {
 	return out
 }
 
-const settingsColumns = "poll_interval_ms, watch_interval_ms, watch_max_interval_ms, check_max_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notifications_background_only, muted_notification_kinds, silent_notification_kinds, approval_mode, auto_approve_rebase, provider, model, effort, branch_update, update_on_github"
+const settingsColumns = "poll_interval_ms, watch_interval_ms, watch_max_interval_ms, check_max_interval_ms, approvals_required, merge_method, include_existing, include_own, keep_worktree, notifications_enabled, notifications_background_only, muted_notification_kinds, silent_notification_kinds, approval_mode, auto_approve_rebase, provider, model, effort, branch_update, update_on_github, screen_reader"
 
 func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	var (
@@ -184,7 +186,7 @@ func (s *Store) Settings(ctx context.Context) (Settings, error) {
 	err := s.db.QueryRowContext(ctx, "SELECT "+settingsColumns+" FROM settings WHERE id = 1").
 		Scan(&pollMS, &watchMS, &maxMS, &checkMS, &approvals, &out.MergeMethod, &out.IncludeExisting, &out.IncludeOwn, &out.KeepWorktree,
 			&out.NotificationsEnabled, &out.NotificationsBackgroundOnly, &muted, &silent, &out.ApprovalMode, &out.AutoApproveRebase,
-			&out.Provider, &out.Model, &out.Effort, &out.BranchUpdate, &out.UpdateOnGitHub)
+			&out.Provider, &out.Model, &out.Effort, &out.BranchUpdate, &out.UpdateOnGitHub, &out.ScreenReader)
 	if err != nil {
 		return Settings{}, fmt.Errorf("read settings: %w", err)
 	}
@@ -244,12 +246,13 @@ UPDATE settings SET
     model               = ?,
     effort              = ?,
     branch_update       = ?,
-    update_on_github    = ?
+    update_on_github    = ?,
+    screen_reader       = ?
 WHERE id = 1`,
 		next.PollInterval.Milliseconds(), next.WatchInterval.Milliseconds(), next.WatchMaxInterval.Milliseconds(), next.CheckMaxInterval.Milliseconds(), approvals,
 		next.MergeMethod, next.IncludeExisting, next.IncludeOwn, next.KeepWorktree,
 		next.NotificationsEnabled, next.NotificationsBackgroundOnly, muted, silent, next.ApprovalMode, next.AutoApproveRebase,
-		next.Provider, next.Model, next.Effort, next.BranchUpdate, next.UpdateOnGitHub)
+		next.Provider, next.Model, next.Effort, next.BranchUpdate, next.UpdateOnGitHub, next.ScreenReader)
 	if err != nil {
 		return Settings{}, fmt.Errorf("save settings: %w", err)
 	}
