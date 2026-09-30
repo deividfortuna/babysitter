@@ -139,7 +139,8 @@ One press of ⌘Q (Ctrl+Q on Linux and Windows) does not quit the app,
 because a quit stops the daemon that the app started and the agents of
 its watches. The app shows a hint. To quit, hold the shortcut for 1.2
 seconds or press it again in 0.5 seconds. Quit in the application menu
-or in the menu bar item quits at once.
+or in the menu bar item quits at once. On macOS, when the app has no open
+window, ⌘Q quits at once.
 
 The app looks for a running daemon in the data directory and attaches to
 it when it finds one. Otherwise it starts `babysitter daemon start` itself
