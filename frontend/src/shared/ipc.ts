@@ -20,3 +20,4 @@ export const UPDATES_SET_SETTINGS_CHANNEL = "updates:set-settings";
 export const LOGS_APP_RECORDS_CHANNEL = "logs:app-records";
 export const LOGS_APP_RECORD_CHANNEL = "logs:app-record";
 export const LOGS_OPEN_FOLDER_CHANNEL = "logs:open-folder";
+export const QUIT_SHORTCUT_CHANNEL = "quit:shortcut";

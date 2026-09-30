@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import type { BabysitterBridge } from "./preload";
 import {
+  QUIT_SHORTCUT_CHANNEL,
   UPDATES_CHECK_CHANNEL,
   UPDATES_DOWNLOAD_CHANNEL,
   UPDATES_GET_SETTINGS_CHANNEL,
@@ -72,4 +73,17 @@ test("the update status reaches the listener until it lets go", () => {
 
   expect(listener).toHaveBeenCalledWith({ state: "available", currentVersion: "0.1.0", version: "0.2.0" });
   expect(electron.listeners.has(UPDATES_STATUS_CHANNEL)).toBe(false);
+});
+
+test("the quit hint reaches the listener only when it has a known state", () => {
+  const listener = vi.fn();
+  const off = bridge.quit.onShortcut(listener);
+
+  electron.listeners.get(QUIT_SHORTCUT_CHANNEL)?.({}, { state: "down" });
+  electron.listeners.get(QUIT_SHORTCUT_CHANNEL)?.({}, { state: "sideways" });
+  electron.listeners.get(QUIT_SHORTCUT_CHANNEL)?.({}, null);
+  off();
+
+  expect(listener.mock.calls).toEqual([[{ state: "down" }]]);
+  expect(electron.listeners.has(QUIT_SHORTCUT_CHANNEL)).toBe(false);
 });

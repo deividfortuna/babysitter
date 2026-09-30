@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ThemeProvider } from "./hooks/use-theme";
 import { App } from "./App";
+import { QuitHint } from "./components/quit-hint";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -24,6 +25,7 @@ createRoot(document.getElementById("root")!).render(
     <ThemeProvider>
       <QueryClientProvider client={queryClient}>
         <App />
+        <QuitHint />
       </QueryClientProvider>
     </ThemeProvider>
   </StrictMode>,
