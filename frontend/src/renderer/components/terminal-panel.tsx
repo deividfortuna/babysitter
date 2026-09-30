@@ -22,9 +22,14 @@ export function TerminalPanel({ watch, enabled, onClose }: Props) {
     <section
       aria-labelledby="terminal-panel-title"
       style={{ "--terminal-panel-height": `${panel.height}px` } as CSSProperties}
-      className="relative col-start-1 row-start-2 flex h-(--terminal-panel-height) max-h-[80vh] min-w-0 flex-col border-t bg-background"
+      className="relative col-start-1 row-start-2 flex h-(--terminal-panel-height) min-w-0 flex-col border-t bg-background"
     >
-      <TerminalPanelResizeHandle height={panel.height} onResize={panel.setHeight} onReset={panel.resetHeight} />
+      <TerminalPanelResizeHandle
+        height={panel.height}
+        maxHeight={panel.maxHeight}
+        onResize={panel.setHeight}
+        onReset={panel.resetHeight}
+      />
       <div className="flex h-10 shrink-0 items-center gap-2 border-b bg-muted px-5">
         <TerminalIcon className="size-4 shrink-0 text-muted-foreground" />
         <h2 id="terminal-panel-title" className="text-sm font-medium">

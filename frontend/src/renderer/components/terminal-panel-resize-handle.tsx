@@ -1,11 +1,12 @@
 import { useState, type KeyboardEvent, type PointerEvent } from "react";
 import { cn } from "@/lib/utils";
-import { TERMINAL_PANEL_MAX_HEIGHT, TERMINAL_PANEL_MIN_HEIGHT } from "@/hooks/use-terminal-panel-height";
+import { TERMINAL_PANEL_MIN_HEIGHT } from "@/hooks/use-terminal-panel-height";
 
 const KEYBOARD_STEP = 16;
 
 type Props = {
   height: number;
+  maxHeight: number;
   onResize: (height: number) => void;
   onReset: () => void;
 };
@@ -14,7 +15,7 @@ function panelBottom(handle: HTMLElement): number {
   return (handle.parentElement ?? handle).getBoundingClientRect().bottom;
 }
 
-export function TerminalPanelResizeHandle({ height, onResize, onReset }: Props) {
+export function TerminalPanelResizeHandle({ height, maxHeight, onResize, onReset }: Props) {
   const [resizing, setResizing] = useState(false);
 
   function start(event: PointerEvent<HTMLDivElement>) {
@@ -38,7 +39,7 @@ export function TerminalPanelResizeHandle({ height, onResize, onReset }: Props) 
     if (event.key === "ArrowUp") onResize(height + KEYBOARD_STEP);
     else if (event.key === "ArrowDown") onResize(height - KEYBOARD_STEP);
     else if (event.key === "Home") onResize(TERMINAL_PANEL_MIN_HEIGHT);
-    else if (event.key === "End") onResize(TERMINAL_PANEL_MAX_HEIGHT);
+    else if (event.key === "End") onResize(maxHeight);
     else return;
     event.preventDefault();
   }
@@ -49,7 +50,7 @@ export function TerminalPanelResizeHandle({ height, onResize, onReset }: Props) 
       aria-orientation="horizontal"
       aria-label="Resize terminal"
       aria-valuemin={TERMINAL_PANEL_MIN_HEIGHT}
-      aria-valuemax={TERMINAL_PANEL_MAX_HEIGHT}
+      aria-valuemax={maxHeight}
       aria-valuenow={height}
       tabIndex={0}
       title="Drag to resize. Double click to reset."
