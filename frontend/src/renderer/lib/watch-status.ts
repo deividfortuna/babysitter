@@ -213,6 +213,13 @@ export function watchAuthor(w: Pick<Watch, "author">, pull?: Pick<PullRequest, "
   return w.author || pull?.author || "";
 }
 
+export function watchAuthorAvatar(
+  w: Pick<Watch, "authorAvatarUrl">,
+  pull?: Pick<PullRequest, "authorAvatarUrl">,
+): string | undefined {
+  return w.authorAvatarUrl || pull?.authorAvatarUrl;
+}
+
 const ESC = String.fromCharCode(27);
 const BEL = String.fromCharCode(7);
 const osc = new RegExp(ESC + "\\][^" + BEL + "]*(" + BEL + "|" + ESC + "\\\\)", "g");

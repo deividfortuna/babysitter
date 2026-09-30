@@ -20,6 +20,7 @@ import {
   needsAttention,
   sessionWord,
   watchAuthor,
+  watchAuthorAvatar,
   watchLabel,
 } from "@/lib/watch-status";
 
@@ -103,7 +104,7 @@ export function WatchRow({ watch: w, pull, onOpen }: Props) {
       }
       details={[
         <span key="number">#{w.number}</span>,
-        author ? <AuthorName key="author" login={author} /> : null,
+        author ? <AuthorName key="author" login={author} avatarUrl={watchAuthorAvatar(w, pull)} /> : null,
         labels.length > 0 ? <LabelBadges key="labels" labels={labels} /> : null,
         tags.length > 0 ? (
           <span key="tags" className="inline-flex flex-wrap gap-1.5">

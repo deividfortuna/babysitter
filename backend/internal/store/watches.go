@@ -91,6 +91,7 @@ type Watch struct {
 	URL               string
 	Title             string
 	Author            string
+	AuthorAvatarURL   string
 	BotLogin          string
 	HeadRef           string
 	BaseRef           string
@@ -147,14 +148,15 @@ func (w Watch) Repo() string {
 }
 
 type WatchState struct {
-	Title          string
-	BaseRef        string
-	HeadSHA        string
-	PRState        PRState
-	MergeableState MergeableState
-	CheckStates    map[string]checks.State
-	GreenSHA       string
-	PolledAt       time.Time
+	Title           string
+	AuthorAvatarURL string
+	BaseRef         string
+	HeadSHA         string
+	PRState         PRState
+	MergeableState  MergeableState
+	CheckStates     map[string]checks.State
+	GreenSHA        string
+	PolledAt        time.Time
 }
 
 type ListWatchesOptions struct {
@@ -167,7 +169,7 @@ const watchColumns = `id, owner, name, number, url, title, author, bot_login, he
 	consecutive_errors, head_sha, pr_state, mergeable_state, check_states, green_sha, summary, include_own, agent_session,
 	approvals_required, merge_method, ready_since, ready_blockers, approval_mode, auto_approve_rebase,
 	taken_over_at, taken_over_pid, handback_start, auto_reason, merge_when_ready, update_type, keep_worktree, effort,
-	branch_update, update_on_github`
+	branch_update, update_on_github, author_avatar_url`
 
 func (s *Store) CreateWatch(ctx context.Context, w Watch) (Watch, error) {
 	if w.CheckStates == nil {
@@ -195,13 +197,13 @@ INSERT INTO watches (owner, name, number, url, title, author, bot_login, head_re
 	source_dir, worktree_dir, work_branch, git_user_name, git_user_email, provider, model, status, stop_reason,
 	include_existing, started_at, head_sha, pr_state, mergeable_state, check_states, green_sha, summary, include_own, agent_session,
 	approvals_required, merge_method, approval_mode, auto_approve_rebase, auto_reason, merge_when_ready, update_type, keep_worktree, effort,
-	branch_update, update_on_github)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+	branch_update, update_on_github, author_avatar_url)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 		w.Owner, w.Name, w.Number, w.URL, w.Title, w.Author, w.BotLogin, w.HeadRef, w.BaseRef,
 		w.SourceDir, w.WorktreeDir, w.WorkBranch, w.GitUserName, w.GitUserEmail, w.Provider, w.Model, w.Status, w.StopReason,
 		w.IncludeExisting, timeToDB(w.StartedAt), w.HeadSHA, w.PRState, w.MergeableState, string(checkStates), w.GreenSHA, string(w.Summary), w.IncludeOwn, w.AgentSession,
 		w.ApprovalsRequired, w.MergeMethod, w.ApprovalMode, w.AutoApproveRebase, w.AutoReason, w.MergeWhenReady, w.UpdateType, w.KeepWorktree, w.Effort,
-		w.BranchUpdate, w.UpdateOnGitHub)
+		w.BranchUpdate, w.UpdateOnGitHub, w.AuthorAvatarURL)
 	if err != nil {
 		var sqliteErr sqlite3.Error
 		if errors.As(err, &sqliteErr) && sqliteErr.ExtendedCode == sqlite3.ErrConstraintUnique {
@@ -291,10 +293,11 @@ func (s *Store) UpdateWatchState(ctx context.Context, id int64, st WatchState) e
 	}
 	_, err = s.db.ExecContext(ctx, `
 UPDATE watches SET title = COALESCE(NULLIF(?, ''), title), base_ref = COALESCE(NULLIF(?, ''), base_ref),
+	author_avatar_url = COALESCE(NULLIF(?, ''), author_avatar_url),
 	head_sha = ?, pr_state = ?, mergeable_state = ?, check_states = ?, green_sha = ?,
 	last_poll_at = ?, last_error = '', consecutive_errors = 0
 WHERE id = ?`,
-		st.Title, st.BaseRef, st.HeadSHA, st.PRState, st.MergeableState, string(checkStates), st.GreenSHA, timeToDB(st.PolledAt), id)
+		st.Title, st.BaseRef, st.AuthorAvatarURL, st.HeadSHA, st.PRState, st.MergeableState, string(checkStates), st.GreenSHA, timeToDB(st.PolledAt), id)
 	if err != nil {
 		return fmt.Errorf("update watch: %w", err)
 	}
@@ -362,7 +365,7 @@ func scanWatch(row scanner) (Watch, error) {
 		&w.ConsecutiveErrors, &w.HeadSHA, &w.PRState, &w.MergeableState, &checkStates, &w.GreenSHA, &summary, &includeOwn, &w.AgentSession,
 		&w.ApprovalsRequired, &w.MergeMethod, &readySince, &blockers, &w.ApprovalMode, &w.AutoApproveRebase,
 		&takenOverAt, &w.TakenOverPID, &w.HandbackStart, &w.AutoReason, &w.MergeWhenReady, &w.UpdateType, &w.KeepWorktree, &w.Effort,
-		&w.BranchUpdate, &w.UpdateOnGitHub)
+		&w.BranchUpdate, &w.UpdateOnGitHub, &w.AuthorAvatarURL)
 	if err != nil {
 		return Watch{}, err
 	}

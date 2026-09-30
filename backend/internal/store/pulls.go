@@ -61,6 +61,7 @@ type PullRequest struct {
 	GitHubID           int64
 	Title              string
 	Author             string
+	AuthorAvatarURL    string
 	State              PRState
 	Draft              bool
 	BaseRef            string
@@ -108,7 +109,7 @@ const prColumns = `p.repo_id, r.owner || '/' || r.name, p.number, p.github_id, p
 	p.created_at, p.updated_at, p.merged_at, p.closed_at,
 	p.mergeable_state, p.review_decision, p.approvals, p.changes_requested,
 	p.requested_reviewers, p.labels, p.additions, p.deletions, p.ci_status, p.synced_at,
-	p.assignees, p.fork, p.update_type`
+	p.assignees, p.fork, p.update_type, p.author_avatar_url`
 
 func (s *Store) UpsertPR(ctx context.Context, pr PullRequest) error {
 	reviewers, err := jsonList(pr.RequestedReviewers)
@@ -136,12 +137,13 @@ INSERT INTO pull_requests (
 	created_at, updated_at, merged_at, closed_at,
 	mergeable_state, review_decision, approvals, changes_requested,
 	requested_reviewers, labels, additions, deletions, ci_status, synced_at,
-	assignees, fork, update_type
-) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+	assignees, fork, update_type, author_avatar_url
+) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT (repo_id, number) DO UPDATE SET
 	github_id = excluded.github_id,
 	title = excluded.title,
 	author = excluded.author,
+	author_avatar_url = excluded.author_avatar_url,
 	state = excluded.state,
 	draft = excluded.draft,
 	base_ref = excluded.base_ref,
@@ -170,7 +172,7 @@ ON CONFLICT (repo_id, number) DO UPDATE SET
 		timeToDB(pr.CreatedAt), timeToDB(pr.UpdatedAt), timePtrToDB(pr.MergedAt), timePtrToDB(pr.ClosedAt),
 		pr.MergeableState, pr.ReviewDecision, pr.Approvals, pr.ChangesRequested,
 		reviewers, labels, pr.Additions, pr.Deletions, pr.CIStatus, timeToDB(pr.SyncedAt),
-		assignees, pr.Fork, pr.UpdateType)
+		assignees, pr.Fork, pr.UpdateType, pr.AuthorAvatarURL)
 	if err != nil {
 		return fmt.Errorf("upsert pull request: %w", err)
 	}
@@ -234,7 +236,7 @@ func scanPR(sc scanner) (PullRequest, error) {
 		&createdAt, &updatedAt, &mergedAt, &closedAt,
 		&pr.MergeableState, &pr.ReviewDecision, &pr.Approvals, &pr.ChangesRequested,
 		&reviewers, &labels, &pr.Additions, &pr.Deletions, &pr.CIStatus, &syncedAt,
-		&assignees, &pr.Fork, &pr.UpdateType)
+		&assignees, &pr.Fork, &pr.UpdateType, &pr.AuthorAvatarURL)
 	if err != nil {
 		return PullRequest{}, err
 	}

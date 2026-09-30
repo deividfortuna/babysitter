@@ -284,6 +284,9 @@ func TestCollectReadyAndMerged(t *testing.T) {
 	if s.PR.Mergeable == nil || !*s.PR.Mergeable || s.Checks.Status != "success" || len(s.FailedJobs) != 0 {
 		t.Fatalf("snapshot = %+v", s)
 	}
+	if s.PR.AuthorAvatarURL != ghfake.AvatarURL(pr.Author) {
+		t.Fatalf("AuthorAvatarURL = %q, want %q", s.PR.AuthorAvatarURL, ghfake.AvatarURL(pr.Author))
+	}
 
 	g.Update(func() {
 		pr.State, pr.Merged, pr.Mergeable, pr.MergeableState = "closed", true, nil, "unknown"

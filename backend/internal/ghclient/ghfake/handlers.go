@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"slices"
 	"strconv"
 	"strings"
@@ -547,7 +548,7 @@ func pullRequest(r *Repo, p *PR) *github.PullRequest {
 	out := &github.PullRequest{
 		ID: new(p.ID), NodeID: new(nodeID(r, p)), Number: new(p.Number), Title: new(p.Title), State: new(p.State),
 		Merged: new(p.Merged), MergedAt: stamp(p.MergedAt), ClosedAt: stamp(p.ClosedAt), Draft: new(p.Draft),
-		Mergeable: p.Mergeable, MergeableState: str(p.MergeableState), User: user(p.Author), HTMLURL: new(p.URL),
+		Mergeable: p.Mergeable, MergeableState: str(p.MergeableState), User: prAuthor(p), HTMLURL: new(p.URL),
 		Head: &github.PullRequestBranch{
 			Ref: new(p.HeadRef), SHA: new(p.HeadSHA), Label: new(headLabel(p)),
 			Repo: &github.Repository{FullName: new(p.HeadRepo), Name: new(headName), Owner: user(headOwner)},
@@ -613,7 +614,19 @@ func user(login string) *github.User {
 	if login == "" {
 		return nil
 	}
-	return &github.User{Login: new(login)}
+	return &github.User{Login: new(login), AvatarURL: new(AvatarURL(login))}
+}
+
+func prAuthor(p *PR) *github.User {
+	u := user(p.Author)
+	if u != nil && p.AuthorAvatar != "" {
+		u.AvatarURL = new(p.AuthorAvatar)
+	}
+	return u
+}
+
+func AvatarURL(login string) string {
+	return "https://avatars.githubusercontent.com/" + url.PathEscape(login)
 }
 
 func str(s string) *string {

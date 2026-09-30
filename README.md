@@ -439,7 +439,8 @@ The database path comes from, in this order:
 
 Each pull request row has these fields:
 
-- number, GitHub id, title, author, URL, base and head branch, head commit
+- number, GitHub id, title, author and the URL of its avatar, URL, base and
+  head branch, head commit
 - state: `open`, `merged` or `closed`
 - draft flag, labels, requested reviewers, additions and deletions
 - assignees, the fork flag (the head branch lives in another
@@ -509,8 +510,8 @@ snapshot keys the pull request by the owner and name GitHub returns.
 The snapshot holds:
 
 - `snapshot_at`: when the snapshot was taken
-- `pr`: repository, number, `node_id`, URL, title, author, state, draft, merged and
-  closed flags, head and base branch, the `head_repo` of a fork, head
+- `pr`: repository, number, `node_id`, URL, title, author, `author_avatar_url`,
+  state, draft, merged and closed flags, head and base branch, the `head_repo` of a fork, head
   commit, `mergeable` (`null`
   while GitHub computes it), `mergeable_state`, `behind` (the branch
   needs the commits of its base, see below), `behind_by` (the commits

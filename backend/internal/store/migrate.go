@@ -715,6 +715,10 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	UPDATE settings SET silent_notification_kinds = 'agent,review,checks,watch,merge,auto' WHERE notification_sound = 0;
 	ALTER TABLE settings DROP COLUMN notification_sound;
 	`,
+	`
+	ALTER TABLE pull_requests ADD COLUMN author_avatar_url TEXT NOT NULL DEFAULT '';
+	ALTER TABLE watches ADD COLUMN author_avatar_url TEXT NOT NULL DEFAULT '';
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

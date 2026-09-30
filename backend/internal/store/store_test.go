@@ -132,6 +132,7 @@ func samplePR(repoID int64, number int) PullRequest {
 		GitHubID:           int64(1000 + number),
 		Title:              "Add thing",
 		Author:             "alice",
+		AuthorAvatarURL:    "https://avatars.githubusercontent.com/u/1",
 		State:              StateOpen,
 		BaseRef:            "main",
 		HeadRef:            "feature",
@@ -174,7 +175,7 @@ func TestPullRequests(t *testing.T) {
 		t.Fatalf("OpenPRs() len = %d, want 1", len(open))
 	}
 	got := open[0]
-	if got.RepoFullName != "octo/hello" || got.Title != "Add thing" || got.MergeableState != "clean" ||
+	if got.RepoFullName != "octo/hello" || got.Title != "Add thing" || got.AuthorAvatarURL != pr.AuthorAvatarURL || got.MergeableState != "clean" ||
 		got.ReviewDecision != ReviewRequired || got.CIStatus != checks.CIPending || got.Additions != 10 ||
 		!got.UpdatedAt.Equal(pr.UpdatedAt) || got.MergedAt != nil {
 		t.Fatalf("unexpected PR %+v", got)

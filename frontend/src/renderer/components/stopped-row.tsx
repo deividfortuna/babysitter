@@ -4,7 +4,7 @@ import type { Watch } from "@/hooks/useWatches";
 import { AuthorName, DiffStat, InboxRow, LabelBadges } from "@/components/inbox-row";
 import { StopBadge, TagBadges } from "@/components/status-badges";
 import { duration, relativeTime } from "@/lib/time";
-import { autoTags, watchAuthor, watchLabel } from "@/lib/watch-status";
+import { autoTags, watchAuthor, watchAuthorAvatar, watchLabel } from "@/lib/watch-status";
 
 function StopIcon({ reason }: { reason: Watch["stopReason"] }) {
   switch (reason) {
@@ -46,7 +46,7 @@ export function StoppedRow({ watch: w, pull, onOpen }: Props) {
       }
       details={[
         <span key="label">{watchLabel(w)}</span>,
-        author ? <AuthorName key="author" login={author} /> : null,
+        author ? <AuthorName key="author" login={author} avatarUrl={watchAuthorAvatar(w, pull)} /> : null,
         labels.length > 0 ? <LabelBadges key="labels" labels={labels} /> : null,
         tags.length > 0 ? (
           <span key="tags" className="inline-flex flex-wrap gap-1.5">

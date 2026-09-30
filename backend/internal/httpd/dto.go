@@ -42,6 +42,7 @@ type PullRequest struct {
 	Number             int                  `json:"number"`
 	Title              string               `json:"title"`
 	Author             string               `json:"author"`
+	AuthorAvatarURL    string               `json:"authorAvatarUrl,omitempty" description:"The GitHub avatar of the author, absent until the next sync of the repository"`
 	Dependabot         bool                 `json:"dependabot" description:"Dependabot opened the pull request and owns its branch"`
 	State              store.PRState        `json:"state" enum:"open,closed,merged"`
 	Draft              bool                 `json:"draft"`
@@ -111,6 +112,7 @@ func pullFromStore(p store.PullRequest) PullRequest {
 		Number:             p.Number,
 		Title:              p.Title,
 		Author:             p.Author,
+		AuthorAvatarURL:    p.AuthorAvatarURL,
 		Dependabot:         agent.IsDependabot(p.Author),
 		State:              p.State,
 		Draft:              p.Draft,
@@ -145,6 +147,7 @@ type Watch struct {
 	URL               string                  `json:"url"`
 	Title             string                  `json:"title"`
 	Author            string                  `json:"author"`
+	AuthorAvatarURL   string                  `json:"authorAvatarUrl,omitempty" description:"The GitHub avatar of the author, absent until the next poll of an active watch"`
 	Dependabot        bool                    `json:"dependabot" description:"Dependabot owns the branch of the pull request, so the daemon never pushes it and the agent only replies"`
 	HeadRef           string                  `json:"headRef"`
 	BaseRef           string                  `json:"baseRef"`
@@ -579,8 +582,9 @@ func watchFromStore(w store.Watch, s prwatch.SessionInfo, readySince *time.Time,
 		states = map[string]checks.State{}
 	}
 	out := Watch{
-		ID: w.ID, Repo: w.Repo(), Number: w.Number, URL: w.URL, Title: w.Title, Author: w.Author, Dependabot: agent.IsDependabot(w.Author),
-		HeadRef: w.HeadRef, BaseRef: w.BaseRef, Provider: w.Provider, Model: w.Model, Effort: w.Effort, SourceDir: w.SourceDir, WorktreeDir: w.WorktreeDir,
+		ID: w.ID, Repo: w.Repo(), Number: w.Number, URL: w.URL, Title: w.Title, Author: w.Author, AuthorAvatarURL: w.AuthorAvatarURL,
+		Dependabot: agent.IsDependabot(w.Author),
+		HeadRef:    w.HeadRef, BaseRef: w.BaseRef, Provider: w.Provider, Model: w.Model, Effort: w.Effort, SourceDir: w.SourceDir, WorktreeDir: w.WorktreeDir,
 		WorkBranch: w.WorkBranch, Status: w.Status, StopReason: w.StopReason, IncludeExisting: w.IncludeExisting, IncludeOwn: w.IncludeOwn,
 		StartedAt: w.StartedAt, StoppedAt: w.StoppedAt, LastPollAt: w.LastPollAt, LastHeartbeatAt: w.LastHeartbeatAt,
 		LastError: w.LastError, HeadSHA: w.HeadSHA, PRState: w.PRState, MergeableState: w.MergeableState,

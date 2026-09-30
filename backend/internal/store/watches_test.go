@@ -588,3 +588,31 @@ func oneActivity(t *testing.T, s *Store, watchID int64) Activity {
 	}
 	return rows[0]
 }
+
+func TestWatchAuthorAvatarComesWithThePoll(t *testing.T) {
+	t.Parallel()
+	s, _ := openTemp(t)
+	ctx := context.Background()
+	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+	avatar := "https://avatars.githubusercontent.com/in/29110?v=4"
+
+	w, err := s.CreateWatch(ctx, newWatch(now))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if w.AuthorAvatarURL != "" {
+		t.Fatalf("AuthorAvatarURL = %q, want empty before the first poll", w.AuthorAvatarURL)
+	}
+	if err := s.UpdateWatchState(ctx, w.ID, WatchState{AuthorAvatarURL: avatar, HeadSHA: "abc", PolledAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetWatch(ctx, w.ID); got.AuthorAvatarURL != avatar {
+		t.Fatalf("AuthorAvatarURL after poll = %q, want %q", got.AuthorAvatarURL, avatar)
+	}
+	if err := s.UpdateWatchState(ctx, w.ID, WatchState{HeadSHA: "abc", PolledAt: now}); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetWatch(ctx, w.ID); got.AuthorAvatarURL != avatar {
+		t.Fatalf("AuthorAvatarURL after a poll with no avatar = %q, want %q", got.AuthorAvatarURL, avatar)
+	}
+}
