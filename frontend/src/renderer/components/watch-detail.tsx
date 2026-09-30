@@ -12,6 +12,8 @@ import {
   HeartPulseIcon,
   MessageSquareIcon,
   MessageSquareReplyIcon,
+  PanelBottomDashedIcon,
+  PanelBottomIcon,
   PanelRightIcon,
   PlayIcon,
   PowerOffIcon,
@@ -28,13 +30,12 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { Proposal } from "@/hooks/useProposals";
-import { useResizeTerminal, useSendMessage, useWatchOutput } from "@/hooks/useSession";
+import { useSendMessage } from "@/hooks/useSession";
 import { ProposalPanel } from "@/components/proposal-panel";
 import { ProposalDecisionProvider, useCurrentProposal, useProposalDecision } from "@/components/proposal-decision";
 import { WatchSettingsPanel } from "@/components/watch-settings-panel";
 import { useWatchActivity, type Activity } from "@/hooks/useWatchActivity";
 import { usePollWatch, useWatch, useWatches, type Watch } from "@/hooks/useWatches";
-import { AgentTerminal } from "@/components/agent-terminal";
 import {
   AutoBadges,
   ChecksBadge,
@@ -50,6 +51,7 @@ import { MergeWatchDialog } from "@/components/merge-watch-dialog";
 import { StopWatchDialog } from "@/components/stop-watch-dialog";
 import { TakenOverPanel } from "@/components/taken-over-panel";
 import { TakeoverDialog } from "@/components/takeover-dialog";
+import { TerminalPanel } from "@/components/terminal-panel";
 import { Tip } from "@/components/tip";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -137,6 +139,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
   const [stopping, setStopping] = useState(false);
   const [merging, setMerging] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [terminalOpen, setTerminalOpen] = useState(false);
 
   const rows = useMemo(() => (activity.data ? [...activity.data].reverse() : []), [activity.data]);
   const checks = useMemo(() => (watch ? checkRows(watch) : []), [watch]);
@@ -172,11 +175,12 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
   const active = watch.status === "active";
   const ready = active && Boolean(watch.readySince);
   const blockers = active ? (watch.readyBlockers ?? []) : [];
+  const terminalShown = terminalOpen && !isSelfWatch(watch);
 
   return (
     <ProposalDecisionProvider key={watch.id} watch={watch}>
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto]">
+        <div className="flex min-w-0 flex-col overflow-y-auto">
           <ViewHeader className="flex-col items-stretch gap-2 bg-muted-subtle pb-3.5">
             <div className="flex h-titlebar items-center gap-2">
               <h1 className={cn("truncate text-lg font-medium tracking-tight", !active && "text-foreground/75")}>
@@ -277,7 +281,15 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
 
           {!active ? <ArchiveSummary watch={watch} onWatchPR={onWatchPR} /> : null}
 
-          {isSelfWatch(watch) ? <SelfSessionPanel watch={watch} /> : <SessionPanel watch={watch} enabled={enabled} />}
+          {isSelfWatch(watch) ? (
+            <SelfSessionPanel watch={watch} />
+          ) : (
+            <SessionPanel
+              watch={watch}
+              terminalOpen={terminalShown}
+              onTerminalToggle={() => setTerminalOpen((v) => !v)}
+            />
+          )}
 
           {checks.length > 0 ? (
             <Collapsible className="border-b">
@@ -401,6 +413,9 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
             </Empty>
           ) : null}
         </div>
+        {terminalShown ? (
+          <TerminalPanel watch={watch} enabled={enabled} onClose={() => setTerminalOpen(false)} />
+        ) : null}
         {active && settingsOpen ? <WatchSettingsPanel watch={watch} onClose={() => setSettingsOpen(false)} /> : null}
       </div>
     </ProposalDecisionProvider>
@@ -472,13 +487,12 @@ function SelfSessionPanel({ watch }: { watch: Watch }) {
   );
 }
 
-function SessionPanel({ watch, enabled }: { watch: Watch; enabled: boolean }) {
+type SessionPanelProps = { watch: Watch; terminalOpen: boolean; onTerminalToggle: () => void };
+
+function SessionPanel({ watch, terminalOpen, onTerminalToggle }: SessionPanelProps) {
   const active = watch.status === "active";
-  const output = useWatchOutput(enabled ? watch.id : null);
   const send = useSendMessage();
-  const resize = useResizeTerminal();
   const [message, setMessage] = useState("");
-  const [open, setOpen] = useState(false);
   const [takingOver, setTakingOver] = useState(false);
   const session = sessionWord(watch.session.state);
   const held = Boolean(watch.pendingProposal);
@@ -517,10 +531,14 @@ function SessionPanel({ watch, enabled }: { watch: Watch; enabled: boolean }) {
             variant="ghost"
             size="xs"
             className="font-mono text-2xs text-muted-foreground"
-            onClick={() => setOpen((v) => !v)}
+            onClick={onTerminalToggle}
           >
-            <ChevronDownIcon data-icon="inline-start" className={cn("transition-transform", open && "rotate-180")} />
-            {open ? `hide ${terminalWord}` : `show ${terminalWord}`}
+            {terminalOpen ? (
+              <PanelBottomDashedIcon data-icon="inline-start" />
+            ) : (
+              <PanelBottomIcon data-icon="inline-start" />
+            )}
+            {terminalOpen ? `hide ${terminalWord}` : `show ${terminalWord}`}
           </Button>
         </div>
       </AgentHeader>
@@ -537,21 +555,6 @@ function SessionPanel({ watch, enabled }: { watch: Watch; enabled: boolean }) {
             ? "The agent process ended. It starts again with the next message."
             : "The agent waits on you. Read what it printed and answer it below."}
         </p>
-      ) : null}
-      {open ? (
-        output.error || !output.data ? (
-          <pre
-            aria-label="Agent output"
-            className="max-h-96 overflow-auto rounded-md border bg-muted/40 p-3 font-mono text-2xs/relaxed whitespace-pre-wrap"
-          >
-            {output.error ? output.error.message : "Nothing printed yet."}
-          </pre>
-        ) : (
-          <AgentTerminal
-            output={output.data}
-            onResize={active ? (grid) => resize.mutate({ id: watch.id, ...grid }) : undefined}
-          />
-        )
       ) : null}
       {withYou ? <TakenOverPanel watch={watch} /> : null}
       {active && !withYou ? (

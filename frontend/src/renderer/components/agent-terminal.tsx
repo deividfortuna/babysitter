@@ -5,7 +5,7 @@ import { scrollingAncestor, settledReporter, terminalBox } from "@/lib/terminal-
 import { terminalTheme } from "@/lib/terminal-palette";
 import { plainOutput } from "@/lib/watch-status";
 
-const LIMITS: GridLimits = { minCols: 20, minRows: 30, maxRows: 60 };
+const LIMITS: GridLimits = { minCols: 20, minRows: 10, maxRows: 60 };
 const RESIZE_SETTLE_MS = 150;
 
 type Props = {

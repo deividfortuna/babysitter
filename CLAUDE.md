@@ -128,8 +128,9 @@ never edit it by hand. `scripts/build-daemon.mjs` compiles the Go binary
 into `frontend/daemon/` before `start`, `package` and `make`.
 The agent terminal is read only. `src/renderer/lib/ghostty/` parses the
 output with libghostty-vt compiled to WebAssembly and draws it on a canvas.
-The grid fills the width of the panel and the height of the window, from
-30 to 60 rows, and the app sends that size to `POST /watches/{id}/resize`,
+It opens in a panel at the bottom of the watch view, and the user drags
+the top edge of the panel to change its height. The grid fills that panel,
+from 10 to 60 rows, and the app sends that size to `POST /watches/{id}/resize`,
 which resizes the pseudo terminal of the agent.
 The WASM is inlined in a lazy chunk, because the packaged app loads from
 `file://`, where `fetch` fails; the CSP allows it with `'wasm-unsafe-eval'`.

@@ -137,12 +137,30 @@ test("shows what the agent does and sends it a message", async () => {
   expect(await screen.findByText("agent asks you")).toBeVisible();
   expect(screen.getByText("The agent waits on you. Read what it printed and answer it below.")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "show the terminal" }));
-  expect(await screen.findByLabelText("Agent output")).toHaveTextContent("❯ which option do you prefer?");
+  const terminal = await screen.findByRole("region", { name: "Terminal" });
+  expect(await within(terminal).findByLabelText("Agent output")).toHaveTextContent("❯ which option do you prefer?");
   await user.type(screen.getByLabelText("Message to the agent"), "the first one");
   await user.click(screen.getByRole("button", { name: "Send" }));
 
   await waitFor(() => expect(sent).toEqual({ message: "the first one" }));
   await waitFor(() => expect(screen.getByLabelText("Message to the agent")).toHaveValue(""));
+});
+
+test("opens the terminal in a panel at the bottom and closes it", async () => {
+  const watch = buildWatch({ id: 42 });
+  serveApi({ watches: [watch], watchById: { 42: watch }, watchOutput: { 42: "hello from the agent\n" } });
+  const user = userEvent.setup();
+
+  renderWatchDetail();
+  await user.click(await screen.findByRole("button", { name: "show the terminal" }));
+  const terminal = await screen.findByRole("region", { name: "Terminal" });
+  expect(within(terminal).getByRole("separator", { name: "Resize terminal" })).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "hide the terminal" })).toBeVisible();
+
+  await user.click(within(terminal).getByRole("button", { name: "Close the terminal" }));
+
+  expect(screen.queryByRole("region", { name: "Terminal" })).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "show the terminal" })).toBeVisible();
 });
 
 test("a self watch has no terminal and no message box", async () => {
