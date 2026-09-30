@@ -314,6 +314,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 		s.dropWorktree(ctx, co.dir, dir, branch)
 		return store.Watch{}, err
 	}
+	s.snapshots.set(w.ID, snap)
 	if err := s.finishStart(ctx, client, w, snap, baseline, *req.IncludeExisting); err != nil {
 		s.log.Error("finish the start of the watch", "watch", w.ID, "pr", prLabel(w), "err", err)
 	}
@@ -514,6 +515,7 @@ func (s *Service) stop(ctx context.Context, id int64, reason store.StopReason, d
 	s.work.clear(w.ID)
 	s.rereviewTries.drop(w.ID)
 	s.branchTries.drop(w.ID)
+	s.snapshots.drop(w.ID)
 	fate := worktreeNotTried
 	keep := s.keepsWorktree(w, o)
 	if !keep {

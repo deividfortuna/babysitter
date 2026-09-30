@@ -946,6 +946,58 @@ paths:
                 $ref: '#/components/schemas/HttpdAPIError'
           description: Service Unavailable
       summary: Change who releases the turns of a watch while it runs
+  /api/v1/watches/{id}/diff:
+    get:
+      operationId: diffWatchPullRequest
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdPullRequestDiff'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: 'The diff of the pull request of an active watch: the daemon fetches
+        the base and the head branch into the worktree and diffs the head against
+        their merge base'
   /api/v1/watches/{id}/handback:
     post:
       operationId: handbackWatch
@@ -1819,6 +1871,57 @@ paths:
           description: Service Unavailable
       summary: 'Move the agent session of a watch to the terminal of the author: the
         session of the daemon ends and the proposals that wait are declined'
+  /api/v1/watches/{id}/view:
+    get:
+      operationId: viewWatchPullRequest
+      parameters:
+      - description: Watch id
+        in: path
+        name: id
+        required: true
+        schema:
+          description: Watch id
+          format: int64
+          type: integer
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdPullRequestView'
+          description: OK
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Bad Request
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The pull request of an active watch as the daemon last read it from
+        GitHub, with no call to GitHub
 components:
   schemas:
     ApprovalParams:
@@ -2723,6 +2826,53 @@ components:
       - assignees
       - fork
       type: object
+    HttpdPullRequestChecks:
+      properties:
+        failed:
+          type: integer
+        passed:
+          type: integer
+        pending:
+          type: integer
+        skipped:
+          type: integer
+        status:
+          enum:
+          - success
+          - failure
+          - pending
+          - none
+          type: string
+      required:
+      - status
+      - passed
+      - failed
+      - pending
+      - skipped
+      type: object
+    HttpdPullRequestDiff:
+      properties:
+        base:
+          description: 'The merge base of the base branch and the head: the commit
+            the diff starts from'
+          type: string
+        diff:
+          description: The plain unified diff of the pull request
+          type: string
+        head:
+          description: The head of the pull request on GitHub, as the daemon fetched
+            it
+          type: string
+        truncated:
+          description: The diff was longer than one megabyte, so it stops at the last
+            whole file under that size
+          type: boolean
+      required:
+      - base
+      - head
+      - diff
+      - truncated
+      type: object
     HttpdPullRequestList:
       properties:
         pullRequests:
@@ -2732,6 +2882,149 @@ components:
           type: array
       required:
       - pullRequests
+      type: object
+    HttpdPullRequestReview:
+      properties:
+        login:
+          type: string
+        state:
+          description: 'The verdict that stands: APPROVED or CHANGES_REQUESTED, or
+            else the state of the last review, COMMENTED or DISMISSED'
+          type: string
+      required:
+      - login
+      - state
+      type: object
+    HttpdPullRequestView:
+      properties:
+        additions:
+          type: integer
+        approvals:
+          type: integer
+        assignees:
+          items:
+            type: string
+          nullable: true
+          type: array
+        author:
+          type: string
+        autoMerge:
+          description: The merge method of auto-merge; absent when auto-merge is off
+          enum:
+          - ""
+          - merge
+          - squash
+          - rebase
+          type: string
+        baseRef:
+          type: string
+        behindBy:
+          description: The commits of the base that the head does not have, read only
+            while the mergeable state is blocked, else 0
+          type: integer
+        body:
+          description: The description of the pull request, as its author wrote it
+          type: string
+        changedFiles:
+          type: integer
+        changesRequested:
+          type: integer
+        checks:
+          $ref: '#/components/schemas/HttpdPullRequestChecks'
+        commits:
+          type: integer
+        createdAt:
+          format: date-time
+          type: string
+        deletions:
+          type: integer
+        draft:
+          type: boolean
+        headRef:
+          type: string
+        headSha:
+          type: string
+        labels:
+          items:
+            type: string
+          nullable: true
+          type: array
+        mergeable:
+          description: Whether GitHub can merge the pull request; absent while GitHub
+            computes it
+          nullable: true
+          type: boolean
+        mergeableState:
+          type: string
+        milestone:
+          type: string
+        number:
+          type: integer
+        repo:
+          type: string
+        requestedReviewers:
+          description: The users and teams asked for a review that did not review
+            yet
+          items:
+            type: string
+          nullable: true
+          type: array
+        reviewDecision:
+          enum:
+          - approved
+          - changes_requested
+          - review_required
+          - none
+          type: string
+        reviewers:
+          description: Each person who submitted a review, in the order of their first
+            review
+          items:
+            $ref: '#/components/schemas/HttpdPullRequestReview'
+          nullable: true
+          type: array
+        snapshotAt:
+          description: When the daemon read the pull request from GitHub
+          format: date-time
+          type: string
+        state:
+          enum:
+          - open
+          - closed
+          - merged
+          type: string
+        title:
+          type: string
+        url:
+          type: string
+      required:
+      - repo
+      - number
+      - url
+      - title
+      - author
+      - state
+      - draft
+      - baseRef
+      - headRef
+      - headSha
+      - mergeableState
+      - behindBy
+      - reviewDecision
+      - approvals
+      - changesRequested
+      - requestedReviewers
+      - reviewers
+      - labels
+      - assignees
+      - additions
+      - deletions
+      - commits
+      - changedFiles
+      - createdAt
+      - body
+      - checks
+      - snapshotAt
       type: object
     HttpdQueuedPullRequest:
       properties:

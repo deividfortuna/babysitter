@@ -176,5 +176,9 @@ func (s *Service) post(ctx context.Context, client *github.Client, w store.Watch
 }
 
 func (s *Service) replyCommand(w store.Watch) string {
-	return fmt.Sprintf("%s watch reply %d", agent.ShellWord(cmp.Or(s.exe, "babysitter")), w.ID)
+	return s.watchCommand(w, "reply")
+}
+
+func (s *Service) watchCommand(w store.Watch, verb string) string {
+	return fmt.Sprintf("%s watch %s %d", agent.ShellWord(cmp.Or(s.exe, "babysitter")), verb, w.ID)
 }

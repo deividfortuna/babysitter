@@ -18,6 +18,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/notify"
 	"github.com/deividfortuna/babysitter/internal/processalive"
 	"github.com/deividfortuna/babysitter/internal/session"
+	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
 	"github.com/deividfortuna/babysitter/internal/timex"
 	"github.com/deividfortuna/babysitter/internal/watcher"
@@ -105,6 +106,7 @@ type Service struct {
 	locks         keyedlock.Locks[int64]
 	sessions      sessions
 	sizes         registry[TerminalSize]
+	snapshots     registry[*snapshot.Snapshot]
 	sizeLocks     keyedlock.Locks[int64]
 	turns         keyedQueues
 	work          selfWork

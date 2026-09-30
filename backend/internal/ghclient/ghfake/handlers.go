@@ -570,6 +570,13 @@ func pullRequest(r *Repo, p *PR) *github.PullRequest {
 	for _, login := range p.Assignees {
 		out.Assignees = append(out.Assignees, user(login))
 	}
+	if p.Milestone != "" {
+		out.Milestone = &github.Milestone{Title: new(p.Milestone)}
+	}
+	if p.AutoMerge != "" {
+		out.AutoMerge = &github.PullRequestAutoMerge{MergeMethod: new(p.AutoMerge)}
+	}
+	out.Commits, out.ChangedFiles = nonZeroInt(p.Commits), nonZeroInt(p.ChangedFiles)
 	out.Body = str(p.Body)
 	return out
 }

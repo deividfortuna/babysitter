@@ -55,7 +55,10 @@ var pr = PullRequest{Repo: "octo/hello", Number: 3, Title: "Fix the thing", URL:
 
 func TestOpenMessage(t *testing.T) {
 	t.Parallel()
-	msg, err := OpenMessage(Open{PR: pr, WorktreeDir: "/wt", WorkBranch: "babysitter/fix", Interval: "3 minutes", ReplyCommand: "/opt/babysitter watch reply 12"})
+	msg, err := OpenMessage(Open{
+		PR: pr, WorktreeDir: "/wt", WorkBranch: "babysitter/fix", Interval: "3 minutes", ReplyCommand: "/opt/babysitter watch reply 12",
+		ViewCommand: "/opt/babysitter watch view 12", DiffCommand: "/opt/babysitter watch diff 12",
+	})
 	if err != nil {
 		t.Fatalf("OpenMessage() error = %v", err)
 	}
@@ -67,7 +70,7 @@ func TestOpenMessage(t *testing.T) {
 		"Commit your work on this branch and do not push",
 		"the daemon pushes your commits to fix",
 		"every 3 minutes",
-		"gh pr view 3",
+		"Read the pull request with `/opt/babysitter watch view 12` and its diff with `/opt/babysitter watch diff 12`",
 		"`/opt/babysitter watch reply 12 --to <comment id> <text>` answers a review comment in its thread, or a comment on the conversation on the conversation",
 	} {
 		if !strings.Contains(msg, want) {

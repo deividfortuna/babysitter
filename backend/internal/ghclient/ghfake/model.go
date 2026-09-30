@@ -74,10 +74,15 @@ type PR struct {
 	// compare of BaseRef with HeadSHA answers.
 	BehindBy  int
 	Labels    []string
-	Additions int
-	Deletions int
-	CreatedAt time.Time
-	UpdatedAt time.Time
+	Milestone string
+	// AutoMerge is the merge method of auto-merge; empty leaves it off.
+	AutoMerge    string
+	Additions    int
+	Deletions    int
+	Commits      int
+	ChangedFiles int
+	CreatedAt    time.Time
+	UpdatedAt    time.Time
 	// Requested are the users asked for a review, as REST lists them.
 	Requested []string
 	// RequestedTeams are the teams asked for a review, which only GraphQL

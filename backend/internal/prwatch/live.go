@@ -196,6 +196,7 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	msg, err := agent.OpenMessage(agent.Open{
 		PR: pullRequestOf(w), WorktreeDir: w.WorktreeDir, WorkBranch: w.WorkBranch,
 		Interval: interval(s.Interval()), Prelude: runner.Prelude(), ReplyCommand: s.replyCommand(w),
+		ViewCommand: s.watchCommand(w, "view"), DiffCommand: s.watchCommand(w, "diff"),
 	})
 	if err != nil {
 		return l, err

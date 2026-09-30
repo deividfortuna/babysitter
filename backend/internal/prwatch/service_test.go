@@ -298,6 +298,8 @@ func (m *meeting) missed() []string {
 type fakeRelease struct {
 	mu          sync.Mutex
 	remote      string
+	branches    map[string]string
+	fetchDirs   []string
 	work        string
 	history     map[string][]string
 	missing     []string
@@ -346,7 +348,7 @@ func (f *fakeRelease) contains(sha, ancestor string) bool {
 	return sha == ancestor || slices.Contains(f.history[sha], ancestor)
 }
 
-func (f *fakeRelease) Fetch(context.Context, string, string) (string, error) {
+func (f *fakeRelease) Fetch(_ context.Context, dir, branch string) (string, error) {
 	f.mu.Lock()
 	during := f.duringFetch
 	f.duringFetch = nil
@@ -356,6 +358,10 @@ func (f *fakeRelease) Fetch(context.Context, string, string) (string, error) {
 	}
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	f.fetchDirs = append(f.fetchDirs, dir)
+	if sha, ok := f.branches[branch]; ok {
+		return sha, f.fetchErr
+	}
 	return f.remote, f.fetchErr
 }
 

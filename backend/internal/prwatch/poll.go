@@ -64,7 +64,7 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 		return err
 	}
 	now := s.now()
-	snap, err := snapshot.Collect(ctx, client, s.store, target(w), s.watchOptions(w))
+	snap, err := s.collect(ctx, client, w)
 	if err != nil {
 		return s.pollFailed(ctx, w, err, now)
 	}
