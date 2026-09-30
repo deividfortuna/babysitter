@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"slices"
 	"strings"
 )
@@ -42,20 +41,98 @@ func AuthorPatterns() []string {
 const AuthorDecisionRefusal = "babysitter: only the author runs this command; do not run it again, " +
 	"and say in your final message what the author has to decide"
 
-var authorDecisionCall = regexp.MustCompile(`(?s)babysitter.*\bwatch\s+(?:` + decisionWords() + `)\b`)
+var decisionSubcommands = decisionWords()
 
-func decisionWords() string {
+func decisionWords() []string {
 	words := make([]string, 0, len(authorDecisions))
 	for _, decision := range authorDecisions {
 		words = append(words, strings.TrimPrefix(decision, "watch "))
 	}
-	return strings.Join(words, "|")
+	return words
 }
 
-var shellQuoting = strings.NewReplacer(`'`, "", `"`, "", `\`, "")
-
 func IsAuthorDecision(command string) bool {
-	return authorDecisionCall.MatchString(shellQuoting.Replace(command))
+	return runsAuthorDecision(splitShellWords(command))
+}
+
+func runsAuthorDecision(words []shellWord) bool {
+	for i := 0; i < len(words); i++ {
+		word := words[i]
+		if word.separator {
+			continue
+		}
+		if strings.Contains(word.text, "babysitter") {
+			args := commandArgs(words[i+1:])
+			subcommands := watchSubcommands(args)
+			if slices.ContainsFunc(subcommands, isDecisionSubcommand) {
+				return true
+			}
+			if len(subcommands) > 0 {
+				if slices.ContainsFunc(args, substitutesAnAuthorDecision) {
+					return true
+				}
+				i += len(args)
+				continue
+			}
+		}
+		if inner := splitShellWords(word.text); len(inner) > 1 && runsAuthorDecision(inner) {
+			return true
+		}
+	}
+	return false
+}
+
+func isDecisionSubcommand(subcommand string) bool {
+	return slices.Contains(decisionSubcommands, subcommand)
+}
+
+func commandArgs(words []shellWord) []shellWord {
+	end := slices.IndexFunc(words, func(w shellWord) bool { return w.separator })
+	if end < 0 {
+		return words
+	}
+	return words[:end]
+}
+
+func substitutesAnAuthorDecision(word shellWord) bool {
+	substitutes := strings.Contains(word.text, "$(") || strings.Contains(word.text, "`")
+	return substitutes && runsAuthorDecision(splitShellWords(word.text))
+}
+
+func watchSubcommands(args []shellWord) []string {
+	var out []string
+	for _, flagsTakeValues := range []bool{true, false} {
+		positional := positionalWords(args, flagsTakeValues)
+		if len(positional) >= 2 && positional[0] == "watch" {
+			out = append(out, positional[1])
+		}
+	}
+	return out
+}
+
+func positionalWords(args []shellWord, flagsTakeValues bool) []string {
+	var out []string
+	for i := 0; i < len(args); i++ {
+		text := args[i].text
+		switch {
+		case text == "--":
+			return out
+		case !strings.HasPrefix(text, "-"):
+			if text != "" {
+				out = append(out, text)
+			}
+		case flagsTakeValues && flagTakesNextWord(text):
+			i++
+		}
+	}
+	return out
+}
+
+func flagTakesNextWord(flag string) bool {
+	if strings.Contains(flag, "=") {
+		return false
+	}
+	return strings.HasPrefix(flag, "--") || len(flag) == 2
 }
 
 func RefusesToolUse(event string, payload map[string]any) bool {
