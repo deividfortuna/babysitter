@@ -56,9 +56,12 @@ type PR struct {
 	// "unknown" and so on.
 	MergeableState string
 	Author         string
-	URL            string
-	HeadRef        string
-	HeadSHA        string
+	// AuthorAvatar is the avatar GitHub returns for the author. Empty gives
+	// the one AvatarURL makes from the login.
+	AuthorAvatar string
+	URL          string
+	HeadRef      string
+	HeadSHA      string
 	// HeadRepo is the full name of the repository of the head branch, which
 	// differs from the repository of the pull request for a fork.
 	HeadRepo string

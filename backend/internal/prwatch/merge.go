@@ -146,7 +146,7 @@ func (s *Service) mergeNow(ctx context.Context, client *github.Client, w store.W
 		return store.Watch{}, err
 	}
 	if err := s.store.UpdateWatchState(ctx, w.ID, store.WatchState{
-		Title: snap.PR.Title, BaseRef: snap.PR.BaseBranch,
+		Title: snap.PR.Title, AuthorAvatarURL: snap.PR.AuthorAvatarURL, BaseRef: snap.PR.BaseBranch,
 		HeadSHA: next.HeadSHA, PRState: store.StateMerged, MergeableState: next.MergeableState,
 		CheckStates: next.Checks, GreenSHA: next.GreenSHA, PolledAt: s.now(),
 	}); err != nil {

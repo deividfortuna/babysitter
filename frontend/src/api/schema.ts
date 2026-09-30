@@ -1023,6 +1023,8 @@ export interface components {
             approvals: number;
             assignees: string[] | null;
             author: string;
+            /** @description The GitHub avatar of the author, absent until the next sync of the repository */
+            authorAvatarUrl?: string;
             baseRef: string;
             changesRequested: number;
             /** @enum {string} */
@@ -1320,6 +1322,8 @@ export interface components {
             /** @description How many approvals the pull request needs before the watch calls it ready to merge */
             approvalsRequired: number;
             author: string;
+            /** @description The GitHub avatar of the author, absent until the next poll of an active watch */
+            authorAvatarUrl?: string;
             /** @description Approved work goes out after a clean rebase or merge onto a branch that moved, without asking again */
             autoApproveRebase: boolean;
             /**

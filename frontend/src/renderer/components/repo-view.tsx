@@ -77,7 +77,7 @@ function PullRow({ pr, queued, onWatch }: PullRowProps) {
       }
       details={[
         <span key="number">#{pr.number}</span>,
-        <AuthorName key="author" login={pr.author} />,
+        <AuthorName key="author" login={pr.author} avatarUrl={pr.authorAvatarUrl} />,
         labels.length > 0 ? <LabelBadges key="labels" labels={labels} /> : null,
         hasTags ? (
           <span key="tags" className="inline-flex flex-wrap gap-1.5">

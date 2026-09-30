@@ -86,6 +86,7 @@ type PR struct {
 	URL                 string               `json:"url"`
 	Title               string               `json:"title"`
 	Author              string               `json:"author"`
+	AuthorAvatarURL     string               `json:"author_avatar_url"`
 	State               store.PRState        `json:"state"`
 	Draft               bool                 `json:"draft"`
 	Merged              bool                 `json:"merged"`
@@ -374,23 +375,24 @@ func resolveRepo(ctx context.Context, t *Target, dir string) (headOwner string, 
 
 func toPR(t Target, pr *github.PullRequest) PR {
 	out := PR{
-		Repo:           t.Repo(),
-		Number:         pr.GetNumber(),
-		NodeID:         pr.GetNodeID(),
-		URL:            pr.GetHTMLURL(),
-		Title:          pr.GetTitle(),
-		Author:         pr.GetUser().GetLogin(),
-		State:          store.PRState(pr.GetState()),
-		Draft:          pr.GetDraft(),
-		Merged:         pr.GetMerged(),
-		Closed:         store.PRState(pr.GetState()) == store.StateClosed,
-		HeadSHA:        pr.GetHead().GetSHA(),
-		HeadBranch:     pr.GetHead().GetRef(),
-		HeadRepo:       pr.GetHead().GetRepo().GetFullName(),
-		BaseBranch:     pr.GetBase().GetRef(),
-		Mergeable:      pr.Mergeable,
-		MergeableState: store.MergeableState(pr.GetMergeableState()),
-		UpdateType:     watcher.UpdateTypeOf(pr),
+		Repo:            t.Repo(),
+		Number:          pr.GetNumber(),
+		NodeID:          pr.GetNodeID(),
+		URL:             pr.GetHTMLURL(),
+		Title:           pr.GetTitle(),
+		Author:          pr.GetUser().GetLogin(),
+		AuthorAvatarURL: pr.GetUser().GetAvatarURL(),
+		State:           store.PRState(pr.GetState()),
+		Draft:           pr.GetDraft(),
+		Merged:          pr.GetMerged(),
+		Closed:          store.PRState(pr.GetState()) == store.StateClosed,
+		HeadSHA:         pr.GetHead().GetSHA(),
+		HeadBranch:      pr.GetHead().GetRef(),
+		HeadRepo:        pr.GetHead().GetRepo().GetFullName(),
+		BaseBranch:      pr.GetBase().GetRef(),
+		Mergeable:       pr.Mergeable,
+		MergeableState:  store.MergeableState(pr.GetMergeableState()),
+		UpdateType:      watcher.UpdateTypeOf(pr),
 	}
 	for _, u := range pr.RequestedReviewers {
 		if login := u.GetLogin(); login != "" {

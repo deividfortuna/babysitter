@@ -195,6 +195,7 @@ func toStorePR(repo store.Repo, pr *github.PullRequest, old store.PullRequest, n
 		GitHubID:           pr.GetID(),
 		Title:              pr.GetTitle(),
 		Author:             pr.GetUser().GetLogin(),
+		AuthorAvatarURL:    pr.GetUser().GetAvatarURL(),
 		State:              store.StateOpen,
 		Draft:              pr.GetDraft(),
 		BaseRef:            pr.GetBase().GetRef(),

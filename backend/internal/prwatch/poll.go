@@ -207,7 +207,7 @@ func (s *Service) recordDiff(ctx context.Context, w store.Watch, snap *snapshot.
 		return nil, State{}, err
 	}
 	if err := s.store.UpdateWatchState(ctx, w.ID, store.WatchState{
-		Title: snap.PR.Title, BaseRef: snap.PR.BaseBranch,
+		Title: snap.PR.Title, AuthorAvatarURL: snap.PR.AuthorAvatarURL, BaseRef: snap.PR.BaseBranch,
 		HeadSHA: next.HeadSHA, PRState: next.PRState, MergeableState: next.MergeableState,
 		CheckStates: next.Checks, GreenSHA: next.GreenSHA, PolledAt: now,
 	}); err != nil {

@@ -147,7 +147,7 @@ func TestSyncNewAndUnchangedPR(t *testing.T) {
 		t.Fatalf("stored %d PRs, want 1", len(prs))
 	}
 	pr := prs[0]
-	if pr.Title != "One" || pr.Author != "alice" || pr.HeadSHA != "sha1" || pr.MergeableState != "clean" ||
+	if pr.Title != "One" || pr.Author != "alice" || pr.AuthorAvatarURL != ghfake.AvatarURL("alice") || pr.HeadSHA != "sha1" || pr.MergeableState != "clean" ||
 		pr.Additions != 5 || pr.Deletions != 2 || pr.ReviewDecision != store.ReviewApproved || pr.Approvals != 1 ||
 		pr.CIStatus != checks.CISuccess || len(pr.Labels) != 1 || pr.Labels[0] != "bug" ||
 		len(pr.RequestedReviewers) != 1 || pr.RequestedReviewers[0] != "bob" {

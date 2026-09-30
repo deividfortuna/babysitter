@@ -2608,6 +2608,10 @@ components:
           type: array
         author:
           type: string
+        authorAvatarUrl:
+          description: The GitHub avatar of the author, absent until the next sync
+            of the repository
+          type: string
         baseRef:
           type: string
         changesRequested:
@@ -3314,6 +3318,10 @@ components:
             calls it ready to merge
           type: integer
         author:
+          type: string
+        authorAvatarUrl:
+          description: The GitHub avatar of the author, absent until the next poll
+            of an active watch
           type: string
         autoApproveRebase:
           description: Approved work goes out after a clean rebase or merge onto a

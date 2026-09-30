@@ -5,6 +5,7 @@ import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Item, ItemActions, ItemContent, ItemGroup, ItemMedia, ItemTitle } from "@/components/ui/item";
+import { avatarSource } from "@/lib/avatar";
 import { initials } from "@/lib/initials";
 import { cn } from "@/lib/utils";
 
@@ -43,13 +44,16 @@ export function LabelBadges({ labels }: { labels: string[] }) {
 
 const botSuffix = "[bot]";
 
-export function AuthorName({ login }: { login: string }) {
+type AuthorNameProps = { login: string; avatarUrl?: string };
+
+export function AuthorName({ login, avatarUrl }: AuthorNameProps) {
   const bot = login.endsWith(botSuffix);
   const name = bot ? login.slice(0, -botSuffix.length) : login;
+  const src = avatarSource(name, bot, avatarUrl);
   return (
     <span className="inline-flex items-center gap-1.5">
       <Avatar className="size-4.5">
-        {bot ? null : <AvatarImage src={`https://github.com/${name}.png?size=36`} alt="" />}
+        {src ? <AvatarImage src={src} alt="" /> : null}
         <AvatarFallback
           className={cn("text-3xs font-semibold", bot ? "bg-chart-1 text-white" : "bg-accent text-muted-foreground")}
         >

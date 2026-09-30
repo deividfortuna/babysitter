@@ -297,7 +297,8 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 
 	baseline, base := Diff(State{}, snap, now)
 	w, err := s.store.CreateWatch(ctx, store.Watch{
-		Owner: owner, Name: name, Number: snap.PR.Number, URL: snap.PR.URL, Title: snap.PR.Title, Author: snap.PR.Author,
+		Owner: owner, Name: name, Number: snap.PR.Number, URL: snap.PR.URL, Title: snap.PR.Title,
+		Author: snap.PR.Author, AuthorAvatarURL: snap.PR.AuthorAvatarURL,
 		BotLogin: acc.botLogin, HeadRef: headRef, BaseRef: snap.PR.BaseBranch,
 		SourceDir: co.dir, WorktreeDir: dir, WorkBranch: branch,
 		GitUserName: acc.userName, GitUserEmail: acc.userEmail,
