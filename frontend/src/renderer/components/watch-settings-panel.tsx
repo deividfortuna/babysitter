@@ -34,7 +34,7 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
   return (
     <aside
       aria-labelledby="watch-settings-title"
-      className="relative flex w-90 shrink-0 flex-col gap-5 overflow-y-auto border-l bg-background p-5"
+      className="relative col-start-2 row-span-2 row-start-1 flex w-90 shrink-0 flex-col gap-5 overflow-y-auto border-l bg-background p-5"
     >
       <Tip label="Close watch settings" side="left">
         <Button
