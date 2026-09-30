@@ -62,8 +62,13 @@ export function quitShortcut(options: QuitShortcutOptions): QuitShortcutHandler 
     return options.platform === "darwin" ? input.meta : input.control;
   }
 
+  function onlyModifierDown(input: QuitKeyInput) {
+    const pressed = [input.meta, input.control, input.alt, input.shift].filter(Boolean).length;
+    return modifierDown(input) && pressed === 1;
+  }
+
   function isQuitKey(input: QuitKeyInput) {
-    return input.key.toLowerCase() === "q" && modifierDown(input) && !input.alt && !input.shift;
+    return input.key.toLowerCase() === "q" && onlyModifierDown(input);
   }
 
   function isModifierAlone(input: QuitKeyInput) {

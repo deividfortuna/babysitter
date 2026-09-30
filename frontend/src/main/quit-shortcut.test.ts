@@ -155,6 +155,26 @@ test("Command Q with Shift or Option is not the quit shortcut", () => {
   expect(hints).toEqual([]);
 });
 
+test("Control Command Q is not the quit shortcut", () => {
+  expect(pressQ({ control: true })).toBe(false);
+  key("keyUp", "q", { meta: true, control: true });
+  expect(pressQ({ control: true })).toBe(false);
+
+  expect(quits).toBe(0);
+  expect(hints).toEqual([]);
+});
+
+test("off macOS Control Q with the Meta key is not the quit shortcut", () => {
+  setup("linux");
+
+  expect(key("keyDown", "q", { control: true, meta: true })).toBe(false);
+  key("keyUp", "q", { control: true, meta: true });
+  expect(key("keyDown", "q", { control: true, meta: true })).toBe(false);
+
+  expect(quits).toBe(0);
+  expect(hints).toEqual([]);
+});
+
 test("off macOS the shortcut is Control Q", () => {
   setup("linux");
 

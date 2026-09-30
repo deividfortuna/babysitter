@@ -342,7 +342,16 @@ test("a quit that the daemon lets go of quits at once", async () => {
 test("a double press of the quit shortcut in the window shows the hint and quits", () => {
   electron.appEvents.get("activate")?.();
   const [listener] = electron.windows[0].webContents.inputListeners;
-  const press = { type: "keyDown", key: "q", meta: true, control: true, alt: false, shift: false, isAutoRepeat: false };
+  const onMac = process.platform === "darwin";
+  const press = {
+    type: "keyDown",
+    key: "q",
+    meta: onMac,
+    control: !onMac,
+    alt: false,
+    shift: false,
+    isAutoRepeat: false,
+  };
   const event = { preventDefault: vi.fn() };
 
   (listener as (event: unknown, input: unknown) => void)(event, press);
