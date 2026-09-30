@@ -46,3 +46,12 @@ test("carries an icon alone, with the label for assistive technology", () => {
     expect(button.querySelector("svg")).toBeInTheDocument();
   }
 });
+
+test("names each choice in a tooltip on hover", async () => {
+  const user = userEvent.setup();
+
+  renderWithProviders(<ThemeToggle />);
+  await user.hover(screen.getByRole("button", { name: "Dark theme" }));
+
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Dark theme");
+});

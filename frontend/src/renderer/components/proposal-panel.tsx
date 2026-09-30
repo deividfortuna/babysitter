@@ -20,6 +20,7 @@ import {
 } from "@/hooks/useProposals";
 import type { Watch } from "@/hooks/useWatches";
 import { AttentionBadge, Meta, ToneBadge } from "@/components/status-badges";
+import { Tip } from "@/components/tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -383,9 +384,11 @@ function SplitButton({
           {variant === "default" ? <ButtonGroupSeparator className="bg-primary-foreground/30" /> : null}
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button size="icon-sm" variant={variant} className="w-7" aria-label={label}>
-                <ChevronDownIcon />
-              </Button>
+              <Tip label={label}>
+                <Button size="icon-sm" variant={variant} className="w-7" aria-label={label}>
+                  <ChevronDownIcon />
+                </Button>
+              </Tip>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">{more}</DropdownMenuContent>
           </DropdownMenu>

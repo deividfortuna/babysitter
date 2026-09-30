@@ -2,7 +2,7 @@ import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import type { ComponentProps } from "react";
-import { buildNotification, buildRateLimit, buildWatch } from "@test/fixtures";
+import { buildNotification, buildRateLimit, buildRepo, buildWatch } from "@test/fixtures";
 import { renderWithProviders } from "@test/test-utils";
 import { serveApi } from "@test/msw";
 import { bridge } from "@/lib/bridge";
@@ -83,6 +83,28 @@ test("opens the settings from the account row", async () => {
   await user.click(screen.getByRole("button", { name: "Settings" }));
 
   expect(onOpenSettings).toHaveBeenCalledWith();
+});
+
+test("keeps the actions of a repository shown while its menu is open", async () => {
+  serveApi({ watches: [], repos: [buildRepo()], pullRequests: [] });
+  const user = userEvent.setup();
+
+  renderSidebar();
+  const more = await screen.findByRole("button", { name: "More" });
+  await user.click(more);
+
+  expect(await screen.findByRole("menuitem", { name: "Sync now" })).toBeVisible();
+  expect(more).toHaveAttribute("data-state", "open");
+});
+
+test("names the actions of a repository in a tooltip on hover", async () => {
+  serveApi({ watches: [], repos: [buildRepo()], pullRequests: [] });
+  const user = userEvent.setup();
+
+  renderSidebar();
+  await user.hover(await screen.findByRole("button", { name: "More" }));
+
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("More actions");
 });
 
 test("opens the Polling settings to poll less often when the rate limit runs low", async () => {

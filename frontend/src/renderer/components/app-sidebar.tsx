@@ -23,6 +23,7 @@ import { UpdateCard } from "@/components/update-card";
 import type { SettingsCategory } from "@/components/settings-dialog";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { initials } from "@/lib/initials";
+import { Tip } from "@/components/tip";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -177,10 +178,12 @@ export function AppSidebar({
 
         <SidebarGroup>
           <SidebarGroupLabel>Repositories</SidebarGroupLabel>
-          <SidebarGroupAction title="Add a repository" disabled={!enabled} onClick={onAddRepo}>
-            <PlusIcon />
-            <span className="sr-only">Add a repository</span>
-          </SidebarGroupAction>
+          <Tip label="Add a repository">
+            <SidebarGroupAction disabled={!enabled} onClick={onAddRepo}>
+              <PlusIcon />
+              <span className="sr-only">Add a repository</span>
+            </SidebarGroupAction>
+          </Tip>
           <SidebarGroupContent>
             <SidebarMenu>
               {repos.isPending && enabled
@@ -208,10 +211,12 @@ export function AppSidebar({
                     </SidebarMenuButton>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <SidebarMenuAction showOnHover>
-                          <MoreHorizontalIcon />
-                          <span className="sr-only">More</span>
-                        </SidebarMenuAction>
+                        <Tip label="More actions">
+                          <SidebarMenuAction showOnHover>
+                            <MoreHorizontalIcon />
+                            <span className="sr-only">More</span>
+                          </SidebarMenuAction>
+                        </Tip>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent side="right" align="start">
                         <DropdownMenuGroup>
@@ -302,20 +307,24 @@ function AccountRow({ viewer, onOpenSettings }: AccountRowProps) {
       >
         {name}
       </span>
-      <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground">
-        <a href={issuesURL} target="_blank" rel="noreferrer" aria-label="Report an issue">
-          <MessageCircleIcon />
-        </a>
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
-        aria-label="Settings"
-        onClick={onOpenSettings}
-      >
-        <SettingsIcon />
-      </Button>
+      <Tip label="Report an issue">
+        <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground">
+          <a href={issuesURL} target="_blank" rel="noreferrer" aria-label="Report an issue">
+            <MessageCircleIcon />
+          </a>
+        </Button>
+      </Tip>
+      <Tip label="Settings">
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Settings"
+          onClick={onOpenSettings}
+        >
+          <SettingsIcon />
+        </Button>
+      </Tip>
     </div>
   );
 }

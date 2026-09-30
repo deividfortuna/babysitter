@@ -1,12 +1,24 @@
 import type { ReactNode } from "react";
 import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
+import { Tip } from "@/components/tip";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarTrigger } from "@/components/ui/sidebar";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { historyShortcuts } from "@/hooks/use-history-shortcuts";
 import type { HistoryControls } from "@/hooks/use-view-history";
 import { isMac } from "@/lib/platform";
+
+function sidebarShortcut(): string {
+  return isMac ? "⌘B" : "Ctrl+B";
+}
+
+function TipLabel({ label, shortcut }: { label: string; shortcut: string }) {
+  return (
+    <>
+      {label} <Kbd>{shortcut}</Kbd>
+    </>
+  );
+}
 
 function HistoryButton({
   label,
@@ -22,25 +34,13 @@ function HistoryButton({
   children: ReactNode;
 }) {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="size-7"
-            aria-label={label}
-            disabled={disabled}
-            onClick={onClick}
-          >
-            {children}
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent side="bottom">
-        {label} <Kbd>{shortcut}</Kbd>
-      </TooltipContent>
-    </Tooltip>
+    <Tip side="bottom" label={<TipLabel label={label} shortcut={shortcut} />}>
+      <span className="inline-flex">
+        <Button variant="ghost" size="icon" className="size-7" aria-label={label} disabled={disabled} onClick={onClick}>
+          {children}
+        </Button>
+      </span>
+    </Tip>
   );
 }
 
@@ -48,7 +48,9 @@ function NavigationButtons({ canGoBack, canGoForward, onBack, onForward }: Histo
   const shortcuts = historyShortcuts();
   return (
     <>
-      <SidebarTrigger />
+      <Tip side="bottom" label={<TipLabel label="Toggle sidebar" shortcut={sidebarShortcut()} />}>
+        <SidebarTrigger />
+      </Tip>
       <HistoryButton label="Go back" shortcut={shortcuts.back.label} disabled={!canGoBack} onClick={onBack}>
         <ArrowLeftIcon />
       </HistoryButton>

@@ -1,5 +1,6 @@
 import { MonitorIcon, MoonIcon, SunIcon, type LucideIcon } from "lucide-react";
 import { useTheme } from "@/hooks/use-theme";
+import { Tip } from "@/components/tip";
 import { Button } from "@/components/ui/button";
 import type { ThemePreference } from "@/lib/theme";
 import { cn } from "@/lib/utils";
@@ -20,21 +21,21 @@ export function ThemeToggle({ onChange }: { onChange?: () => void }) {
       className="flex w-fit shrink-0 items-center gap-0.5 rounded-lg border bg-muted/40 p-0.5"
     >
       {choices.map(({ preference: choice, label, Icon }) => (
-        <Button
-          key={choice}
-          variant="ghost"
-          size="icon-sm"
-          aria-label={label}
-          aria-pressed={preference === choice}
-          title={label}
-          className={cn("text-muted-foreground", preference === choice && "bg-background text-foreground shadow-xs")}
-          onClick={() => {
-            setPreference(choice);
-            onChange?.();
-          }}
-        >
-          <Icon />
-        </Button>
+        <Tip key={choice} label={label}>
+          <Button
+            variant="ghost"
+            size="icon-sm"
+            aria-label={label}
+            aria-pressed={preference === choice}
+            className={cn("text-muted-foreground", preference === choice && "bg-background text-foreground shadow-xs")}
+            onClick={() => {
+              setPreference(choice);
+              onChange?.();
+            }}
+          >
+            <Icon />
+          </Button>
+        </Tip>
       ))}
     </div>
   );

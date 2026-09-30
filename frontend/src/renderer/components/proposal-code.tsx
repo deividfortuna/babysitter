@@ -32,6 +32,7 @@ import { readViewedFiles, storeViewedFiles, type ViewedFiles } from "@/lib/viewe
 import { Meta } from "@/components/status-badges";
 import { count } from "@/components/proposal-dialogs";
 import { changeIcon, FileTree, LineCounts, type MissingLoad } from "@/components/proposal-file-tree";
+import { Tip } from "@/components/tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -46,7 +47,7 @@ import {
 import { Spinner } from "@/components/ui/spinner";
 import { Toggle } from "@/components/ui/toggle";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { shortSha } from "@/lib/time";
 import { cn } from "@/lib/utils";
 
@@ -322,15 +323,6 @@ function CommitCodeState({ shown }: { shown: ShownCode }) {
         </Button>
       </AlertDescription>
     </Alert>
-  );
-}
-
-function Tip({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <Tooltip>
-      <TooltipTrigger asChild>{children}</TooltipTrigger>
-      <TooltipContent>{label}</TooltipContent>
-    </Tooltip>
   );
 }
 
@@ -704,16 +696,17 @@ function CopyPath({ path }: { path: string }) {
     });
   const Icon = copied ? CheckIcon : CopyIcon;
   return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      aria-label={copied ? `Copied ${path}` : `Copy the path of ${path}`}
-      title="Copy the path"
-      className="shrink-0 text-muted-foreground"
-      onClick={copy}
-    >
-      <Icon className={cn(copied && "text-success")} />
-    </Button>
+    <Tip label={copied ? "Copied" : "Copy the path"}>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={copied ? `Copied ${path}` : `Copy the path of ${path}`}
+        className="shrink-0 text-muted-foreground"
+        onClick={copy}
+      >
+        <Icon className={cn(copied && "text-success")} />
+      </Button>
+    </Tip>
   );
 }
 
