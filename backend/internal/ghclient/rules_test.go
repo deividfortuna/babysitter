@@ -22,6 +22,8 @@ func TestRequiredApprovalsTakesTheLargerRule(t *testing.T) {
 		{"ruleset only, protection unreadable", `[{"type":"pull_request","parameters":{"required_approving_review_count":2}}]`, http.StatusForbidden, `{"message":"Resource not accessible by personal access token"}`, 2},
 		{"protection only", `[]`, http.StatusOK, `{"required_pull_request_reviews":{"required_approving_review_count":1}}`, 1},
 		{"both, the larger wins", `[{"type":"pull_request","parameters":{"required_approving_review_count":1}},{"type":"deletion"}]`, http.StatusOK, `{"required_pull_request_reviews":{"required_approving_review_count":3}}`, 3},
+		{"protection without required reviews", `[]`, http.StatusOK, `{"required_status_checks":{"strict":true,"contexts":["build"]}}`, 0},
+		{"ruleset over protection without required reviews", `[{"type":"pull_request","parameters":{"required_approving_review_count":2}}]`, http.StatusOK, `{"enforce_admins":{"enabled":true}}`, 2},
 		{"no rule at all", `[]`, http.StatusNotFound, `{"message":"Branch not protected"}`, 0},
 		{"rules endpoint missing", "", http.StatusNotFound, `{"message":"Not Found"}`, 0},
 		{"private repository on a free plan", "forbidden", http.StatusForbidden, `{"message":"Upgrade to GitHub Pro or make this repository public to enable this feature."}`, 0},

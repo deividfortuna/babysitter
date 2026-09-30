@@ -66,7 +66,11 @@ func protectionApprovals(ctx context.Context, c *github.Client, owner, repo, bra
 	if err != nil {
 		return 0, false, resp, fmt.Errorf("protection of %s/%s branch %s: %w", owner, repo, branch, err)
 	}
-	return p.GetRequiredPullRequestReviews().RequiredApprovingReviewCount, true, resp, nil
+	reviews := p.GetRequiredPullRequestReviews()
+	if reviews == nil {
+		return 0, true, resp, nil
+	}
+	return reviews.RequiredApprovingReviewCount, true, resp, nil
 }
 
 func unprotected(err error) bool {
