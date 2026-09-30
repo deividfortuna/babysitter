@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { CircleAlertIcon, EyeIcon, SearchIcon } from "lucide-react";
+import { CircleAlertIcon, SearchIcon } from "lucide-react";
 import { usePullsByLabel } from "@/hooks/usePulls";
 import { useWatches, type Watch } from "@/hooks/useWatches";
 import { FirstRun } from "@/components/first-run";
@@ -11,7 +11,6 @@ import { WatchRow } from "@/components/watch-row";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
-import { Select, SelectContent, SelectGroup, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import type { Navigate } from "@/lib/navigation";
@@ -25,8 +24,6 @@ import {
   type WatchFilter,
 } from "@/lib/watch-filter";
 import { needsAttention, needsYouFirst, watchLabel } from "@/lib/watch-status";
-
-const ALL = "__all__";
 
 function byRepo(watches: Watch[]): [string, Watch[]][] {
   const map = new Map<string, Watch[]>();
@@ -81,32 +78,27 @@ function FilterBar({ counts, filter, query, onFilterChange, onQueryChange }: Fil
 
 type Props = {
   enabled: boolean;
-  repo?: string;
   onNavigate: Navigate;
   onWatchPR: () => void;
   onAddRepo: () => void;
 };
 
-export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }: Props) {
+export function WatchingView({ enabled, onNavigate, onWatchPR, onAddRepo }: Props) {
   const watches = useWatches(enabled);
   const pulls = usePullsByLabel(enabled);
 
   const [filter, setFilter] = useState<WatchFilter>("all");
   const [query, setQuery] = useState("");
 
-  const repos = useMemo(() => [...new Set((watches.data ?? []).map((w) => w.repo))].sort(), [watches.data]);
-  const inRepo = useMemo(
-    () => (watches.data ?? []).filter((w) => !repo || w.repo === repo).sort(needsYouFirst),
-    [watches.data, repo],
-  );
+  const sorted = useMemo(() => [...(watches.data ?? [])].sort(needsYouFirst), [watches.data]);
   const { counts, pinned, groups } = useMemo(() => {
     const needle = searchNeedle(query);
-    const found = inRepo.filter((w) => watchSearchText(w, pulls.byLabel.get(watchLabel(w))).includes(needle));
+    const found = sorted.filter((w) => watchSearchText(w, pulls.byLabel.get(watchLabel(w))).includes(needle));
     const needsYou: Watch[] = [];
     const rest: Watch[] = [];
     for (const w of found.filter(watchFilters[filter].matches)) (needsAttention(w) ? needsYou : rest).push(w);
     return { counts: countByFilter(found), pinned: needsYou, groups: byRepo(rest) };
-  }, [inRepo, filter, query, pulls.byLabel]);
+  }, [sorted, filter, query, pulls.byLabel]);
   const nothingMatches = pinned.length + groups.length === 0;
 
   function clearFilters() {
@@ -168,93 +160,48 @@ export function WatchingView({ enabled, repo, onNavigate, onWatchPR, onAddRepo }
       <ViewHeader>
         {title}
         <Meta>{all.length} active</Meta>
-        <div className="ml-auto">
-          <Select
-            value={repo ?? ALL}
-            onValueChange={(value) => onNavigate({ kind: "watching", repo: value === ALL ? undefined : value })}
-          >
-            <SelectTrigger size="sm" className="font-mono text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent align="end">
-              <SelectGroup>
-                <SelectItem value={ALL}>all repositories</SelectItem>
-                {repos.map((r) => (
-                  <SelectItem key={r} value={r}>
-                    {r}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-            </SelectContent>
-          </Select>
-        </div>
       </ViewHeader>
 
       <PullsErrorAlert error={pulls.error} />
 
-      {inRepo.length === 0 ? (
+      <FilterBar counts={counts} filter={filter} query={query} onFilterChange={setFilter} onQueryChange={setQuery} />
+      {nothingMatches ? (
         <Empty className="py-16">
           <EmptyHeader>
             <EmptyMedia variant="icon">
-              <EyeIcon />
+              <SearchIcon />
             </EmptyMedia>
-            <EmptyTitle>No watch in {repo}</EmptyTitle>
-            <EmptyDescription>Pull requests of this repository show here once one is watched.</EmptyDescription>
+            <EmptyTitle>No watch matches</EmptyTitle>
+            <EmptyDescription>No watched pull request has this state or text.</EmptyDescription>
           </EmptyHeader>
           <EmptyContent>
-            <Button variant="outline" onClick={() => onNavigate({ kind: "watching" })}>
-              Show every repository
+            <Button variant="outline" onClick={clearFilters}>
+              Clear the filters
             </Button>
           </EmptyContent>
         </Empty>
       ) : (
-        <>
-          <FilterBar
-            counts={counts}
-            filter={filter}
-            query={query}
-            onFilterChange={setFilter}
-            onQueryChange={setQuery}
-          />
-          {nothingMatches ? (
-            <Empty className="py-16">
-              <EmptyHeader>
-                <EmptyMedia variant="icon">
-                  <SearchIcon />
-                </EmptyMedia>
-                <EmptyTitle>No watch matches</EmptyTitle>
-                <EmptyDescription>No watched pull request has this state or text.</EmptyDescription>
-              </EmptyHeader>
-              <EmptyContent>
-                <Button variant="outline" onClick={clearFilters}>
-                  Clear the filters
-                </Button>
-              </EmptyContent>
-            </Empty>
-          ) : (
-            <div className="flex flex-col gap-3 p-3">
-              {pinned.length > 0 ? (
-                <InboxGroup heading={`Needs you · ${pinned.length}`}>{pinned.map(renderRow)}</InboxGroup>
-              ) : null}
-              {groups.map(([name, list]) => (
-                <InboxGroup
-                  key={name}
-                  heading={
-                    <button
-                      type="button"
-                      onClick={() => onNavigate({ kind: "repo", name })}
-                      className="transition-colors hover:text-foreground"
-                    >
-                      {name} · {list.length}
-                    </button>
-                  }
+        <div className="flex flex-col gap-3 p-3">
+          {pinned.length > 0 ? (
+            <InboxGroup heading={`Needs you · ${pinned.length}`}>{pinned.map(renderRow)}</InboxGroup>
+          ) : null}
+          {groups.map(([name, list]) => (
+            <InboxGroup
+              key={name}
+              heading={
+                <button
+                  type="button"
+                  onClick={() => onNavigate({ kind: "repo", name })}
+                  className="transition-colors hover:text-foreground"
                 >
-                  {list.map(renderRow)}
-                </InboxGroup>
-              ))}
-            </div>
-          )}
-        </>
+                  {name} · {list.length}
+                </button>
+              }
+            >
+              {list.map(renderRow)}
+            </InboxGroup>
+          ))}
+        </div>
       )}
     </div>
   );

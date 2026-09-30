@@ -1,4 +1,4 @@
-import { type ComponentProps, useMemo, useState } from "react";
+import { type ComponentProps, useMemo } from "react";
 import {
   ArchiveIcon,
   BellIcon,
@@ -24,6 +24,7 @@ import type { SettingsCategory } from "@/components/settings-dialog";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { initials } from "@/lib/initials";
 import { Tip } from "@/components/tip";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -275,19 +276,17 @@ export function AppSidebar({
   );
 }
 
-function Avatar({ viewer }: { viewer?: Viewer }) {
-  const [broken, setBroken] = useState(false);
+type ViewerAvatarProps = { viewer?: Viewer; className?: string };
+
+function ViewerAvatar({ viewer, className }: ViewerAvatarProps) {
   const label = viewer ? initials(viewer.name?.trim() || viewer.login) : null;
   return (
-    <span className="flex size-7 shrink-0 items-center justify-center overflow-hidden rounded-full bg-accent text-3xs font-semibold text-muted-foreground">
-      {viewer?.avatarUrl && !broken ? (
-        <img src={viewer.avatarUrl} alt="" className="size-full object-cover" onError={() => setBroken(true)} />
-      ) : label ? (
-        label
-      ) : (
-        <UserRoundIcon className="size-3.5" />
-      )}
-    </span>
+    <Avatar className={className}>
+      {viewer?.avatarUrl ? <AvatarImage src={viewer.avatarUrl} alt="" /> : null}
+      <AvatarFallback className="bg-accent text-3xs font-semibold text-muted-foreground">
+        {label ?? <UserRoundIcon className="size-3" />}
+      </AvatarFallback>
+    </Avatar>
   );
 }
 
@@ -300,15 +299,15 @@ function AccountRow({ viewer, onOpenSettings }: AccountRowProps) {
   const name = viewer?.name?.trim() || viewer?.login || "No account";
   return (
     <div className="flex items-center gap-2.5 px-0.5 pt-1">
-      <Avatar viewer={viewer} />
+      <ViewerAvatar viewer={viewer} className="size-5" />
       <span
-        className={cn("min-w-0 flex-1 truncate text-sm", !viewer && "text-muted-foreground")}
+        className={cn("min-w-0 flex-1 truncate text-xs", !viewer && "text-muted-foreground")}
         title={viewer?.login ? `@${viewer.login}` : undefined}
       >
         {name}
       </span>
       <Tip label="Report an issue">
-        <Button asChild variant="ghost" size="icon-sm" className="text-muted-foreground">
+        <Button asChild variant="ghost" size="icon-xs" className="text-muted-foreground">
           <a href={issuesURL} target="_blank" rel="noreferrer" aria-label="Report an issue">
             <MessageCircleIcon />
           </a>
@@ -317,7 +316,7 @@ function AccountRow({ viewer, onOpenSettings }: AccountRowProps) {
       <Tip label="Settings">
         <Button
           variant="ghost"
-          size="icon-sm"
+          size="icon-xs"
           className="text-muted-foreground"
           aria-label="Settings"
           onClick={onOpenSettings}

@@ -41,21 +41,6 @@ test("groups active pull requests by repository and opens a selected pull reques
   expect(onNavigate).toHaveBeenCalledWith({ kind: "watch", id: 42 });
 });
 
-test("offers to clear a repository filter with no active pull requests", async () => {
-  const onNavigate = vi.fn();
-  const user = userEvent.setup();
-  serveApi({ watches: [buildWatch({ repo: "octo/other" })] });
-
-  renderWithProviders(
-    <WatchingView enabled repo="octo/babysitter" onNavigate={onNavigate} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />,
-  );
-
-  expect(await screen.findByText("No watch in octo/babysitter")).toBeVisible();
-  await user.click(screen.getByRole("button", { name: "Show every repository" }));
-
-  expect(onNavigate).toHaveBeenCalledWith({ kind: "watching" });
-});
-
 test("pins the watches that wait on the author above the repositories", async () => {
   serveApi({
     watches: [
