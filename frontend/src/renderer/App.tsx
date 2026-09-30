@@ -78,15 +78,7 @@ export function App() {
   function screen() {
     switch (view.kind) {
       case "watching":
-        return (
-          <WatchingView
-            enabled={ready}
-            repo={view.repo}
-            onNavigate={navigate}
-            onWatchPR={openStart}
-            onAddRepo={openAddRepo}
-          />
-        );
+        return <WatchingView enabled={ready} onNavigate={navigate} onWatchPR={openStart} onAddRepo={openAddRepo} />;
       case "repo":
         return (
           <RepoView
