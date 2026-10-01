@@ -10,7 +10,8 @@ import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import { macSigning, updateResources } from "./scripts/mac-signing";
 import { windowsVersion } from "./scripts/release-channel";
 
-const appVersion = process.platform === "win32" && process.env.VERSION ? windowsVersion(process.env.VERSION) : undefined;
+const appVersion =
+  process.platform === "win32" && process.env.VERSION ? windowsVersion(process.env.VERSION) : undefined;
 
 const config: ForgeConfig = {
   packagerConfig: {
