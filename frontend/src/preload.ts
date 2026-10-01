@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
+import type { MenuAnchor } from "./shared/app-menu";
 import type { DaemonStatus } from "./shared/daemon-status";
 import type { LogRecord, OpenLogFolderResult } from "./shared/logs";
 import type { DesktopNotification, NotificationClick } from "./shared/notifications";
@@ -6,6 +7,7 @@ import { isQuitShortcutHint, type QuitShortcutHint } from "./shared/quit";
 import type { ThemePreference } from "./shared/theme";
 import {
   APP_GET_VERSION_CHANNEL,
+  APP_MENU_POPUP_CHANNEL,
   DAEMON_GET_STATUS_CHANNEL,
   DAEMON_RESTART_CHANNEL,
   DAEMON_STATUS_CHANNEL,
@@ -39,6 +41,7 @@ export type BabysitterBridge = {
   };
   app: {
     getVersion(): Promise<string>;
+    popupMenu(anchor: MenuAnchor): void;
   };
   dialog: {
     pickDirectory(defaultPath?: string): Promise<string | null>;
@@ -85,6 +88,7 @@ const bridge: BabysitterBridge = {
   },
   app: {
     getVersion: () => ipcRenderer.invoke(APP_GET_VERSION_CHANNEL),
+    popupMenu: (anchor) => ipcRenderer.send(APP_MENU_POPUP_CHANNEL, anchor),
   },
   dialog: {
     pickDirectory: (defaultPath) => ipcRenderer.invoke(DIALOG_PICK_DIRECTORY_CHANNEL, defaultPath),

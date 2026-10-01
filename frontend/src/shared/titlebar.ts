@@ -2,15 +2,24 @@ export const TITLEBAR_HEIGHT = 48;
 
 export const TITLEBAR_NAV_LEFT = 80;
 
+export const TITLEBAR_NAV_INSET = 12;
+
 const TITLEBAR_NAV_BUTTON = 28;
 const TITLEBAR_NAV_BUTTON_GAP = 2;
 const TITLEBAR_NAV_BUTTONS = 3;
 const TITLEBAR_NAV_MARGIN = 24;
 
-export const TITLEBAR_NAV_WIDTH =
-  TITLEBAR_NAV_BUTTONS * TITLEBAR_NAV_BUTTON + (TITLEBAR_NAV_BUTTONS - 1) * TITLEBAR_NAV_BUTTON_GAP;
+function navWidth(buttons: number): number {
+  return buttons * TITLEBAR_NAV_BUTTON + (buttons - 1) * TITLEBAR_NAV_BUTTON_GAP;
+}
 
-export const TITLEBAR_NAV_CLEARANCE = TITLEBAR_NAV_LEFT + TITLEBAR_NAV_WIDTH + TITLEBAR_NAV_MARGIN;
+export const TITLEBAR_NAV_WIDTH = navWidth(TITLEBAR_NAV_BUTTONS);
+
+export const TITLEBAR_NAV_WIDTH_WITH_MENU = navWidth(TITLEBAR_NAV_BUTTONS + 1);
+
+export function titlebarNavClearance(left: number, width: number): number {
+  return left + width + TITLEBAR_NAV_MARGIN;
+}
 
 export const MAC_WINDOW_BUTTON_HEIGHT = 14;
 

@@ -128,7 +128,7 @@ export function AppSidebar({
 
   return (
     <Sidebar {...props}>
-      <SidebarHeader className="h-titlebar" />
+      <SidebarHeader className="h-titlebar app-drag" />
 
       <SidebarContent>
         <SidebarGroup>

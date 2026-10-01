@@ -18,20 +18,27 @@ afterEach(() => {
 test("sticks to the top of the view so the title stays in the top bar", () => {
   render(<ViewHeader>Stopped</ViewHeader>);
 
-  expect(screen.getByRole("banner")).toHaveClass("sticky", "top-0");
+  expect(screen.getByRole("banner")).toHaveClass("sticky", "top-0", "min-h-titlebar");
 });
 
-test("on macOS drags the window and clears the window buttons when the sidebar collapses", () => {
-  platform.isMac = true;
-
+test("drags the window and clears the navigation buttons when the sidebar collapses", () => {
   render(<ViewHeader>Stopped</ViewHeader>);
 
   expect(screen.getByRole("banner")).toHaveClass("app-drag", clearsWindowButtonsWhenSidebarCollapses);
 });
 
-test("elsewhere leaves dragging and the header padding to the native window frame", () => {
+test("off macOS keeps its content out from under the window buttons", () => {
   render(<ViewHeader>Stopped</ViewHeader>);
 
-  expect(screen.getByRole("banner")).not.toHaveClass("app-drag");
-  expect(screen.getByRole("banner")).not.toHaveClass(clearsWindowButtonsWhenSidebarCollapses);
+  expect(screen.getByRole("banner")).toHaveClass("pr-window-controls");
+  expect(screen.getByRole("banner")).not.toHaveClass("pr-5");
+});
+
+test("on macOS keeps the usual inset, since the window buttons sit at the left", () => {
+  platform.isMac = true;
+
+  render(<ViewHeader>Stopped</ViewHeader>);
+
+  expect(screen.getByRole("banner")).toHaveClass("pr-5");
+  expect(screen.getByRole("banner")).not.toHaveClass("pr-window-controls");
 });

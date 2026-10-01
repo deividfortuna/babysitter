@@ -25,6 +25,7 @@ export const bridge: BabysitterBridge = window.babysitter ?? {
   },
   app: {
     getVersion: async () => BROWSER_VERSION,
+    popupMenu: () => undefined,
   },
   dialog: {
     pickDirectory: async () => null,

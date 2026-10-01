@@ -1,12 +1,13 @@
-import type { ReactNode } from "react";
-import { ArrowLeftIcon, ArrowRightIcon } from "lucide-react";
+import type { MouseEvent, ReactNode } from "react";
+import { ArrowLeftIcon, ArrowRightIcon, MenuIcon } from "lucide-react";
 import { Tip } from "@/components/tip";
 import { Button } from "@/components/ui/button";
 import { Kbd } from "@/components/ui/kbd";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { historyShortcuts } from "@/hooks/use-history-shortcuts";
 import type { HistoryControls } from "@/hooks/use-view-history";
-import { isMac } from "@/lib/platform";
+import { bridge } from "@/lib/bridge";
+import { isMac, isWindows } from "@/lib/platform";
 
 function sidebarShortcut(): string {
   return isMac ? "⌘B" : "Ctrl+B";
@@ -44,10 +45,27 @@ function HistoryButton({
   );
 }
 
+function popupMenuUnder(event: MouseEvent<HTMLButtonElement>) {
+  const { left, bottom } = event.currentTarget.getBoundingClientRect();
+  bridge.app.popupMenu({ x: left, y: bottom });
+}
+
+function MenuButton() {
+  if (!isWindows) return null;
+  return (
+    <Tip side="bottom" label="Menu">
+      <Button variant="ghost" size="icon" className="size-7" aria-label="Menu" onClick={popupMenuUnder}>
+        <MenuIcon />
+      </Button>
+    </Tip>
+  );
+}
+
 function NavigationButtons({ canGoBack, canGoForward, onBack, onForward }: HistoryControls) {
   const shortcuts = historyShortcuts();
   return (
     <>
+      <MenuButton />
       <Tip side="bottom" label={<TipLabel label="Toggle sidebar" shortcut={sidebarShortcut()} />}>
         <SidebarTrigger />
       </Tip>
@@ -61,17 +79,7 @@ function NavigationButtons({ canGoBack, canGoForward, onBack, onForward }: Histo
   );
 }
 
-export function AppHeader(history: HistoryControls) {
-  if (isMac) return null;
-  return (
-    <header className="flex h-10 shrink-0 items-center gap-0.5 px-3">
-      <NavigationButtons {...history} />
-    </header>
-  );
-}
-
 export function TitlebarNav(history: HistoryControls) {
-  if (!isMac) return null;
   return (
     <div
       data-slot="titlebar-nav"

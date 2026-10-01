@@ -1,6 +1,7 @@
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import type { BabysitterBridge } from "./preload";
 import {
+  APP_MENU_POPUP_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
   UPDATES_CHECK_CHANNEL,
   UPDATES_DOWNLOAD_CHANNEL,
@@ -14,6 +15,7 @@ import {
 const electron = vi.hoisted(() => ({
   exposed: null as unknown,
   invoked: [] as unknown[][],
+  sent: [] as unknown[][],
   listeners: new Map<string, (...args: unknown[]) => void>(),
 }));
 
@@ -27,7 +29,9 @@ vi.mock("electron", () => ({
     invoke: async (...args: unknown[]) => {
       electron.invoked.push(args);
     },
-    send() {},
+    send: (...args: unknown[]) => {
+      electron.sent.push(args);
+    },
     on: (channel: string, handler: (...args: unknown[]) => void) => electron.listeners.set(channel, handler),
     off: (channel: string) => electron.listeners.delete(channel),
   },
@@ -37,10 +41,17 @@ let bridge: BabysitterBridge;
 
 beforeEach(async () => {
   electron.invoked.length = 0;
+  electron.sent.length = 0;
   electron.listeners.clear();
   vi.resetModules();
   await import("./preload");
   bridge = electron.exposed as BabysitterBridge;
+});
+
+test("the menu goes to the main process with the point to open it at", () => {
+  bridge.app.popupMenu({ x: 12, y: 38 });
+
+  expect(electron.sent).toEqual([[APP_MENU_POPUP_CHANNEL, { x: 12, y: 38 }]]);
 });
 
 test("each update call goes to its channel", async () => {
