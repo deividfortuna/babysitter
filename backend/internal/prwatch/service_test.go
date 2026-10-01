@@ -368,15 +368,22 @@ func (f *fakeRelease) Fetch(_ context.Context, dir, branch string) (string, erro
 	return f.remote, f.fetchErr
 }
 
-func (f *fakeRelease) FetchFrom(_ context.Context, dir, url, branch string) (string, error) {
+func (f *fakeRelease) FetchFrom(_ context.Context, dir, remote, branch string) (string, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.fetchDirs = append(f.fetchDirs, dir)
-	f.fetchURLs = append(f.fetchURLs, url)
-	if sha, ok := f.upstream[branch]; ok {
+	f.fetchURLs = append(f.fetchURLs, remote)
+	branches := f.upstream
+	if remote == "origin" {
+		branches = f.branches
+	}
+	if sha, ok := branches[branch]; ok {
 		return sha, f.fetchErr
 	}
-	return "", fmt.Errorf("no branch %s in %s", branch, url)
+	if remote == "origin" {
+		return f.remote, f.fetchErr
+	}
+	return "", fmt.Errorf("no branch %s in %s", branch, remote)
 }
 
 func (f *fakeRelease) Head(context.Context, string) (string, error) {

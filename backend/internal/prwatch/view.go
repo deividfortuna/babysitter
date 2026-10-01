@@ -117,7 +117,7 @@ func (s *Service) fetchBase(ctx context.Context, dir string, w store.Watch) (str
 	}
 	baseRepo := w.Owner + "/" + w.Name
 	if strings.EqualFold(owner+"/"+name, baseRepo) {
-		return s.rel.Fetch(ctx, dir, w.BaseRef)
+		return s.rel.FetchFrom(ctx, dir, "origin", w.BaseRef)
 	}
 	return s.rel.FetchFrom(ctx, dir, siblingURL(origin, baseRepo), w.BaseRef)
 }

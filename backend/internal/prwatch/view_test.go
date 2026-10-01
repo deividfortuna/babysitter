@@ -99,6 +99,11 @@ func TestDiffGoesFromTheMergeBaseToThePushedHead(t *testing.T) {
 	if d.Base != "m1" || d.Head != "abc" || !strings.Contains(d.Diff, "-m1\n+abc") {
 		t.Fatalf("Diff() = %+v, want from the merge base m1 to the head abc", d)
 	}
+	var remotes []string
+	fx.rel.set(func(f *fakeRelease) { remotes = slices.Clone(f.fetchURLs) })
+	if !slices.Equal(remotes, []string{"origin"}) {
+		t.Fatalf("base fetched from %v, want origin into no shared ref", remotes)
+	}
 }
 
 func TestDiffInAShallowCheckoutSaysToUnshallowIt(t *testing.T) {
