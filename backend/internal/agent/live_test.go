@@ -4,8 +4,8 @@ package agent_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
+	"log/slog"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -21,53 +21,94 @@ import (
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/agent/claude"
 	"github.com/deividfortuna/babysitter/internal/agent/copilot"
+	"github.com/deividfortuna/babysitter/internal/httpd"
+	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/runfile"
 )
 
 const liveWatch = "7"
 
-type recordingDaemon struct {
+const (
+	daemonCheck  = "daemon-check"
+	daemonSilent = "daemon-silent"
+)
+
+type liveWatches struct {
+	httpd.WatchController
 	mu       sync.Mutex
 	toolUses []string
+	holds    []time.Duration
+}
+
+func (c *liveWatches) Hook(ctx context.Context, _ int64, event string, payload []byte) (prwatch.Verdict, error) {
+	if event != agent.EventPreToolUse {
+		return prwatch.ToolVerdict(event, payload, true), nil
+	}
+	c.mu.Lock()
+	c.toolUses = append(c.toolUses, string(payload))
+	c.mu.Unlock()
+	switch {
+	case strings.Contains(string(payload), daemonSilent):
+		start := time.Now()
+		<-ctx.Done()
+		c.mu.Lock()
+		c.holds = append(c.holds, time.Since(start))
+		c.mu.Unlock()
+		return prwatch.Verdict{}, ctx.Err()
+	case strings.Contains(string(payload), daemonCheck):
+		return prwatch.Verdict{Deny: true, Reason: "babysitter live check: the daemon refuses " + daemonCheck}, nil
+	}
+	return prwatch.ToolVerdict(event, payload, true), nil
+}
+
+type liveDaemon struct {
+	watches  *liveWatches
+	hooks    http.Handler
+	mu       sync.Mutex
 	requests []string
 }
 
-func (d *recordingDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-	if r.URL.Path == "/api/v1/watches/"+liveWatch+"/hook" {
-		var body struct {
-			Event   string         `json:"event"`
-			Payload map[string]any `json:"payload"`
-		}
-		_ = json.NewDecoder(r.Body).Decode(&body)
-		if body.Event == agent.EventPreToolUse {
-			payload, _ := json.Marshal(body.Payload)
-			d.toolUses = append(d.toolUses, string(payload))
-		}
-		w.WriteHeader(http.StatusNoContent)
+func newLiveDaemon(t *testing.T) *liveDaemon {
+	watches := &liveWatches{}
+	return &liveDaemon{
+		watches: watches,
+		hooks:   httpd.NewRouter(httpd.Deps{Watches: watches, Log: slog.New(slog.NewTextHandler(t.Output(), nil))}),
+	}
+}
+
+func (d *liveDaemon) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	if r.URL.Path == httpd.Prefix+"/watches/"+liveWatch+"/hook" {
+		d.hooks.ServeHTTP(w, r)
 		return
 	}
+	d.mu.Lock()
 	d.requests = append(d.requests, r.Method+" "+r.URL.Path)
+	d.mu.Unlock()
 	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprint(w, `{"id":`+liveWatch+`}`)
 }
 
-func (d *recordingDaemon) reset() {
+func (d *liveDaemon) reset() {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	d.toolUses, d.requests = nil, nil
+	d.requests = nil
+	d.mu.Unlock()
+	d.watches.mu.Lock()
+	d.watches.toolUses, d.watches.holds = nil, nil
+	d.watches.mu.Unlock()
 }
 
-func (d *recordingDaemon) snapshot() ([]string, []string) {
+func (d *liveDaemon) snapshot() (toolUses, requests []string, holds []time.Duration) {
 	d.mu.Lock()
-	defer d.mu.Unlock()
-	return slices.Clone(d.toolUses), slices.Clone(d.requests)
+	requests = slices.Clone(d.requests)
+	d.mu.Unlock()
+	d.watches.mu.Lock()
+	defer d.watches.mu.Unlock()
+	return slices.Clone(d.watches.toolUses), requests, slices.Clone(d.watches.holds)
 }
 
 type liveEnv struct {
 	bin, dataDir, worktree, claudeConfig string
-	daemon                               *recordingDaemon
+	daemon                               *liveDaemon
 }
 
 func startLiveEnv(t *testing.T) *liveEnv {
@@ -78,7 +119,7 @@ func startLiveEnv(t *testing.T) *liveEnv {
 		dataDir:      filepath.Join(root, "data"),
 		worktree:     filepath.Join(root, "worktree"),
 		claudeConfig: filepath.Join(root, ".claude.json"),
-		daemon:       &recordingDaemon{},
+		daemon:       newLiveDaemon(t),
 	}
 	build := exec.Command("go", "build", "-o", env.bin, "github.com/deividfortuna/babysitter/cmd/babysitter")
 	if out, err := build.CombinedOutput(); err != nil {
@@ -202,7 +243,7 @@ func TestLiveAgentsRefuseTheDecisionsOfTheAuthor(t *testing.T) {
 				e.daemon.reset()
 				argv, env := p.argv(t, e, livePrompt(command))
 				out := e.run(t, argv, env)
-				toolUses, requests := e.daemon.snapshot()
+				toolUses, requests, _ := e.daemon.snapshot()
 				if !slices.ContainsFunc(toolUses, func(u string) bool { return strings.Contains(u, "watch ") }) {
 					t.Fatalf("the agent never tried the command, so nothing was checked\ntool uses: %v\noutput:\n%s", toolUses, out)
 				}
@@ -216,11 +257,35 @@ func TestLiveAgentsRefuseTheDecisionsOfTheAuthor(t *testing.T) {
 			e.daemon.reset()
 			argv, env := p.argv(t, e, livePrompt(allowed))
 			out := e.run(t, argv, env)
-			_, requests := e.daemon.snapshot()
+			_, requests, _ := e.daemon.snapshot()
 			if !slices.ContainsFunc(requests, func(r string) bool { return strings.HasSuffix(r, "/watches/"+liveWatch+"/reply") }) {
 				t.Fatalf("the reply did not reach the daemon: %v\noutput:\n%s", requests, out)
 			}
 			t.Logf("allowed; requests: %v", requests)
 		})
+		if p.name == "claude-hook-only" {
+			continue
+		}
+		for _, marker := range []string{daemonCheck, daemonSilent} {
+			t.Run(p.name+"/applies the verdict of the daemon on touch "+marker, func(t *testing.T) {
+				e.daemon.reset()
+				target := filepath.Join(e.worktree, marker)
+				argv, env := p.argv(t, e, livePrompt("touch "+marker))
+				out := e.run(t, argv, env)
+				toolUses, _, holds := e.daemon.snapshot()
+				if !slices.ContainsFunc(toolUses, func(u string) bool { return strings.Contains(u, marker) }) {
+					t.Fatalf("the agent never tried the command, so nothing was checked\ntool uses: %v\noutput:\n%s", toolUses, out)
+				}
+				if _, err := os.Stat(target); err == nil {
+					t.Fatalf("the tool ran although the daemon did not allow it\noutput:\n%s", out)
+				}
+				for _, hold := range holds {
+					if hold >= 10*time.Second {
+						t.Fatalf("the hook waited %s on a silent daemon, past the hook timeout of the agent", hold)
+					}
+				}
+				t.Logf("refused; tool uses: %v, waits on a silent daemon: %v", toolUses, holds)
+			})
+		}
 	}
 }

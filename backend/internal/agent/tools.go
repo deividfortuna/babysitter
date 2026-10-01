@@ -141,13 +141,15 @@ func flagTakesNextWord(flag string) bool {
 	return strings.HasPrefix(flag, "--") || len(flag) == 2
 }
 
-func RefusesToolUse(event string, payload map[string]any) bool {
+func RefusesToolUse(event string, payload json.RawMessage) bool {
 	return event == EventPreToolUse && IsAuthorDecision(toolCommand(payload))
 }
 
-func toolCommand(payload map[string]any) string {
+func toolCommand(payload json.RawMessage) string {
+	var fields map[string]any
+	_ = json.Unmarshal(payload, &fields)
 	for _, key := range []string{"toolArgs", "tool_input"} {
-		if command, ok := toolArgs(payload[key])["command"].(string); ok {
+		if command, ok := toolArgs(fields[key])["command"].(string); ok {
 			return command
 		}
 	}

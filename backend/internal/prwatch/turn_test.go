@@ -18,7 +18,7 @@ import (
 
 func (fx *fixture) hook(w store.Watch, event, payload string) {
 	fx.t.Helper()
-	if err := fx.svc.Hook(context.Background(), w.ID, event, []byte(payload)); err != nil {
+	if _, err := fx.svc.Hook(context.Background(), w.ID, event, []byte(payload)); err != nil {
 		fx.t.Fatalf("Hook(%s) error = %v", event, err)
 	}
 	fx.svc.wg.Wait()
@@ -258,11 +258,11 @@ func TestATurnThatEndsBeforeTheSendReturnsIsClosed(t *testing.T) {
 	h := fx.host.last()
 	h.mu.Lock()
 	h.onSend = func() {
-		if err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil {
+		if _, err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil {
 			t.Error(err)
 		}
 		fx.rel.commit("abc", "w1")
-		if err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil {
+		if _, err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil {
 			t.Error(err)
 		}
 	}
@@ -287,7 +287,7 @@ func TestASendThatFailsKeepsTheTurnThatEnded(t *testing.T) {
 	fx.rel.commit("abc", "w1")
 	release := make(chan struct{})
 	fx.svc.spawn(fx.svc.turns.queue(w.ID, func() { <-release }))
-	if err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil {
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil {
 		t.Fatal(err)
 	}
 	h := fx.host.last()
@@ -717,11 +717,11 @@ func TestTheEndOfATurnWaitsForItsStart(t *testing.T) {
 	fx.hook(w, agent.EventStop, `{}`)
 	for i := range 20 {
 		unlock := fx.svc.locks.Lock(w.ID)
-		if err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil {
+		if _, err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 		fx.rel.commit(fx.rel.work, fmt.Sprintf("w%d", i))
-		if err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil {
+		if _, err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil {
 			t.Fatal(err)
 		}
 		unlock()

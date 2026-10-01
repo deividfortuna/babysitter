@@ -134,20 +134,45 @@ func (s *Service) Send(ctx context.Context, id int64, text string) (store.Activi
 	return s.deliver(ctx, w, text, summary, deliverAuthor, nil)
 }
 
-func (s *Service) Hook(ctx context.Context, id int64, event string, payload []byte) error {
+type Verdict struct {
+	Deny   bool
+	Reason string
+}
+
+const NoSessionRefusal = "babysitter: the daemon runs no agent session for this watch, so it refuses every tool; " +
+	"stop and say in your final message that the session of the watch is gone"
+
+func (s *Service) Hook(ctx context.Context, id int64, event string, payload []byte) (Verdict, error) {
 	if !agent.ValidEvent(event) {
-		return fmt.Errorf("unknown hook event %q", event)
+		return Verdict{}, fmt.Errorf("unknown hook event %q", event)
 	}
 	l := s.sessions.get(id)
-	if l == nil {
-		return nil
+	verdict := ToolVerdict(event, payload, l != nil)
+	if l != nil {
+		s.reportState(ctx, id, l, event, payload)
 	}
+	return verdict, nil
+}
+
+func ToolVerdict(event string, payload []byte, hasSession bool) Verdict {
+	switch {
+	case event != agent.EventPreToolUse:
+		return Verdict{}
+	case !hasSession:
+		return Verdict{Deny: true, Reason: NoSessionRefusal}
+	case agent.RefusesToolUse(event, payload):
+		return Verdict{Deny: true, Reason: agent.AuthorDecisionRefusal}
+	}
+	return Verdict{}
+}
+
+func (s *Service) reportState(ctx context.Context, id int64, l *live, event string, payload []byte) {
 	state, ok := agent.StateOf(event, payload)
 	if !ok {
-		return nil
+		return
 	}
 	if !l.report(state, s.now()) {
-		return nil
+		return
 	}
 	s.store.PublishSession(l.key)
 	switch {
@@ -157,7 +182,6 @@ func (s *Service) Hook(ctx context.Context, id int64, event string, payload []by
 	case state.EndsTurn():
 		s.queueEndTurn(id, l.turnSeq())
 	}
-	return nil
 }
 
 type TerminalSize struct {

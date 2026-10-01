@@ -553,6 +553,23 @@ type HookRequest struct {
 	Payload map[string]any `json:"payload"`
 }
 
+type HookResponse struct {
+	Decision string `json:"decision" enum:"allow,deny" description:"For pre-tool-use, whether the agent may run the tool; every other event gets allow"`
+	Reason   string `json:"reason,omitempty" description:"Why the daemon refuses the tool, for the agent to read"`
+}
+
+const (
+	HookAllow = "allow"
+	HookDeny  = "deny"
+)
+
+func hookResponse(v prwatch.Verdict) HookResponse {
+	if v.Deny {
+		return HookResponse{Decision: HookDeny, Reason: v.Reason}
+	}
+	return HookResponse{Decision: HookAllow}
+}
+
 type Activity struct {
 	ID         int64              `json:"id"`
 	WatchID    int64              `json:"watchId"`

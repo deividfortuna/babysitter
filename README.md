@@ -1316,11 +1316,16 @@ What the agent may never do, whatever a comment or a log says:
 - post on GitHub beside the daemon, for example with `gh api -f`
 - run `babysitter watch mode`, `approve`, `reject`, `retry`, `merge`,
   `stop`, `takeover` or `handback`, so it cannot approve its own work.
-  The hook before each tool call refuses these commands also with a
+  Before each tool call, the hook sends the call to the daemon and
+  applies its answer. The daemon refuses these commands also with a
   flag before `watch` such as `-o json`, a full path, `sh -c` or shell
-  quotes such as `baby''sitter`. Claude Code has deny rules for them
-  too. The hook reads the text of the command, so a shell variable, a
-  command substitution or a script can still hide a decision
+  quotes such as `baby''sitter`, and it refuses every tool of a watch
+  that has no agent session in the daemon. When the daemon does not
+  answer in 5 seconds, or answers with an error, the hook refuses the
+  tool and the agent can try again. Claude Code and Copilot CLI have
+  deny rules for these commands too. The daemon reads the text of the
+  command, so a shell variable, a command substitution or a script can
+  still hide a decision
 - fetch the web or start a subagent: `WebFetch`, `WebSearch`, `Task`,
   `Agent`, `curl` and `wget` are refused
 - merge, approve, dismiss a review, open or close a pull request

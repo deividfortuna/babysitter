@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -118,29 +119,30 @@ func TestIsAuthorDecisionTakesEverySpellingOfADecision(t *testing.T) {
 func TestRefusesToolUseReadsTheCommandOfEveryAgent(t *testing.T) {
 	t.Parallel()
 	const decision = "babysitter -o json watch reject 1 --reason x"
-	refused := []map[string]any{
-		{"toolName": "bash", "toolArgs": map[string]any{"command": decision}},
-		{"toolName": "bash", "toolArgs": `{"command":"` + decision + `"}`},
-		{"tool_name": "Bash", "tool_input": map[string]any{"command": decision}},
+	refused := []string{
+		`{"toolName":"bash","toolArgs":{"command":"` + decision + `"}}`,
+		`{"toolName":"bash","toolArgs":"{\"command\":\"` + decision + `\"}"}`,
+		`{"tool_name":"Bash","tool_input":{"command":"` + decision + `"}}`,
 	}
 	for _, payload := range refused {
-		if !RefusesToolUse(EventPreToolUse, payload) {
-			t.Errorf("RefusesToolUse(%v) = false", payload)
+		if !RefusesToolUse(EventPreToolUse, json.RawMessage(payload)) {
+			t.Errorf("RefusesToolUse(%s) = false", payload)
 		}
-		if RefusesToolUse(EventPostToolUse, payload) {
-			t.Errorf("RefusesToolUse() refuses a tool that already ran: %v", payload)
+		if RefusesToolUse(EventPostToolUse, json.RawMessage(payload)) {
+			t.Errorf("RefusesToolUse() refuses a tool that already ran: %s", payload)
 		}
 	}
-	allowed := []map[string]any{
-		{"toolName": "bash", "toolArgs": map[string]any{"command": "babysitter watch reply 1 done"}},
-		{"tool_name": "Read", "tool_input": map[string]any{"file_path": decision}},
-		{"toolName": "bash", "toolArgs": "not json"},
-		{},
-		nil,
+	allowed := []string{
+		`{"toolName":"bash","toolArgs":{"command":"babysitter watch reply 1 done"}}`,
+		`{"tool_name":"Read","tool_input":{"file_path":"` + decision + `"}}`,
+		`{"toolName":"bash","toolArgs":"not json"}`,
+		`{}`,
+		`not json`,
+		``,
 	}
 	for _, payload := range allowed {
-		if RefusesToolUse(EventPreToolUse, payload) {
-			t.Errorf("RefusesToolUse(%v) = true", payload)
+		if RefusesToolUse(EventPreToolUse, json.RawMessage(payload)) {
+			t.Errorf("RefusesToolUse(%s) = true", payload)
 		}
 	}
 }

@@ -1020,8 +1020,12 @@ paths:
             schema:
               $ref: '#/components/schemas/HookParams'
       responses:
-        "204":
-          description: No Content
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdHookResponse'
+          description: OK
         "400":
           content:
             application/json:
@@ -1041,7 +1045,8 @@ paths:
                 $ref: '#/components/schemas/HttpdAPIError'
           description: Service Unavailable
       summary: Report an event of the agent of a watched pull request. The hook command
-        of the agent calls it.
+        of the agent calls it. For pre-tool-use, the answer tells if the agent may
+        run the tool.
   /api/v1/watches/{id}/merge:
     post:
       operationId: mergeWatch
@@ -2037,6 +2042,21 @@ components:
       - version
       - pid
       - startedAt
+      type: object
+    HttpdHookResponse:
+      properties:
+        decision:
+          description: For pre-tool-use, whether the agent may run the tool; every
+            other event gets allow
+          enum:
+          - allow
+          - deny
+          type: string
+        reason:
+          description: Why the daemon refuses the tool, for the agent to read
+          type: string
+      required:
+      - decision
       type: object
     HttpdLogAttr:
       properties:
