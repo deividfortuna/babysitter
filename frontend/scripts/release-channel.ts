@@ -103,6 +103,10 @@ export function trainVersion(base: string, channel: Channel, date: Date, run: nu
   return `${base}-${channel}.${day(date)}.${run}`;
 }
 
+export function windowsVersion(version: string): string {
+  return version.replace(/-(.*)$/, (_, prerelease: string) => `-${prerelease.replaceAll(".", "")}`);
+}
+
 export function stableVersionOf(nightlyTag: string): string {
   const match = TRAIN_VERSION.exec(nightlyTag.slice(1));
   if (!nightlyTag.startsWith("v") || match?.[2] !== "nightly") {

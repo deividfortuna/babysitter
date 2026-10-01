@@ -10,6 +10,7 @@ import {
   planRelease,
   stableVersionOf,
   trainVersion,
+  windowsVersion,
 } from "./release-channel";
 
 const sha = "0123456789abcdef0123456789abcdef01234567";
@@ -105,6 +106,11 @@ test("a train version carries the channel, the day and the run", () => {
   expect(trainVersion("0.1.1", "nightly", date, 41)).toBe("0.1.1-nightly.20260928.41");
   expect(trainVersion("0.1.1", "preview", date, 42)).toBe("0.1.1-preview.20260928.42");
   expect(() => trainVersion("0.1.1", "stable", date, 43)).toThrow(/no train/);
+});
+
+test("a Windows version removes dotted prerelease components", () => {
+  expect(windowsVersion("0.1.0-nightly.20260928.41")).toBe("0.1.0-nightly2026092841");
+  expect(windowsVersion("0.1.0")).toBe("0.1.0");
 });
 
 test("the stable version of a nightly is the version it previews", () => {

@@ -8,10 +8,14 @@ import { VitePlugin } from "@electron-forge/plugin-vite";
 import { FusesPlugin } from "@electron-forge/plugin-fuses";
 import { FuseV1Options, FuseVersion } from "@electron/fuses";
 import { macSigning, updateResources } from "./scripts/mac-signing";
+import { windowsVersion } from "./scripts/release-channel";
+
+const appVersion = process.platform === "win32" && process.env.VERSION ? windowsVersion(process.env.VERSION) : undefined;
 
 const config: ForgeConfig = {
   packagerConfig: {
     asar: true,
+    appVersion,
     name: "Babysitter",
     executableName: "babysitter",
     appBundleId: "com.deividfortuna.babysitter",
