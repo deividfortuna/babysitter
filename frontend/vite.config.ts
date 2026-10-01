@@ -2,7 +2,27 @@ import { fileURLToPath, URL } from "node:url";
 import { defineConfig } from "vite-plus";
 import react from "@vitejs/plugin-react";
 
+const isElectron = (id: string) => id === "electron" || id.startsWith("electron/");
+
+const electronProcess = {
+  format: "cjs",
+  outDir: "dist-electron",
+  dts: false,
+  sourcemap: true,
+  outExtensions: () => ({ js: ".cjs" }),
+  outputOptions: { codeSplitting: false },
+  deps: {
+    alwaysBundle: (id: string) => !id.startsWith("node:") && !isElectron(id),
+    neverBundle: isElectron,
+    onlyBundle: false,
+  },
+} as const;
+
 export default defineConfig({
+  pack: [
+    { ...electronProcess, entry: ["src/main.ts"], clean: true },
+    { ...electronProcess, entry: ["src/preload.ts"], clean: false },
+  ],
   assetsInclude: ["**/*.wasm"],
   plugins: [react()],
   resolve: {
@@ -83,7 +103,15 @@ export default defineConfig({
       "typescript/no-misused-promises": "error",
       "vite-plus/prefer-vite-plus-imports": "error",
     },
-    ignorePatterns: [".vite/", "coverage/", "daemon/", "out/", "src/api/schema.ts", "src/renderer/components/ui/"],
+    ignorePatterns: [
+      "coverage/",
+      "daemon/",
+      "dist/",
+      "dist-electron/",
+      "out/",
+      "src/api/schema.ts",
+      "src/renderer/components/ui/",
+    ],
     options: {
       typeAware: true,
       typeCheck: true,
@@ -97,10 +125,11 @@ export default defineConfig({
       functions: ["cn", "cva"],
     },
     ignorePatterns: [
-      ".vite/",
       "components.json",
       "coverage/",
       "daemon/",
+      "dist/",
+      "dist-electron/",
       "out/",
       "pnpm-lock.yaml",
       "src/api/schema.ts",

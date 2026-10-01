@@ -26,16 +26,6 @@
       "@test/*": ["./src/test/*"]
     }
   },
-  "include": [
-    "src/**/*.ts",
-    "src/**/*.tsx",
-    "scripts/**/*.ts",
-    "forge.env.d.ts",
-    "forge.config.ts",
-    "vite.config.ts",
-    "vite.main.config.mts",
-    "vite.preload.config.mts",
-    "vite.renderer.config.mts"
-  ],
-  "exclude": ["node_modules", ".vite", "out", "daemon"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "scripts/**/*.ts", "vite.config.ts", "vite.renderer.config.mts"],
+  "exclude": ["node_modules", "dist", "dist-electron", "out", "daemon"]
 }

@@ -6,9 +6,7 @@ overrides:
 
 allowBuilds:
   electron-winstaller: true
-  fs-xattr: true
   fsevents: true
-  macos-alias: true
   msw: true
 
 peerDependencyRules:

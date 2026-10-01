@@ -105,18 +105,30 @@ pnpm start           # at the root: go install the CLI, then open the app
 cd frontend
 pnpm install
 pnpm start           # compiles the daemon, then opens the app
-pnpm run package     # builds a distributable app in frontend/out
-pnpm run make        # also makes the DMG and the zip in frontend/out/make
+pnpm run package     # builds the app, not packed, in frontend/out/release
+pnpm run make        # also makes the DMG and the zip, or the NSIS installer, in frontend/out/release
 ```
 
-`pnpm start`, `pnpm run package` and `pnpm run make` compile the daemon first
-with `scripts/build-daemon.mjs` into `frontend/daemon/`. The script calls
+`pnpm start` runs `scripts/dev.mjs`. It starts the Vite dev server of the
+renderer and `vp pack --watch` for the main process and the preload, and
+it starts Electron again when one of the two bundles changes.
+
+`pnpm run package` and `pnpm run make` run `scripts/build-desktop.mjs`. It
+compiles the daemon, bundles the app, copies the bundles into
+`frontend/out/stage` and gives that folder to electron-builder, with the
+configuration of `scripts/desktop-builder.ts`. The default is the platform
+and the arch of the machine. `--platform=win32` and `--arch=x64` make
+another one, for example the Windows installer on a Mac. That needs
+`mingw-w64` for the cgo of the daemon.
+
+`pnpm start` and the build compile the daemon with
+`scripts/build-daemon.mjs` into `frontend/daemon/`. The script calls
 `go build`, so Go and a C compiler are required, as for the CLI. Set
 `BABYSITTER_DAEMON_BINARY` to make the app start another binary.
 
-Releases hold the macOS app and the Windows installer. The Forge
-configuration also has makers for Linux, but no workflow builds them. On
-Linux, use the CLI archives.
+Releases hold the macOS app and the Windows installer. The
+electron-builder configuration also has the deb and rpm targets for
+Linux, but no workflow builds them. On Linux, use the CLI archives.
 
 On Windows the agent runs in a pseudo console, ConPTY, and the job object
 that holds it ends the agent and its children when the watch stops or
@@ -137,8 +149,7 @@ The files below are made from those three:
 | `trayTemplate.png`, `trayTemplate@2x.png` | the menu bar of macOS, which tints them itself |
 
 `assets/agents` holds the logos of Claude Code and Copilot that the app
-shows beside a watch. `assets/app-update.yml` tells the updater where the
-releases are.
+shows beside a watch.
 
 Render them with a browser and not with `qlmanage`, which fills the
 transparent background with white and leaves white corners on the tile:

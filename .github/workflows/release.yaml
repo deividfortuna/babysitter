@@ -116,13 +116,16 @@ jobs:
             os: darwin
             arch: arm64
             lipo: arm64
+            unpacked: mac-arm64
           - runner: macos-15-intel
             os: darwin
             arch: x64
             lipo: x86_64
+            unpacked: mac
           - runner: windows-latest
             os: win32
             arch: x64
+            unpacked: win-unpacked
     defaults:
       run:
         working-directory: frontend
@@ -130,11 +133,9 @@ jobs:
     env:
       OS: ${{ matrix.os }}
       ARCH: ${{ matrix.arch }}
+      UNPACKED: out/release/${{ matrix.unpacked }}
       VERSION: ${{ needs.resolve.outputs.version }}
-      BABYSITTER_RELEASE_CHANNEL: ${{ needs.resolve.outputs.channel }}
-      # The daemon needs cgo for SQLite. Go turns it off quietly when it
-      # finds no C compiler, and a daemon without SQLite is no daemon.
-      CGO_ENABLED: "1"
+      FEED: ${{ needs.resolve.outputs.feed }}
       SIGNED: ${{ matrix.os == 'darwin' && secrets.MAC_CERT_P12_BASE64 != '' }}
       UPDATES: ${{ matrix.os == 'darwin' && secrets.MAC_CERT_P12_BASE64 != '' && needs.resolve.outputs.feed != '' }}
     steps:
@@ -209,7 +210,7 @@ jobs:
       - name: Verify the installer
         if: matrix.os == 'win32'
         run: |
-          app="out/Babysitter-win32-$ARCH"
+          app="$UNPACKED"
           daemon="$app/resources/daemon/babysitter.exe"
           if [ ! -f "$app/babysitter.exe" ]; then
             echo "::error::make wrote no app at $app"
@@ -217,14 +218,14 @@ jobs:
           fi
           test "$("$daemon" --version)" = "babysitter version $VERSION"
           test ! -f "$app/resources/app-update.yml"
-          test -f "out/make/squirrel.windows/$ARCH/Babysitter-Setup.exe"
+          test -f "out/release/Babysitter-$VERSION-win32-$ARCH-Setup.exe"
 
       - name: Verify the app
         if: matrix.os == 'darwin'
         env:
           LIPO_ARCH: ${{ matrix.lipo }}
         run: |
-          app="out/Babysitter-darwin-$ARCH/Babysitter.app"
+          app="$UNPACKED/Babysitter.app"
           daemon="$app/Contents/Resources/daemon/babysitter"
           if [ ! -d "$app" ]; then
             echo "::error::make wrote no app at $app"
@@ -243,29 +244,33 @@ jobs:
             test ! -f "$app/Contents/Resources/app-update.yml"
           fi
 
-      - name: Name the assets
+      - name: Collect the assets
         if: matrix.os == 'darwin'
         run: |
-          mkdir -p out/release
-          cp "out/make/dmg/$ARCH/Babysitter.dmg" "out/release/Babysitter-$VERSION-darwin-$ARCH.dmg"
-          cp "out/make/zip/darwin/$ARCH/Babysitter-darwin-$ARCH-$VERSION.zip" "out/release/Babysitter-$VERSION-darwin-$ARCH.zip"
-          cp "out/release/Babysitter-$VERSION-darwin-$ARCH.dmg" "out/release/babysitter-darwin-$ARCH.dmg"
-          cp "out/release/Babysitter-$VERSION-darwin-$ARCH.zip" "out/release/babysitter-darwin-$ARCH.zip"
-          ls -l out/release
+          mkdir -p out/assets
+          for ext in dmg zip; do
+            cp "out/release/Babysitter-$VERSION-darwin-$ARCH.$ext" out/assets/
+            cp "out/release/Babysitter-$VERSION-darwin-$ARCH.$ext" "out/assets/babysitter-darwin-$ARCH.$ext"
+          done
+          if [ "$UPDATES" = "true" ]; then
+            cp out/release/Babysitter-"$VERSION"-darwin-"$ARCH".*.blockmap out/assets/
+            cp "out/release/$FEED" "out/assets/${FEED%.yml}-$ARCH.yml"
+          fi
+          ls -l out/assets
 
-      - name: Name the installer
+      - name: Collect the installer
         if: matrix.os == 'win32'
         run: |
-          mkdir -p out/release
-          cp "out/make/squirrel.windows/$ARCH/Babysitter-Setup.exe" "out/release/Babysitter-$VERSION-win32-$ARCH-Setup.exe"
-          cp "out/release/Babysitter-$VERSION-win32-$ARCH-Setup.exe" "out/release/babysitter-win32-$ARCH-Setup.exe"
-          ls -l out/release
+          mkdir -p out/assets
+          cp "out/release/Babysitter-$VERSION-win32-$ARCH-Setup.exe" out/assets/
+          cp "out/release/Babysitter-$VERSION-win32-$ARCH-Setup.exe" "out/assets/babysitter-win32-$ARCH-Setup.exe"
+          ls -l out/assets
 
       - name: Upload the app
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: desktop-${{ matrix.os }}-${{ matrix.arch }}
-          path: frontend/out/release/*
+          path: frontend/out/assets/*
 
   publish:
     name: Publish
@@ -303,12 +308,11 @@ jobs:
           path: assets
           merge-multiple: true
 
-      - name: Write the feed
+      - name: Merge the feeds
         if: env.UPDATES == 'true'
         run: |
-          node frontend/scripts/write-feed.mjs "$VERSION" \
-            "assets/Babysitter-$VERSION-darwin-arm64.zip" \
-            "assets/Babysitter-$VERSION-darwin-x64.zip" > "assets/$FEED"
+          node frontend/scripts/merge-feed.mjs "assets/${FEED%.yml}-arm64.yml" "assets/${FEED%.yml}-x64.yml" > "assets/$FEED"
+          rm "assets/${FEED%.yml}-arm64.yml" "assets/${FEED%.yml}-x64.yml"
           cat "assets/$FEED"
 
       - name: Write the notes of a preview
