@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"strings"
 
 	"github.com/google/go-github/v91/github"
@@ -96,7 +97,17 @@ func (s *Service) fetchBase(ctx context.Context, dir string, w store.Watch) (str
 	if strings.EqualFold(owner+"/"+name, baseRepo) {
 		return s.rel.Fetch(ctx, dir, w.BaseRef)
 	}
-	return s.rel.FetchFrom(ctx, dir, "https://github.com/"+baseRepo+".git", w.BaseRef)
+	return s.rel.FetchFrom(ctx, dir, siblingURL(origin, baseRepo), w.BaseRef)
+}
+
+func siblingURL(origin, repo string) string {
+	if u, err := url.Parse(origin); err == nil && u.Scheme != "" && u.Scheme != "ssh" {
+		u.User = nil
+		origin = u.String()
+	}
+	path := strings.TrimSuffix(strings.TrimSuffix(origin, "/"), ".git")
+	ownerStart := strings.LastIndexAny(path[:strings.LastIndex(path, "/")], "/:") + 1
+	return path[:ownerStart] + repo + ".git"
 }
 
 func checkoutOf(w store.Watch) string {

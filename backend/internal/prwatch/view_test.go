@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/deividfortuna/babysitter/internal/store"
 )
 
 func TestViewKeepsTheLastSnapshotOfTheWatch(t *testing.T) {
@@ -89,7 +91,7 @@ func TestDiffOfAForkReadsTheBaseFromTheBaseRepository(t *testing.T) {
 	fx.api.Repo("alice/hello")
 	fx.update(func() { fx.pr.HeadRepo = "alice/hello" })
 	fork := t.TempDir()
-	gitIn(t, fork, []string{"init", "-q"}, []string{"remote", "add", "origin", "https://github.com/alice/hello.git"},
+	gitIn(t, fork, []string{"init", "-q"}, []string{"remote", "add", "origin", "git@github.com:alice/hello.git"},
 		[]string{"config", "user.name", "Alice"}, []string{"config", "user.email", "alice@example.com"})
 	fx.co.dir = fork
 	fx.rel.set(func(f *fakeRelease) {
@@ -112,8 +114,25 @@ func TestDiffOfAForkReadsTheBaseFromTheBaseRepository(t *testing.T) {
 	}
 	var urls []string
 	fx.rel.set(func(f *fakeRelease) { urls = slices.Clone(f.fetchURLs) })
-	if !slices.Equal(urls, []string{"https://github.com/octo/hello.git"}) {
-		t.Fatalf("fetched from %v, want the base repository", urls)
+	if len(urls) != 1 {
+		t.Fatalf("fetched from %v, want the base repository once", urls)
+	}
+	if owner, name, err := store.ParseFullName(urls[0]); err != nil || owner+"/"+name != "octo/hello" {
+		t.Fatalf("fetched the base from %s, want octo/hello", urls[0])
+	}
+}
+
+func TestSiblingURLKeepsTheTransportOfOrigin(t *testing.T) {
+	t.Parallel()
+	for origin, want := range map[string]string{
+		"https://github.com/alice/hello.git":                   "https://github.com/octo/hello.git",
+		"https://x-access-token:secret@github.com/alice/hello": "https://github.com/octo/hello.git",
+		"git@github.com:alice/hello.git":                       "git@github.com:octo/hello.git",
+		"ssh://git@github.com/alice/hello.git/":                "ssh://git@github.com/octo/hello.git",
+	} {
+		if got := siblingURL(origin, "octo/hello"); got != want {
+			t.Errorf("siblingURL(%q) = %q, want %q", origin, got, want)
+		}
 	}
 }
 
