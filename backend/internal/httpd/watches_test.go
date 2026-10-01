@@ -618,7 +618,7 @@ func TestSessionRoutesWithoutService(t *testing.T) {
 		{http.MethodPost, "/watches/1/next", ""},
 		{http.MethodGet, "/watches/1/output", ""},
 		{http.MethodGet, "/watches/1/view", ""},
-		{http.MethodGet, "/watches/1/diff", ""},
+		{http.MethodPost, "/watches/1/diff", ""},
 		{http.MethodPost, "/watches/1/hook", `{"event":"stop","payload":{}}`},
 		{http.MethodPost, "/watches/1/resize", `{"rows":40,"cols":120}`},
 	} {
@@ -659,20 +659,23 @@ func TestViewAndDiffRoutes(t *testing.T) {
 	}
 
 	var diff PullRequestDiff
-	if rec := call(t, h, http.MethodGet, "/watches/1/diff", "", &diff); rec.Code != http.StatusOK || diff != (PullRequestDiff{Base: "m1", Head: "abc", Diff: "diff --git a/x.go b/x.go\n"}) {
+	if rec := call(t, h, http.MethodPost, "/watches/1/diff", "", &diff); rec.Code != http.StatusOK || diff != (PullRequestDiff{Base: "m1", Head: "abc", Diff: "diff --git a/x.go b/x.go\n"}) {
 		t.Fatalf("diff: %d %s", rec.Code, rec.Body)
 	}
 	if _, err := st.StopWatch(context.Background(), 2, store.StopUser, nil, time.Now()); err != nil {
 		t.Fatal(err)
 	}
-	if rec := call(t, h, http.MethodGet, "/watches/2/diff", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "watch_stopped") {
+	if rec := call(t, h, http.MethodPost, "/watches/2/diff", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "watch_stopped") {
 		t.Fatalf("diff of a stopped watch: %d %s", rec.Code, rec.Body)
 	}
-	if rec := call(t, h, http.MethodGet, "/watches/3/diff", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "shallow_checkout") {
+	if rec := call(t, h, http.MethodPost, "/watches/3/diff", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "shallow_checkout") {
 		t.Fatalf("diff in a shallow checkout: %d %s", rec.Code, rec.Body)
 	}
-	if rec := call(t, h, http.MethodGet, "/watches/9/diff", "", nil); rec.Code != http.StatusNotFound {
+	if rec := call(t, h, http.MethodPost, "/watches/9/diff", "", nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("diff missing: %d", rec.Code)
+	}
+	if rec := call(t, h, http.MethodGet, "/watches/1/diff", "", nil); rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("diff with GET: %d, want it refused because it fetches", rec.Code)
 	}
 }
 

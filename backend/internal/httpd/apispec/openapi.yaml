@@ -947,7 +947,7 @@ paths:
           description: Service Unavailable
       summary: Change who releases the turns of a watch while it runs
   /api/v1/watches/{id}/diff:
-    get:
+    post:
       operationId: diffWatchPullRequest
       parameters:
       - description: Watch id

@@ -409,10 +409,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The diff of the pull request of an active watch: the daemon fetches the base and the head branch into the worktree and diffs the head against their merge base */
-        get: operations["diffWatchPullRequest"];
+        get?: never;
         put?: never;
-        post?: never;
+        /** The diff of the pull request of an active watch: the daemon fetches the base and the head branch into the worktree and diffs the head against their merge base */
+        post: operations["diffWatchPullRequest"];
         delete?: never;
         options?: never;
         head?: never;

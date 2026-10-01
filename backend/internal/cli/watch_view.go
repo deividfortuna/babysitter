@@ -102,7 +102,7 @@ It makes no call to the GitHub API.`,
 		Args: cobra.ExactArgs(1),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, _ []string) error {
 			var out httpd.PullRequestDiff
-			if err := c.get(cmd.Context(), fmt.Sprintf("/watches/%d/diff", w.ID), &out); err != nil {
+			if err := c.post(cmd.Context(), fmt.Sprintf("/watches/%d/diff", w.ID), nil, &out); err != nil {
 				return err
 			}
 			if err := opts.print(cmd.OutOrStdout(), pullRequestDiff(out)); err != nil {
