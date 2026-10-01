@@ -1,6 +1,10 @@
 package agent
 
-import "slices"
+import (
+	"path/filepath"
+	"slices"
+	"strings"
+)
 
 type ToolFacts struct {
 	WatchID int64
@@ -65,7 +69,7 @@ func (noSession) check(_ ToolCall, f ToolFacts) (string, bool) {
 type commandRule struct {
 	name    string
 	program string
-	names   func(lowered string) bool
+	names   func(lowered string, f ToolFacts) bool
 	path    []string
 	reason  func(ToolFacts) string
 }
@@ -74,7 +78,7 @@ func (r commandRule) id() string { return r.name }
 
 func (r commandRule) check(call ToolCall, f ToolFacts) (string, bool) {
 	for _, invocation := range call.Invocations {
-		if r.names(invocation.lowered) && invocation.runs(r.path) {
+		if r.names(invocation.lowered, f) && invocation.runs(r.path) {
 			return r.reason(f), true
 		}
 	}
@@ -86,13 +90,24 @@ const AuthorDecisionRefusal = "babysitter: only the author runs this command; do
 
 func authorOnly(ToolFacts) string { return AuthorDecisionRefusal }
 
+func namesDaemon(lowered string, f ToolFacts) bool {
+	return namesBabysitter(lowered) || namesExecutable(lowered, f.Exe)
+}
+
+func namesExecutable(lowered, exe string) bool {
+	if exe == "" {
+		return false
+	}
+	return filepath.Base(lowered) == strings.ToLower(filepath.Base(exe))
+}
+
 func authorRules() []toolRule {
 	out := make([]toolRule, 0, len(authorDecisions))
 	for _, decision := range authorDecisions {
 		out = append(out, commandRule{
 			name:    "author-" + decision,
 			program: "babysitter",
-			names:   namesBabysitter,
+			names:   namesDaemon,
 			path:    []string{"watch", decision},
 			reason:  authorOnly,
 		})

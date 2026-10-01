@@ -134,6 +134,31 @@ func TestEveryCommandRuleRefusesEverySpelling(t *testing.T) {
 	}
 }
 
+func TestDecideRefusesADecisionOfTheDaemonExecutable(t *testing.T) {
+	t.Parallel()
+	renamed := ToolFacts{WatchID: 7, Exe: "/opt/tools/watchd", Live: true}
+	for _, command := range []string{
+		"/opt/tools/watchd -o json watch merge 7",
+		"watchd watch approve 7",
+		"WATCHD watch reject 7",
+		"sh -c 'wat''chd --data-dir /tmp/x watch stop 7'",
+		"echo $(/opt/tools/watchd watch merge 7)",
+	} {
+		if v := DecideTool(EventPreToolUse, ParseToolCall(shellCall(command)), renamed); !refusedAsAuthorOnly(v) {
+			t.Errorf("DecideTool(%q) = %+v", command, v)
+		}
+	}
+	for _, command := range []string{
+		"/opt/tools/watchd watch reply 7 done",
+		"/opt/tools/watchd -o json watch status 7",
+		"watchdog watch merge 7",
+	} {
+		if v := DecideTool(EventPreToolUse, ParseToolCall(shellCall(command)), renamed); v.Deny {
+			t.Errorf("DecideTool(%q) = %+v", command, v)
+		}
+	}
+}
+
 func TestDecideReadsTheCommandOfEveryAgent(t *testing.T) {
 	t.Parallel()
 	const decision = "babysitter -o json watch reject 1 --reason x"
