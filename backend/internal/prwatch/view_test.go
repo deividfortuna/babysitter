@@ -5,11 +5,11 @@ import (
 	"errors"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
+	"github.com/deividfortuna/babysitter/internal/testutil"
 )
 
 func TestViewKeepsTheLastSnapshotOfTheWatch(t *testing.T) {
@@ -93,15 +93,14 @@ func TestViewWaitsForTheLockOfTheWatch(t *testing.T) {
 		_, err := fx.svc.View(context.Background(), w.ID)
 		done <- err
 	}()
-	select {
-	case err := <-done:
+	testutil.Eventually(t, func() bool { return fx.lockUsers(w.ID) >= 2 }, "View to wait on the lock of the watch")
+	if _, err := fx.svc.stop(context.Background(), w.ID, store.StopUser, "", StopOptions{}); err != nil {
 		unlock()
-		t.Fatalf("View() returned %v while a stop could hold the lock of the watch", err)
-	case <-time.After(200 * time.Millisecond):
+		t.Fatal(err)
 	}
 	unlock()
-	if err := <-done; err != nil {
-		t.Fatalf("View() after the lock error = %v", err)
+	if err := <-done; !errors.Is(err, ErrWatchStopped) {
+		t.Fatalf("View() during a stop error = %v, want ErrWatchStopped", err)
 	}
 }
 
@@ -141,7 +140,7 @@ func TestDiffWaitsForAStopThatHoldsTheLockOfTheWatch(t *testing.T) {
 		_, err := fx.svc.Diff(context.Background(), w.ID)
 		done <- err
 	}()
-	time.Sleep(200 * time.Millisecond)
+	testutil.Eventually(t, func() bool { return fx.lockUsers(w.ID) >= 2 }, "Diff to wait on the lock of the watch")
 	if _, err := fx.svc.stop(context.Background(), w.ID, store.StopUser, "", StopOptions{}); err != nil {
 		unlock()
 		t.Fatal(err)
