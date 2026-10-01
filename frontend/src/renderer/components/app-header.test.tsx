@@ -5,7 +5,7 @@ import { renderWithProviders } from "@test/test-utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { bridge } from "@/lib/bridge";
 import type { HistoryControls } from "@/hooks/use-view-history";
-import { TitlebarNav, WindowTitlebar } from "./app-header";
+import { TitlebarNav } from "./app-header";
 
 const platform = vi.hoisted(() => ({ isMac: false, isWindows: false }));
 
@@ -32,19 +32,6 @@ function history(overrides: Partial<HistoryControls> = {}): HistoryControls {
 function titlebarNav() {
   return screen.getByRole("button", { name: "Toggle Sidebar" }).closest("[data-slot=titlebar-nav]");
 }
-
-test("off macOS draws a title bar that drags the window under the window buttons", () => {
-  const { container } = renderWithProviders(<WindowTitlebar />, { withSidebar: true });
-
-  expect(container.querySelector("[data-slot=window-titlebar]")).toHaveClass("app-drag", "h-titlebar");
-});
-
-test("on macOS leaves the title bar to the window, which draws its buttons over the views", () => {
-  platform.isMac = true;
-  const { container } = renderWithProviders(<WindowTitlebar />, { withSidebar: true });
-
-  expect(container.querySelector("[data-slot=window-titlebar]")).not.toBeInTheDocument();
-});
 
 test("off Windows puts back and forward after the sidebar toggle", () => {
   renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });

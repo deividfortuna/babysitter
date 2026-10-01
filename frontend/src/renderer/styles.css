@@ -270,3 +270,13 @@
   text-transform: uppercase;
   color: var(--muted-foreground);
 }
+
+/* Off macOS the window draws its buttons over the top right of the app.
+   The title bar area the system reports leaves them out, so this pads
+   the header past them, and keeps the usual inset when there are none. */
+@utility pr-window-controls {
+  padding-right: max(
+    --spacing(5),
+    calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + --spacing(3))
+  );
+}

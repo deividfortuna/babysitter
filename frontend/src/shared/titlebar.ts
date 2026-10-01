@@ -17,7 +17,9 @@ export const TITLEBAR_NAV_WIDTH = navWidth(TITLEBAR_NAV_BUTTONS);
 
 export const TITLEBAR_NAV_WIDTH_WITH_MENU = navWidth(TITLEBAR_NAV_BUTTONS + 1);
 
-export const TITLEBAR_NAV_CLEARANCE = TITLEBAR_NAV_LEFT + TITLEBAR_NAV_WIDTH + TITLEBAR_NAV_MARGIN;
+export function titlebarNavClearance(left: number, width: number): number {
+  return left + width + TITLEBAR_NAV_MARGIN;
+}
 
 export const MAC_WINDOW_BUTTON_HEIGHT = 14;
 

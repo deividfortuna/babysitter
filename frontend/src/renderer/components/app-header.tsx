@@ -79,11 +79,6 @@ function NavigationButtons({ canGoBack, canGoForward, onBack, onForward }: Histo
   );
 }
 
-export function WindowTitlebar() {
-  if (isMac) return null;
-  return <div data-slot="window-titlebar" className="h-titlebar shrink-0 app-drag" />;
-}
-
 export function TitlebarNav(history: HistoryControls) {
   return (
     <div
