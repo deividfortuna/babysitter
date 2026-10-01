@@ -31,7 +31,7 @@ func TestTheCommandOfTheAuthorContinuesTheConversationWithNoRules(t *testing.T) 
 			HasTrustDialogAccepted bool `json:"hasTrustDialogAccepted"`
 		} `json:"projects"`
 	}
-	if err := json.Unmarshal(data, &config); err != nil || !config.Projects[l.WorktreeDir].HasTrustDialogAccepted {
+	if err := json.Unmarshal(data, &config); err != nil || !config.Projects[filepath.ToSlash(l.WorktreeDir)].HasTrustDialogAccepted {
 		t.Fatalf("the worktree is not trusted: %s, %v", data, err)
 	}
 }

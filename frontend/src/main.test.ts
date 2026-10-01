@@ -29,6 +29,8 @@ const electron = vi.hoisted(() => ({
   daemonStops: "at once" as "at once" | "never",
   updateSettings: {} as Record<string, unknown>,
   attention: 0,
+  squirrelLaunch: false,
+  daemonStarts: 0,
 }));
 
 vi.mock("./main/update-settings", () => ({
@@ -47,7 +49,11 @@ vi.mock("./main/theme-preference", () => ({
   },
 }));
 
-vi.mock("electron-squirrel-startup", () => ({ default: false }));
+vi.mock("electron-squirrel-startup", () => ({
+  get default() {
+    return electron.squirrelLaunch;
+  },
+}));
 
 vi.mock("./main/daemon-supervisor", () => ({
   DaemonSupervisor: class {
@@ -55,7 +61,9 @@ vi.mock("./main/daemon-supervisor", () => ({
     getStatus() {
       return { state: "starting" };
     }
-    async start() {}
+    async start() {
+      electron.daemonStarts++;
+    }
     async restart() {}
     stop() {
       return electron.daemonStops === "never" ? new Promise(() => undefined) : Promise.resolve();
@@ -149,6 +157,7 @@ vi.mock("electron", () => {
         setBadge() {},
       },
       setBadgeCount() {},
+      setAppUserModelId() {},
     },
     BrowserWindow: FakeBrowserWindow,
     dialog: { showOpenDialog: () => ({ canceled: true, filePaths: [] }) },
@@ -187,6 +196,7 @@ async function loadMain() {
   electron.daemonStops = "at once";
   electron.updateSettings = {};
   electron.attention = 0;
+  electron.daemonStarts = 0;
   vi.resetModules();
   vi.stubGlobal("MAIN_WINDOW_VITE_DEV_SERVER_URL", undefined);
   vi.stubGlobal("MAIN_WINDOW_VITE_NAME", "main_window");
@@ -295,6 +305,20 @@ test("closing the window where a menu bar item runs leaves the app alive", async
 
   expect({ quits: electron.quits, trays: electron.trays }).toEqual({ quits: 0, trays: 1 });
   vi.unstubAllGlobals();
+});
+
+test("a launch by the Squirrel installer quits and starts no daemon, window or tray", async () => {
+  electron.squirrelLaunch = true;
+  await loadMain();
+  electron.appEvents.get("ready")?.();
+  electron.squirrelLaunch = false;
+
+  expect({
+    quits: electron.quits,
+    daemonStarts: electron.daemonStarts,
+    windows: electron.windows.length,
+    trays: electron.trays,
+  }).toEqual({ quits: 1, daemonStarts: 0, windows: 0, trays: 0 });
 });
 
 function invoke(channel: string, ...args: unknown[]): unknown {

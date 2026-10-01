@@ -70,6 +70,10 @@ if (started) {
   app.quit();
 }
 
+// Windows shows a toast under the identity of the app, and Squirrel gives
+// the shortcut it makes this one: the package and the executable name.
+if (process.platform === "win32") app.setAppUserModelId("com.squirrel.babysitter.babysitter");
+
 const dataDir = defaultDataDir(process.platform, process.env, os.homedir());
 
 let themePreference: ThemePreference = readStoredTheme(dataDir);
@@ -379,6 +383,9 @@ function createWindow() {
 }
 
 app.on("ready", () => {
+  // A launch by the Squirrel installer only makes or removes the
+  // shortcuts and quits: it starts no daemon it would then have to kill.
+  if (started) return;
   nativeTheme.themeSource = themePreference;
   void daemon.start();
   createWindow();

@@ -62,10 +62,13 @@ func Run(ctx context.Context, cfg Config) error {
 		return fmt.Errorf("create data dir: %w", err)
 	}
 
+	// A run file that names this very process is stale: Windows hands a
+	// freed pid to the next process, so a daemon killed without cleanup
+	// leaves a file that its successor would take for a sibling.
 	runPath := runfile.Path(cfg.DataDir)
 	if live, err := runfile.Live(runPath); err != nil {
 		return err
-	} else if live != nil {
+	} else if live != nil && live.PID != os.Getpid() {
 		return fmt.Errorf("%w: pid %d on port %d", ErrAlreadyRunning, live.PID, live.Port)
 	}
 

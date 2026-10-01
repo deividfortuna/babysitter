@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -53,6 +54,9 @@ func TestOpenMigratesAndReopens(t *testing.T) {
 
 func TestOpenKeepsTheDatabaseDirPrivate(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no permission bits")
+	}
 	_, path := openTemp(t)
 
 	info, err := os.Stat(filepath.Dir(path))

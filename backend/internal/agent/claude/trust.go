@@ -31,6 +31,9 @@ func acceptTrust(path, dir string) error {
 			return fmt.Errorf("find the Claude Code configuration: %w", err)
 		}
 	}
+	// Claude Code keys its projects with forward slashes on Windows too,
+	// as C:/Users/me/project. ToSlash changes nothing elsewhere.
+	dir = filepath.ToSlash(dir)
 	config := map[string]json.RawMessage{}
 	data, err := os.ReadFile(path)
 	switch {

@@ -63,9 +63,25 @@ builds:
     flags: [-trimpath]
     ldflags: ["-s -w -X main.version={{.Version}}"]
 
+  - id: windows-amd64
+    dir: backend
+    main: ./cmd/babysitter
+    binary: babysitter
+    goos: [windows]
+    goarch: [amd64]
+    env:
+      - CGO_ENABLED=1
+      - CC=x86_64-w64-mingw32-gcc
+      - CXX=x86_64-w64-mingw32-g++
+    flags: [-trimpath]
+    ldflags: ["-s -w -X main.version={{.Version}}"]
+
 archives:
   - id: default
     formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - README.md

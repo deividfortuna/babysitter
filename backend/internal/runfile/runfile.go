@@ -18,6 +18,18 @@ const (
 	OwnerCLI = "cli"
 )
 
+// Windows refuses to open a file while another process replaces it, and
+// refuses to replace a file another process has open. Both last
+// microseconds, so a reader and the writer try again for a moment.
+const (
+	busyTries = 20
+	busyPause = 10 * time.Millisecond
+)
+
+// startSlack lets a StartedAt cut to the second, or a clock that steps
+// back a little, still name the process that wrote the file.
+const startSlack = time.Second
+
 type Info struct {
 	PID        int       `json:"pid"`
 	Port       int       `json:"port"`
@@ -55,14 +67,18 @@ func Write(path string, info Info) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temp run file: %w", err)
 	}
-	if err := os.Rename(tmpName, path); err != nil {
+	if err := whileBusy(func() error { return os.Rename(tmpName, path) }); err != nil {
 		return fmt.Errorf("replace run file: %w", err)
 	}
 	return nil
 }
 
 func Read(path string) (*Info, error) {
-	data, err := os.ReadFile(path)
+	var data []byte
+	err := whileBusy(func() (err error) {
+		data, err = os.ReadFile(path)
+		return err
+	})
 	if errors.Is(err, os.ErrNotExist) {
 		return nil, nil
 	}
@@ -74,6 +90,18 @@ func Read(path string) (*Info, error) {
 		return nil, fmt.Errorf("parse run file: %w", err)
 	}
 	return &info, nil
+}
+
+// whileBusy runs op again while it fails because another process has the
+// file, up to busyTries times, and returns the last error.
+func whileBusy(op func() error) error {
+	for try := 1; ; try++ {
+		err := op()
+		if err == nil || !busy(err) || try == busyTries {
+			return err
+		}
+		time.Sleep(busyPause)
+	}
 }
 
 func Remove(path string) error {
@@ -99,8 +127,19 @@ func Live(path string) (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info == nil || !processalive.Alive(info.PID) {
+	if info == nil || !info.running() {
 		return nil, nil
 	}
 	return info, nil
+}
+
+// running reports whether the process that wrote the file still runs. A
+// process created after the file was written only took over a freed pid.
+func (i *Info) running() bool {
+	if !processalive.Alive(i.PID) {
+		return false
+	}
+	created, known := processalive.Created(i.PID)
+	bothKnown := known && !i.StartedAt.IsZero()
+	return !bothKnown || !created.After(i.StartedAt.Add(startSlack))
 }

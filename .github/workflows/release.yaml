@@ -100,10 +100,11 @@ jobs:
           name: cli
           path: |
             dist/*.tar.gz
+            dist/*.zip
             dist/checksums.txt
 
   desktop:
-    name: Desktop (${{ matrix.arch }})
+    name: Desktop (${{ matrix.os }} ${{ matrix.arch }})
     needs: resolve
     if: needs.resolve.outputs.release == 'true'
     runs-on: ${{ matrix.runner }}
@@ -112,20 +113,30 @@ jobs:
       matrix:
         include:
           - runner: macos-latest
+            os: darwin
             arch: arm64
             lipo: arm64
           - runner: macos-15-intel
+            os: darwin
             arch: x64
             lipo: x86_64
+          - runner: windows-latest
+            os: win32
+            arch: x64
     defaults:
       run:
         working-directory: frontend
+        shell: bash
     env:
+      OS: ${{ matrix.os }}
       ARCH: ${{ matrix.arch }}
       VERSION: ${{ needs.resolve.outputs.version }}
       BABYSITTER_RELEASE_CHANNEL: ${{ needs.resolve.outputs.channel }}
-      SIGNED: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
-      UPDATES: ${{ secrets.MAC_CERT_P12_BASE64 != '' && needs.resolve.outputs.feed != '' }}
+      # The daemon needs cgo for SQLite. Go turns it off quietly when it
+      # finds no C compiler, and a daemon without SQLite is no daemon.
+      CGO_ENABLED: "1"
+      SIGNED: ${{ matrix.os == 'darwin' && secrets.MAC_CERT_P12_BASE64 != '' }}
+      UPDATES: ${{ matrix.os == 'darwin' && secrets.MAC_CERT_P12_BASE64 != '' && needs.resolve.outputs.feed != '' }}
     steps:
       - name: Check out
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -157,13 +168,14 @@ jobs:
         run: pnpm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Import the signing certificate
-        if: env.SIGNED == 'true'
+        if: matrix.os == 'darwin' && env.SIGNED == 'true'
         uses: apple-actions/import-codesign-certs@5142e029c445c10ffc7149d172e540235a065466 # v7.0.0
         with:
           p12-file-base64: ${{ secrets.MAC_CERT_P12_BASE64 }}
           p12-password: ${{ secrets.MAC_CERT_PASSWORD }}
 
       - name: Choose the signature
+        if: matrix.os == 'darwin'
         env:
           MAC_SIGN_IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
           APPLE_API_KEY_BASE64: ${{ secrets.APPLE_API_KEY_BASE64 }}
@@ -194,7 +206,21 @@ jobs:
           done
           exit 1
 
+      - name: Verify the installer
+        if: matrix.os == 'win32'
+        run: |
+          app="out/Babysitter-win32-$ARCH"
+          daemon="$app/resources/daemon/babysitter.exe"
+          if [ ! -f "$app/babysitter.exe" ]; then
+            echo "::error::make wrote no app at $app"
+            exit 1
+          fi
+          test "$("$daemon" --version)" = "babysitter version $VERSION"
+          test ! -f "$app/resources/app-update.yml"
+          test -f "out/make/squirrel.windows/$ARCH/Babysitter-Setup.exe"
+
       - name: Verify the app
+        if: matrix.os == 'darwin'
         env:
           LIPO_ARCH: ${{ matrix.lipo }}
         run: |
@@ -218,6 +244,7 @@ jobs:
           fi
 
       - name: Name the assets
+        if: matrix.os == 'darwin'
         run: |
           mkdir -p out/release
           cp "out/make/dmg/$ARCH/Babysitter.dmg" "out/release/Babysitter-$VERSION-darwin-$ARCH.dmg"
@@ -226,10 +253,18 @@ jobs:
           cp "out/release/Babysitter-$VERSION-darwin-$ARCH.zip" "out/release/babysitter-darwin-$ARCH.zip"
           ls -l out/release
 
+      - name: Name the installer
+        if: matrix.os == 'win32'
+        run: |
+          mkdir -p out/release
+          cp "out/make/squirrel.windows/$ARCH/Babysitter-Setup.exe" "out/release/Babysitter-$VERSION-win32-$ARCH-Setup.exe"
+          cp "out/release/Babysitter-$VERSION-win32-$ARCH-Setup.exe" "out/release/babysitter-win32-$ARCH-Setup.exe"
+          ls -l out/release
+
       - name: Upload the app
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: desktop-${{ matrix.arch }}
+          name: desktop-${{ matrix.os }}-${{ matrix.arch }}
           path: frontend/out/release/*
 
   publish:

@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -228,6 +229,9 @@ func TestRemoveLeavesADirectoryWithAGitFileThatIsNotAWorktree(t *testing.T) {
 
 func TestRemoveReportsAStatThatFails(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no permission bits that make a stat fail")
+	}
 	if os.Geteuid() == 0 {
 		t.Skip("root reads every directory")
 	}

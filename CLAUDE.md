@@ -105,7 +105,10 @@ socket. `internal/store` is SQLite and publishes an event on
 feed as SSE. `internal/snapshot` fetches one pull request from GitHub and
 decides the next action. `internal/prwatch` is the watch loop: snapshot,
 `Diff` against stored state, activity rows, message to the agent, merge
-readiness. `internal/session` owns the pseudo terminal of the agent.
+readiness. `internal/session` owns the pseudo terminal of the agent: `process.go`
+is the shared session, `session.go` starts it in a pty on Unix and
+`session_windows.go` in a ConPTY inside a job object on Windows. The
+supervisor socket is a Unix socket there and a named pipe on Windows.
 `internal/agent` holds the session contract, the embedded prompts in
 `prompts/`, the rules that decide if the agent may run a tool
 (`toolcall.go` parses the call, `toolpolicy.go` holds the rules), and

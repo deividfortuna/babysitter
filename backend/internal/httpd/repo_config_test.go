@@ -2,6 +2,7 @@ package httpd
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"os/exec"
@@ -12,6 +13,17 @@ import (
 	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
+
+// jsonString quotes a path for a JSON body: a Windows path has
+// backslashes that JSON escapes.
+func jsonString(t *testing.T, s string) string {
+	t.Helper()
+	b, err := json.Marshal(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(b)
+}
 
 func checkoutOf(t *testing.T, origin string) string {
 	t.Helper()
@@ -45,13 +57,13 @@ func TestTheRepositoryConfigurationRoutes(t *testing.T) {
 	if rec := call(t, h, http.MethodPatch, path, `{"autoStartMine":true}`, &cfg); rec.Code != http.StatusOK || !cfg.AutoStartMine || cfg.CheckoutDir != "" {
 		t.Fatalf("a toggle without a checkout: %d %s", rec.Code, rec.Body)
 	}
-	web := checkoutOf(t, "https://github.com/acme/web.git")
-	if rec := call(t, h, http.MethodPatch, path, `{"checkoutDir":"`+web+`"}`, nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "has no remote for acme/billing") {
+	web := jsonString(t, checkoutOf(t, "https://github.com/acme/web.git"))
+	if rec := call(t, h, http.MethodPatch, path, `{"checkoutDir":`+web+`}`, nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "has no remote for acme/billing") {
 		t.Fatalf("a checkout of another repository: %d %s", rec.Code, rec.Body)
 	}
 
 	dir := checkoutOf(t, "git@github.com:acme/billing.git")
-	body := `{"checkoutDir":"` + dir + `","autoStartMine":true,"includeDrafts":true,"autoWatchDependabot":true,
+	body := `{"checkoutDir":` + jsonString(t, dir) + `,"autoStartMine":true,"includeDrafts":true,"autoWatchDependabot":true,
 		"overrides":{"provider":"copilot","model":"gpt-5.3-codex","effort":"low","approvalMode":"manual","mergeMethod":"squash","approvalsRequired":null,"includeExisting":true,
 			"autoApproveRebase":true,"includeOwn":false,"keepWorktree":true},
 		"dependabotScope":"minor","dependabotApproval":"ask","dependabotLimit":2}`
