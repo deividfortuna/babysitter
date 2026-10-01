@@ -187,7 +187,9 @@ func TestCommand(t *testing.T) {
 		t.Fatalf("pre-push hook = %q, %v", hook, err)
 	}
 	data, err := os.ReadFile(c.ConfigPath)
-	if err != nil || !strings.Contains(string(data), `"hasTrustDialogAccepted": true`) || !strings.Contains(string(data), l.WorktreeDir) {
+	// Claude Code keys the project with forward slashes, on Windows too.
+	project, _ := json.Marshal(filepath.ToSlash(l.WorktreeDir))
+	if err != nil || !strings.Contains(string(data), `"hasTrustDialogAccepted": true`) || !strings.Contains(string(data), string(project)+": {") {
 		t.Fatalf("trust config = %s, %v", data, err)
 	}
 	if !c.Signals() || c.Prelude() != "" {

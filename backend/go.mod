@@ -3,6 +3,8 @@ module github.com/deividfortuna/babysitter
 go 1.27.0
 
 require (
+	github.com/Microsoft/go-winio v0.6.2
+	github.com/charmbracelet/x/conpty v0.2.0
 	github.com/creack/pty v1.1.24
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/google/go-github/v91 v91.0.0
@@ -12,6 +14,7 @@ require (
 	github.com/swaggest/openapi-go v0.2.61
 	golang.org/x/mod v0.41.0
 	golang.org/x/sync v0.23.0
+	golang.org/x/sys v0.48.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

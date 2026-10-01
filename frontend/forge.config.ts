@@ -27,7 +27,10 @@ const config: ForgeConfig = {
   },
   rebuildConfig: {},
   makers: [
-    new MakerSquirrel({ setupIcon: "assets/icon.ico" }),
+    // The installer of Windows. It installs per user, under
+    // %LocalAppData%\babysitter, and makes the shortcuts. No MSI: it needs
+    // the WiX toolkit, and nothing deploys the app by policy.
+    new MakerSquirrel({ setupIcon: "assets/icon.ico", setupExe: "Babysitter-Setup.exe", noMsi: true }),
     new MakerZIP({}, ["darwin"]),
     new MakerDMG({ name: "Babysitter", icon: "assets/icon.icns", format: "ULFO" }, ["darwin"]),
     new MakerRpm({ options: { icon: "assets/icon.png" } }),

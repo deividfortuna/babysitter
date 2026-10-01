@@ -149,6 +149,7 @@ vi.mock("electron", () => {
         setBadge() {},
       },
       setBadgeCount() {},
+      setAppUserModelId() {},
     },
     BrowserWindow: FakeBrowserWindow,
     dialog: { showOpenDialog: () => ({ canceled: true, filePaths: [] }) },

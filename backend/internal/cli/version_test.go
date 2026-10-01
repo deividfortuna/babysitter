@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 
 	"github.com/google/go-github/v91/github"
@@ -81,6 +82,9 @@ func TestVersionOutsideTheAppPointsAtTheReleasePage(t *testing.T) {
 
 func TestVersionFollowsTheLinkThatHomebrewMakes(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Homebrew is for macOS, and a symlink needs a privilege on Windows")
+	}
 	dir := t.TempDir()
 	daemon := filepath.Join(dir, "Babysitter.app", "Contents", "Resources", "daemon")
 	if err := os.MkdirAll(daemon, 0o755); err != nil {

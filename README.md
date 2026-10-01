@@ -1,8 +1,8 @@
 # babysitter
 
 babysitter watches GitHub pull requests. It is one Go binary that is both
-the CLI and a daemon, plus an Electron desktop app for macOS that runs the
-daemon and shows its state.
+the CLI and a daemon, plus an Electron desktop app for macOS and Windows
+that runs the daemon and shows its state.
 
 A watch on a pull request runs a coding agent, Claude Code or Copilot CLI,
 in a pseudo terminal inside a git worktree. The daemon polls the pull
@@ -43,12 +43,26 @@ Privacy & Security, or remove the quarantine:
 xattr -dr com.apple.quarantine /Applications/Babysitter.app
 ```
 
-The app updates itself: it checks the releases once an hour, downloads
+On Windows 10 1809 or later, download the installer and run it. It
+installs the app for the current user, under `%LocalAppData%\babysitter`,
+and makes a Start menu shortcut:
+
+- [Windows x64](https://github.com/deividfortuna/babysitter/releases/latest/download/babysitter-win32-x64-Setup.exe)
+
+The installer is not signed, so SmartScreen asks for a confirmation on
+the first run. The app needs [Git for Windows](https://gitforwindows.org):
+the daemon makes the worktrees with git, and Claude Code runs its hooks
+in the bash that comes with it. The app of Windows does not update
+itself; `babysitter version` tells you when a newer release is out.
+
+The app updates itself on macOS: it checks the releases once an hour, downloads
 a new version, and asks you to restart. **Settings > Updates** turns the download off or follows
 nightlies. See [docs/release.md](docs/release.md#updates-of-the-app).
 
-For the CLI only, on Linux or macOS, each release also has a
-`babysitter_<version>_<os>_<arch>.tar.gz` archive and `checksums.txt`.
+For the CLI only, each release also has a
+`babysitter_<version>_<os>_<arch>.tar.gz` archive for Linux and macOS, a
+`babysitter_<version>_windows_amd64.zip` archive for Windows, and
+`checksums.txt`.
 `babysitter version` tells you when a newer release is out and how to
 upgrade. It never upgrades by itself.
 
@@ -61,7 +75,10 @@ To build from source:
 
 - Go 1.27 or later
 - A C compiler. The SQLite driver, `mattn/go-sqlite3`, uses cgo. On macOS,
-  install the Xcode command line tools. On Linux, install `gcc`.
+  install the Xcode command line tools. On Linux, install `gcc`. On
+  Windows, install a MinGW-w64 gcc, such as
+  `winget install BrechtSanders.WinLibs.POSIX.UCRT`, and set
+  `CGO_ENABLED=1`: Go turns cgo off quietly when it finds no compiler.
 - Node 26 or later for the desktop app and for `codegen/`. See
   `.node-version`.
 - pnpm 12 or later. Each `package.json` sets the exact version in
@@ -97,9 +114,15 @@ with `scripts/build-daemon.mjs` into `frontend/daemon/`. The script calls
 `go build`, so Go and a C compiler are required, as for the CLI. Set
 `BABYSITTER_DAEMON_BINARY` to make the app start another binary.
 
-Releases hold only the macOS app. The Forge configuration also has
-makers for Windows and Linux, but no workflow builds them. On Linux, use
-the CLI archives.
+Releases hold the macOS app and the Windows installer. The Forge
+configuration also has makers for Linux, but no workflow builds them. On
+Linux, use the CLI archives.
+
+On Windows the agent runs in a pseudo console, ConPTY, and the job object
+that holds it ends the agent and its children when the watch stops or
+the daemon dies. The link between the app and the daemon is a named
+pipe instead of the Unix socket. Desktop notifications of the CLI and
+the service are not available there; the app shows its own.
 
 `frontend/assets` holds the icons. `icon.svg` is the drawing of the app,
 `icon-dark.svg` the same one on a dark tile, and `tray.svg` the black
@@ -442,7 +465,8 @@ The database path comes from, in this order:
 1. the `--db` flag
 2. the `BABYSITTER_DB` environment variable
 3. `<user config dir>/babysitter/babysitter.db`, which is
-   `~/Library/Application Support/babysitter/babysitter.db` on macOS and
+   `~/Library/Application Support/babysitter/babysitter.db` on macOS,
+   `%AppData%\babysitter\babysitter.db` on Windows and
    `$XDG_CONFIG_HOME/babysitter/babysitter.db` on Linux, with
    `~/.config` when `XDG_CONFIG_HOME` is not set
 
@@ -1625,13 +1649,14 @@ The workflow has these jobs:
 2. `cli` runs [GoReleaser](https://goreleaser.com) inside the
    `goreleaser-cross` image, because the SQLite driver needs a C compiler
    for each target. GoReleaser runs `go mod tidy` and `go test` first,
-   then makes archives for Linux and macOS on amd64 and arm64, and a
-   checksum file.
+   then makes archives for Linux and macOS on amd64 and arm64, a zip for
+   Windows on amd64, and a checksum file.
 3. `desktop` makes the app on a macOS runner of each arch, because cgo
-   does not cross compile there. It sets the version of the app and of
-   the daemon, checks the arch and the version of the daemon, and keeps
-   the DMG and the zip, each under its versioned name and as
-   `babysitter-darwin-<arch>`.
+   does not cross compile there, and on a Windows runner for x64. It
+   sets the version of the app and of the daemon, checks the arch and the
+   version of the daemon, and keeps the DMG and the zip of macOS and the
+   installer of Windows, each under its versioned name and as
+   `babysitter-darwin-<arch>` or `babysitter-win32-x64-Setup.exe`.
 4. `publish` writes the update feed of the channel and makes the GitHub
    release with all the files. A release that fails before this job
    leaves no release.

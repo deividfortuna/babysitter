@@ -42,8 +42,10 @@ export function defaultDataDir(
   if (override) return override;
   if (platform === "darwin") return joinPath(homeDir, "Library", "Application Support", "babysitter");
   if (platform === "win32") {
-    const appData = env.APPDATA?.trim() || joinPath(homeDir, "AppData", "Roaming");
-    return joinPath(appData, "babysitter");
+    // Windows paths keep their backslashes, so the daemon logs and shows
+    // one kind of separator.
+    const appData = env.APPDATA?.trim() || [homeDir.replace(/[/\\]+$/, ""), "AppData", "Roaming"].join("\\");
+    return [appData.replace(/[/\\]+$/, ""), "babysitter"].join("\\");
   }
   const xdg = env.XDG_CONFIG_HOME?.trim() || joinPath(homeDir, ".config");
   return joinPath(xdg, "babysitter");
