@@ -50,6 +50,8 @@ func (s *Service) View(ctx context.Context, id int64) (*snapshot.Snapshot, error
 }
 
 func (s *Service) Diff(ctx context.Context, id int64) (PullDiff, error) {
+	unlock := s.locks.Lock(id)
+	defer unlock()
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {
 		return PullDiff{}, err

@@ -6,6 +6,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestViewKeepsTheLastSnapshotOfTheWatch(t *testing.T) {
@@ -79,6 +80,29 @@ func TestDiffGoesFromTheMergeBaseToThePushedHead(t *testing.T) {
 	}
 	if d.Base != "m1" || d.Head != "abc" || !strings.Contains(d.Diff, "-m1\n+abc") {
 		t.Fatalf("Diff() = %+v, want from the merge base m1 to the head abc", d)
+	}
+}
+
+func TestDiffWaitsForTheLockOfTheWatch(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+
+	unlock := fx.svc.locks.Lock(w.ID)
+	done := make(chan error, 1)
+	go func() {
+		_, err := fx.svc.Diff(context.Background(), w.ID)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("Diff() returned %v while the poll held the lock of the watch", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	unlock()
+	if err := <-done; err != nil {
+		t.Fatalf("Diff() after the lock error = %v", err)
 	}
 }
 
