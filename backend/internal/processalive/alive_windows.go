@@ -4,6 +4,7 @@ package processalive
 
 import (
 	"math"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
@@ -29,4 +30,21 @@ func Alive(pid int) bool {
 		return false
 	}
 	return code == stillActive
+}
+
+// Created returns when the process that has the pid now was created.
+func Created(pid int) (time.Time, bool) {
+	if pid <= 0 || pid > math.MaxUint32 {
+		return time.Time{}, false
+	}
+	h, err := windows.OpenProcess(windows.PROCESS_QUERY_LIMITED_INFORMATION, false, uint32(pid))
+	if err != nil {
+		return time.Time{}, false
+	}
+	defer func() { _ = windows.CloseHandle(h) }()
+	var created, exited, kernel, user windows.Filetime
+	if err := windows.GetProcessTimes(h, &created, &exited, &kernel, &user); err != nil {
+		return time.Time{}, false
+	}
+	return time.Unix(0, created.Nanoseconds()), true
 }

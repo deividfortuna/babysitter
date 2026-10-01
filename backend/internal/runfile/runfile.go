@@ -26,6 +26,10 @@ const (
 	busyPause = 10 * time.Millisecond
 )
 
+// startSlack lets a StartedAt cut to the second, or a clock that steps
+// back a little, still name the process that wrote the file.
+const startSlack = time.Second
+
 type Info struct {
 	PID        int       `json:"pid"`
 	Port       int       `json:"port"`
@@ -123,8 +127,19 @@ func Live(path string) (*Info, error) {
 	if err != nil {
 		return nil, err
 	}
-	if info == nil || !processalive.Alive(info.PID) {
+	if info == nil || !info.running() {
 		return nil, nil
 	}
 	return info, nil
+}
+
+// running reports whether the process that wrote the file still runs. A
+// process created after the file was written only took over a freed pid.
+func (i *Info) running() bool {
+	if !processalive.Alive(i.PID) {
+		return false
+	}
+	created, known := processalive.Created(i.PID)
+	bothKnown := known && !i.StartedAt.IsZero()
+	return !bothKnown || !created.After(i.StartedAt.Add(startSlack))
 }

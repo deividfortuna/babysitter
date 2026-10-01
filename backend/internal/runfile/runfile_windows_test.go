@@ -80,3 +80,19 @@ func TestWriteWaitsForAFileAnotherProcessHolds(t *testing.T) {
 		t.Fatalf("Read() = %+v, %v", info, err)
 	}
 }
+
+// Windows hands a freed pid to the next process soon. A process created
+// after the run file was written has only taken the pid of the daemon.
+func TestLiveIgnoresAProcessThatTookTheFreedPid(t *testing.T) {
+	path := filepath.Join(t.TempDir(), FileName)
+	if err := Write(path, Info{PID: os.Getpid(), Port: 1, StartedAt: time.Now().Add(-time.Hour)}); err != nil {
+		t.Fatal(err)
+	}
+	live, err := Live(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live != nil {
+		t.Fatalf("Live = %+v for a pid that a newer process took", live)
+	}
+}
