@@ -45,7 +45,7 @@ func (s *Service) approveByHand(ctx context.Context, client *github.Client, w st
 	if !agent.IsDependabot(w.Author) {
 		return fmt.Errorf("%w: %s#%d is by %s", ErrNotDependabot, w.Repo(), w.Number, w.Author)
 	}
-	snap, err := snapshot.Collect(ctx, client, s.store, target(w), s.watchOptions(w))
+	snap, err := s.collect(ctx, client, w)
 	if err != nil {
 		return err
 	}

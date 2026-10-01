@@ -15,7 +15,9 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/events"
+	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
+	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
 	"github.com/deividfortuna/babysitter/internal/testutil"
 )
@@ -408,6 +410,39 @@ func (f *fakeWatches) Output(ctx context.Context, id int64, lines int) (string, 
 	return fmt.Sprintf("prompt ❯ (%d lines)\n", lines), nil
 }
 
+func (f *fakeWatches) View(ctx context.Context, id int64) (*snapshot.Snapshot, error) {
+	w, err := f.st.GetWatch(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+	if w.Number == 4 {
+		return nil, prwatch.ErrNoSnapshot
+	}
+	return &snapshot.Snapshot{
+		SnapshotAt: time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC),
+		PR: snapshot.PR{
+			Repo: w.Repo(), Number: w.Number, Title: "Fix the thing", State: store.StateOpen, BaseBranch: "main", HeadBranch: "fix",
+			Labels: []string{"bug"}, Body: "Fixes the retry loop.",
+			Reviewers: []snapshot.Reviewer{{Login: "bob", State: "APPROVED"}},
+		},
+		Checks: snapshot.Checks{Status: "success", PassedCount: 2},
+	}, nil
+}
+
+func (f *fakeWatches) Diff(ctx context.Context, id int64) (string, error) {
+	w, err := f.st.GetWatch(ctx, id)
+	if err != nil {
+		return "", err
+	}
+	if w.Status == store.WatchStopped {
+		return "", prwatch.ErrWatchStopped
+	}
+	if w.Number == 5 {
+		return "", fmt.Errorf("%w: octo/hello#5", ghclient.ErrDiffTooLarge)
+	}
+	return "diff --git a/x.go b/x.go\n", nil
+}
+
 func (f *fakeWatches) Resize(ctx context.Context, id int64, size prwatch.TerminalSize) error {
 	if _, err := f.st.GetWatch(ctx, id); err != nil {
 		return err
@@ -583,12 +618,62 @@ func TestSessionRoutesWithoutService(t *testing.T) {
 		{http.MethodPost, "/watches/1/send", `{"message":"hi"}`},
 		{http.MethodPost, "/watches/1/next", ""},
 		{http.MethodGet, "/watches/1/output", ""},
+		{http.MethodGet, "/watches/1/view", ""},
+		{http.MethodGet, "/watches/1/diff", ""},
 		{http.MethodPost, "/watches/1/hook", `{"event":"stop","payload":{}}`},
 		{http.MethodPost, "/watches/1/resize", `{"rows":40,"cols":120}`},
 	} {
 		if rec := call(t, h, c.method, c.path, c.body, nil); rec.Code != http.StatusServiceUnavailable {
 			t.Fatalf("%s %s without service: %d %s", c.method, c.path, rec.Code, rec.Body)
 		}
+	}
+}
+
+func TestViewAndDiffRoutes(t *testing.T) {
+	t.Parallel()
+	h, st, _ := newTestAPI(t)
+	for _, w := range []store.Watch{
+		{Owner: "octo", Name: "hello", Number: 3, Provider: prwatch.ProviderClaude, StartedAt: time.Now()},
+		{Owner: "octo", Name: "hello", Number: 4, Provider: prwatch.ProviderSelf, StartedAt: time.Now()},
+		{Owner: "octo", Name: "hello", Number: 5, Provider: prwatch.ProviderClaude, StartedAt: time.Now()},
+	} {
+		if _, err := st.CreateWatch(context.Background(), w); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	var view PullRequestView
+	if rec := call(t, h, http.MethodGet, "/watches/1/view", "", &view); rec.Code != http.StatusOK {
+		t.Fatalf("view: %d %s", rec.Code, rec.Body)
+	}
+	if view.Repo != "octo/hello" || strings.Join(view.Labels, ",") != "bug" || view.Body != "Fixes the retry loop." || view.Checks.Passed != 2 {
+		t.Fatalf("view = %+v", view)
+	}
+	if len(view.Reviewers) != 1 || view.Reviewers[0] != (PullRequestReview{Login: "bob", State: "APPROVED"}) || view.Assignees == nil {
+		t.Fatalf("view reviewers %+v, assignees %v: want bob and an empty list, not null", view.Reviewers, view.Assignees)
+	}
+	if rec := call(t, h, http.MethodGet, "/watches/2/view", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "no_snapshot") {
+		t.Fatalf("view before a poll: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(t, h, http.MethodGet, "/watches/9/view", "", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("view missing: %d", rec.Code)
+	}
+
+	var diff PullRequestDiff
+	if rec := call(t, h, http.MethodGet, "/watches/1/diff", "", &diff); rec.Code != http.StatusOK || diff != (PullRequestDiff{Diff: "diff --git a/x.go b/x.go\n"}) {
+		t.Fatalf("diff: %d %s", rec.Code, rec.Body)
+	}
+	if _, err := st.StopWatch(context.Background(), 2, store.StopUser, nil, time.Now()); err != nil {
+		t.Fatal(err)
+	}
+	if rec := call(t, h, http.MethodGet, "/watches/2/diff", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "watch_stopped") {
+		t.Fatalf("diff of a stopped watch: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(t, h, http.MethodGet, "/watches/3/diff", "", nil); rec.Code != http.StatusUnprocessableEntity || !strings.Contains(rec.Body.String(), "diff_too_large") {
+		t.Fatalf("diff too large for GitHub: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(t, h, http.MethodGet, "/watches/9/diff", "", nil); rec.Code != http.StatusNotFound {
+		t.Fatalf("diff missing: %d", rec.Code)
 	}
 }
 

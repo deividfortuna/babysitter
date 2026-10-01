@@ -678,6 +678,55 @@ func TestWithRequestsMergesTheLoginsOnce(t *testing.T) {
 	}
 }
 
+func TestCollectKeepsTheDetailsOfThePullRequest(t *testing.T) {
+	t.Parallel()
+	g, pr := newFakePR()
+	pr.Labels, pr.Assignees, pr.Milestone, pr.AutoMerge = []string{"bug", "go"}, []string{"alice"}, "v2", "squash"
+	pr.Additions, pr.Deletions, pr.Commits, pr.ChangedFiles = 12, 3, 2, 4
+	pr.CreatedAt, pr.Body = ghfake.At("2026-09-01T00:00:00Z"), "Fixes the retry loop."
+	pr.Reviews = append(pr.Reviews, ghfake.Review{ID: 8, State: "COMMENTED", Author: "carol", SubmittedAt: ghfake.At("2026-09-03T00:00:00Z")})
+	c, st := g.Client(t), openStore(t)
+
+	s, err := Collect(context.Background(), c, st, Target{Owner: "octo", Name: "hello", Number: 3}, Options{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := s.PR
+	if strings.Join(got.Labels, ",") != "bug,go" || strings.Join(got.Assignees, ",") != "alice" || got.Milestone != "v2" || got.AutoMerge != "squash" {
+		t.Fatalf("labels %v, assignees %v, milestone %q, auto-merge %q", got.Labels, got.Assignees, got.Milestone, got.AutoMerge)
+	}
+	if got.Additions != 12 || got.Deletions != 3 || got.Commits != 2 || got.ChangedFiles != 4 {
+		t.Fatalf("size = +%d -%d, %d commits, %d files, want +12 -3, 2 commits, 4 files", got.Additions, got.Deletions, got.Commits, got.ChangedFiles)
+	}
+	if !got.CreatedAt.Equal(ghfake.At("2026-09-01T00:00:00Z")) || got.Body != "Fixes the retry loop." {
+		t.Fatalf("created %v, body %q", got.CreatedAt, got.Body)
+	}
+	want := []Reviewer{{Login: "bob", State: "APPROVED"}, {Login: "carol", State: "COMMENTED"}}
+	if fmt.Sprint(got.Reviewers) != fmt.Sprint(want) {
+		t.Fatalf("reviewers = %v, want %v: the approval of bob stands after his comment, and the draft of dave is left out", got.Reviewers, want)
+	}
+}
+
+func TestLatestReviewsTakesTheLastVerdict(t *testing.T) {
+	t.Parallel()
+	review := func(login, state, at string) *github.PullRequestReview {
+		return &github.PullRequestReview{
+			State:       new(state),
+			User:        &github.User{Login: new(login)},
+			SubmittedAt: &github.Timestamp{Time: ghfake.At(at)},
+		}
+	}
+	got := latestReviews([]*github.PullRequestReview{
+		review("bob", "APPROVED", "2026-09-03T00:00:00Z"),
+		review("bob", "CHANGES_REQUESTED", "2026-09-01T00:00:00Z"),
+		review("carol", "COMMENTED", "2026-09-02T00:00:00Z"),
+	})
+	want := []Reviewer{{Login: "bob", State: "APPROVED"}, {Login: "carol", State: "COMMENTED"}}
+	if fmt.Sprint(got) != fmt.Sprint(want) {
+		t.Fatalf("latestReviews() = %v, want %v", got, want)
+	}
+}
+
 func TestReviewerLoginsKeepsAChangeRequestACommentFollowed(t *testing.T) {
 	t.Parallel()
 	review := func(id int64, login, state, commit string) *github.PullRequestReview {

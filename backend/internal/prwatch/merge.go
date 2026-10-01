@@ -71,7 +71,7 @@ func (s *Service) Merge(ctx context.Context, id int64, o MergeOptions) (store.Wa
 			return store.Watch{}, err
 		}
 	}
-	snap, err := snapshot.Collect(ctx, client, s.store, target(w), s.watchOptions(w))
+	snap, err := s.collect(ctx, client, w)
 	if err != nil {
 		return store.Watch{}, err
 	}

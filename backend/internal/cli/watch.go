@@ -245,6 +245,8 @@ Every subcommand talks to the running daemon. Start it with
 		newWatchRejectCmd(opts, &dataDirFlag),
 		newWatchModeCmd(opts, &dataDirFlag),
 		newWatchMergeRulesCmd(opts, &dataDirFlag),
+		newWatchViewCmd(opts, &dataDirFlag),
+		newWatchDiffCmd(opts, &dataDirFlag),
 		newWatchOutputCmd(opts, &dataDirFlag),
 		newWatchHookCmd(opts, &dataDirFlag),
 	)

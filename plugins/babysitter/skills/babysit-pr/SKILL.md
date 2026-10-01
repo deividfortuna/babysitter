@@ -67,9 +67,13 @@ what to correct, so report it and stop. Do not work around it.
 
 ## 2. Read the pull request one time
 
-Run `gh pr view` and `gh pr diff`, then look at the code that the diff
-touches. The messages of the daemon are short and point at one item. You
-can only judge them with the change in your head.
+Run `babysitter watch view <watch>` and `babysitter watch diff <watch>`,
+then look at the code that the diff touches. `watch view` reads the last
+snapshot of the daemon and makes no call to GitHub. `watch diff` reads the
+diff from GitHub through the cache of the daemon, so a diff that did not
+change costs no API budget. The messages of the daemon
+are short and point at one item. You can only judge them with the change
+in your head.
 
 ## 3. Loop on `watch next`
 

@@ -61,6 +61,8 @@ type Action struct {
 	Query url.Values
 	Vars  map[string]string
 	Body  []byte
+	// Accept is the media type the request asked for.
+	Accept string
 	// Status is the status the fake answered with, or 0 while the answer is
 	// still on its way.
 	Status int
@@ -297,7 +299,7 @@ func (g *GitHub) Reset() {
 func (g *GitHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, _ := io.ReadAll(r.Body)
 	path := strings.TrimPrefix(r.URL.Path, apiPrefix)
-	a := Action{Method: r.Method, Path: path, Query: r.URL.Query(), Body: body}
+	a := Action{Method: r.Method, Path: path, Query: r.URL.Query(), Body: body, Accept: r.Header.Get("Accept")}
 	rt, vars := g.match(r.Method, path)
 	if rt != nil {
 		a.Route, a.Vars = rt.name, vars

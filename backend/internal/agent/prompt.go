@@ -53,6 +53,8 @@ type Open struct {
 	Items        []Item
 	Prelude      string
 	ReplyCommand string
+	ViewCommand  string
+	DiffCommand  string
 }
 
 func OpenMessage(o Open) (string, error) {

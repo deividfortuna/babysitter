@@ -32,6 +32,20 @@ func GetPull(ctx context.Context, c *github.Client, owner, repo string, number i
 	return pr, resp, nil
 }
 
+var ErrDiffTooLarge = errors.New("github serves no diff this large: read it with git diff in the checkout")
+
+func PullDiff(ctx context.Context, c *github.Client, owner, repo string, number int) (string, *github.Response, error) {
+	diff, resp, err := c.PullRequests.GetRaw(ctx, owner, repo, number, github.RawOptions{Type: github.Diff})
+	if err == nil {
+		return diff, resp, nil
+	}
+	tooLarge := resp != nil && resp.StatusCode == http.StatusNotAcceptable
+	if tooLarge {
+		return "", resp, fmt.Errorf("%w: %s/%s#%d: %w", ErrDiffTooLarge, owner, repo, number, err)
+	}
+	return "", resp, fmt.Errorf("get the diff of pull request %s/%s#%d: %w", owner, repo, number, err)
+}
+
 const comparePageWithoutFiles = 2
 
 func BehindBy(ctx context.Context, c *github.Client, owner, repo, base, head string) (int, *github.Response, error) {
