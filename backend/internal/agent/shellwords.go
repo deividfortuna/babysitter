@@ -44,6 +44,8 @@ func splitShellWords(command string) []shellWord {
 			i = s.addDoubleQuoted(runes, i+1)
 		case r == ' ' || r == '\t':
 			s.flush()
+		case r == '#' && !s.inWord:
+			i = endOfLine(runes, i) - 1
 		case startsRedirection(runes, i):
 			i = s.addRedirection(runes, i)
 		case strings.ContainsRune(shellSeparators, r):
@@ -110,6 +112,15 @@ func (s *shellSplitter) addSingleQuoted(runes []rune, from int) int {
 			return i
 		}
 		s.word.WriteRune(runes[i])
+	}
+	return len(runes)
+}
+
+func endOfLine(runes []rune, from int) int {
+	for i := from; i < len(runes); i++ {
+		if runes[i] == '\n' {
+			return i
+		}
 	}
 	return len(runes)
 }
