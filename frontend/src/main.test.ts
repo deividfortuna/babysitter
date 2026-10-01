@@ -37,6 +37,8 @@ const electron = vi.hoisted(() => ({
   overlays: [] as Record<string, unknown>[],
   zoom: 1,
   popups: [] as Record<string, unknown>[],
+  systemDark: false,
+  themeUpdated: null as (() => void) | null,
 }));
 
 vi.mock("./main/update-settings", () => ({
@@ -182,7 +184,15 @@ vi.mock("electron", () => {
       buildFromTemplate: (template: unknown) => template,
       getApplicationMenu: () => ({ popup: (options: Record<string, unknown>) => electron.popups.push(options) }),
     },
-    nativeTheme: { shouldUseDarkColors: false, themeSource: "system", on() {} },
+    nativeTheme: {
+      get shouldUseDarkColors() {
+        return electron.systemDark;
+      },
+      themeSource: "system",
+      on: (event: string, fn: () => void) => {
+        if (event === "updated") electron.themeUpdated = fn;
+      },
+    },
     Notification: FakeNotification,
     shell: { openExternal: (url: string) => electron.opened.push(url) },
     Tray: class {
@@ -216,6 +226,8 @@ async function loadMain() {
   electron.overlays.length = 0;
   electron.zoom = 1;
   electron.popups.length = 0;
+  electron.systemDark = false;
+  electron.themeUpdated = null;
   vi.resetModules();
   vi.stubGlobal("MAIN_WINDOW_VITE_DEV_SERVER_URL", undefined);
   vi.stubGlobal("MAIN_WINDOW_VITE_NAME", "main_window");
@@ -349,6 +361,19 @@ test("on Windows a change of theme paints the window buttons again", async () =>
   followTheme("light");
 
   expect(electron.overlays.at(-1)).toEqual({ color: CANVAS.light, symbolColor: INK.light, height: TITLEBAR_HEIGHT });
+  vi.unstubAllGlobals();
+});
+
+test("on Windows a change of the system theme paints the window buttons again", async () => {
+  vi.stubGlobal("process", { ...process, platform: "win32" });
+  electron.theme = "system";
+  await loadMain();
+  electron.appEvents.get("ready")?.();
+
+  electron.systemDark = true;
+  electron.themeUpdated?.();
+
+  expect(electron.overlays.at(-1)).toEqual({ color: CANVAS.dark, symbolColor: INK.dark, height: TITLEBAR_HEIGHT });
   vi.unstubAllGlobals();
 });
 
