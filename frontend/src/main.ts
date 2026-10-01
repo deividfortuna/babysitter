@@ -9,6 +9,8 @@ import {
   Notification,
   shell,
   Tray,
+  type BrowserWindowConstructorOptions,
+  type IpcMainEvent,
   type IpcMainInvokeEvent,
 } from "electron";
 import { existsSync, mkdirSync } from "node:fs";
@@ -23,11 +25,13 @@ import { readUpdateSettings, writeUpdateSettings } from "./main/update-settings"
 import { killLoginShells, shellRunner } from "./main/login-shell";
 import { openQueue } from "./main/pending-open";
 import { concealWindow, quitShortcut } from "./main/quit-shortcut";
+import { isMenuAnchor } from "./shared/app-menu";
 import { defaultDataDir } from "./shared/daemon-discovery";
 import { resolveDaemonLaunch } from "./shared/daemon-launch";
 import { daemonEnvOnce } from "./shared/shell-env";
 import {
   APP_GET_VERSION_CHANNEL,
+  APP_MENU_POPUP_CHANNEL,
   DAEMON_GET_STATUS_CHANNEL,
   DAEMON_RESTART_CHANNEL,
   DAEMON_STATUS_CHANNEL,
@@ -62,8 +66,8 @@ import {
   type DesktopNotification,
   type Presentation,
 } from "./shared/notifications";
-import { canvasColor, isThemePreference, type ThemePreference } from "./shared/theme";
-import { MAC_WINDOW_BUTTON_POSITION } from "./shared/titlebar";
+import { canvasColor, isThemePreference, windowControlsColors, type ThemePreference } from "./shared/theme";
+import { MAC_WINDOW_BUTTON_POSITION, TITLEBAR_HEIGHT } from "./shared/titlebar";
 import { readStoredTheme, writeStoredTheme } from "./main/theme-preference";
 
 if (started) {
@@ -176,11 +180,29 @@ ipcMain.on(THEME_FOLLOW_CHANNEL, (_event, preference: unknown) => {
   nativeTheme.themeSource = preference;
   themePreference = preference;
   writeStoredTheme(dataDir, preference);
-  const canvas = canvasColor(preference, nativeTheme.shouldUseDarkColors);
+  paintWindows();
+});
+
+nativeTheme.on("updated", paintWindows);
+
+function paintWindows() {
+  const canvas = canvasColor(themePreference, nativeTheme.shouldUseDarkColors);
   for (const win of BrowserWindow.getAllWindows()) {
     win.setBackgroundColor(canvas);
+    if (process.platform !== "darwin") win.setTitleBarOverlay(windowControls());
   }
-});
+}
+
+function windowControls() {
+  return { ...windowControlsColors(themePreference, nativeTheme.shouldUseDarkColors), height: TITLEBAR_HEIGHT };
+}
+
+function titleBar(): BrowserWindowConstructorOptions {
+  if (process.platform === "darwin") {
+    return { titleBarStyle: "hiddenInset", trafficLightPosition: MAC_WINDOW_BUTTON_POSITION };
+  }
+  return { titleBarStyle: "hidden", titleBarOverlay: windowControls() };
+}
 
 ipcMain.handle(NOTIFICATIONS_SUPPORTED_CHANNEL, () => Notification.isSupported());
 
@@ -326,6 +348,16 @@ async function markAllRead() {
   }
 }
 
+ipcMain.on(APP_MENU_POPUP_CHANNEL, (event: IpcMainEvent, anchor: unknown) => {
+  if (!isMenuAnchor(anchor)) return;
+  const zoom = event.sender.getZoomFactor();
+  Menu.getApplicationMenu()?.popup({
+    window: BrowserWindow.fromWebContents(event.sender) ?? undefined,
+    x: Math.round(anchor.x * zoom),
+    y: Math.round(anchor.y * zoom),
+  });
+});
+
 ipcMain.handle(DIALOG_PICK_DIRECTORY_CHANNEL, async (event: IpcMainInvokeEvent, defaultPath?: unknown) => {
   const win = BrowserWindow.fromWebContents(event.sender);
   const options = {
@@ -344,12 +376,7 @@ function createWindow() {
     minHeight: 640,
     backgroundColor: canvasColor(themePreference, nativeTheme.shouldUseDarkColors),
     icon: appIconPath(),
-    ...(process.platform === "darwin"
-      ? {
-          titleBarStyle: "hiddenInset" as const,
-          trafficLightPosition: MAC_WINDOW_BUTTON_POSITION,
-        }
-      : {}),
+    ...titleBar(),
     webPreferences: {
       preload: path.join(__dirname, "preload.js"),
     },

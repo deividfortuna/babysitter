@@ -2,6 +2,7 @@ export const DAEMON_GET_STATUS_CHANNEL = "daemon:get-status";
 export const DAEMON_STATUS_CHANNEL = "daemon:status";
 export const DAEMON_RESTART_CHANNEL = "daemon:restart";
 export const APP_GET_VERSION_CHANNEL = "app:get-version";
+export const APP_MENU_POPUP_CHANNEL = "app:menu-popup";
 export const DIALOG_PICK_DIRECTORY_CHANNEL = "dialog:pick-directory";
 export const THEME_FOLLOW_CHANNEL = "theme:follow";
 export const NOTIFICATIONS_SHOW_CHANNEL = "notifications:show";

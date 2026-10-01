@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState, type CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AddRepoDialog } from "@/components/add-repo-dialog";
-import { AppHeader, TitlebarNav } from "@/components/app-header";
+import { TitlebarNav, WindowTitlebar } from "@/components/app-header";
 import { AppSidebar } from "@/components/app-sidebar";
 import { DaemonDown } from "@/components/daemon-down";
 import { LoadingScreen } from "@/components/loading-screen";
@@ -24,9 +24,25 @@ import { useHistoryShortcuts } from "@/hooks/use-history-shortcuts";
 import { useSidebarWidth } from "@/hooks/use-sidebar-width";
 import { useViewHistory } from "@/hooks/use-view-history";
 import { connectEventTransport, type EventsConnection, type ReadyFrame } from "@/lib/event-transport";
+import { isMac, isWindows } from "@/lib/platform";
 import { presents } from "@/lib/presenting";
 import { cn } from "@/lib/utils";
-import { TITLEBAR_HEIGHT, TITLEBAR_NAV_CLEARANCE, TITLEBAR_NAV_LEFT, TITLEBAR_NAV_WIDTH } from "../shared/titlebar";
+import {
+  TITLEBAR_HEIGHT,
+  TITLEBAR_NAV_CLEARANCE,
+  TITLEBAR_NAV_INSET,
+  TITLEBAR_NAV_LEFT,
+  TITLEBAR_NAV_WIDTH,
+  TITLEBAR_NAV_WIDTH_WITH_MENU,
+} from "../shared/titlebar";
+
+function titlebarNavLeft(): number {
+  return isMac ? TITLEBAR_NAV_LEFT : TITLEBAR_NAV_INSET;
+}
+
+function titlebarNavWidth(): number {
+  return isWindows ? TITLEBAR_NAV_WIDTH_WITH_MENU : TITLEBAR_NAV_WIDTH;
+}
 
 export function App() {
   const status = useDaemonStatus();
@@ -117,8 +133,8 @@ export function App() {
         {
           "--sidebar-width": `${sidebar.width}px`,
           "--titlebar-height": `${TITLEBAR_HEIGHT}px`,
-          "--titlebar-nav-left": `${TITLEBAR_NAV_LEFT}px`,
-          "--titlebar-nav-width": `${TITLEBAR_NAV_WIDTH}px`,
+          "--titlebar-nav-left": `${titlebarNavLeft()}px`,
+          "--titlebar-nav-width": `${titlebarNavWidth()}px`,
           "--titlebar-nav-clearance": `${TITLEBAR_NAV_CLEARANCE}px`,
         } as CSSProperties
       }
@@ -140,7 +156,7 @@ export function App() {
         onResizingChange={setResizing}
       />
       <SidebarInset className="h-svh overflow-hidden">
-        <AppHeader {...history} />
+        <WindowTitlebar />
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
           {ready ? screen() : <DaemonDown status={status} />}
         </div>

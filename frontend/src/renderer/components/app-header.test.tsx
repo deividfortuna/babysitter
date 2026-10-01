@@ -3,20 +3,26 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { renderWithProviders } from "@test/test-utils";
 import { useSidebar } from "@/components/ui/sidebar";
+import { bridge } from "@/lib/bridge";
 import type { HistoryControls } from "@/hooks/use-view-history";
-import { AppHeader, TitlebarNav } from "./app-header";
+import { TitlebarNav, WindowTitlebar } from "./app-header";
 
-const platform = vi.hoisted(() => ({ isMac: false }));
+const platform = vi.hoisted(() => ({ isMac: false, isWindows: false }));
 
 vi.mock("@/lib/platform", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/platform")>()),
   get isMac() {
     return platform.isMac;
   },
+  get isWindows() {
+    return platform.isWindows;
+  },
 }));
 
 afterEach(() => {
   platform.isMac = false;
+  platform.isWindows = false;
+  vi.restoreAllMocks();
 });
 
 function history(overrides: Partial<HistoryControls> = {}): HistoryControls {
@@ -27,22 +33,21 @@ function titlebarNav() {
   return screen.getByRole("button", { name: "Toggle Sidebar" }).closest("[data-slot=titlebar-nav]");
 }
 
-test("keeps the sidebar toggle in the same header when the sidebar collapses", async () => {
-  const user = userEvent.setup();
-  renderWithProviders(<AppHeader {...history()} />, { withSidebar: true });
+test("off macOS draws a title bar that drags the window under the window buttons", () => {
+  const { container } = renderWithProviders(<WindowTitlebar />, { withSidebar: true });
 
-  const header = screen.getByRole("banner");
-  const toggle = screen.getByRole("button", { name: "Toggle Sidebar" });
-  expect(header).toContainElement(toggle);
-
-  await user.click(toggle);
-
-  expect(screen.getByRole("banner")).toBe(header);
-  expect(header).toContainElement(screen.getByRole("button", { name: "Toggle Sidebar" }));
+  expect(container.querySelector("[data-slot=window-titlebar]")).toHaveClass("app-drag", "h-titlebar");
 });
 
-test("puts back and forward after the sidebar toggle in the header", () => {
-  renderWithProviders(<AppHeader {...history()} />, { withSidebar: true });
+test("on macOS leaves the title bar to the window, which draws its buttons over the views", () => {
+  platform.isMac = true;
+  const { container } = renderWithProviders(<WindowTitlebar />, { withSidebar: true });
+
+  expect(container.querySelector("[data-slot=window-titlebar]")).not.toBeInTheDocument();
+});
+
+test("off Windows puts back and forward after the sidebar toggle", () => {
+  renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });
 
   const buttons = screen
     .getAllByRole("button")
@@ -50,8 +55,31 @@ test("puts back and forward after the sidebar toggle in the header", () => {
   expect(buttons).toEqual(["Toggle Sidebar", "Go back", "Go forward"]);
 });
 
+test("on Windows puts the menu of the app before the sidebar toggle", () => {
+  platform.isWindows = true;
+  renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });
+
+  const buttons = screen
+    .getAllByRole("button")
+    .map((button) => button.getAttribute("aria-label") ?? button.textContent);
+  expect(buttons).toEqual(["Menu", "Toggle Sidebar", "Go back", "Go forward"]);
+});
+
+test("on Windows opens the menu of the app under its button", async () => {
+  platform.isWindows = true;
+  const popupMenu = vi.spyOn(bridge.app, "popupMenu");
+  const user = userEvent.setup();
+  renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });
+  const button = screen.getByRole("button", { name: "Menu" });
+  vi.spyOn(button, "getBoundingClientRect").mockReturnValue(new DOMRect(12, 10, 28, 28));
+
+  await user.click(button);
+
+  expect(popupMenu).toHaveBeenCalledWith({ x: 12, y: 38 });
+});
+
 test("disables back and forward when the history cannot move", () => {
-  renderWithProviders(<AppHeader {...history()} />, { withSidebar: true });
+  renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });
 
   expect(screen.getByRole("button", { name: "Go back" })).toBeDisabled();
   expect(screen.getByRole("button", { name: "Go forward" })).toBeDisabled();
@@ -60,7 +88,7 @@ test("disables back and forward when the history cannot move", () => {
 test("goes back and forward when the history can move", async () => {
   const user = userEvent.setup();
   const controls = history({ canGoBack: true, canGoForward: true });
-  renderWithProviders(<AppHeader {...controls} />, { withSidebar: true });
+  renderWithProviders(<TitlebarNav {...controls} />, { withSidebar: true });
 
   await user.click(screen.getByRole("button", { name: "Go back" }));
   await user.click(screen.getByRole("button", { name: "Go forward" }));
@@ -71,7 +99,7 @@ test("goes back and forward when the history can move", async () => {
 
 test("shows the shortcut in the tooltip of back", async () => {
   const user = userEvent.setup();
-  renderWithProviders(<AppHeader {...history({ canGoBack: true })} />, { withSidebar: true });
+  renderWithProviders(<TitlebarNav {...history({ canGoBack: true })} />, { withSidebar: true });
 
   await user.hover(screen.getByRole("button", { name: "Go back" }));
 
@@ -85,7 +113,7 @@ function SidebarState() {
 
 test("shows the shortcut in the tooltip of the sidebar toggle", async () => {
   const user = userEvent.setup();
-  renderWithProviders(<AppHeader {...history()} />, { withSidebar: true });
+  renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });
 
   await user.hover(screen.getByRole("button", { name: "Toggle Sidebar" }));
 
@@ -109,7 +137,7 @@ test.each([
   const user = userEvent.setup();
   renderWithProviders(
     <>
-      <AppHeader {...history()} />
+      <TitlebarNav {...history()} />
       <SidebarState />
     </>,
     { withSidebar: true },
@@ -123,18 +151,9 @@ test.each([
   expect(screen.getByRole("status")).toHaveTextContent("open");
 });
 
-test("on macOS keeps the sidebar toggle, back and forward beside the window buttons when the sidebar is open or collapsed", async () => {
-  platform.isMac = true;
+test("keeps the sidebar toggle, back and forward in the title bar when the sidebar is open or collapsed", async () => {
   const user = userEvent.setup();
-  renderWithProviders(
-    <>
-      <AppHeader {...history()} />
-      <TitlebarNav {...history()} />
-    </>,
-    { withSidebar: true },
-  );
-
-  expect(screen.queryByRole("banner")).not.toBeInTheDocument();
+  renderWithProviders(<TitlebarNav {...history()} />, { withSidebar: true });
 
   const cluster = titlebarNav();
   expect(cluster).toHaveClass("fixed", "left-titlebar-nav-left");

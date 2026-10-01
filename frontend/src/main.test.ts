@@ -1,12 +1,15 @@
 import { beforeEach, expect, test, vi } from "vite-plus/test";
 import {
+  APP_MENU_POPUP_CHANNEL,
   NOTIFICATIONS_CLICK_CHANNEL,
   NOTIFICATIONS_OPEN_READY_CHANNEL,
   NOTIFICATIONS_SHOW_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
+  THEME_FOLLOW_CHANNEL,
   UPDATES_GET_STATUS_CHANNEL,
   UPDATES_SET_SETTINGS_CHANNEL,
 } from "./shared/ipc";
+import { CANVAS, INK } from "./shared/theme";
 import { MAC_WINDOW_BUTTON_HEIGHT, TITLEBAR_HEIGHT } from "./shared/titlebar";
 
 type Handler = (...args: never[]) => unknown;
@@ -31,6 +34,9 @@ const electron = vi.hoisted(() => ({
   attention: 0,
   squirrelLaunch: false,
   daemonStarts: 0,
+  overlays: [] as Record<string, unknown>[],
+  zoom: 1,
+  popups: [] as Record<string, unknown>[],
 }));
 
 vi.mock("./main/update-settings", () => ({
@@ -83,6 +89,9 @@ vi.mock("electron", () => {
     }
     setWindowOpenHandler() {}
     openDevTools() {}
+    getZoomFactor() {
+      return electron.zoom;
+    }
   }
   class FakeBrowserWindow {
     webContents = new FakeWebContents();
@@ -121,6 +130,10 @@ vi.mock("electron", () => {
     }
     loadURL() {}
     loadFile() {}
+    setBackgroundColor() {}
+    setTitleBarOverlay(options: Record<string, unknown>) {
+      electron.overlays.push(options);
+    }
   }
   class FakeNotification {
     private clicked: (() => void) | null = null;
@@ -165,8 +178,11 @@ vi.mock("electron", () => {
       handle: (channel: string, fn: Handler) => electron.handlers.set(channel, fn),
       on: (channel: string, fn: Handler) => electron.listeners.set(channel, fn),
     },
-    Menu: { buildFromTemplate: (template: unknown) => template },
-    nativeTheme: { shouldUseDarkColors: false, themeSource: "system" },
+    Menu: {
+      buildFromTemplate: (template: unknown) => template,
+      getApplicationMenu: () => ({ popup: (options: Record<string, unknown>) => electron.popups.push(options) }),
+    },
+    nativeTheme: { shouldUseDarkColors: false, themeSource: "system", on() {} },
     Notification: FakeNotification,
     shell: { openExternal: (url: string) => electron.opened.push(url) },
     Tray: class {
@@ -197,6 +213,9 @@ async function loadMain() {
   electron.updateSettings = {};
   electron.attention = 0;
   electron.daemonStarts = 0;
+  electron.overlays.length = 0;
+  electron.zoom = 1;
+  electron.popups.length = 0;
   vi.resetModules();
   vi.stubGlobal("MAIN_WINDOW_VITE_DEV_SERVER_URL", undefined);
   vi.stubGlobal("MAIN_WINDOW_VITE_NAME", "main_window");
@@ -213,6 +232,18 @@ function rendererReady(index = 0) {
   const listener = electron.listeners.get(NOTIFICATIONS_OPEN_READY_CHANNEL);
   if (!listener) throw new Error("the main process listens for no renderer");
   (listener as (event: unknown) => unknown)({ sender: electron.windows[index].webContents });
+}
+
+function followTheme(preference: string) {
+  const listener = electron.listeners.get(THEME_FOLLOW_CHANNEL);
+  if (!listener) throw new Error("the main process follows no theme");
+  (listener as (event: unknown, preference: unknown) => unknown)(null, preference);
+}
+
+function popupMenu(anchor: unknown) {
+  const listener = electron.listeners.get(APP_MENU_POPUP_CHANNEL);
+  if (!listener) throw new Error("the main process opens no menu");
+  (listener as (event: unknown, anchor: unknown) => unknown)({ sender: electron.windows[0].webContents }, anchor);
 }
 
 beforeEach(async () => {
@@ -294,6 +325,49 @@ test("on macOS the window buttons sit in the middle of the title bar", async () 
   const position = electron.windowOptions[0].trafficLightPosition as { y: number };
   expect(position.y * 2 + MAC_WINDOW_BUTTON_HEIGHT).toBe(TITLEBAR_HEIGHT);
   vi.unstubAllGlobals();
+});
+
+test("on Windows the window draws no title bar or menu and puts its buttons over the app in the colors of the theme", async () => {
+  vi.stubGlobal("process", { ...process, platform: "win32" });
+  electron.theme = "dark";
+  await loadMain();
+  electron.appEvents.get("ready")?.();
+
+  expect(electron.windowOptions[0]).toMatchObject({
+    titleBarStyle: "hidden",
+    titleBarOverlay: { color: CANVAS.dark, symbolColor: INK.dark, height: TITLEBAR_HEIGHT },
+  });
+  vi.unstubAllGlobals();
+});
+
+test("on Windows a change of theme paints the window buttons again", async () => {
+  vi.stubGlobal("process", { ...process, platform: "win32" });
+  electron.theme = "dark";
+  await loadMain();
+  electron.appEvents.get("ready")?.();
+
+  followTheme("light");
+
+  expect(electron.overlays.at(-1)).toEqual({ color: CANVAS.light, symbolColor: INK.light, height: TITLEBAR_HEIGHT });
+  vi.unstubAllGlobals();
+});
+
+test("the menu of the app opens under the point the renderer gives, in the zoom of the page", () => {
+  electron.appEvents.get("ready")?.();
+  electron.zoom = 1.5;
+
+  popupMenu({ x: 12, y: 38 });
+
+  expect(electron.popups).toEqual([{ window: electron.windows[0], x: 18, y: 57 }]);
+});
+
+test("the menu of the app stays closed for a point it cannot read", () => {
+  electron.appEvents.get("ready")?.();
+
+  popupMenu({ x: "12", y: 38 });
+  popupMenu(null);
+
+  expect(electron.popups).toEqual([]);
 });
 
 test("closing the window where a menu bar item runs leaves the app alive", async () => {
