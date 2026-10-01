@@ -5,7 +5,9 @@ import (
 	"errors"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -148,6 +150,26 @@ func TestDiffWaitsForAStopThatHoldsTheLockOfTheWatch(t *testing.T) {
 	unlock()
 	if err := <-done; !errors.Is(err, ErrWatchStopped) {
 		t.Fatalf("Diff() during a stop error = %v, want ErrWatchStopped", err)
+	}
+}
+
+func TestDiffMakesNoCallWhileTheRateLimitPauses(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.guard = (&ghclient.RateGuard{Floor: 10}).Pausing(func() time.Time { return fx.clock() })
+	fx.update(func() { fx.pr.Diff = "diff --git a/x.go b/x.go\n+new\n" })
+	w := fx.start()
+	fx.api.SetRate(&ghfake.Rate{Limit: 5000, Remaining: 3, Reset: fx.clock().Add(time.Hour)})
+	if _, err := fx.svc.Diff(context.Background(), w.ID); !errors.Is(err, ghclient.ErrPaused) {
+		t.Fatalf("Diff() that used the budget error = %v, want ErrPaused", err)
+	}
+	fx.api.Reset()
+
+	if _, err := fx.svc.Diff(context.Background(), w.ID); !errors.Is(err, ghclient.ErrPaused) {
+		t.Fatalf("Diff() during the pause error = %v, want ErrPaused", err)
+	}
+	if calls := fx.api.Calls(ghfake.RoutePull); len(calls) != 0 {
+		t.Fatalf("pull reads during the pause = %+v, want none", calls)
 	}
 }
 

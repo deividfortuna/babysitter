@@ -67,6 +67,9 @@ func (s *Service) Diff(ctx context.Context, id int64) (string, error) {
 	if w.Status != store.WatchActive {
 		return "", ErrWatchStopped
 	}
+	if s.guard.Paused() {
+		return "", ghclient.ErrPaused
+	}
 	client, err := s.newClient(ctx)
 	if err != nil {
 		return "", err
