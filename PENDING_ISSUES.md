@@ -18,7 +18,7 @@ its issue does and goes with the fix.
 | 42  | The installed service and the app daemon poll the same repositories twice | none, seen in the check of the rate limit |
 | 46  | Two daemons can open the same database, and nothing stops the second | none, seen in the screenshot run of 45 |
 | 52  | A message that waits on a hung fetch reaches the agent twice          | none, seen in the live run of the Ghostty terminal |
-| 54  | Claude Code warns that the deny rules of the author commands never match | none, seen in the live run of watch view and watch diff |
+| 54  | Claude Code warns that the `:*` deny rules of the author commands never match | none, seen in the live run of watch view and watch diff |
 ## 04. prwatch cleanups, as a backlog
 
 Found: 2026-09-20, review of `backend/internal/prwatch`, and triaged on
@@ -264,7 +264,7 @@ did not submit it. The next message submitted both. A cancelled send
 must type nothing, or the send must not wait on the fetch without a
 limit. Issue 23 is in the same path of the daemon.
 
-## 54. Claude Code warns that the deny rules of the author commands never match
+## 54. Claude Code warns that the `:*` deny rules of the author commands never match
 
 Found: 2026-10-01, in the live run of `watch view` and `watch diff`, on
 watch 1 of `deividfortuna/gha-playground#29`, provider `claude`.
