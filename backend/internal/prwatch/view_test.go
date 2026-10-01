@@ -9,6 +9,7 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
+	"github.com/deividfortuna/babysitter/internal/store"
 )
 
 func TestViewKeepsTheLastSnapshotOfTheWatch(t *testing.T) {
@@ -125,6 +126,29 @@ func TestDiffReadsTheDiffOfThePullRequestFromGitHub(t *testing.T) {
 	}
 	if _, err := fx.svc.Diff(context.Background(), w.ID); !errors.Is(err, ErrWatchStopped) {
 		t.Fatalf("Diff() of a stopped watch error = %v, want ErrWatchStopped", err)
+	}
+}
+
+func TestDiffWaitsForAStopThatHoldsTheLockOfTheWatch(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.update(func() { fx.pr.Diff = "diff --git a/x.go b/x.go\n+new\n" })
+	w := fx.start()
+
+	unlock := fx.svc.locks.Lock(w.ID)
+	done := make(chan error, 1)
+	go func() {
+		_, err := fx.svc.Diff(context.Background(), w.ID)
+		done <- err
+	}()
+	time.Sleep(200 * time.Millisecond)
+	if _, err := fx.svc.stop(context.Background(), w.ID, store.StopUser, "", StopOptions{}); err != nil {
+		unlock()
+		t.Fatal(err)
+	}
+	unlock()
+	if err := <-done; !errors.Is(err, ErrWatchStopped) {
+		t.Fatalf("Diff() during a stop error = %v, want ErrWatchStopped", err)
 	}
 }
 
