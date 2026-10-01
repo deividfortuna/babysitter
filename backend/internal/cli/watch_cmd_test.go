@@ -208,6 +208,9 @@ func newFakeDaemon() *fakeDaemon {
 		}
 		fmt.Fprint(w, `{"decision":"allow"}`)
 	})
+	d.mux.HandleFunc("/api/v1/watches/4/hook", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `not json`)
+	})
 	d.mux.HandleFunc("/api/v1/watches/5/hook", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
 	})
@@ -569,13 +572,14 @@ func TestHookCommandAppliesTheVerdictOfTheDaemon(t *testing.T) {
 		args   []string
 		reason string
 	}{
-		"no daemon":              {[]string{"--data-dir", t.TempDir(), "--watch", "1"}, tryAgain},
-		"a 500 with no error":    {[]string{"--watch", "5"}, tryAgain},
-		"no answer":              {[]string{"--watch", "8", "--timeout", "200ms"}, tryAgain},
-		"no watch":               {nil, doNotTryAgain},
-		"an error of the daemon": {[]string{"--watch", "9"}, doNotTryAgain},
-		"a body with no verdict": {[]string{"--watch", "6"}, doNotTryAgain},
-		"an empty body":          {[]string{"--watch", "7"}, doNotTryAgain},
+		"no daemon":               {[]string{"--data-dir", t.TempDir(), "--watch", "1"}, tryAgain},
+		"no answer":               {[]string{"--watch", "8", "--timeout", "200ms"}, tryAgain},
+		"no watch":                {nil, doNotTryAgain},
+		"an error of the daemon":  {[]string{"--watch", "9"}, doNotTryAgain},
+		"a 500 with no error":     {[]string{"--watch", "5"}, doNotTryAgain},
+		"a body that is not JSON": {[]string{"--watch", "4"}, doNotTryAgain},
+		"a body with no verdict":  {[]string{"--watch", "6"}, doNotTryAgain},
+		"an empty body":           {[]string{"--watch", "7"}, doNotTryAgain},
 	} {
 		r := runHook(dataDir, ls, append([]string{"pre-tool-use"}, c.args...)...)
 		if reason := r.refusal(t); !strings.HasPrefix(reason, c.reason) {
