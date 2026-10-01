@@ -42,9 +42,18 @@ vi.mock("vite", () => ({
 
 const RESTART_DEBOUNCE_MS = 300;
 
+const signalHandlers = new Map<string, () => void>();
+
 async function startDev() {
+  dev.apps = [];
+  dev.bundleChanged = [];
+  signalHandlers.clear();
+  vi.resetModules();
   vi.useFakeTimers();
-  vi.spyOn(process, "once").mockReturnValue(process);
+  vi.spyOn(process, "once").mockImplementation((event, listener) => {
+    signalHandlers.set(String(event), listener as () => void);
+    return process;
+  });
   vi.spyOn(process, "exit").mockImplementation(() => undefined as never);
   await import("./dev.mjs");
   await vi.advanceTimersByTimeAsync(RESTART_DEBOUNCE_MS);
@@ -58,6 +67,17 @@ async function changeBundle() {
 afterEach(() => {
   vi.useRealTimers();
   vi.restoreAllMocks();
+});
+
+test("an app that exits after the runner begins to stop is not replaced by a new one", async () => {
+  await startDev();
+  const [first] = dev.apps;
+
+  await changeBundle();
+  signalHandlers.get("SIGINT")?.();
+  first.emit("exit", 0);
+
+  expect(dev.apps).toHaveLength(1);
 });
 
 test("bundle changes while the old app still stops start one new app, not one for each change", async () => {

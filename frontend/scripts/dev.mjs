@@ -32,6 +32,7 @@ function bundlesReady() {
 }
 
 function startApp() {
+  if (stopping) return;
   const env = { ...process.env, VITE_DEV_SERVER_URL: devServerUrl };
   delete env.ELECTRON_RUN_AS_NODE;
   const child = spawn(electronPath, [".", ...electronArgs], { cwd: frontendDir, stdio: "inherit", env });
