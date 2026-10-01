@@ -68,9 +68,12 @@ what to correct, so report it and stop. Do not work around it.
 ## 2. Read the pull request one time
 
 Run `babysitter watch view <watch>` and `babysitter watch diff <watch>`,
-then look at the code that the diff touches. Both read what the daemon
-already has, so they cost no GitHub API budget. The messages of the daemon are short and point at one item. You
-can only judge them with the change in your head.
+then look at the code that the diff touches. `watch view` reads the last
+snapshot of the daemon. `watch diff` fetches the base and the head branch
+with git each time, so it needs git access to the remote. Neither calls
+the GitHub API, so they cost no API budget. The messages of the daemon
+are short and point at one item. You can only judge them with the change
+in your head.
 
 ## 3. Loop on `watch next`
 
