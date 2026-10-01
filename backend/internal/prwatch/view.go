@@ -25,8 +25,13 @@ func (s *Service) collect(ctx context.Context, client *github.Client, w store.Wa
 	if err != nil {
 		return nil, err
 	}
-	s.snapshots.set(w.ID, snap)
+	s.publish(w.ID, snap)
 	return snap, nil
+}
+
+func (s *Service) publish(id int64, snap *snapshot.Snapshot) {
+	view := *snap
+	s.snapshots.set(id, &view)
 }
 
 func (s *Service) View(ctx context.Context, id int64) (*snapshot.Snapshot, error) {

@@ -43,6 +43,26 @@ func TestViewKeepsTheLastSnapshotOfTheWatch(t *testing.T) {
 	}
 }
 
+func TestViewIsNotChangedByTheRestOfThePoll(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.answered()
+	w := fx.start()
+	fx.agentIdle(w)
+
+	fx.poll(w)
+	if asked := fx.asked(); len(asked) != 1 {
+		t.Fatalf("asked = %v, want the poll to ask bob for a new review", asked)
+	}
+	snap, err := fx.svc.View(context.Background(), w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(snap.PR.RequestedReviewers) != 0 {
+		t.Fatalf("View() requested reviewers = %v, want none as GitHub returned them", snap.PR.RequestedReviewers)
+	}
+}
+
 func TestDiffGoesFromTheMergeBaseToThePushedHead(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
