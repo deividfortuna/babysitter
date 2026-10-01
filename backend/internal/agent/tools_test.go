@@ -77,6 +77,8 @@ func TestIsAuthorDecisionTakesEverySpellingOfADecision(t *testing.T) {
 		"babysitter >|/tmp/out -o json watch merge 7",
 		"babysitter {fd}>/tmp/out watch merge 7",
 		"babysitter -o json 2>&1 watch merge 7",
+		"BABYSITTER watch merge 7",
+		"/usr/local/bin/BabySitter -o json watch approve 7",
 	} {
 		if !IsAuthorDecision(command) {
 			t.Errorf("IsAuthorDecision(%q) = false", command)

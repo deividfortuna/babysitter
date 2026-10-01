@@ -61,7 +61,7 @@ func runsAuthorDecision(words []shellWord) bool {
 		if word.separator {
 			continue
 		}
-		if strings.Contains(word.text, "babysitter") {
+		if namesBabysitter(word.text) {
 			args := commandArgs(words[i+1:])
 			subcommands := watchSubcommands(args)
 			if slices.ContainsFunc(subcommands, isDecisionSubcommand) {
@@ -80,6 +80,10 @@ func runsAuthorDecision(words []shellWord) bool {
 		}
 	}
 	return false
+}
+
+func namesBabysitter(word string) bool {
+	return strings.Contains(strings.ToLower(word), "babysitter")
 }
 
 func isDecisionSubcommand(subcommand string) bool {
