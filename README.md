@@ -380,7 +380,7 @@ babysitter watch list                             # the watched pull requests
 babysitter watch list --all                       # stopped watches too
 babysitter watch status 1                         # state, checks, the agent, and what blocks the merge
 babysitter watch view 1                           # the pull request as the daemon last read it: reviewers, labels, size, checks, description
-babysitter watch diff 1                           # the diff of the pull request, from the merge base with its base branch
+babysitter watch diff 1                           # the diff of the pull request, as gh pr diff shows it, through the cache of the daemon
 babysitter watch activity 1                       # what happened on watch 1
 babysitter watch activity 1 --since 20 --limit 50 # only the rows after row 20, at most 50
 babysitter watch poll 1                           # ask the daemon to look at the pull request now
@@ -1216,13 +1216,15 @@ daemon: state, branches, mergeability, reviewers, labels, assignees,
 milestone, auto-merge, size, checks and the description. It makes no
 call to GitHub and marks no review item as seen. After a restart of the
 daemon, it answers only after the first poll of the watch. `watch diff`
-fetches the base and the head branch into the worktree of the watch, or
-into the checkout of a self watch, and prints the diff of the head
-against their merge base: the diff of the pull request on GitHub. For a
-pull request from a fork, it fetches the base branch from the base
-repository, because origin is the fork. Commits that are not pushed yet
-are not in it. The agent reads the pull
-request with these two commands when its session starts.
+prints the diff of the pull request as GitHub serves it, the same diff
+as `gh pr diff`: from where the head left the base to the pushed head.
+Commits that are not pushed yet are not in it. The daemon reads it
+through its cache of conditional requests. The ETag of a diff is a hash
+of the diff, so comments and reviews do not change it: a diff that did
+not change gets a 304 and costs no API budget. GitHub serves no diff
+for a very large pull request; `watch diff` then says so, and `git diff`
+in the checkout is the way to read it. The agent reads the pull request
+with these two commands when its session starts.
 
 ### Take the session over
 

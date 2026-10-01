@@ -3,13 +3,12 @@ package prwatch
 import (
 	"context"
 	"errors"
-	"slices"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
-	"github.com/deividfortuna/babysitter/internal/store"
 )
 
 func TestViewKeepsTheLastSnapshotOfTheWatch(t *testing.T) {
@@ -82,136 +81,61 @@ func TestViewIsNotChangedByTheRestOfThePoll(t *testing.T) {
 	}
 }
 
-func TestDiffGoesFromTheMergeBaseToThePushedHead(t *testing.T) {
+func TestViewWaitsForTheLockOfTheWatch(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	fx.rel.set(func(f *fakeRelease) {
-		f.branches = map[string]string{"main": "m2"}
-		f.history["m2"] = []string{"m1"}
-		f.history["abc"] = []string{"m1"}
-	})
 	w := fx.start()
 
-	d, err := fx.svc.Diff(context.Background(), w.ID)
-	if err != nil {
-		t.Fatalf("Diff() error = %v", err)
+	unlock := fx.svc.locks.Lock(w.ID)
+	done := make(chan error, 1)
+	go func() {
+		_, err := fx.svc.View(context.Background(), w.ID)
+		done <- err
+	}()
+	select {
+	case err := <-done:
+		unlock()
+		t.Fatalf("View() returned %v while a stop could hold the lock of the watch", err)
+	case <-time.After(200 * time.Millisecond):
 	}
-	if d.Base != "m1" || d.Head != "abc" || !strings.Contains(d.Diff, "-m1\n+abc") {
-		t.Fatalf("Diff() = %+v, want from the merge base m1 to the head abc", d)
-	}
-	var remotes []string
-	fx.rel.set(func(f *fakeRelease) { remotes = slices.Clone(f.fetchURLs) })
-	if !slices.Equal(remotes, []string{"origin"}) {
-		t.Fatalf("base fetched from %v, want origin into no shared ref", remotes)
+	unlock()
+	if err := <-done; err != nil {
+		t.Fatalf("View() after the lock error = %v", err)
 	}
 }
 
-func TestDiffInAShallowCheckoutSaysToUnshallowIt(t *testing.T) {
+func TestDiffReadsTheDiffOfThePullRequestFromGitHub(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	fx.rel.set(func(f *fakeRelease) {
-		f.branches = map[string]string{"main": "m2"}
-		f.shallow = true
-	})
+	fx.update(func() { fx.pr.Diff = "diff --git a/x.go b/x.go\n+new\n" })
 	w := fx.start()
+	fx.api.Reset()
 
-	_, err := fx.svc.Diff(context.Background(), w.ID)
-	if !errors.Is(err, ErrShallowCheckout) || !strings.Contains(err.Error(), "git fetch --unshallow") {
-		t.Fatalf("Diff() in a shallow checkout error = %v, want ErrShallowCheckout with the command that fixes it", err)
+	diff, err := fx.svc.Diff(context.Background(), w.ID)
+	if err != nil || diff != "diff --git a/x.go b/x.go\n+new\n" {
+		t.Fatalf("Diff() = %q, %v", diff, err)
+	}
+	calls := fx.api.Calls(ghfake.RoutePull)
+	if len(calls) != 1 || !strings.Contains(calls[0].Accept, "diff") {
+		t.Fatalf("pull reads = %+v, want one read of the diff media type", calls)
+	}
+
+	if _, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := fx.svc.Diff(context.Background(), w.ID); !errors.Is(err, ErrWatchStopped) {
+		t.Fatalf("Diff() of a stopped watch error = %v, want ErrWatchStopped", err)
 	}
 }
 
-func TestDiffOfAForkReadsTheBaseFromTheBaseRepository(t *testing.T) {
+func TestDiffOfASelfWatch(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	fx.api.Repo("alice/hello")
-	fx.update(func() { fx.pr.HeadRepo = "alice/hello" })
-	fork := t.TempDir()
-	gitIn(t, fork, []string{"init", "-q"}, []string{"remote", "add", "origin", "git@github.com:alice/hello.git"},
-		[]string{"config", "user.name", "Alice"}, []string{"config", "user.email", "alice@example.com"})
-	fx.co.dir = fork
-	fx.rel.set(func(f *fakeRelease) {
-		f.branches = map[string]string{"main": "stale"}
-		f.upstream = map[string]string{"main": "m2"}
-		f.history["m2"] = []string{"m1"}
-		f.history["abc"] = []string{"m1"}
-	})
-	w, err := fx.svc.Start(context.Background(), StartRequest{Target: pr3})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-
-	d, err := fx.svc.Diff(context.Background(), w.ID)
-	if err != nil {
-		t.Fatalf("Diff() error = %v", err)
-	}
-	if d.Base != "m1" || d.Head != "abc" {
-		t.Fatalf("Diff() = %+v, want from the merge base m1 with the main of octo/hello", d)
-	}
-	var urls []string
-	fx.rel.set(func(f *fakeRelease) { urls = slices.Clone(f.fetchURLs) })
-	if len(urls) != 1 {
-		t.Fatalf("fetched from %v, want the base repository once", urls)
-	}
-	if owner, name, err := store.ParseFullName(urls[0]); err != nil || owner+"/"+name != "octo/hello" {
-		t.Fatalf("fetched the base from %s, want octo/hello", urls[0])
-	}
-}
-
-func TestSiblingURLKeepsTheTransportOfOrigin(t *testing.T) {
-	t.Parallel()
-	for origin, want := range map[string]string{
-		"https://github.com/alice/hello.git":                   "https://github.com/octo/hello.git",
-		"https://x-access-token:secret@github.com/alice/hello": "https://github.com/octo/hello.git",
-		"git@github.com:alice/hello.git":                       "git@github.com:octo/hello.git",
-		"ssh://git@github.com/alice/hello.git/":                "ssh://git@github.com/octo/hello.git",
-	} {
-		if got := siblingURL(origin, "octo/hello"); got != want {
-			t.Errorf("siblingURL(%q) = %q, want %q", origin, got, want)
-		}
-	}
-}
-
-func TestViewAndDiffWaitForTheLockOfTheWatch(t *testing.T) {
-	t.Parallel()
-	for name, read := range map[string]func(*Service, int64) error{
-		"view": func(s *Service, id int64) error { _, err := s.View(context.Background(), id); return err },
-		"diff": func(s *Service, id int64) error { _, err := s.Diff(context.Background(), id); return err },
-	} {
-		t.Run(name, func(t *testing.T) {
-			t.Parallel()
-			fx := newFixture(t)
-			w := fx.start()
-
-			unlock := fx.svc.locks.Lock(w.ID)
-			done := make(chan error, 1)
-			go func() { done <- read(fx.svc, w.ID) }()
-			select {
-			case err := <-done:
-				unlock()
-				t.Fatalf("%s returned %v while a stop could hold the lock of the watch", name, err)
-			case <-time.After(200 * time.Millisecond):
-			}
-			unlock()
-			if err := <-done; err != nil {
-				t.Fatalf("%s after the lock error = %v", name, err)
-			}
-		})
-	}
-}
-
-func TestDiffOfASelfWatchReadsItsCheckout(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
+	fx.update(func() { fx.pr.Diff = "diff --git a/x.go b/x.go\n+new\n" })
 	w := fx.startSelf()
 
-	if _, err := fx.svc.Diff(context.Background(), w.ID); err != nil {
-		t.Fatalf("Diff() of a self watch error = %v", err)
-	}
-	var dirs []string
-	fx.rel.set(func(f *fakeRelease) { dirs = slices.Clone(f.fetchDirs) })
-	if len(dirs) != 2 || dirs[0] != fx.dir || dirs[1] != fx.dir {
-		t.Fatalf("fetched in %v, want the base and the head in the checkout %s", dirs, fx.dir)
+	if diff, err := fx.svc.Diff(context.Background(), w.ID); err != nil || diff == "" {
+		t.Fatalf("Diff() of a self watch = %q, %v", diff, err)
 	}
 	if _, err := fx.svc.View(context.Background(), w.ID); err != nil {
 		t.Fatalf("View() of a self watch error = %v", err)

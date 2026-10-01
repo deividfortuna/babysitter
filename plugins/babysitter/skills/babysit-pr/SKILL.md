@@ -69,9 +69,9 @@ what to correct, so report it and stop. Do not work around it.
 
 Run `babysitter watch view <watch>` and `babysitter watch diff <watch>`,
 then look at the code that the diff touches. `watch view` reads the last
-snapshot of the daemon. `watch diff` fetches the base and the head branch
-with git each time, so it needs git access to the remote. Neither calls
-the GitHub API, so they cost no API budget. The messages of the daemon
+snapshot of the daemon and makes no call to GitHub. `watch diff` reads the
+diff from GitHub through the cache of the daemon, so a diff that did not
+change costs no API budget. The messages of the daemon
 are short and point at one item. You can only judge them with the change
 in your head.
 

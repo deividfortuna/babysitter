@@ -81,8 +81,12 @@ type PR struct {
 	Deletions    int
 	Commits      int
 	ChangedFiles int
-	CreatedAt    time.Time
-	UpdatedAt    time.Time
+	// Diff is what the pull request answers with for the diff media type.
+	// Its ETag is a hash of the diff, as on GitHub, so a request with that
+	// ETag in If-None-Match gets 304.
+	Diff      string
+	CreatedAt time.Time
+	UpdatedAt time.Time
 	// Requested are the users asked for a review, as REST lists them.
 	Requested []string
 	// RequestedTeams are the teams asked for a review, which only GraphQL

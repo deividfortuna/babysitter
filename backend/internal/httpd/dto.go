@@ -121,10 +121,7 @@ type PullRequestChecks struct {
 }
 
 type PullRequestDiff struct {
-	Base      string `json:"base" description:"The merge base of the base branch and the head: the commit the diff starts from"`
-	Head      string `json:"head" description:"The head of the pull request on GitHub, as the daemon fetched it"`
-	Diff      string `json:"diff" description:"The plain unified diff of the pull request"`
-	Truncated bool   `json:"truncated" description:"The diff was longer than one megabyte, so it stops at the last whole file under that size"`
+	Diff string `json:"diff" description:"The plain unified diff of the pull request, as GitHub serves it"`
 }
 
 type PullRequestQuery struct {

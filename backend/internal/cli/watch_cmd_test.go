@@ -199,12 +199,8 @@ func newFakeDaemon() *fakeDaemon {
 			`"autoMerge":"squash","additions":12,"deletions":3,"commits":2,"changedFiles":4,"createdAt":"2026-09-01T00:00:00Z",`+
 			`"body":"Fixes the retry loop.","checks":{"status":"success","passed":2,"failed":0,"pending":0,"skipped":0},"snapshotAt":"2026-09-07T12:00:00Z"}`)
 	})
-	d.mux.HandleFunc("/api/v1/watches/1/diff", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
-			w.WriteHeader(http.StatusMethodNotAllowed)
-			return
-		}
-		fmt.Fprint(w, `{"base":"m1","head":"abc","diff":"diff --git a/x.go b/x.go\n-old\n+new\n","truncated":true}`)
+	d.mux.HandleFunc("GET /api/v1/watches/1/diff", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"diff":"diff --git a/x.go b/x.go\n-old\n+new\n"}`)
 	})
 	d.mux.HandleFunc("/api/v1/watches/1/hook", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
@@ -426,12 +422,9 @@ func TestViewAndDiffCommands(t *testing.T) {
 		}
 	}
 
-	run := runInTerminal(t, d, nil, "", "watch", "diff", "1")
-	if run.err != nil || run.out != "diff --git a/x.go b/x.go\n-old\n+new\n" {
-		t.Fatalf("diff = %q, %v", run.out, run.err)
-	}
-	if !strings.Contains(run.errOut, "git diff m1 abc") {
-		t.Fatalf("diff stderr = %q, want how to read the rest of a cut diff", run.errOut)
+	out, err = runWatch(t, d, "diff", "1")
+	if err != nil || out != "diff --git a/x.go b/x.go\n-old\n+new\n" {
+		t.Fatalf("diff = %q, %v", out, err)
 	}
 }
 

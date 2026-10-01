@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"cmp"
 	"fmt"
 	"io"
 	"strings"
@@ -94,24 +93,18 @@ func newWatchDiffCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	return &cobra.Command{
 		Use:   "diff <watch>",
 		Short: "Print the diff of the pull request of a watch",
-		Long: `diff prints the diff of the pull request of an active watch as it is on
-GitHub. The daemon fetches the base and the head branch into the worktree
-of the watch, or into the checkout of a self watch, and diffs the head
-against their merge base. Commits that are not pushed yet are not in it.
-It makes no call to the GitHub API.`,
+		Long: `diff prints the diff of the pull request of an active watch, as GitHub
+serves it: from where the head left the base to the pushed head. Commits
+that are not pushed yet are not in it. The daemon reads it through its
+cache of conditional requests, so a diff that did not change costs no API
+budget. For a diff too large for GitHub, use git diff in the checkout.`,
 		Args: cobra.ExactArgs(1),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, _ []string) error {
 			var out httpd.PullRequestDiff
-			if err := c.post(cmd.Context(), fmt.Sprintf("/watches/%d/diff", w.ID), nil, &out); err != nil {
+			if err := c.get(cmd.Context(), fmt.Sprintf("/watches/%d/diff", w.ID), &out); err != nil {
 				return err
 			}
-			if err := opts.print(cmd.OutOrStdout(), pullRequestDiff(out)); err != nil {
-				return err
-			}
-			if out.Truncated {
-				fmt.Fprintf(cmd.ErrOrStderr(), "The diff stops at 1 MB. Read the rest with `git diff %s %s` in %s.\n", out.Base, out.Head, cmp.Or(w.WorktreeDir, w.SourceDir))
-			}
-			return nil
+			return opts.print(cmd.OutOrStdout(), pullRequestDiff(out))
 		}),
 	}
 }

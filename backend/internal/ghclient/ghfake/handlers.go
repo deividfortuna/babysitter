@@ -1,6 +1,8 @@
 package ghfake
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -157,9 +159,27 @@ func headLabel(p *PR) string {
 }
 
 func (c *call) pull() {
-	if r, p := c.prOf(); p != nil {
+	r, p := c.prOf()
+	switch {
+	case p == nil:
+	case strings.Contains(c.a.Accept, "diff"):
+		c.diff(p.Diff)
+	default:
 		c.json(http.StatusOK, pullRequest(r, p))
 	}
+}
+
+func (c *call) diff(diff string) {
+	sum := sha256.Sum256([]byte(diff))
+	etag := `"` + hex.EncodeToString(sum[:]) + `"`
+	c.w.Header().Set("ETag", etag)
+	if c.r.Header.Get("If-None-Match") == etag {
+		c.w.WriteHeader(http.StatusNotModified)
+		return
+	}
+	c.w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+	c.w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(c.w, diff)
 }
 
 func (c *call) merge() {

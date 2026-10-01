@@ -168,7 +168,7 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/watches/{id}/approval", a.handleSetApproval)
 		r.Get("/watches/{id}/output", a.handleWatchOutput)
 		r.Get("/watches/{id}/view", a.handleViewWatch)
-		r.Post("/watches/{id}/diff", a.handleDiffWatch)
+		r.Get("/watches/{id}/diff", a.handleDiffWatch)
 		r.Post("/watches/{id}/resize", a.handleResizeWatch)
 		r.Post("/watches/{id}/hook", a.handleWatchHook)
 		r.Post("/control/shutdown", a.handleShutdown)

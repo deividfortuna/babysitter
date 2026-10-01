@@ -409,10 +409,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /** The diff of the pull request of an active watch, from GitHub through the cache of conditional requests: a diff that did not change costs no API budget. A 422 says GitHub serves no diff that large. */
+        get: operations["diffWatchPullRequest"];
         put?: never;
-        /** The diff of the pull request of an active watch: the daemon fetches the base and the head branch into the worktree and diffs the head against their merge base */
-        post: operations["diffWatchPullRequest"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1107,14 +1107,8 @@ export interface components {
             status: "success" | "failure" | "pending" | "none";
         };
         HttpdPullRequestDiff: {
-            /** @description The merge base of the base branch and the head: the commit the diff starts from */
-            base: string;
-            /** @description The plain unified diff of the pull request */
+            /** @description The plain unified diff of the pull request, as GitHub serves it */
             diff: string;
-            /** @description The head of the pull request on GitHub, as the daemon fetched it */
-            head: string;
-            /** @description The diff was longer than one megabyte, so it stops at the last whole file under that size */
-            truncated: boolean;
         };
         HttpdPullRequestList: {
             pullRequests: components["schemas"]["HttpdPullRequest"][] | null;
@@ -3022,6 +3016,15 @@ export interface operations {
             };
             /** @description Conflict */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/deividfortuna/babysitter/internal/agent"
+	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -30,7 +31,7 @@ type WatchController interface {
 	SetMergeRules(ctx context.Context, id int64, c prwatch.MergeRulesChange) (store.Watch, error)
 	Output(ctx context.Context, id int64, lines int) (string, error)
 	View(ctx context.Context, id int64) (*snapshot.Snapshot, error)
-	Diff(ctx context.Context, id int64) (prwatch.PullDiff, error)
+	Diff(ctx context.Context, id int64) (string, error)
 	Resize(ctx context.Context, id int64, size prwatch.TerminalSize) error
 	Session(ctx context.Context, w store.Watch) (prwatch.SessionInfo, error)
 	Readiness(w store.Watch, state agent.State) (*time.Time, []string)
@@ -110,8 +111,8 @@ func (noopWatches) View(context.Context, int64) (*snapshot.Snapshot, error) {
 	return nil, errWatchUnavailable
 }
 
-func (noopWatches) Diff(context.Context, int64) (prwatch.PullDiff, error) {
-	return prwatch.PullDiff{}, errWatchUnavailable
+func (noopWatches) Diff(context.Context, int64) (string, error) {
+	return "", errWatchUnavailable
 }
 
 func (noopWatches) Resize(context.Context, int64, prwatch.TerminalSize) error {
@@ -228,7 +229,8 @@ var (
 	diffErrors = newErrorMap("diff_failed",
 		notFound("watch_not_found", store.ErrWatchNotFound),
 		conflict("watch_stopped", prwatch.ErrWatchStopped),
-		conflict("shallow_checkout", prwatch.ErrShallowCheckout),
+		unprocessable("diff_too_large", ghclient.ErrDiffTooLarge),
+		unavailable("rate_limited", ghclient.ErrPaused),
 		unavailable("watch_unavailable", errWatchUnavailable),
 	)
 	resizeErrors = newErrorMap("resize_failed",

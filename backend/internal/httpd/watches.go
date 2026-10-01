@@ -426,11 +426,11 @@ func (a *api) handleDiffWatch(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		return
 	}
-	d, err := a.watches.Diff(r.Context(), id)
+	diff, err := a.watches.Diff(r.Context(), id)
 	if diffErrors.write(w, err) {
 		return
 	}
-	writeJSON(w, http.StatusOK, PullRequestDiff{Base: d.Base, Head: d.Head, Diff: d.Diff, Truncated: d.Truncated})
+	writeJSON(w, http.StatusOK, PullRequestDiff{Diff: diff})
 }
 
 func (a *api) handleResizeWatch(w http.ResponseWriter, r *http.Request) {

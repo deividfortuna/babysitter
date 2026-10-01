@@ -9,7 +9,7 @@ the user.
 babysitter watch list                  # watched pull requests, provider, agent state, head, checks, last poll
 babysitter watch status <watch>        # one watch, with what blocks the merge
 babysitter watch view <watch>          # the pull request as the daemon last read it: reviewers, labels, size, checks, description
-babysitter watch diff <watch>          # the diff of the pull request, from the merge base with its base branch
+babysitter watch diff <watch>          # the diff of the pull request, as gh pr diff shows it, through the cache of the daemon
 babysitter watch activity <watch>      # everything reported, oldest first; --since <id> for the rest
 babysitter watch poll <watch>          # ask the daemon to look now, for example after a push
 ```
