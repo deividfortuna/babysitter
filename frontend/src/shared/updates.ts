@@ -35,6 +35,10 @@ export function isBusy(state: UpdateState): boolean {
   return BUSY_STATES.includes(state);
 }
 
+export function isRestartable(state: UpdateState): boolean {
+  return state === "downloaded" || state === "installing";
+}
+
 export function isUpdateChannel(value: unknown): value is UpdateChannel {
   return value === "stable" || value === "nightly";
 }

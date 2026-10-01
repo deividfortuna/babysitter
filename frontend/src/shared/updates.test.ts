@@ -2,6 +2,7 @@ import { expect, test } from "vite-plus/test";
 import {
   defaultChannel,
   isBusy,
+  isRestartable,
   isUpdateChannel,
   parseSettingsPatch,
   releaseUrl,
@@ -68,6 +69,21 @@ test("a check, a download and an install keep the updater busy", () => {
   expect(
     ["unsupported", "idle", "available", "not-available", "error"].some((state) => isBusy(state as UpdateState)),
   ).toBe(false);
+});
+
+test("only a downloaded update or an install in progress offers the restart", () => {
+  const states: UpdateState[] = [
+    "unsupported",
+    "idle",
+    "checking",
+    "available",
+    "not-available",
+    "downloading",
+    "downloaded",
+    "installing",
+    "error",
+  ];
+  expect(states.filter(isRestartable)).toEqual(["downloaded", "installing"]);
 });
 
 test("the release page of a version is its tag on GitHub", () => {
