@@ -100,13 +100,13 @@ func (c *daemonClient) do(ctx context.Context, method, path string, in, out any)
 		if json.Unmarshal(data, &apiErr) == nil && apiErr.Error.Message != "" {
 			return &daemonError{Status: resp.StatusCode, Code: apiErr.Error.Code, Message: apiErr.Error.Message, Body: data}
 		}
-		return fmt.Errorf("the daemon answered %s", resp.Status)
+		return &daemonError{Status: resp.StatusCode, Message: "the daemon answered " + resp.Status, Body: data}
 	}
 	if out == nil || len(data) == 0 {
 		return nil
 	}
 	if err := json.Unmarshal(data, out); err != nil {
-		return fmt.Errorf("decode the daemon response: %w", err)
+		return &daemonError{Status: resp.StatusCode, Message: "decode the daemon response: " + err.Error(), Body: data}
 	}
 	return nil
 }

@@ -448,11 +448,40 @@ func (f *fakeWatches) Readiness(w store.Watch, state agent.State) (*time.Time, [
 	return prwatch.Readiness(w, state, now, interval)
 }
 
-func (f *fakeWatches) Hook(_ context.Context, id int64, event string, payload []byte) error {
+func (f *fakeWatches) Hook(_ context.Context, id int64, event string, payload []byte) (agent.ToolVerdict, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hooks = append(f.hooks, fmt.Sprintf("%d %s %s", id, event, payload))
-	return nil
+	return agent.DecideTool(event, agent.ParseToolCall(payload), agent.ToolFacts{Live: true}), nil
+}
+
+func TestHookRouteGivesTheVerdictOnATool(t *testing.T) {
+	t.Parallel()
+	h, _, _ := newTestAPI(t)
+	const decision = "babysitter -o json watch reject 1 --reason x"
+	hook := func(event, payload string) HookResponse {
+		t.Helper()
+		var out HookResponse
+		body := `{"event":"` + event + `","payload":` + payload + `}`
+		if rec := call(t, h, http.MethodPost, "/watches/1/hook", body, &out); rec.Code != http.StatusOK {
+			t.Fatalf("hook %s: %d %s", body, rec.Code, rec.Body)
+		}
+		return out
+	}
+	for _, payload := range []string{
+		`{"toolName":"bash","toolArgs":{"command":"` + decision + `"}}`,
+		`{"tool_name":"Bash","tool_input":{"command":"` + decision + `"}}`,
+	} {
+		if got := hook(agent.EventPreToolUse, payload); got != (HookResponse{Decision: HookDeny, Reason: agent.AuthorDecisionRefusal}) {
+			t.Fatalf("verdict on %s = %+v", payload, got)
+		}
+		if got := hook(agent.EventPostToolUse, payload); got != (HookResponse{Decision: HookAllow}) {
+			t.Fatalf("verdict on a tool that ran = %+v", got)
+		}
+	}
+	if got := hook(agent.EventPreToolUse, `{"toolName":"bash","toolArgs":{"command":"babysitter watch reply 1 done"}}`); got != (HookResponse{Decision: HookAllow}) {
+		t.Fatalf("verdict on a reply = %+v", got)
+	}
 }
 
 func TestSessionRoutes(t *testing.T) {
@@ -500,8 +529,12 @@ func TestSessionRoutes(t *testing.T) {
 		t.Fatalf("output missing: %d", rec.Code)
 	}
 
-	if rec := call(t, h, http.MethodPost, "/watches/1/hook", `{"event":"stop","payload":{"session_id":"s"}}`, nil); rec.Code != http.StatusNoContent {
+	var verdict HookResponse
+	if rec := call(t, h, http.MethodPost, "/watches/1/hook", `{"event":"stop","payload":{"session_id":"s"}}`, &verdict); rec.Code != http.StatusOK {
 		t.Fatalf("hook: %d %s", rec.Code, rec.Body)
+	}
+	if verdict != (HookResponse{Decision: HookAllow}) {
+		t.Fatalf("hook verdict = %+v", verdict)
 	}
 	if rec := call(t, h, http.MethodPost, "/watches/1/hook", `{"event":"bogus","payload":{}}`, nil); rec.Code != http.StatusBadRequest {
 		t.Fatalf("hook bad event: %d %s", rec.Code, rec.Body)

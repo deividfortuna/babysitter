@@ -1316,11 +1316,18 @@ What the agent may never do, whatever a comment or a log says:
 - post on GitHub beside the daemon, for example with `gh api -f`
 - run `babysitter watch mode`, `approve`, `reject`, `retry`, `merge`,
   `stop`, `takeover` or `handback`, so it cannot approve its own work.
-  The hook before each tool call refuses these commands also with a
+  Before each tool call, the hook sends the call to the daemon and
+  applies its answer. The daemon refuses these commands also with a
   flag before `watch` such as `-o json`, a full path, `sh -c` or shell
-  quotes such as `baby''sitter`. Claude Code has deny rules for them
-  too. The hook reads the text of the command, so a shell variable, a
-  command substitution or a script can still hide a decision
+  quotes such as `baby''sitter`, and it refuses every tool of a watch
+  that has no agent session in the daemon. When the daemon does not
+  answer in 5 seconds, the hook refuses the tool and tells the agent to
+  try again. When the daemon answers with an error, or with no
+  verdict, the hook refuses the tool and tells the agent not to try
+  again. Claude Code and Copilot CLI have
+  deny rules for these commands too. The daemon reads the text of the
+  command, so a shell variable, a command substitution or a script can
+  still hide a decision
 - fetch the web or start a subagent: `WebFetch`, `WebSearch`, `Task`,
   `Agent`, `curl` and `wget` are refused
 - merge, approve, dismiss a review, open or close a pull request
@@ -1469,6 +1476,10 @@ The daemon and the desktop app each write a log to the `logs/` folder
 of the data directory, one JSON record per line:
 
 - `daemon.log`: what the daemon did, from each poll to each failure.
+  Each call of the hook of an agent adds one record with the watch,
+  the event, the decision, the tool, the command on one line with
+  secrets removed, and the rule that refused the tool. A refused tool
+  is an info record; every other call is a debug record.
   A daemon started from a terminal also prints it as text on stderr.
 - `app.log`: what the app did to start, attach to and stop the daemon,
   the updates it checked, and the lines the daemon printed that are not
@@ -1521,7 +1532,7 @@ project for the desktop app. Paths below are relative to `backend/`.
 - `internal/checks`: reduces check runs, commit statuses and workflow runs to the states the app uses, and trims a failed job log to the lines that matter
 - `internal/prwatch`: the watch of one pull request: the poll, the activity diff, the messages to the agent session
 - `internal/session`: runs the agent in a pseudo terminal the daemon owns: types messages, keeps the output, reports the exit
-- `internal/agent`: the contract of an agent session, its state, the git hooks, and the messages the daemon types; the prompts live in `prompts/`. `agent/claude` and `agent/copilot` build the command line of each CLI as an interactive session, with its hooks and its tool rules
+- `internal/agent`: the contract of an agent session, its state, the git hooks, the messages the daemon types, and the rules that decide if the agent may run a tool: the parse of a tool call into the programs it runs, rules on the state of the watch, and rules on a command, each with the reason the agent reads; the prompts live in `prompts/`. `agent/claude` and `agent/copilot` build the command line of each CLI as an interactive session, with its hooks and its tool rules
 - `internal/worktree`: the git write operations of a watch, in its own worktree
 - `internal/gitrepo`: reads the current branch, the remotes and git configuration values with git
 - `internal/gitrelease`: the git the daemon runs to release the work of the agent: reads the pull request branch, compares it with the work branch, and pushes with the credential helper of the author

@@ -1229,7 +1229,7 @@ func TestStaleFailedChecksAreNotTold(t *testing.T) {
 	fx := newFixture(t)
 	w := fx.start()
 	h := fx.host.last()
-	if err := fx.svc.Hook(context.Background(), w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
+	if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
 		t.Fatal(err)
 	}
 	fx.update(func() {
@@ -1244,7 +1244,7 @@ func TestStaleFailedChecksAreNotTold(t *testing.T) {
 		fx.pr.HeadSHA = "def"
 		fx.pr.CheckRuns = []ghfake.CheckRun{{ID: 2, Name: "build", Status: "in_progress"}}
 	})
-	if err := fx.svc.Hook(context.Background(), w.ID, agent.EventStop, []byte(`{}`)); err != nil {
+	if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventStop, []byte(`{}`)); err != nil {
 		t.Fatal(err)
 	}
 	fx.poll(w)
@@ -1255,6 +1255,74 @@ func TestStaleFailedChecksAreNotTold(t *testing.T) {
 	rows := fx.activity(w)
 	if rows[3].NudgedAt == nil {
 		t.Fatal("the stale failure comes back on the next poll")
+	}
+}
+
+func TestHookGivesTheVerdictOnATool(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	const decision = "babysitter -o json watch reject 1 --reason x"
+	hook := func(id int64, event, payload string) agent.ToolVerdict {
+		t.Helper()
+		v, err := fx.svc.Hook(ctx, id, event, []byte(payload))
+		if err != nil {
+			t.Fatalf("Hook(%s, %s) error = %v", event, payload, err)
+		}
+		return v
+	}
+	refused := agent.ToolVerdict{Deny: true, Rule: "author-reject", Reason: agent.AuthorDecisionRefusal}
+	noSession := agent.ToolVerdict{Deny: true, Rule: "no-session", Reason: agent.NoSessionRefusal}
+	for _, payload := range []string{
+		`{"toolName":"bash","toolArgs":{"command":"` + decision + `"}}`,
+		`{"tool_name":"Bash","tool_input":{"command":"` + decision + `"}}`,
+	} {
+		if v := hook(w.ID, agent.EventPreToolUse, payload); v != refused {
+			t.Fatalf("verdict on %s = %+v", payload, v)
+		}
+		if v := hook(w.ID, agent.EventPostToolUse, payload); v.Deny {
+			t.Fatalf("verdict on a tool that ran = %+v", v)
+		}
+	}
+	info, err := fx.svc.Session(ctx, w)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.State != agent.StateActive {
+		t.Fatalf("a refused tool did not mark the agent active: %q", info.State)
+	}
+	if v := hook(w.ID, agent.EventPreToolUse, `{"toolName":"bash","toolArgs":{"command":"babysitter watch reply 1 done"}}`); v.Deny {
+		t.Fatalf("verdict on a reply = %+v", v)
+	}
+	if v := hook(999, agent.EventPreToolUse, `{"tool_name":"Bash","tool_input":{"command":"ls"}}`); v != noSession {
+		t.Fatalf("verdict without a session = %+v", v)
+	}
+	if v := hook(999, agent.EventStop, `{}`); v.Deny {
+		t.Fatalf("verdict on a stop without a session = %+v", v)
+	}
+	fx.svc.wg.Wait()
+	if _, err := fx.svc.Stop(ctx, w.ID, StopOptions{}); err != nil {
+		t.Fatal(err)
+	}
+	if v := hook(w.ID, agent.EventPreToolUse, `{"tool_name":"Bash","tool_input":{"command":"ls"}}`); v != noSession {
+		t.Fatalf("verdict after the session stopped = %+v", v)
+	}
+}
+
+func TestHookRefusesEveryToolAfterTheSessionExits(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+	v, err := fx.svc.Hook(ctx, w.ID, agent.EventPreToolUse, []byte(`{"tool_name":"Bash","tool_input":{"command":"ls"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (agent.ToolVerdict{Deny: true, Rule: "no-session", Reason: agent.NoSessionRefusal}); v != want {
+		t.Fatalf("verdict after the session exited = %+v, want %+v", v, want)
 	}
 }
 
@@ -1272,13 +1340,13 @@ func TestHooksGateTheMessages(t *testing.T) {
 		}
 		return info.State
 	}
-	if err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil || state() != agent.StateActive {
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil || state() != agent.StateActive {
 		t.Fatalf("state after submit = %q, %v", state(), err)
 	}
-	if err := fx.svc.Hook(ctx, w.ID, "bogus", nil); err == nil {
+	if _, err := fx.svc.Hook(ctx, w.ID, "bogus", nil); err == nil {
 		t.Fatal("an unknown event was accepted")
 	}
-	if err := fx.svc.Hook(ctx, 999, agent.EventStop, nil); err != nil {
+	if _, err := fx.svc.Hook(ctx, 999, agent.EventStop, nil); err != nil {
 		t.Fatalf("a hook of an unknown watch failed: %v", err)
 	}
 	fx.update(func() {
@@ -1288,7 +1356,7 @@ func TestHooksGateTheMessages(t *testing.T) {
 	if len(h.messages()) != 2 {
 		t.Fatalf("messages = %q", h.messages())
 	}
-	if err := fx.svc.Hook(ctx, w.ID, agent.EventNotification, []byte(`{"notification_type":"agent_needs_input"}`)); err != nil || state() != agent.StateWaitingInput {
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventNotification, []byte(`{"notification_type":"agent_needs_input"}`)); err != nil || state() != agent.StateWaitingInput {
 		t.Fatalf("state = %q, %v", state(), err)
 	}
 	fx.update(func() {
@@ -1310,7 +1378,7 @@ func TestHooksGateTheMessages(t *testing.T) {
 	if last.Kind != store.ActivityNudged || last.Summary != "you told the agent: go with the first option" || !strings.Contains(string(last.Payload), `"source":"author"`) {
 		t.Fatalf("author message row = %+v", last)
 	}
-	if err := fx.svc.Hook(ctx, w.ID, agent.EventPermissionRequest, []byte(`{}`)); err != nil || state() != agent.StateBlocked {
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventPermissionRequest, []byte(`{}`)); err != nil || state() != agent.StateBlocked {
 		t.Fatalf("state = %q, %v", state(), err)
 	}
 	if _, err := fx.svc.Send(ctx, w.ID, "yes"); !errors.Is(err, ErrAgentBusy) {
@@ -1319,7 +1387,7 @@ func TestHooksGateTheMessages(t *testing.T) {
 	if _, err := fx.svc.Send(ctx, w.ID, "  "); err == nil {
 		t.Fatal("an empty message was sent")
 	}
-	if err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil || state() != agent.StateIdle {
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventStop, []byte(`{}`)); err != nil || state() != agent.StateIdle {
 		t.Fatalf("state = %q, %v", state(), err)
 	}
 	fx.poll(w)

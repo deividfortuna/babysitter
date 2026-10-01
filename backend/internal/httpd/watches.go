@@ -441,8 +441,9 @@ func (a *api) handleWatchHook(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	payload, _ := json.Marshal(req.Payload)
-	if hookErrors.write(w, a.watches.Hook(r.Context(), id, req.Event, payload)) {
+	verdict, err := a.watches.Hook(r.Context(), id, req.Event, payload)
+	if hookErrors.write(w, err) {
 		return
 	}
-	w.WriteHeader(http.StatusNoContent)
+	writeJSON(w, http.StatusOK, hookResponse(verdict))
 }

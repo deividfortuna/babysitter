@@ -428,7 +428,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Report an event of the agent of a watched pull request. The hook command of the agent calls it. */
+        /** Report an event of the agent of a watched pull request. The hook command of the agent calls it. For pre-tool-use, the answer tells if the agent may run the tool. */
         post: operations["reportWatchHook"];
         delete?: never;
         options?: never;
@@ -758,6 +758,15 @@ export interface components {
             startedAt: string;
             status: string;
             version: string;
+        };
+        HttpdHookResponse: {
+            /**
+             * @description For pre-tool-use, whether the agent may run the tool; every other event gets allow
+             * @enum {string}
+             */
+            decision: "allow" | "deny";
+            /** @description Why the daemon refuses the tool, for the agent to read */
+            reason?: string;
         };
         HttpdLogAttr: {
             key: string;
@@ -2964,12 +2973,14 @@ export interface operations {
             };
         };
         responses: {
-            /** @description No Content */
-            204: {
+            /** @description OK */
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["HttpdHookResponse"];
+                };
             };
             /** @description Bad Request */
             400: {

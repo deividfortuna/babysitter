@@ -25,7 +25,7 @@ func (fx *fixture) good() {
 
 func (fx *fixture) agentIdle(w store.Watch) {
 	fx.t.Helper()
-	if err := fx.svc.Hook(context.Background(), w.ID, agent.EventStop, []byte(`{}`)); err != nil {
+	if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventStop, []byte(`{}`)); err != nil {
 		fx.t.Fatalf("Hook(stop) error = %v", err)
 	}
 }
@@ -153,12 +153,12 @@ func TestEveryBlockerKeepsThePullRequestFromReadiness(t *testing.T) {
 			fx.failBuild("")
 		}, "1 check failed"},
 		{"agent working", func(fx *fixture, w store.Watch) {
-			if err := fx.svc.Hook(context.Background(), w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil {
+			if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil {
 				fx.t.Fatal(err)
 			}
 		}, "the agent is still working"},
 		{"agent waits on a permission", func(fx *fixture, w store.Watch) {
-			if err := fx.svc.Hook(context.Background(), w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
+			if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
 				fx.t.Fatal(err)
 			}
 		}, "the agent waits on a permission decision"},
@@ -216,7 +216,7 @@ func TestAMessageTheAgentWasNotToldBlocksReadiness(t *testing.T) {
 	fx := newFixture(t)
 	fx.good()
 	w := fx.start()
-	if err := fx.svc.Hook(context.Background(), w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
+	if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
 		t.Fatal(err)
 	}
 	fx.update(func() {
@@ -238,7 +238,7 @@ func TestTheBlockerNamesWhatTheMessageOfThePollLeftUntold(t *testing.T) {
 	fx.good()
 	w := fx.start()
 	ctx := context.Background()
-	if err := fx.svc.Hook(ctx, w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := fx.st.InsertActivity(ctx, store.Activity{

@@ -780,24 +780,25 @@ func newWatchHookCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	var watch int64
 	cmd := &cobra.Command{
 		Use:    "hook <event>",
-		Short:  "Report an event of an agent session to the daemon",
+		Short:  "Report an event of an agent session to the daemon and apply its verdict on a tool",
 		Hidden: true,
 		Args:   cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			event, payload := args[0], hookPayload(cmd.InOrStdin())
-			refused := agent.RefusesToolUse(event, payload)
-			if refused {
-				if err := writeRefusal(cmd.OutOrStdout()); err != nil {
-					return err
+			verdict, err := reportHook(cmd, opts, *dataDirFlag, watch, event, payload)
+			if event != agent.EventPreToolUse {
+				if err != nil {
+					fmt.Fprintln(cmd.ErrOrStderr(), "babysitter hook:", err)
 				}
+				return nil
 			}
-			if err := reportHook(cmd, opts, *dataDirFlag, watch, event, payload); err != nil {
-				fmt.Fprintln(cmd.ErrOrStderr(), "babysitter hook:", err)
+			if err != nil {
+				return refuseTool(cmd.OutOrStdout(), hookFailureReason(err))
 			}
-			if refused {
-				return &ExitCodeError{Code: refusedToolExitCode, Err: errors.New(agent.AuthorDecisionRefusal)}
+			if verdict.Decision == httpd.HookAllow {
+				return nil
 			}
-			return nil
+			return refuseTool(cmd.OutOrStdout(), verdict.Reason)
 		},
 	}
 	cmd.Flags().Int64Var(&watch, "watch", 0, "the watch the session belongs to")
@@ -815,25 +816,64 @@ func hookPayload(r io.Reader) map[string]any {
 	return payload
 }
 
-func writeRefusal(w io.Writer) error {
-	return json.NewEncoder(w).Encode(map[string]string{
-		"permissionDecision":       "deny",
-		"permissionDecisionReason": agent.AuthorDecisionRefusal,
-	})
+var (
+	errNoWatch   = errors.New("a watch is required")
+	errNoVerdict = errors.New("the daemon answered with no verdict")
+)
+
+func hookFailureReason(err error) string {
+	if failsOnEveryTry(err) {
+		return "babysitter: the hook of this watch cannot get a verdict, so it refuses every tool; " +
+			"do not try again, and say in your final message that the hook fails (" + err.Error() + ")"
+	}
+	return "babysitter: the daemon did not answer, try again (" + err.Error() + ")"
 }
 
-func reportHook(cmd *cobra.Command, opts *options, dataDir string, watch int64, event string, payload map[string]any) error {
+func failsOnEveryTry(err error) bool {
+	_, daemonAnswered := errors.AsType[*daemonError](err)
+	return daemonAnswered || errors.Is(err, errNoWatch) || errors.Is(err, errNoVerdict)
+}
+
+func refuseTool(w io.Writer, reason string) error {
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"permissionDecision":       "deny",
+		"permissionDecisionReason": reason,
+	})
+	return &ExitCodeError{Code: refusedToolExitCode, Err: errors.New(reason)}
+}
+
+func reportHook(cmd *cobra.Command, opts *options, dataDir string, watch int64, event string, payload map[string]any) (httpd.HookResponse, error) {
+	var verdict httpd.HookResponse
 	if watch <= 0 {
-		return fmt.Errorf("a watch is required")
+		return verdict, errNoWatch
 	}
 	c, err := opts.daemonClient(dataDir)
 	if err != nil {
-		return err
+		return verdict, err
 	}
-	c.http.Timeout = hookTimeout
-	ctx, cancel := context.WithTimeout(cmd.Context(), hookTimeout)
+	timeout := hookTimeoutWithin(opts.timeout)
+	c.http.Timeout = timeout
+	ctx, cancel := context.WithTimeout(cmd.Context(), timeout)
 	defer cancel()
-	return c.post(ctx, fmt.Sprintf("/watches/%d/hook", watch), httpd.HookRequest{Event: event, Payload: payload}, nil)
+	if err := c.post(ctx, fmt.Sprintf("/watches/%d/hook", watch), httpd.HookRequest{Event: event, Payload: payload}, &verdict); err != nil {
+		return verdict, err
+	}
+	if !isVerdict(verdict) {
+		return verdict, errNoVerdict
+	}
+	return verdict, nil
+}
+
+func hookTimeoutWithin(timeout time.Duration) time.Duration {
+	if timeout <= 0 {
+		return hookTimeout
+	}
+	return min(timeout, hookTimeout)
+}
+
+func isVerdict(v httpd.HookResponse) bool {
+	refusesWithReason := v.Decision == httpd.HookDeny && v.Reason != ""
+	return v.Decision == httpd.HookAllow || refusesWithReason
 }
 
 func typed[T any](cmd *cobra.Command, flag string, v *T) *T {

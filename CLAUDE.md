@@ -107,8 +107,10 @@ decides the next action. `internal/prwatch` is the watch loop: snapshot,
 `Diff` against stored state, activity rows, message to the agent, merge
 readiness. `internal/session` owns the pseudo terminal of the agent.
 `internal/agent` holds the session contract, the embedded prompts in
-`prompts/`, and one subpackage per provider (`claude`, `copilot`) that
-builds the command line and the hooks. `internal/worktree` makes and removes
+`prompts/`, the rules that decide if the agent may run a tool
+(`toolcall.go` parses the call, `toolpolicy.go` holds the rules), and
+one subpackage per provider (`claude`, `copilot`) that builds the
+command line and the hooks. `internal/worktree` makes and removes
 the worktree the agent works in. `internal/ghclient` wraps go-github with
 one shared conditional-request cache and `RateGuard`. `internal/logbook` is
 the slog handler of the daemon: it keeps the last records in memory, writes

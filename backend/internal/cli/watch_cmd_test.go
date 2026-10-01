@@ -6,14 +6,15 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
-	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/httpd"
 	"github.com/deividfortuna/babysitter/internal/runfile"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -200,7 +201,28 @@ func newFakeDaemon() *fakeDaemon {
 		}
 		_ = json.NewDecoder(r.Body).Decode(&body)
 		d.hooks = append(d.hooks, fmt.Sprintf("1 %s %s", body.Event, body.Payload))
+		w.Header().Set("Content-Type", "application/json")
+		if strings.Contains(string(body.Payload), "daemon-check") {
+			fmt.Fprint(w, `{"decision":"deny","reason":"the daemon refuses daemon-check"}`)
+			return
+		}
+		fmt.Fprint(w, `{"decision":"allow"}`)
+	})
+	d.mux.HandleFunc("/api/v1/watches/4/hook", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `not json`)
+	})
+	d.mux.HandleFunc("/api/v1/watches/5/hook", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusInternalServerError)
+	})
+	d.mux.HandleFunc("/api/v1/watches/6/hook", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"decision":"maybe"}`)
+	})
+	d.mux.HandleFunc("/api/v1/watches/7/hook", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
+	})
+	d.mux.HandleFunc("/api/v1/watches/8/hook", func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.Copy(io.Discard, r.Body)
+		<-r.Context().Done()
 	})
 	d.mux.HandleFunc("/api/v1/watches/9/hook", func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotFound)
@@ -432,6 +454,55 @@ func TestNextAndPollCommands(t *testing.T) {
 	}
 }
 
+type hookRun struct {
+	out, errOut string
+	err         error
+}
+
+func runHook(dataDir, stdin string, args ...string) hookRun {
+	var out, errOut bytes.Buffer
+	root := NewRootCmd()
+	root.SetOut(&out)
+	root.SetErr(&errOut)
+	root.SetIn(strings.NewReader(stdin))
+	root.SetArgs(append([]string{"watch", "--data-dir", dataDir, "hook"}, args...))
+	err := root.ExecuteContext(context.Background())
+	return hookRun{out: out.String(), errOut: errOut.String(), err: err}
+}
+
+func (r hookRun) quiet() bool {
+	return r == hookRun{}
+}
+
+func (r hookRun) warned(text string) bool {
+	return r.err == nil && strings.Contains(r.errOut, text)
+}
+
+func (r hookRun) refusal(t *testing.T) string {
+	t.Helper()
+	exit, ok := errors.AsType[*ExitCodeError](r.err)
+	if !ok {
+		t.Fatalf("hook = %v, want exit 2", r.err)
+	}
+	if exit.Code != refusedToolExitCode {
+		t.Fatalf("hook exit = %d, want %d", exit.Code, refusedToolExitCode)
+	}
+	var decision struct {
+		PermissionDecision       string `json:"permissionDecision"`
+		PermissionDecisionReason string `json:"permissionDecisionReason"`
+	}
+	if err := json.Unmarshal([]byte(r.out), &decision); err != nil {
+		t.Fatalf("hook output = %q, %v", r.out, err)
+	}
+	if decision.PermissionDecision != "deny" {
+		t.Fatalf("hook decision = %q, want deny", decision.PermissionDecision)
+	}
+	if decision.PermissionDecisionReason != r.err.Error() {
+		t.Fatalf("stdout reason %q, stderr reason %q", decision.PermissionDecisionReason, r.err.Error())
+	}
+	return decision.PermissionDecisionReason
+}
+
 func TestHookCommand(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
@@ -443,68 +514,94 @@ func TestHookCommand(t *testing.T) {
 	if err := runfile.Write(runfile.Path(dataDir), runfile.Info{PID: os.Getpid(), Port: port, Owner: runfile.OwnerCLI}); err != nil {
 		t.Fatal(err)
 	}
-	run := func(stdin string, args ...string) (string, error) {
-		var out, errOut bytes.Buffer
-		root := NewRootCmd()
-		root.SetOut(&out)
-		root.SetErr(&errOut)
-		root.SetIn(strings.NewReader(stdin))
-		root.SetArgs(append([]string{"watch", "--data-dir", dataDir, "hook"}, args...))
-		err := root.ExecuteContext(context.Background())
-		return errOut.String(), err
+	if r := runHook(dataDir, `{"notification_type":"idle_prompt"}`, "notification", "--watch", "1"); !r.quiet() {
+		t.Fatalf("hook = %+v", r)
 	}
-	if errOut, err := run(`{"notification_type":"idle_prompt"}`, "notification", "--watch", "1"); err != nil || errOut != "" {
-		t.Fatalf("hook = %q, %v", errOut, err)
-	}
-	if errOut, err := run("", "stop", "--watch", "1"); err != nil || errOut != "" {
-		t.Fatalf("hook without payload = %q, %v", errOut, err)
+	if r := runHook(dataDir, "", "stop", "--watch", "1"); !r.quiet() {
+		t.Fatalf("hook without payload = %+v", r)
 	}
 	if want := []string{`1 notification {"notification_type":"idle_prompt"}`, `1 stop {}`}; !slices.Equal(d.hooks, want) {
 		t.Fatalf("hooks = %v, want %v", d.hooks, want)
 	}
-	if errOut, err := run("", "stop"); err != nil || !strings.Contains(errOut, "a watch is required") {
-		t.Fatalf("hook without a watch = %q, %v", errOut, err)
+	if r := runHook(dataDir, "", "stop"); !r.warned("a watch is required") {
+		t.Fatalf("hook without a watch = %+v", r)
 	}
-	if errOut, err := run("", "stop", "--watch", "9"); err != nil || !strings.Contains(errOut, "watch not found") {
-		t.Fatalf("hook of a missing watch = %q, %v", errOut, err)
+	if r := runHook(dataDir, "", "stop", "--watch", "9"); !r.warned("watch not found") {
+		t.Fatalf("hook of a missing watch = %+v", r)
 	}
-	refusal := map[string]string{
-		"copilot": `{"toolName":"bash","toolArgs":{"command":"babysitter -o json watch reject 1 --reason x"}}`,
-		"claude":  `{"tool_name":"Bash","tool_input":{"command":"babysitter -o json watch reject 1 --reason x"}}`,
+	if r := runHook(dataDir, "", "stop", "--watch", "5"); !r.warned("500") {
+		t.Fatalf("hook that the daemon fails = %+v", r)
 	}
-	for agentName, payload := range refusal {
-		var out, errOut bytes.Buffer
-		root := NewRootCmd()
-		root.SetOut(&out)
-		root.SetErr(&errOut)
-		root.SetIn(strings.NewReader(payload))
-		root.SetArgs([]string{"watch", "--data-dir", dataDir, "hook", "pre-tool-use", "--watch", "1"})
-		err := root.ExecuteContext(context.Background())
-		exit, ok := errors.AsType[*ExitCodeError](err)
-		if !ok || exit.Code != 2 || err.Error() != agent.AuthorDecisionRefusal {
-			t.Fatalf("%s: hook of an author decision = %v, want exit 2", agentName, err)
+	if r := runHook(t.TempDir(), "", "stop", "--watch", "1"); !r.warned("no daemon is running") {
+		t.Fatalf("hook without a daemon = %+v", r)
+	}
+}
+
+func TestHookCommandAppliesTheVerdictOfTheDaemon(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+	srv := httptest.NewServer(d.mux)
+	t.Cleanup(srv.Close)
+	var port int
+	fmt.Sscanf(strings.TrimPrefix(srv.URL, "http://127.0.0.1:"), "%d", &port)
+	dataDir := t.TempDir()
+	if err := runfile.Write(runfile.Path(dataDir), runfile.Info{PID: os.Getpid(), Port: port, Owner: runfile.OwnerCLI}); err != nil {
+		t.Fatal(err)
+	}
+	for agentName, payload := range map[string]string{
+		"copilot": `{"toolName":"bash","toolArgs":{"command":"echo daemon-check"}}`,
+		"claude":  `{"tool_name":"Bash","tool_input":{"command":"echo daemon-check"}}`,
+	} {
+		r := runHook(dataDir, payload, "pre-tool-use", "--watch", "1")
+		if reason := r.refusal(t); reason != "the daemon refuses daemon-check" {
+			t.Fatalf("%s: reason = %q", agentName, reason)
 		}
-		var decision struct {
-			PermissionDecision       string `json:"permissionDecision"`
-			PermissionDecisionReason string `json:"permissionDecisionReason"`
-		}
-		if err := json.Unmarshal(out.Bytes(), &decision); err != nil || decision.PermissionDecision != "deny" || decision.PermissionDecisionReason != agent.AuthorDecisionRefusal {
-			t.Fatalf("%s: hook output = %q, %v", agentName, out.String(), err)
-		}
+	}
+	decision := `{"toolName":"bash","toolArgs":{"command":"babysitter -o json watch reject 1 --reason x"}}`
+	if r := runHook(dataDir, decision, "pre-tool-use", "--watch", "1"); !r.quiet() {
+		t.Fatalf("the hook refused a tool the daemon allows: %+v", r)
 	}
 	if got := d.hooks[len(d.hooks)-1]; !strings.HasPrefix(got, "1 pre-tool-use ") {
-		t.Fatalf("the refused tool use did not reach the daemon: %v", d.hooks)
+		t.Fatalf("the tool use did not reach the daemon: %v", d.hooks)
 	}
-	if errOut, err := run(`{"toolName":"bash","toolArgs":{"command":"babysitter watch reply 1 done"}}`, "pre-tool-use", "--watch", "1"); err != nil || errOut != "" {
-		t.Fatalf("hook of a reply = %q, %v", errOut, err)
+
+	ls := `{"tool_name":"Bash","tool_input":{"command":"ls"}}`
+	const tryAgain = "babysitter: the daemon did not answer, try again"
+	const doNotTryAgain = "babysitter: the hook of this watch cannot get a verdict"
+	for name, c := range map[string]struct {
+		args   []string
+		reason string
+	}{
+		"no daemon":               {[]string{"--data-dir", t.TempDir(), "--watch", "1"}, tryAgain},
+		"no answer":               {[]string{"--watch", "8", "--timeout", "200ms"}, tryAgain},
+		"no watch":                {nil, doNotTryAgain},
+		"an error of the daemon":  {[]string{"--watch", "9"}, doNotTryAgain},
+		"a 500 with no error":     {[]string{"--watch", "5"}, doNotTryAgain},
+		"a body that is not JSON": {[]string{"--watch", "4"}, doNotTryAgain},
+		"a body with no verdict":  {[]string{"--watch", "6"}, doNotTryAgain},
+		"an empty body":           {[]string{"--watch", "7"}, doNotTryAgain},
+	} {
+		r := runHook(dataDir, ls, append([]string{"pre-tool-use"}, c.args...)...)
+		if reason := r.refusal(t); !strings.HasPrefix(reason, c.reason) {
+			t.Fatalf("%s: reason = %q, want it to start with %q", name, reason, c.reason)
+		}
 	}
-	var out, errOut bytes.Buffer
-	root := NewRootCmd()
-	root.SetOut(&out)
-	root.SetErr(&errOut)
-	root.SetArgs([]string{"watch", "--data-dir", t.TempDir(), "hook", "stop", "--watch", "1"})
-	if err := root.ExecuteContext(context.Background()); err != nil || !strings.Contains(errOut.String(), "no daemon is running") {
-		t.Fatalf("hook without a daemon = %q, %v", errOut.String(), err)
+}
+
+func TestHookAnswersBeforeTheAgentsStopWaiting(t *testing.T) {
+	t.Parallel()
+	const agentHookTimeout = 10 * time.Second
+	if hookTimeout >= agentHookTimeout {
+		t.Fatalf("hookTimeout = %s, want less than the %s the agents wait", hookTimeout, agentHookTimeout)
+	}
+	for requested, want := range map[time.Duration]time.Duration{
+		0:                hookTimeout,
+		30 * time.Second: hookTimeout,
+		time.Second:      time.Second,
+	} {
+		if got := hookTimeoutWithin(requested); got != want {
+			t.Errorf("hookTimeoutWithin(%s) = %s, want %s", requested, got, want)
+		}
 	}
 }
 
