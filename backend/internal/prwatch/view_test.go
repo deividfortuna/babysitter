@@ -83,6 +83,40 @@ func TestDiffGoesFromTheMergeBaseToThePushedHead(t *testing.T) {
 	}
 }
 
+func TestDiffOfAForkReadsTheBaseFromTheBaseRepository(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.api.Repo("alice/hello")
+	fx.update(func() { fx.pr.HeadRepo = "alice/hello" })
+	fork := t.TempDir()
+	gitIn(t, fork, []string{"init", "-q"}, []string{"remote", "add", "origin", "https://github.com/alice/hello.git"},
+		[]string{"config", "user.name", "Alice"}, []string{"config", "user.email", "alice@example.com"})
+	fx.co.dir = fork
+	fx.rel.set(func(f *fakeRelease) {
+		f.branches = map[string]string{"main": "stale"}
+		f.upstream = map[string]string{"main": "m2"}
+		f.history["m2"] = []string{"m1"}
+		f.history["abc"] = []string{"m1"}
+	})
+	w, err := fx.svc.Start(context.Background(), StartRequest{Target: pr3})
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+
+	d, err := fx.svc.Diff(context.Background(), w.ID)
+	if err != nil {
+		t.Fatalf("Diff() error = %v", err)
+	}
+	if d.Base != "m1" || d.Head != "abc" {
+		t.Fatalf("Diff() = %+v, want from the merge base m1 with the main of octo/hello", d)
+	}
+	var urls []string
+	fx.rel.set(func(f *fakeRelease) { urls = slices.Clone(f.fetchURLs) })
+	if !slices.Equal(urls, []string{"https://github.com/octo/hello.git"}) {
+		t.Fatalf("fetched from %v, want the base repository", urls)
+	}
+}
+
 func TestDiffWaitsForTheLockOfTheWatch(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

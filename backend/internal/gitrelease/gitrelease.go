@@ -32,6 +32,7 @@ var ErrLeaseRefused = errors.New("the pull request branch moved, so the lease re
 
 type Git interface {
 	Fetch(ctx context.Context, dir, branch string) (string, error)
+	FetchFrom(ctx context.Context, dir, url, branch string) (string, error)
 	Head(ctx context.Context, dir string) (string, error)
 	Parent(ctx context.Context, dir, sha string) (string, error)
 	Contains(ctx context.Context, dir, sha, ancestor string) (bool, error)
@@ -102,6 +103,14 @@ func (g *Runner) raw(ctx context.Context, dir string, args ...string) (string, e
 func (g *Runner) Fetch(ctx context.Context, dir, branch string) (string, error) {
 	tracking := "refs/remotes/origin/" + branch
 	if _, err := g.git(ctx, dir, "fetch", "-q", "--no-tags", "origin", "+refs/heads/"+branch+":"+tracking); err != nil {
+		return "", err
+	}
+	return g.git(ctx, dir, "rev-parse", "--verify", "-q", tracking+"^{commit}")
+}
+
+func (g *Runner) FetchFrom(ctx context.Context, dir, url, branch string) (string, error) {
+	tracking := "refs/babysitter/base/" + branch
+	if _, err := g.git(ctx, dir, "fetch", "-q", "--no-tags", url, "+refs/heads/"+branch+":"+tracking); err != nil {
 		return "", err
 	}
 	return g.git(ctx, dir, "rev-parse", "--verify", "-q", tracking+"^{commit}")

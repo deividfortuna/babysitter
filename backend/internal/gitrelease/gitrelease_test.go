@@ -86,6 +86,25 @@ func TestAFastForwardGoesOutPlain(t *testing.T) {
 	}
 }
 
+func TestFetchFromReadsTheBranchOfAnotherRepository(t *testing.T) {
+	t.Parallel()
+	origin, work, _ := repos(t)
+	ctx := context.Background()
+	upstream := filepath.Join(t.TempDir(), "upstream.git")
+	git(t, work, "clone", "-q", "--bare", origin, upstream)
+	git(t, work, "push", "-q", upstream, "fix:main")
+	want := git(t, upstream, "rev-parse", "main")
+	stale := git(t, origin, "rev-parse", "main")
+
+	got, err := New().FetchFrom(ctx, work, upstream, "main")
+	if err != nil || got != want {
+		t.Fatalf("FetchFrom() = %q, %v, want the main of the upstream %s", got, err, want)
+	}
+	if tracked := git(t, work, "rev-parse", "refs/remotes/origin/main"); tracked != stale {
+		t.Fatalf("origin/main = %s, want it left at %s", tracked, stale)
+	}
+}
+
 func TestThePinnedLeaseRefusesABranchSomebodyMoved(t *testing.T) {
 	t.Parallel()
 	origin, work, other := repos(t)

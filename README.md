@@ -1218,8 +1218,10 @@ call to GitHub and marks no review item as seen. After a restart of the
 daemon, it answers only after the first poll of the watch. `watch diff`
 fetches the base and the head branch into the worktree of the watch, or
 into the checkout of a self watch, and prints the diff of the head
-against their merge base: the diff of the pull request on GitHub.
-Commits that are not pushed yet are not in it. The agent reads the pull
+against their merge base: the diff of the pull request on GitHub. For a
+pull request from a fork, it fetches the base branch from the base
+repository, because origin is the fork. Commits that are not pushed yet
+are not in it. The agent reads the pull
 request with these two commands when its session starts.
 
 ### Take the session over

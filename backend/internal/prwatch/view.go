@@ -4,9 +4,11 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
@@ -60,7 +62,7 @@ func (s *Service) Diff(ctx context.Context, id int64) (PullDiff, error) {
 		return PullDiff{}, ErrWatchStopped
 	}
 	dir := checkoutOf(w)
-	base, err := s.rel.Fetch(ctx, dir, w.BaseRef)
+	base, err := s.fetchBase(ctx, dir, w)
 	if err != nil {
 		return PullDiff{}, fmt.Errorf("fetch the base branch %s: %w", w.BaseRef, err)
 	}
@@ -77,6 +79,22 @@ func (s *Service) Diff(ctx context.Context, id int64) (PullDiff, error) {
 		return PullDiff{}, err
 	}
 	return d, nil
+}
+
+func (s *Service) fetchBase(ctx context.Context, dir string, w store.Watch) (string, error) {
+	origin, err := gitrepo.RemoteURL(ctx, w.SourceDir, "origin")
+	if err != nil {
+		return "", err
+	}
+	owner, name, err := store.ParseFullName(origin)
+	if err != nil {
+		return "", err
+	}
+	baseRepo := w.Owner + "/" + w.Name
+	if strings.EqualFold(owner+"/"+name, baseRepo) {
+		return s.rel.Fetch(ctx, dir, w.BaseRef)
+	}
+	return s.rel.FetchFrom(ctx, dir, "https://github.com/"+baseRepo+".git", w.BaseRef)
 }
 
 func checkoutOf(w store.Watch) string {

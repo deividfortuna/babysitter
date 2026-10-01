@@ -299,7 +299,9 @@ type fakeRelease struct {
 	mu          sync.Mutex
 	remote      string
 	branches    map[string]string
+	upstream    map[string]string
 	fetchDirs   []string
+	fetchURLs   []string
 	work        string
 	history     map[string][]string
 	missing     []string
@@ -363,6 +365,17 @@ func (f *fakeRelease) Fetch(_ context.Context, dir, branch string) (string, erro
 		return sha, f.fetchErr
 	}
 	return f.remote, f.fetchErr
+}
+
+func (f *fakeRelease) FetchFrom(_ context.Context, dir, url, branch string) (string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.fetchDirs = append(f.fetchDirs, dir)
+	f.fetchURLs = append(f.fetchURLs, url)
+	if sha, ok := f.upstream[branch]; ok {
+		return sha, f.fetchErr
+	}
+	return "", fmt.Errorf("no branch %s in %s", branch, url)
 }
 
 func (f *fakeRelease) Head(context.Context, string) (string, error) {
