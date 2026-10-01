@@ -46,6 +46,7 @@ function replaceApp() {
   restartTimer = null;
   if (stopping || !bundlesReady()) return;
   if (!app) return startApp();
+  if (replaced.has(app)) return;
   const old = app;
   replaced.add(old);
   old.once("exit", startApp);
