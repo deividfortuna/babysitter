@@ -1,6 +1,9 @@
 package agent
 
-import "strings"
+import (
+	"strings"
+	"unicode"
+)
 
 const shellSeparators = ";&|\n()`"
 
@@ -31,6 +34,10 @@ func splitShellWords(command string) []shellWord {
 			if i < len(runes) && runes[i] != '\n' {
 				s.add(runes[i])
 			}
+		case r == '$' && followedBy(runes, i, '\''):
+			i = s.addANSIQuoted(runes, i+2)
+		case r == '$' && followedBy(runes, i, '"'):
+			i = s.addDoubleQuoted(runes, i+2)
 		case r == '\'':
 			i = s.addSingleQuoted(runes, i+1)
 		case r == '"':
@@ -105,6 +112,86 @@ func (s *shellSplitter) addSingleQuoted(runes []rune, from int) int {
 		s.word.WriteRune(runes[i])
 	}
 	return len(runes)
+}
+
+func followedBy(runes []rune, i int, next rune) bool {
+	return i+1 < len(runes) && runes[i+1] == next
+}
+
+var ansiEscapes = map[rune]rune{
+	'a': '\a', 'b': '\b', 'e': 0x1b, 'E': 0x1b, 'f': '\f', 'n': '\n', 'r': '\r', 't': '\t', 'v': '\v',
+	'\\': '\\', '\'': '\'', '"': '"', '?': '?',
+}
+
+func (s *shellSplitter) addANSIQuoted(runes []rune, from int) int {
+	s.inWord = true
+	for i := from; i < len(runes); i++ {
+		switch runes[i] {
+		case '\'':
+			return i
+		case '\\':
+			i = s.addANSIEscape(runes, i+1)
+		default:
+			s.word.WriteRune(runes[i])
+		}
+	}
+	return len(runes)
+}
+
+func (s *shellSplitter) addANSIEscape(runes []rune, at int) int {
+	if at >= len(runes) {
+		s.word.WriteRune('\\')
+		return at
+	}
+	r := runes[at]
+	switch {
+	case r == 'x':
+		return s.addEscapedNumber(runes, at, at+1, 2, 16, true)
+	case r == 'u':
+		return s.addEscapedNumber(runes, at, at+1, 4, 16, false)
+	case r == 'U':
+		return s.addEscapedNumber(runes, at, at+1, 8, 16, false)
+	case r >= '0' && r <= '7':
+		return s.addEscapedNumber(runes, at, at, 3, 8, true)
+	case r == 'c' && at+1 < len(runes):
+		s.word.WriteRune(runes[at+1] & 0x1f)
+		return at + 1
+	}
+	if mapped, ok := ansiEscapes[r]; ok {
+		s.word.WriteRune(mapped)
+		return at
+	}
+	s.word.WriteRune('\\')
+	s.word.WriteRune(r)
+	return at
+}
+
+func (s *shellSplitter) addEscapedNumber(runes []rune, at, from, most, base int, asByte bool) int {
+	value, end := 0, from
+	for end < len(runes) && end-from < most {
+		digit, ok := digitValue(runes[end], base)
+		if !ok {
+			break
+		}
+		value = value*base + digit
+		end++
+	}
+	if end == from {
+		s.word.WriteRune('\\')
+		s.word.WriteRune(runes[at])
+		return at
+	}
+	if asByte {
+		s.word.WriteByte(byte(value))
+	} else {
+		s.word.WriteRune(rune(value))
+	}
+	return end - 1
+}
+
+func digitValue(r rune, base int) (int, bool) {
+	value := strings.IndexRune("0123456789abcdef", unicode.ToLower(r))
+	return value, value >= 0 && value < base
 }
 
 func (s *shellSplitter) addDoubleQuoted(runes []rune, from int) int {

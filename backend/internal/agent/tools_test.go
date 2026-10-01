@@ -79,6 +79,12 @@ func TestIsAuthorDecisionTakesEverySpellingOfADecision(t *testing.T) {
 		"babysitter -o json 2>&1 watch merge 7",
 		"BABYSITTER watch merge 7",
 		"/usr/local/bin/BabySitter -o json watch approve 7",
+		`baby$'\x73'itter watch reject 1`,
+		`$'\142abysitter' watch merge 1`,
+		`$'babysitter' watch $'m\145rge' 1`,
+		`babysitter watch $'\x72eject' 1`,
+		`$'baby\U73itter' watch stop 1`,
+		`baby$"sit"ter watch merge 1`,
 	} {
 		if !IsAuthorDecision(command) {
 			t.Errorf("IsAuthorDecision(%q) = false", command)
@@ -91,6 +97,7 @@ func TestIsAuthorDecisionTakesEverySpellingOfADecision(t *testing.T) {
 		`babysitter watch reply --to 42 7 "the author runs watch approve"`,
 		"babysitter watch reply 7 'merge > reject' 2>&1",
 		"babysitter 2>/dev/null watch reply 7 'please watch merge' >/tmp/out",
+		`babysitter watch reply 7 $'line one\nwatch merge is for the author'`,
 		"babysitter -o json watch status 1",
 		"babysitter watch modes",
 		"go test ./internal/prwatch/ -run TestWatchMerge",
