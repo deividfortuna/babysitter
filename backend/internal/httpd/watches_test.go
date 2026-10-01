@@ -448,11 +448,11 @@ func (f *fakeWatches) Readiness(w store.Watch, state agent.State) (*time.Time, [
 	return prwatch.Readiness(w, state, now, interval)
 }
 
-func (f *fakeWatches) Hook(_ context.Context, id int64, event string, payload []byte) (prwatch.Verdict, error) {
+func (f *fakeWatches) Hook(_ context.Context, id int64, event string, payload []byte) (agent.ToolVerdict, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.hooks = append(f.hooks, fmt.Sprintf("%d %s %s", id, event, payload))
-	return prwatch.ToolVerdict(event, payload, true), nil
+	return agent.DecideTool(event, agent.ParseToolCall(payload), agent.ToolFacts{Live: true}), nil
 }
 
 func TestHookRouteGivesTheVerdictOnATool(t *testing.T) {
@@ -530,8 +530,11 @@ func TestSessionRoutes(t *testing.T) {
 	}
 
 	var verdict HookResponse
-	if rec := call(t, h, http.MethodPost, "/watches/1/hook", `{"event":"stop","payload":{"session_id":"s"}}`, &verdict); rec.Code != http.StatusOK || verdict != (HookResponse{Decision: HookAllow}) {
+	if rec := call(t, h, http.MethodPost, "/watches/1/hook", `{"event":"stop","payload":{"session_id":"s"}}`, &verdict); rec.Code != http.StatusOK {
 		t.Fatalf("hook: %d %s", rec.Code, rec.Body)
+	}
+	if verdict != (HookResponse{Decision: HookAllow}) {
+		t.Fatalf("hook verdict = %+v", verdict)
 	}
 	if rec := call(t, h, http.MethodPost, "/watches/1/hook", `{"event":"bogus","payload":{}}`, nil); rec.Code != http.StatusBadRequest {
 		t.Fatalf("hook bad event: %d %s", rec.Code, rec.Body)

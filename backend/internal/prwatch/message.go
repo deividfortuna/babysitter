@@ -1,9 +1,11 @@
 package prwatch
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
@@ -12,6 +14,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/redact"
 	"github.com/deividfortuna/babysitter/internal/session"
 	"github.com/deividfortuna/babysitter/internal/store"
+	"github.com/deividfortuna/babysitter/internal/textx"
 )
 
 var ErrAgentBusy = errors.New("the agent waits on the author")
@@ -134,36 +137,49 @@ func (s *Service) Send(ctx context.Context, id int64, text string) (store.Activi
 	return s.deliver(ctx, w, text, summary, deliverAuthor, nil)
 }
 
-type Verdict struct {
-	Deny   bool
-	Reason string
-}
-
-const NoSessionRefusal = "babysitter: the daemon runs no agent session for this watch, so it refuses every tool; " +
-	"stop and say in your final message that the session of the watch is gone"
-
-func (s *Service) Hook(ctx context.Context, id int64, event string, payload []byte) (Verdict, error) {
+func (s *Service) Hook(ctx context.Context, id int64, event string, payload []byte) (agent.ToolVerdict, error) {
 	if !agent.ValidEvent(event) {
-		return Verdict{}, fmt.Errorf("unknown hook event %q", event)
+		return agent.ToolVerdict{}, fmt.Errorf("unknown hook event %q", event)
 	}
 	l := s.sessions.get(id)
-	verdict := ToolVerdict(event, payload, l != nil)
+	var call agent.ToolCall
+	if event == agent.EventPreToolUse {
+		call = agent.ParseToolCall(payload)
+	}
+	verdict := agent.DecideTool(event, call, agent.ToolFacts{WatchID: id, Exe: cmp.Or(s.exe, "babysitter"), Live: l != nil})
+	s.logHook(ctx, id, event, call, verdict)
 	if l != nil {
-		s.reportState(ctx, id, l, event, payload)
+		s.reportState(context.WithoutCancel(ctx), id, l, event, payload)
 	}
 	return verdict, nil
 }
 
-func ToolVerdict(event string, payload []byte, hasSession bool) Verdict {
-	switch {
-	case event != agent.EventPreToolUse:
-		return Verdict{}
-	case !hasSession:
-		return Verdict{Deny: true, Reason: NoSessionRefusal}
-	case agent.RefusesToolUse(event, payload):
-		return Verdict{Deny: true, Reason: agent.AuthorDecisionRefusal}
+const hookCommandWidth = 200
+
+func (s *Service) logHook(ctx context.Context, id int64, event string, call agent.ToolCall, verdict agent.ToolVerdict) {
+	level := slog.LevelDebug
+	if verdict.Deny {
+		level = slog.LevelInfo
 	}
-	return Verdict{}
+	if !s.log.Enabled(ctx, level) {
+		return
+	}
+	attrs := []any{"watch", id, "event", event, "decision", verdict.Decision()}
+	if call.Tool != "" {
+		attrs = append(attrs, "tool", call.Tool)
+	}
+	if call.Command != "" {
+		attrs = append(attrs, "command", loggedCommand(call.Command))
+	}
+	if verdict.Deny {
+		attrs = append(attrs, "rule", verdict.Rule)
+	}
+	s.log.Log(ctx, level, "the agent called its hook", attrs...)
+}
+
+func loggedCommand(command string) string {
+	oneLine := strings.Join(strings.Fields(redact.Text(command)), " ")
+	return textx.FirstLine(oneLine, hookCommandWidth)
 }
 
 func (s *Service) reportState(ctx context.Context, id int64, l *live, event string, payload []byte) {

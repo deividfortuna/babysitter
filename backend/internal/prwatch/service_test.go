@@ -1264,7 +1264,7 @@ func TestHookGivesTheVerdictOnATool(t *testing.T) {
 	w := fx.start()
 	ctx := context.Background()
 	const decision = "babysitter -o json watch reject 1 --reason x"
-	hook := func(id int64, event, payload string) Verdict {
+	hook := func(id int64, event, payload string) agent.ToolVerdict {
 		t.Helper()
 		v, err := fx.svc.Hook(ctx, id, event, []byte(payload))
 		if err != nil {
@@ -1272,11 +1272,13 @@ func TestHookGivesTheVerdictOnATool(t *testing.T) {
 		}
 		return v
 	}
+	refused := agent.ToolVerdict{Deny: true, Rule: "author-reject", Reason: agent.AuthorDecisionRefusal}
+	noSession := agent.ToolVerdict{Deny: true, Rule: "no-session", Reason: agent.NoSessionRefusal}
 	for _, payload := range []string{
 		`{"toolName":"bash","toolArgs":{"command":"` + decision + `"}}`,
 		`{"tool_name":"Bash","tool_input":{"command":"` + decision + `"}}`,
 	} {
-		if v := hook(w.ID, agent.EventPreToolUse, payload); !v.Deny || v.Reason != agent.AuthorDecisionRefusal {
+		if v := hook(w.ID, agent.EventPreToolUse, payload); v != refused {
 			t.Fatalf("verdict on %s = %+v", payload, v)
 		}
 		if v := hook(w.ID, agent.EventPostToolUse, payload); v.Deny {
@@ -1284,13 +1286,16 @@ func TestHookGivesTheVerdictOnATool(t *testing.T) {
 		}
 	}
 	info, err := fx.svc.Session(ctx, w)
-	if err != nil || info.State != agent.StateActive {
-		t.Fatalf("a refused tool did not mark the agent active: %q, %v", info.State, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.State != agent.StateActive {
+		t.Fatalf("a refused tool did not mark the agent active: %q", info.State)
 	}
 	if v := hook(w.ID, agent.EventPreToolUse, `{"toolName":"bash","toolArgs":{"command":"babysitter watch reply 1 done"}}`); v.Deny {
 		t.Fatalf("verdict on a reply = %+v", v)
 	}
-	if v := hook(999, agent.EventPreToolUse, `{"tool_name":"Bash","tool_input":{"command":"ls"}}`); !v.Deny || v.Reason != NoSessionRefusal {
+	if v := hook(999, agent.EventPreToolUse, `{"tool_name":"Bash","tool_input":{"command":"ls"}}`); v != noSession {
 		t.Fatalf("verdict without a session = %+v", v)
 	}
 	if v := hook(999, agent.EventStop, `{}`); v.Deny {
@@ -1300,7 +1305,7 @@ func TestHookGivesTheVerdictOnATool(t *testing.T) {
 	if _, err := fx.svc.Stop(ctx, w.ID, StopOptions{}); err != nil {
 		t.Fatal(err)
 	}
-	if v := hook(w.ID, agent.EventPreToolUse, `{"tool_name":"Bash","tool_input":{"command":"ls"}}`); !v.Deny {
+	if v := hook(w.ID, agent.EventPreToolUse, `{"tool_name":"Bash","tool_input":{"command":"ls"}}`); v != noSession {
 		t.Fatalf("verdict after the session stopped = %+v", v)
 	}
 }

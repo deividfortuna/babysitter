@@ -793,7 +793,7 @@ func newWatchHookCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				return nil
 			}
 			if err != nil {
-				return refuseTool(cmd.OutOrStdout(), "babysitter: the daemon did not answer, try again ("+err.Error()+")")
+				return refuseTool(cmd.OutOrStdout(), hookFailureReason(err))
 			}
 			if verdict.Decision == httpd.HookAllow {
 				return nil
@@ -816,6 +816,24 @@ func hookPayload(r io.Reader) map[string]any {
 	return payload
 }
 
+var (
+	errNoWatch   = errors.New("a watch is required")
+	errNoVerdict = errors.New("the daemon answered with no verdict")
+)
+
+func hookFailureReason(err error) string {
+	if failsOnEveryTry(err) {
+		return "babysitter: the hook of this watch cannot get a verdict, so it refuses every tool; " +
+			"do not try again, and say in your final message that the hook fails (" + err.Error() + ")"
+	}
+	return "babysitter: the daemon did not answer, try again (" + err.Error() + ")"
+}
+
+func failsOnEveryTry(err error) bool {
+	_, daemonAnswered := errors.AsType[*daemonError](err)
+	return daemonAnswered || errors.Is(err, errNoWatch) || errors.Is(err, errNoVerdict)
+}
+
 func refuseTool(w io.Writer, reason string) error {
 	_ = json.NewEncoder(w).Encode(map[string]string{
 		"permissionDecision":       "deny",
@@ -827,7 +845,7 @@ func refuseTool(w io.Writer, reason string) error {
 func reportHook(cmd *cobra.Command, opts *options, dataDir string, watch int64, event string, payload map[string]any) (httpd.HookResponse, error) {
 	var verdict httpd.HookResponse
 	if watch <= 0 {
-		return verdict, fmt.Errorf("a watch is required")
+		return verdict, errNoWatch
 	}
 	c, err := opts.daemonClient(dataDir)
 	if err != nil {
@@ -841,7 +859,7 @@ func reportHook(cmd *cobra.Command, opts *options, dataDir string, watch int64, 
 		return verdict, err
 	}
 	if !isVerdict(verdict) {
-		return verdict, errors.New("the daemon answered with no verdict")
+		return verdict, errNoVerdict
 	}
 	return verdict, nil
 }

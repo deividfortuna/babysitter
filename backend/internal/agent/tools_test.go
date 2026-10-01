@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -38,112 +37,6 @@ func TestAuthorPatternsTakeEverySpellingOfADecision(t *testing.T) {
 	}
 	if slices.ContainsFunc(got, func(c string) bool { return strings.Contains(c, "reply") }) {
 		t.Fatalf("the reply of the agent is refused: %q", got)
-	}
-}
-
-func TestIsAuthorDecisionTakesEverySpellingOfADecision(t *testing.T) {
-	t.Parallel()
-	for _, command := range []string{
-		"babysitter watch mode 1 auto",
-		"babysitter -o json watch reject 1 --reason x",
-		"babysitter --data-dir /tmp/x watch stop",
-		"/usr/local/bin/babysitter --output json watch approve 1",
-		"'/opt/my tools/babysitter' watch merge 1",
-		"sh -c 'babysitter -o text watch retry 1'",
-		"cd /repo && babysitter watch takeover 1",
-		"babysitter watch\thandback 1",
-		"babysitter \\\n  watch merge 1",
-		"baby''sitter watch reject 1",
-		`baby""sitter watch approve 1`,
-		`babysitter watch "reject" 1`,
-		`babysitter wat'ch' mer""ge 1`,
-		`baby\sitter watch st\op 1`,
-		"babysitter watch reply 7 done && babysitter watch merge 7",
-		`babysitter watch reply 7 "$(babysitter watch merge 7)"`,
-		"babysitter watch reply 7 `babysitter watch merge 7`",
-		`babysitter -o "a watch reply" watch merge 1`,
-		"babysitter --data-dir /tmp/watch watch merge 1",
-		"babysitter watch --reason x reject 1",
-		"echo $(babysitter watch merge 1)",
-		`bash -lc "babysitter watch merge 1"`,
-		"env BABYSITTER_WATCH=7 babysitter watch merge 1",
-		"babysitter >/tmp/out watch merge 7",
-		"babysitter > /tmp/out watch merge 7",
-		"babysitter 2>/dev/null watch merge 7",
-		"babysitter 2>&1 watch merge 7",
-		"babysitter &>/tmp/out watch merge 7",
-		"babysitter &>> /tmp/out watch merge 7",
-		"babysitter </dev/null watch merge 7",
-		"babysitter <<<x watch merge 7",
-		"babysitter >|/tmp/out -o json watch merge 7",
-		"babysitter {fd}>/tmp/out watch merge 7",
-		"babysitter -o json 2>&1 watch merge 7",
-		"BABYSITTER watch merge 7",
-		"/usr/local/bin/BabySitter -o json watch approve 7",
-		`baby$'\x73'itter watch reject 1`,
-		`$'\142abysitter' watch merge 1`,
-		`$'babysitter' watch $'m\145rge' 1`,
-		`babysitter watch $'\x72eject' 1`,
-		`$'baby\U73itter' watch stop 1`,
-		`baby$"sit"ter watch merge 1`,
-		"ls # a comment\nbabysitter watch merge 1",
-		"babysitter watch merge 1#2",
-		"sh <<EOF\nbabysitter watch merge 1\nEOF",
-	} {
-		if !IsAuthorDecision(command) {
-			t.Errorf("IsAuthorDecision(%q) = false", command)
-		}
-	}
-	for _, command := range []string{
-		"babysitter watch reply 1 fixed in the last commit",
-		`babysitter watch reply 7 "please watch merge when ready"`,
-		"babysitter -o json watch reply 7 'I did not run babysitter watch merge'",
-		`babysitter watch reply --to 42 7 "the author runs watch approve"`,
-		"babysitter watch reply 7 'merge > reject' 2>&1",
-		"babysitter 2>/dev/null watch reply 7 'please watch merge' >/tmp/out",
-		`babysitter watch reply 7 $'line one\nwatch merge is for the author'`,
-		"go test ./... # do not run babysitter watch merge 1",
-		"# babysitter watch merge 1\ngit status",
-		"babysitter -o json watch status 1",
-		"babysitter watch modes",
-		"go test ./internal/prwatch/ -run TestWatchMerge",
-		"git commit -m 'watch merge readiness'",
-		"",
-	} {
-		if IsAuthorDecision(command) {
-			t.Errorf("IsAuthorDecision(%q) = true", command)
-		}
-	}
-}
-
-func TestRefusesToolUseReadsTheCommandOfEveryAgent(t *testing.T) {
-	t.Parallel()
-	const decision = "babysitter -o json watch reject 1 --reason x"
-	refused := []string{
-		`{"toolName":"bash","toolArgs":{"command":"` + decision + `"}}`,
-		`{"toolName":"bash","toolArgs":"{\"command\":\"` + decision + `\"}"}`,
-		`{"tool_name":"Bash","tool_input":{"command":"` + decision + `"}}`,
-	}
-	for _, payload := range refused {
-		if !RefusesToolUse(EventPreToolUse, json.RawMessage(payload)) {
-			t.Errorf("RefusesToolUse(%s) = false", payload)
-		}
-		if RefusesToolUse(EventPostToolUse, json.RawMessage(payload)) {
-			t.Errorf("RefusesToolUse() refuses a tool that already ran: %s", payload)
-		}
-	}
-	allowed := []string{
-		`{"toolName":"bash","toolArgs":{"command":"babysitter watch reply 1 done"}}`,
-		`{"tool_name":"Read","tool_input":{"file_path":"` + decision + `"}}`,
-		`{"toolName":"bash","toolArgs":"not json"}`,
-		`{}`,
-		`not json`,
-		``,
-	}
-	for _, payload := range allowed {
-		if RefusesToolUse(EventPreToolUse, json.RawMessage(payload)) {
-			t.Errorf("RefusesToolUse(%s) = true", payload)
-		}
 	}
 }
 

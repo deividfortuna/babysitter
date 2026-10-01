@@ -559,15 +559,12 @@ type HookResponse struct {
 }
 
 const (
-	HookAllow = "allow"
-	HookDeny  = "deny"
+	HookAllow = agent.ToolAllow
+	HookDeny  = agent.ToolDeny
 )
 
-func hookResponse(v prwatch.Verdict) HookResponse {
-	if v.Deny {
-		return HookResponse{Decision: HookDeny, Reason: v.Reason}
-	}
-	return HookResponse{Decision: HookAllow}
+func hookResponse(v agent.ToolVerdict) HookResponse {
+	return HookResponse{Decision: v.Decision(), Reason: v.Reason}
 }
 
 type Activity struct {

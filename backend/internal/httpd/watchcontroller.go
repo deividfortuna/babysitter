@@ -32,7 +32,7 @@ type WatchController interface {
 	Resize(ctx context.Context, id int64, size prwatch.TerminalSize) error
 	Session(ctx context.Context, w store.Watch) (prwatch.SessionInfo, error)
 	Readiness(w store.Watch, state agent.State) (*time.Time, []string)
-	Hook(ctx context.Context, id int64, event string, payload []byte) (prwatch.Verdict, error)
+	Hook(ctx context.Context, id int64, event string, payload []byte) (agent.ToolVerdict, error)
 	Providers() []prwatch.Provider
 }
 
@@ -108,8 +108,8 @@ func (noopWatches) Resize(context.Context, int64, prwatch.TerminalSize) error {
 	return errWatchUnavailable
 }
 
-func (noopWatches) Hook(context.Context, int64, string, []byte) (prwatch.Verdict, error) {
-	return prwatch.Verdict{}, errWatchUnavailable
+func (noopWatches) Hook(context.Context, int64, string, []byte) (agent.ToolVerdict, error) {
+	return agent.ToolVerdict{}, errWatchUnavailable
 }
 
 func (noopWatches) Session(context.Context, store.Watch) (prwatch.SessionInfo, error) {

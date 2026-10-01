@@ -22,7 +22,6 @@ import (
 	"github.com/deividfortuna/babysitter/internal/agent/claude"
 	"github.com/deividfortuna/babysitter/internal/agent/copilot"
 	"github.com/deividfortuna/babysitter/internal/httpd"
-	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/runfile"
 )
 
@@ -40,9 +39,9 @@ type liveWatches struct {
 	holds    []time.Duration
 }
 
-func (c *liveWatches) Hook(ctx context.Context, _ int64, event string, payload []byte) (prwatch.Verdict, error) {
+func (c *liveWatches) Hook(ctx context.Context, _ int64, event string, payload []byte) (agent.ToolVerdict, error) {
 	if event != agent.EventPreToolUse {
-		return prwatch.ToolVerdict(event, payload, true), nil
+		return agent.DecideTool(event, agent.ParseToolCall(payload), agent.ToolFacts{Live: true}), nil
 	}
 	c.mu.Lock()
 	c.toolUses = append(c.toolUses, string(payload))
@@ -54,11 +53,11 @@ func (c *liveWatches) Hook(ctx context.Context, _ int64, event string, payload [
 		c.mu.Lock()
 		c.holds = append(c.holds, time.Since(start))
 		c.mu.Unlock()
-		return prwatch.Verdict{}, ctx.Err()
+		return agent.ToolVerdict{}, ctx.Err()
 	case strings.Contains(string(payload), daemonCheck):
-		return prwatch.Verdict{Deny: true, Reason: "babysitter live check: the daemon refuses " + daemonCheck}, nil
+		return agent.ToolVerdict{Deny: true, Reason: "babysitter live check: the daemon refuses " + daemonCheck}, nil
 	}
-	return prwatch.ToolVerdict(event, payload, true), nil
+	return agent.DecideTool(event, agent.ParseToolCall(payload), agent.ToolFacts{Live: true}), nil
 }
 
 type liveDaemon struct {
