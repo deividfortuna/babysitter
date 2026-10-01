@@ -1310,6 +1310,22 @@ func TestHookGivesTheVerdictOnATool(t *testing.T) {
 	}
 }
 
+func TestHookRefusesEveryToolAfterTheSessionExits(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+	v, err := fx.svc.Hook(ctx, w.ID, agent.EventPreToolUse, []byte(`{"tool_name":"Bash","tool_input":{"command":"ls"}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (agent.ToolVerdict{Deny: true, Rule: "no-session", Reason: agent.NoSessionRefusal}); v != want {
+		t.Fatalf("verdict after the session exited = %+v, want %+v", v, want)
+	}
+}
+
 func TestHooksGateTheMessages(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

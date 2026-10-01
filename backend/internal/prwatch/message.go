@@ -146,7 +146,8 @@ func (s *Service) Hook(ctx context.Context, id int64, event string, payload []by
 	if event == agent.EventPreToolUse {
 		call = agent.ParseToolCall(payload)
 	}
-	verdict := agent.DecideTool(event, call, agent.ToolFacts{WatchID: id, Exe: cmp.Or(s.exe, "babysitter"), Live: l != nil})
+	running := l != nil && l.State() != agent.StateExited
+	verdict := agent.DecideTool(event, call, agent.ToolFacts{WatchID: id, Exe: cmp.Or(s.exe, "babysitter"), Live: running})
 	s.logHook(ctx, id, event, call, verdict)
 	if l != nil {
 		s.reportState(context.WithoutCancel(ctx), id, l, event, payload)
