@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"strings"
@@ -17,6 +18,7 @@ import (
 
 	"golang.org/x/sys/windows"
 
+	"github.com/deividfortuna/babysitter/internal/processalive"
 	"github.com/deividfortuna/babysitter/internal/testutil"
 )
 
@@ -67,6 +69,15 @@ func runHelper(mode string) {
 				fmt.Printf("size %d %d\n", rows, cols)
 			}
 		}
+	case "parent":
+		child := exec.Command(os.Args[0])
+		child.Env = append(os.Environ(), helperEnv+"=stubborn")
+		if err := child.Start(); err != nil {
+			fmt.Printf("child failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Printf("child %d\n", child.Process.Pid)
+		select {}
 	case "quiet":
 	}
 }
@@ -224,6 +235,36 @@ func TestStopKillsAProcessThatIgnoresTheInterrupt(t *testing.T) {
 	case <-h.Done():
 	case <-time.After(time.Second):
 		t.Fatal("the process that ignored the interrupt is still running")
+	}
+}
+
+func TestStopEndsAChildTheAgentStartsBeforeItJoinsTheJob(t *testing.T) {
+	t.Parallel()
+	host := &PTY{Timing: DefaultTiming, beforeJob: func() { time.Sleep(2 * time.Second) }}
+	h, err := host.Start(context.Background(), helperSpec(t, "parent"))
+	if err != nil {
+		t.Fatalf("Start() error = %v", err)
+	}
+	waitFor(t, h, "child ")
+	out := Strip(h.Output(0))
+	_, line, _ := strings.Cut(out, "child ")
+	var child int
+	if _, err := fmt.Sscanf(line, "%d", &child); err != nil {
+		t.Fatalf("no child pid in %q: %v", out, err)
+	}
+	t.Cleanup(func() {
+		if p, err := os.FindProcess(child); err == nil {
+			_ = p.Kill()
+		}
+	})
+	ctx, cancel := context.WithTimeout(context.Background(), stopGrace+5*time.Second)
+	defer cancel()
+	if err := h.Stop(ctx); err != nil {
+		t.Fatalf("Stop() error = %v", err)
+	}
+	<-h.Done()
+	if !testutil.Within(testutil.Timeout, func() bool { return !processalive.Alive(child) }) {
+		t.Fatalf("the child %d of the agent outlived Stop", child)
 	}
 }
 

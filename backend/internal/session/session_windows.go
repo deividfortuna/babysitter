@@ -18,6 +18,8 @@ import (
 
 type PTY struct {
 	Timing Timing
+
+	beforeJob func()
 }
 
 func New() *PTY {
@@ -46,13 +48,22 @@ func (h *PTY) Start(_ context.Context, spec Spec) (Handle, error) {
 		return nil, err
 	}
 	env := append(terminalEnv(os.Environ()), spec.Env...)
-	pid, handle, err := term.pty.Spawn(path, spec.Argv, &syscall.ProcAttr{Dir: spec.Dir, Env: env})
+	suspended := &syscall.SysProcAttr{CreationFlags: windows.CREATE_SUSPENDED}
+	pid, handle, err := term.pty.Spawn(path, spec.Argv, &syscall.ProcAttr{Dir: spec.Dir, Env: env, Sys: suspended})
 	if err != nil {
 		term.Close()
 		log.close()
 		return nil, fmt.Errorf("start %s: %w", spec.Argv[0], err)
 	}
-	term.adopt(windows.Handle(handle))
+	if h.beforeJob != nil {
+		h.beforeJob()
+	}
+	if err := term.adopt(windows.Handle(handle)); err != nil {
+		term.kill()
+		term.Close()
+		log.close()
+		return nil, fmt.Errorf("start %s: %w", spec.Argv[0], err)
+	}
 
 	exited := make(chan struct{})
 	var exitErr error
@@ -136,14 +147,50 @@ func killOnCloseJob() (windows.Handle, error) {
 	return job, nil
 }
 
-// adopt takes the process handle of the agent and puts the agent in the
-// job. When the assignment fails the agent still runs, and only the kill
-// of its children is lost; the process itself is still terminated.
-func (c *console) adopt(proc windows.Handle) {
+// adopt takes the process handle of an agent created suspended, puts the
+// agent in the job and only then lets it run, so every process it starts
+// is in the job too.
+func (c *console) adopt(proc windows.Handle) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.proc = proc
-	_ = windows.AssignProcessToJobObject(c.job, proc)
+	if err := windows.AssignProcessToJobObject(c.job, proc); err != nil {
+		return fmt.Errorf("put the agent in its job: %w", err)
+	}
+	return resume(proc)
+}
+
+// resume lets the main thread of a suspended process run. Spawn closes
+// the handle of the thread, so a snapshot of the threads finds it again.
+func resume(proc windows.Handle) error {
+	pid, err := windows.GetProcessId(proc)
+	if err != nil {
+		return fmt.Errorf("read the pid of the agent: %w", err)
+	}
+	snapshot, err := windows.CreateToolhelp32Snapshot(windows.TH32CS_SNAPTHREAD, 0)
+	if err != nil {
+		return fmt.Errorf("list the threads of the agent: %w", err)
+	}
+	defer func() { _ = windows.CloseHandle(snapshot) }()
+	entry := windows.ThreadEntry32{Size: uint32(unsafe.Sizeof(windows.ThreadEntry32{}))}
+	for err = windows.Thread32First(snapshot, &entry); err == nil; err = windows.Thread32Next(snapshot, &entry) {
+		if entry.OwnerProcessID == pid {
+			return resumeThread(entry.ThreadID)
+		}
+	}
+	return fmt.Errorf("find the thread of the agent: %w", err)
+}
+
+func resumeThread(id uint32) error {
+	thread, err := windows.OpenThread(windows.THREAD_SUSPEND_RESUME, false, id)
+	if err != nil {
+		return fmt.Errorf("open the thread of the agent: %w", err)
+	}
+	defer func() { _ = windows.CloseHandle(thread) }()
+	if _, err := windows.ResumeThread(thread); err != nil {
+		return fmt.Errorf("resume the agent: %w", err)
+	}
+	return nil
 }
 
 func (c *console) waitExit() error {
