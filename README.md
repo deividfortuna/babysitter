@@ -1221,7 +1221,8 @@ as `gh pr diff`: from where the head left the base to the pushed head.
 Commits that are not pushed yet are not in it. The daemon reads it
 through its cache of conditional requests. The ETag of a diff is a hash
 of the diff, so comments and reviews do not change it: a diff that did
-not change gets a 304 and costs no API budget. GitHub serves no diff
+not change gets a 304 and costs no API budget. The cache keeps a diff of
+up to 4 MiB; a larger diff costs one call each time. GitHub serves no diff
 for a very large pull request; `watch diff` then says so, and `git diff`
 in the checkout is the way to read it. The agent reads the pull request
 with these two commands when its session starts.

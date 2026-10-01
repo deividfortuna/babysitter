@@ -409,7 +409,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** The diff of the pull request of an active watch, from GitHub through the cache of conditional requests: a diff that did not change costs no API budget. A 422 says GitHub serves no diff that large. */
+        /** The diff of the pull request of an active watch, from GitHub through the cache of conditional requests: a diff of up to 4 MiB that did not change costs no API budget. A 422 says GitHub serves no diff that large. */
         get: operations["diffWatchPullRequest"];
         put?: never;
         post?: never;

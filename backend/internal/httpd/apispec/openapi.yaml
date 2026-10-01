@@ -1002,8 +1002,8 @@ paths:
                 $ref: '#/components/schemas/HttpdAPIError'
           description: Service Unavailable
       summary: 'The diff of the pull request of an active watch, from GitHub through
-        the cache of conditional requests: a diff that did not change costs no API
-        budget. A 422 says GitHub serves no diff that large.'
+        the cache of conditional requests: a diff of up to 4 MiB that did not change
+        costs no API budget. A 422 says GitHub serves no diff that large.'
   /api/v1/watches/{id}/handback:
     post:
       operationId: handbackWatch

@@ -96,8 +96,8 @@ func newWatchDiffCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		Long: `diff prints the diff of the pull request of an active watch, as GitHub
 serves it: from where the head left the base to the pushed head. Commits
 that are not pushed yet are not in it. The daemon reads it through its
-cache of conditional requests, so a diff that did not change costs no API
-budget. For a diff too large for GitHub, use git diff in the checkout.`,
+cache of conditional requests, so a diff of up to 4 MiB that did not
+change costs no API budget. For a diff too large for GitHub, use git diff in the checkout.`,
 		Args: cobra.ExactArgs(1),
 		RunE: onWatch(opts, dataDirFlag, func(cmd *cobra.Command, c *daemonClient, w httpd.Watch, _ []string) error {
 			var out httpd.PullRequestDiff

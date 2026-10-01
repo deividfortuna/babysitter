@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
 
 	"github.com/google/go-github/v91/github"
@@ -113,6 +114,23 @@ func TestPullDiffReadsAgainWithTheETagOfTheDiff(t *testing.T) {
 	calls := g.Calls(ghfake.RoutePull)
 	if len(calls) != 3 || calls[0].Status != http.StatusOK || calls[1].Status != http.StatusNotModified || calls[2].Accept == calls[0].Accept {
 		t.Fatalf("pull reads = %+v, want the diff, the diff again as 304, then the JSON", calls)
+	}
+}
+
+func TestPullDiffOverTheCacheLimitIsReadInFullEachTime(t *testing.T) {
+	t.Parallel()
+	g := ghfake.New()
+	g.PR("o/r", 5).Diff = strings.Repeat("+", maxCacheBytes+1)
+	c := g.Serve(t).Client(t, github.WithTransport(&cachingTransport{cache: newResponseCache(maxCacheEntries, maxCacheTotalBytes)}))
+
+	for range 2 {
+		if diff, _, err := PullDiff(context.Background(), c, "o", "r", 5); err != nil || len(diff) != maxCacheBytes+1 {
+			t.Fatalf("PullDiff() = %d bytes, %v", len(diff), err)
+		}
+	}
+	calls := g.Calls(ghfake.RoutePull)
+	if len(calls) != 2 || calls[1].Status != http.StatusOK {
+		t.Fatalf("pull reads = %+v, want the whole diff twice", calls)
 	}
 }
 
