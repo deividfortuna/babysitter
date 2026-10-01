@@ -74,8 +74,17 @@ type PR struct {
 	// compare of BaseRef with HeadSHA answers.
 	BehindBy  int
 	Labels    []string
-	Additions int
-	Deletions int
+	Milestone string
+	// AutoMerge is the merge method of auto-merge; empty leaves it off.
+	AutoMerge    string
+	Additions    int
+	Deletions    int
+	Commits      int
+	ChangedFiles int
+	// Diff is what the pull request answers with for the diff media type.
+	// Its ETag is a hash of the diff, as on GitHub, so a request with that
+	// ETag in If-None-Match gets 304.
+	Diff      string
 	CreatedAt time.Time
 	UpdatedAt time.Time
 	// Requested are the users asked for a review, as REST lists them.

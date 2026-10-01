@@ -409,6 +409,30 @@ func (a *api) handleWatchOutput(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, SessionOutput{Output: out})
 }
 
+func (a *api) handleViewWatch(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	snap, err := a.watches.View(r.Context(), id)
+	if viewErrors.write(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, viewFromSnapshot(snap))
+}
+
+func (a *api) handleDiffWatch(w http.ResponseWriter, r *http.Request) {
+	id, ok := pathID(w, r, "id")
+	if !ok {
+		return
+	}
+	diff, err := a.watches.Diff(r.Context(), id)
+	if diffErrors.write(w, err) {
+		return
+	}
+	writeJSON(w, http.StatusOK, PullRequestDiff{Diff: diff})
+}
+
 func (a *api) handleResizeWatch(w http.ResponseWriter, r *http.Request) {
 	id, ok := pathID(w, r, "id")
 	if !ok {

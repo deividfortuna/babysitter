@@ -379,6 +379,8 @@ babysitter watch start --update-on-github=false   # the agent updates a branch b
 babysitter watch list                             # the watched pull requests
 babysitter watch list --all                       # stopped watches too
 babysitter watch status 1                         # state, checks, the agent, and what blocks the merge
+babysitter watch view 1                           # the pull request as the daemon last read it: reviewers, labels, size, checks, description
+babysitter watch diff 1                           # the diff of the pull request, as gh pr diff shows it, through the cache of the daemon
 babysitter watch activity 1                       # what happened on watch 1
 babysitter watch activity 1 --since 20 --limit 50 # only the rows after row 20, at most 50
 babysitter watch poll 1                           # ask the daemon to look at the pull request now
@@ -529,8 +531,12 @@ The snapshot holds:
   `review_decision`, the
   counts of `approvals` and `changes_requested`, the
   `requested_reviewers` still pending, the `reviewers_behind_head`
-  who reviewed an earlier commit, and for a pull request of Dependabot
-  its `update_type`: `patch`, `minor` or `major`
+  who reviewed an earlier commit, the `reviewers` with the verdict
+  that stands for each person who reviewed, `labels`, `assignees`,
+  `milestone`, `auto_merge` (its merge method, absent when auto-merge is
+  off), `additions`, `deletions`, `commits`, `changed_files`,
+  `created_at`, the `body`, and for a pull request of Dependabot its
+  `update_type`: `patch`, `minor` or `major`
 - `checks`: the overall status and the counts of passed, failed, pending
   and skipped checks, `all_terminal`, and one item per check run or
   commit status of the head commit
@@ -1205,6 +1211,22 @@ would decide for you, while a proposal waits on you, while the session
 is with you after a takeover, and on a watch that stopped or whose
 provider is not available. The app shows the same terminal and the same
 message box on the page of the watch.
+
+`watch view` prints the pull request from the last snapshot of the
+daemon: state, branches, mergeability, reviewers, labels, assignees,
+milestone, auto-merge, size, checks and the description. It makes no
+call to GitHub and marks no review item as seen. After a restart of the
+daemon, it answers only after the first poll of the watch. `watch diff`
+prints the diff of the pull request as GitHub serves it, the same diff
+as `gh pr diff`: from where the head left the base to the pushed head.
+Commits that are not pushed yet are not in it. The daemon reads it
+through its cache of conditional requests. The ETag of a diff is a hash
+of the diff, so comments and reviews do not change it: a diff that did
+not change gets a 304 and costs no API budget. The cache keeps a diff of
+up to 4 MiB; a larger diff costs one call each time. GitHub serves no diff
+for a very large pull request; `watch diff` then says so, and `git diff`
+in the checkout is the way to read it. The agent reads the pull request
+with these two commands when its session starts.
 
 ### Take the session over
 

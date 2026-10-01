@@ -9,6 +9,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/checks"
 	"github.com/deividfortuna/babysitter/internal/dependabot"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
+	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
@@ -71,6 +72,56 @@ type PullRequest struct {
 
 type PullRequestList struct {
 	PullRequests []PullRequest `json:"pullRequests"`
+}
+
+type PullRequestView struct {
+	Repo               string               `json:"repo"`
+	Number             int                  `json:"number"`
+	URL                string               `json:"url"`
+	Title              string               `json:"title"`
+	Author             string               `json:"author"`
+	State              store.PRState        `json:"state" enum:"open,closed,merged"`
+	Draft              bool                 `json:"draft"`
+	BaseRef            string               `json:"baseRef"`
+	HeadRef            string               `json:"headRef"`
+	HeadSHA            string               `json:"headSha"`
+	Mergeable          *bool                `json:"mergeable,omitempty" description:"Whether GitHub can merge the pull request; absent while GitHub computes it"`
+	MergeableState     store.MergeableState `json:"mergeableState"`
+	BehindBy           int                  `json:"behindBy" description:"The commits of the base that the head does not have, read only while the mergeable state is blocked, else 0"`
+	ReviewDecision     store.ReviewDecision `json:"reviewDecision" enum:"approved,changes_requested,review_required,none"`
+	Approvals          int                  `json:"approvals"`
+	ChangesRequested   int                  `json:"changesRequested"`
+	RequestedReviewers []string             `json:"requestedReviewers" description:"The users and teams asked for a review that did not review yet"`
+	Reviewers          []PullRequestReview  `json:"reviewers" description:"Each person who submitted a review, in the order of their first review"`
+	Labels             []string             `json:"labels"`
+	Assignees          []string             `json:"assignees"`
+	Milestone          string               `json:"milestone,omitempty"`
+	AutoMerge          string               `json:"autoMerge,omitempty" enum:",merge,squash,rebase" description:"The merge method of auto-merge; absent when auto-merge is off"`
+	Additions          int                  `json:"additions"`
+	Deletions          int                  `json:"deletions"`
+	Commits            int                  `json:"commits"`
+	ChangedFiles       int                  `json:"changedFiles"`
+	CreatedAt          time.Time            `json:"createdAt"`
+	Body               string               `json:"body" description:"The description of the pull request, as its author wrote it"`
+	Checks             PullRequestChecks    `json:"checks"`
+	SnapshotAt         time.Time            `json:"snapshotAt" description:"When the daemon read the pull request from GitHub"`
+}
+
+type PullRequestReview struct {
+	Login string `json:"login"`
+	State string `json:"state" description:"The verdict that stands: APPROVED or CHANGES_REQUESTED, or else the state of the last review, COMMENTED or DISMISSED"`
+}
+
+type PullRequestChecks struct {
+	Status  checks.CIStatus `json:"status" enum:"success,failure,pending,none"`
+	Passed  int             `json:"passed"`
+	Failed  int             `json:"failed"`
+	Pending int             `json:"pending"`
+	Skipped int             `json:"skipped"`
+}
+
+type PullRequestDiff struct {
+	Diff string `json:"diff" description:"The plain unified diff of the pull request, as GitHub serves it"`
 }
 
 type PullRequestQuery struct {
@@ -589,6 +640,35 @@ type ActivityList struct {
 type ActivityQuery struct {
 	Since int64 `query:"since" description:"Only rows with an id above this"`
 	Limit int   `query:"limit" description:"At most this many rows, default 200"`
+}
+
+func viewFromSnapshot(s *snapshot.Snapshot) PullRequestView {
+	pr := s.PR
+	reviewers := make([]PullRequestReview, 0, len(pr.Reviewers))
+	for _, r := range pr.Reviewers {
+		reviewers = append(reviewers, PullRequestReview{Login: r.Login, State: string(r.State)})
+	}
+	return PullRequestView{
+		Repo: pr.Repo, Number: pr.Number, URL: pr.URL, Title: pr.Title, Author: pr.Author,
+		State: pr.State, Draft: pr.Draft, BaseRef: pr.BaseBranch, HeadRef: pr.HeadBranch, HeadSHA: pr.HeadSHA,
+		Mergeable: pr.Mergeable, MergeableState: pr.MergeableState, BehindBy: pr.BehindBy,
+		ReviewDecision: pr.ReviewDecision, Approvals: pr.Approvals, ChangesRequested: pr.ChangesRequested,
+		RequestedReviewers: orEmpty(pr.RequestedReviewers), Reviewers: reviewers,
+		Labels: orEmpty(pr.Labels), Assignees: orEmpty(pr.Assignees), Milestone: pr.Milestone, AutoMerge: pr.AutoMerge,
+		Additions: pr.Additions, Deletions: pr.Deletions, Commits: pr.Commits, ChangedFiles: pr.ChangedFiles,
+		CreatedAt: pr.CreatedAt, Body: pr.Body, SnapshotAt: s.SnapshotAt,
+		Checks: PullRequestChecks{
+			Status: s.Checks.Status, Passed: s.Checks.PassedCount, Failed: s.Checks.FailedCount,
+			Pending: s.Checks.PendingCount, Skipped: s.Checks.SkippedCount,
+		},
+	}
+}
+
+func orEmpty(s []string) []string {
+	if s == nil {
+		return []string{}
+	}
+	return s
 }
 
 func watchFromStore(w store.Watch, s prwatch.SessionInfo, readySince *time.Time, blockers []string) Watch {

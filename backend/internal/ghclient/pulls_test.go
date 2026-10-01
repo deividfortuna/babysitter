@@ -2,9 +2,13 @@ package ghclient
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
+	"strings"
 	"testing"
+
+	"github.com/google/go-github/v91/github"
 
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 )
@@ -87,6 +91,58 @@ func TestGetPullAndReviewsAndChecks(t *testing.T) {
 	}
 	if len(status.Statuses) != 1 || status.Statuses[0].GetState() != "success" {
 		t.Fatalf("status = %+v", status)
+	}
+}
+
+func TestPullDiffReadsAgainWithTheETagOfTheDiff(t *testing.T) {
+	t.Parallel()
+	g := ghfake.New()
+	g.PR("o/r", 5).Diff = "diff --git a/x.go b/x.go\n+new\n"
+	c := g.Serve(t).Client(t, github.WithTransport(&cachingTransport{cache: newResponseCache(maxCacheEntries, maxCacheTotalBytes)}))
+	ctx := context.Background()
+
+	for range 2 {
+		diff, _, err := PullDiff(ctx, c, "o", "r", 5)
+		if err != nil || diff != "diff --git a/x.go b/x.go\n+new\n" {
+			t.Fatalf("PullDiff() = %q, %v", diff, err)
+		}
+	}
+	pr, _, err := GetPull(ctx, c, "o", "r", 5)
+	if err != nil || pr.GetNumber() != 5 {
+		t.Fatalf("GetPull() after the diff = %+v, %v: the JSON must not come from the cached diff", pr, err)
+	}
+	calls := g.Calls(ghfake.RoutePull)
+	if len(calls) != 3 || calls[0].Status != http.StatusOK || calls[1].Status != http.StatusNotModified || calls[2].Accept == calls[0].Accept {
+		t.Fatalf("pull reads = %+v, want the diff, the diff again as 304, then the JSON", calls)
+	}
+}
+
+func TestPullDiffOverTheCacheLimitIsReadInFullEachTime(t *testing.T) {
+	t.Parallel()
+	g := ghfake.New()
+	g.PR("o/r", 5).Diff = strings.Repeat("+", maxCacheBytes+1)
+	c := g.Serve(t).Client(t, github.WithTransport(&cachingTransport{cache: newResponseCache(maxCacheEntries, maxCacheTotalBytes)}))
+
+	for range 2 {
+		if diff, _, err := PullDiff(context.Background(), c, "o", "r", 5); err != nil || len(diff) != maxCacheBytes+1 {
+			t.Fatalf("PullDiff() = %d bytes, %v", len(diff), err)
+		}
+	}
+	calls := g.Calls(ghfake.RoutePull)
+	if len(calls) != 2 || calls[1].Status != http.StatusOK {
+		t.Fatalf("pull reads = %+v, want the whole diff twice", calls)
+	}
+}
+
+func TestPullDiffSaysWhenGitHubServesNoDiffThatLarge(t *testing.T) {
+	t.Parallel()
+	g := ghfake.New()
+	g.PR("o/r", 5)
+	g.Fail(ghfake.RoutePull, http.StatusNotAcceptable, "Sorry, the diff exceeded the maximum number of files (300).")
+	c := g.Client(t)
+
+	if _, _, err := PullDiff(context.Background(), c, "o", "r", 5); !errors.Is(err, ErrDiffTooLarge) {
+		t.Fatalf("PullDiff() error = %v, want ErrDiffTooLarge", err)
 	}
 }
 

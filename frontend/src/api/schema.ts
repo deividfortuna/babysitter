@@ -402,6 +402,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/watches/{id}/diff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The diff of the pull request of an active watch, from GitHub through the cache of conditional requests: a diff of up to 4 MiB that did not change costs no API budget. A 422 says GitHub serves no diff that large. */
+        get: operations["diffWatchPullRequest"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/watches/{id}/handback": {
         parameters: {
             query?: never;
@@ -668,6 +685,23 @@ export interface paths {
         put?: never;
         /** Move the agent session of a watch to the terminal of the author: the session of the daemon ends and the proposals that wait are declined */
         post: operations["takeoverWatch"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/watches/{id}/view": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The pull request of an active watch as the daemon last read it from GitHub, with no call to GitHub */
+        get: operations["viewWatchPullRequest"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -1073,8 +1107,73 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        HttpdPullRequestChecks: {
+            failed: number;
+            passed: number;
+            pending: number;
+            skipped: number;
+            /** @enum {string} */
+            status: "success" | "failure" | "pending" | "none";
+        };
+        HttpdPullRequestDiff: {
+            /** @description The plain unified diff of the pull request, as GitHub serves it */
+            diff: string;
+        };
         HttpdPullRequestList: {
             pullRequests: components["schemas"]["HttpdPullRequest"][] | null;
+        };
+        HttpdPullRequestReview: {
+            login: string;
+            /** @description The verdict that stands: APPROVED or CHANGES_REQUESTED, or else the state of the last review, COMMENTED or DISMISSED */
+            state: string;
+        };
+        HttpdPullRequestView: {
+            additions: number;
+            approvals: number;
+            assignees: string[] | null;
+            author: string;
+            /**
+             * @description The merge method of auto-merge; absent when auto-merge is off
+             * @enum {string}
+             */
+            autoMerge?: "" | "merge" | "squash" | "rebase";
+            baseRef: string;
+            /** @description The commits of the base that the head does not have, read only while the mergeable state is blocked, else 0 */
+            behindBy: number;
+            /** @description The description of the pull request, as its author wrote it */
+            body: string;
+            changedFiles: number;
+            changesRequested: number;
+            checks: components["schemas"]["HttpdPullRequestChecks"];
+            commits: number;
+            /** Format: date-time */
+            createdAt: string;
+            deletions: number;
+            draft: boolean;
+            headRef: string;
+            headSha: string;
+            labels: string[] | null;
+            /** @description Whether GitHub can merge the pull request; absent while GitHub computes it */
+            mergeable?: boolean | null;
+            mergeableState: string;
+            milestone?: string;
+            number: number;
+            repo: string;
+            /** @description The users and teams asked for a review that did not review yet */
+            requestedReviewers: string[] | null;
+            /** @enum {string} */
+            reviewDecision: "approved" | "changes_requested" | "review_required" | "none";
+            /** @description Each person who submitted a review, in the order of their first review */
+            reviewers: components["schemas"]["HttpdPullRequestReview"][] | null;
+            /**
+             * Format: date-time
+             * @description When the daemon read the pull request from GitHub
+             */
+            snapshotAt: string;
+            /** @enum {string} */
+            state: "open" | "closed" | "merged";
+            title: string;
+            url: string;
         };
         HttpdQueuedPullRequest: {
             /** Format: date-time */
@@ -2885,6 +2984,83 @@ export interface operations {
             };
         };
     };
+    diffWatchPullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Watch id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdPullRequestDiff"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Unprocessable Entity */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
     handbackWatch: {
         parameters: {
             query?: never;
@@ -3927,6 +4103,74 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HttpdTakeoverResponse"];
+                };
+            };
+            /** @description Bad Request */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    viewWatchPullRequest: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                /** @description Watch id */
+                id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdPullRequestView"];
                 };
             };
             /** @description Bad Request */

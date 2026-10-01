@@ -194,6 +194,17 @@ func newFakeDaemon() *fakeDaemon {
 	d.mux.HandleFunc("/api/v1/watches/1/output", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintf(w, `{"output":"prompt ❯ (%s lines)\n"}`, r.URL.Query().Get("lines"))
 	})
+	d.mux.HandleFunc("/api/v1/watches/1/view", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"repo":"octo/hello","number":3,"url":"https://github.com/octo/hello/pull/3","title":"Fix the thing","author":"alice",`+
+			`"state":"open","draft":false,"baseRef":"main","headRef":"fix","headSha":"abcdef1234567","mergeable":true,"mergeableState":"clean",`+
+			`"behindBy":0,"reviewDecision":"approved","approvals":1,"changesRequested":0,"requestedReviewers":["dave"],`+
+			`"reviewers":[{"login":"bob","state":"APPROVED"},{"login":"carol","state":"CHANGES_REQUESTED"}],"labels":["bug","go"],"assignees":[],`+
+			`"autoMerge":"squash","additions":12,"deletions":3,"commits":2,"changedFiles":4,"createdAt":"2026-09-01T00:00:00Z",`+
+			`"body":"Fixes the retry loop.","checks":{"status":"success","passed":2,"failed":0,"pending":0,"skipped":0},"snapshotAt":"2026-09-07T12:00:00Z"}`)
+	})
+	d.mux.HandleFunc("GET /api/v1/watches/1/diff", func(w http.ResponseWriter, r *http.Request) {
+		fmt.Fprint(w, `{"diff":"diff --git a/x.go b/x.go\n-old\n+new\n"}`)
+	})
 	d.mux.HandleFunc("/api/v1/watches/1/hook", func(w http.ResponseWriter, r *http.Request) {
 		var body struct {
 			Event   string          `json:"event"`
@@ -408,6 +419,36 @@ func TestSessionCommands(t *testing.T) {
 	out, err = runWatch(t, d, "list")
 	if err != nil || !strings.Contains(out, "AGENT") || !strings.Contains(out, "idle") {
 		t.Fatalf("list = %q, %v", out, err)
+	}
+}
+
+func TestViewAndDiffCommands(t *testing.T) {
+	t.Parallel()
+	d := newFakeDaemon()
+
+	out, err := runWatch(t, d, "view", "octo/hello#3")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"octo/hello#3  Fix the thing  by alice\n",
+		"State:      open   head fix@abcdef1   base main\n",
+		"Reviewers:  bob (approved), carol (changes requested)\n",
+		"Requested:  dave\n",
+		"Labels:     bug, go\n",
+		"Assignees:  -\n",
+		"Milestone:  -   Auto-merge: on, squash\n",
+		"Size:       +12 -3 in 4 files, 2 commits\n",
+		"\nFixes the retry loop.\n",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("view = %q, want it to hold %q", out, want)
+		}
+	}
+
+	out, err = runWatch(t, d, "diff", "1")
+	if err != nil || out != "diff --git a/x.go b/x.go\n-old\n+new\n" {
+		t.Fatalf("diff = %q, %v", out, err)
 	}
 }
 

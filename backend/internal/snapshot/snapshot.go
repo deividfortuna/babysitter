@@ -106,6 +106,22 @@ type PR struct {
 	Approvals           int                  `json:"approvals"`
 	ChangesRequested    int                  `json:"changes_requested"`
 	UpdateType          dependabot.Level     `json:"update_type,omitempty"`
+	Reviewers           []Reviewer           `json:"reviewers"`
+	Labels              []string             `json:"labels"`
+	Assignees           []string             `json:"assignees"`
+	Milestone           string               `json:"milestone,omitempty"`
+	AutoMerge           string               `json:"auto_merge,omitempty"`
+	Additions           int                  `json:"additions"`
+	Deletions           int                  `json:"deletions"`
+	Commits             int                  `json:"commits"`
+	ChangedFiles        int                  `json:"changed_files"`
+	CreatedAt           time.Time            `json:"created_at"`
+	Body                string               `json:"body"`
+}
+
+type Reviewer struct {
+	Login string              `json:"login"`
+	State watcher.ReviewState `json:"state"`
 }
 
 func (pr PR) MarshalJSON() ([]byte, error) {
@@ -292,6 +308,7 @@ func Collect(ctx context.Context, c *github.Client, st SeenStore, t Target, o Op
 	index := indexReviews(reviews)
 	s.Threads.Reviewers = index.requestable(reviewState.AnsweredReviewers(o.TokenLogin), s.PR.Author)
 	s.PR.ReviewersBehindHead = index.behindHead(s.PR.Author, s.PR.HeadSHA)
+	s.PR.Reviewers = latestReviews(reviews)
 	items := reviewItems(issueComments, reviewComments, reviews)
 	s.Checks = summarizeChecks(checkRuns, combined)
 	workflowRuns = latestRuns(workflowRuns, s.PR.HeadSHA)
@@ -419,6 +436,16 @@ func toPR(t Target, pr *github.PullRequest) PR {
 		Mergeable:       pr.Mergeable,
 		MergeableState:  store.MergeableState(pr.GetMergeableState()),
 		UpdateType:      watcher.UpdateTypeOf(pr),
+		Labels:          labelNames(pr.Labels),
+		Assignees:       logins(pr.Assignees),
+		Milestone:       pr.GetMilestone().GetTitle(),
+		AutoMerge:       autoMergeMethod(pr.GetAutoMerge()),
+		Additions:       pr.GetAdditions(),
+		Deletions:       pr.GetDeletions(),
+		Commits:         pr.GetCommits(),
+		ChangedFiles:    pr.GetChangedFiles(),
+		CreatedAt:       pr.GetCreatedAt().Time,
+		Body:            pr.GetBody(),
 	}
 	for _, u := range pr.RequestedReviewers {
 		if login := u.GetLogin(); login != "" {
@@ -428,6 +455,56 @@ func toPR(t Target, pr *github.PullRequest) PR {
 	slices.Sort(out.RequestedReviewers)
 	if out.Merged {
 		out.State = store.StateMerged
+	}
+	return out
+}
+
+func labelNames(labels []*github.Label) []string {
+	out := make([]string, 0, len(labels))
+	for _, l := range labels {
+		out = append(out, l.GetName())
+	}
+	return out
+}
+
+func logins(users []*github.User) []string {
+	out := make([]string, 0, len(users))
+	for _, u := range users {
+		out = append(out, u.GetLogin())
+	}
+	return out
+}
+
+func autoMergeMethod(a *github.PullRequestAutoMerge) string {
+	if a == nil {
+		return ""
+	}
+	return cmp.Or(a.GetMergeMethod(), "merge")
+}
+
+func latestReviews(reviews []*github.PullRequestReview) []Reviewer {
+	sorted := slices.Clone(reviews)
+	slices.SortStableFunc(sorted, func(a, b *github.PullRequestReview) int {
+		return a.GetSubmittedAt().Compare(b.GetSubmittedAt().Time)
+	})
+	latest := map[string]watcher.ReviewState{}
+	var order []string
+	for _, r := range sorted {
+		login, state := r.GetUser().GetLogin(), watcher.StateOf(r)
+		if login == "" || state == watcher.ReviewStatePending {
+			continue
+		}
+		held, known := latest[login]
+		if !known {
+			order = append(order, login)
+		}
+		if !known || state.Counts() || !held.Counts() {
+			latest[login] = state
+		}
+	}
+	out := make([]Reviewer, 0, len(order))
+	for _, login := range order {
+		out = append(out, Reviewer{Login: login, State: latest[login]})
 	}
 	return out
 }
