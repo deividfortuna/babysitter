@@ -1621,7 +1621,7 @@ pnpm run actions:lint
 ```
 
 CI (`.github/workflows/pr.yaml`) also runs the Go tests with `-race` and
-coverage, the Vitest coverage thresholds of `frontend/vite.config.ts`,
+coverage, the Go tests with `-race` on Windows, the Vitest coverage thresholds of `frontend/vite.config.ts`,
 govulncheck, and a check of the GoReleaser configuration. It fails when
 `go mod tidy`, `go generate` for the OpenAPI document, or `pnpm run api:ts`
 change a file.
