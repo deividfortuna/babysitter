@@ -37,6 +37,8 @@ func (s *Service) publish(id int64, snap *snapshot.Snapshot) {
 }
 
 func (s *Service) View(ctx context.Context, id int64) (*snapshot.Snapshot, error) {
+	unlock := s.locks.Lock(id)
+	defer unlock()
 	w, err := s.store.GetWatch(ctx, id)
 	if err != nil {
 		return nil, err

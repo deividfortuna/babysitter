@@ -117,26 +117,31 @@ func TestDiffOfAForkReadsTheBaseFromTheBaseRepository(t *testing.T) {
 	}
 }
 
-func TestDiffWaitsForTheLockOfTheWatch(t *testing.T) {
+func TestViewAndDiffWaitForTheLockOfTheWatch(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
+	for name, read := range map[string]func(*Service, int64) error{
+		"view": func(s *Service, id int64) error { _, err := s.View(context.Background(), id); return err },
+		"diff": func(s *Service, id int64) error { _, err := s.Diff(context.Background(), id); return err },
+	} {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := fx.start()
 
-	unlock := fx.svc.locks.Lock(w.ID)
-	done := make(chan error, 1)
-	go func() {
-		_, err := fx.svc.Diff(context.Background(), w.ID)
-		done <- err
-	}()
-	select {
-	case err := <-done:
-		unlock()
-		t.Fatalf("Diff() returned %v while the poll held the lock of the watch", err)
-	case <-time.After(200 * time.Millisecond):
-	}
-	unlock()
-	if err := <-done; err != nil {
-		t.Fatalf("Diff() after the lock error = %v", err)
+			unlock := fx.svc.locks.Lock(w.ID)
+			done := make(chan error, 1)
+			go func() { done <- read(fx.svc, w.ID) }()
+			select {
+			case err := <-done:
+				unlock()
+				t.Fatalf("%s returned %v while a stop could hold the lock of the watch", name, err)
+			case <-time.After(200 * time.Millisecond):
+			}
+			unlock()
+			if err := <-done; err != nil {
+				t.Fatalf("%s after the lock error = %v", name, err)
+			}
+		})
 	}
 }
 
