@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
@@ -43,6 +44,21 @@ func TestViewKeepsTheLastSnapshotOfTheWatch(t *testing.T) {
 	}
 	if _, err := fx.svc.View(context.Background(), w.ID); !errors.Is(err, ErrWatchStopped) {
 		t.Fatalf("View() of a stopped watch error = %v, want ErrWatchStopped", err)
+	}
+}
+
+func TestStartKeepsTheSnapshotOfAPollThatPublishedFirst(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.svc.snapshots.set(1, &snapshot.Snapshot{PR: snapshot.PR{Title: "read by the poll"}})
+	w := fx.start()
+
+	snap, err := fx.svc.View(context.Background(), w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if snap.PR.Title != "read by the poll" {
+		t.Fatalf("View() title = %q, want the newer snapshot of the poll", snap.PR.Title)
 	}
 }
 

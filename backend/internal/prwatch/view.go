@@ -39,6 +39,19 @@ func (s *Service) publish(id int64, snap *snapshot.Snapshot) {
 	s.snapshots.set(id, &view)
 }
 
+func (s *Service) publishFirst(ctx context.Context, id int64, snap *snapshot.Snapshot) {
+	unlock := s.locks.Lock(id)
+	defer unlock()
+	w, err := s.store.GetWatch(ctx, id)
+	if err != nil || w.Status != store.WatchActive {
+		return
+	}
+	s.snapshots.getOrMake(id, func() *snapshot.Snapshot {
+		view := *snap
+		return &view
+	})
+}
+
 func (s *Service) View(ctx context.Context, id int64) (*snapshot.Snapshot, error) {
 	unlock := s.locks.Lock(id)
 	defer unlock()
