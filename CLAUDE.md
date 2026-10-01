@@ -75,6 +75,7 @@ go test ./internal/prwatch/ -run TestDiff      # one test
 go test -race -count=1 ./...                   # what CI runs
 golangci-lint run ./...                        # vet, staticcheck, errcheck, gosec and more
 go generate ./internal/httpd/apispec/          # rewrite openapi.yaml
+go test -tags agentlive -run TestLive -v ./internal/agent/   # real claude and copilot refuse the author decisions; uses model credits
 go run ./cmd/babysitter daemon start           # daemon in the foreground
 ```
 

@@ -78,9 +78,26 @@ func TestTheAgentCannotDecideForTheAuthorWithAnotherSpelling(t *testing.T) {
 		"babysitter -o json watch merge 1",
 		"/usr/local/bin/babysitter --output json watch approve 1",
 		"sh -c 'babysitter watch mode 1 auto'",
+		"babysitter -o json watch stop",
 	} {
 		if !refused(line) {
 			t.Errorf("no denied tool refuses %q", line)
+		}
+	}
+}
+
+func TestNoDeniedToolMixesAWildcardWithThePrefixSyntax(t *testing.T) {
+	t.Parallel()
+	c := New("", "")
+	c.ConfigPath = filepath.Join(t.TempDir(), ".claude.json")
+	argv, _, err := c.Command(launch(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	denied, _ := flag(argv, "--disallowedTools")
+	for rule := range strings.SplitSeq(denied, ",") {
+		if pattern, ok := strings.CutSuffix(rule, ":*)"); ok && strings.Contains(pattern, "*") {
+			t.Errorf("claude matches %s as a literal prefix, so it refuses nothing", rule)
 		}
 	}
 }

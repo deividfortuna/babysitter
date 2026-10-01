@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/httpd"
 	"github.com/deividfortuna/babysitter/internal/runfile"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -465,6 +467,36 @@ func TestHookCommand(t *testing.T) {
 	}
 	if errOut, err := run("", "stop", "--watch", "9"); err != nil || !strings.Contains(errOut, "watch not found") {
 		t.Fatalf("hook of a missing watch = %q, %v", errOut, err)
+	}
+	refusal := map[string]string{
+		"copilot": `{"toolName":"bash","toolArgs":{"command":"babysitter -o json watch reject 1 --reason x"}}`,
+		"claude":  `{"tool_name":"Bash","tool_input":{"command":"babysitter -o json watch reject 1 --reason x"}}`,
+	}
+	for agentName, payload := range refusal {
+		var out, errOut bytes.Buffer
+		root := NewRootCmd()
+		root.SetOut(&out)
+		root.SetErr(&errOut)
+		root.SetIn(strings.NewReader(payload))
+		root.SetArgs([]string{"watch", "--data-dir", dataDir, "hook", "pre-tool-use", "--watch", "1"})
+		err := root.ExecuteContext(context.Background())
+		exit, ok := errors.AsType[*ExitCodeError](err)
+		if !ok || exit.Code != 2 || err.Error() != agent.AuthorDecisionRefusal {
+			t.Fatalf("%s: hook of an author decision = %v, want exit 2", agentName, err)
+		}
+		var decision struct {
+			PermissionDecision       string `json:"permissionDecision"`
+			PermissionDecisionReason string `json:"permissionDecisionReason"`
+		}
+		if err := json.Unmarshal(out.Bytes(), &decision); err != nil || decision.PermissionDecision != "deny" || decision.PermissionDecisionReason != agent.AuthorDecisionRefusal {
+			t.Fatalf("%s: hook output = %q, %v", agentName, out.String(), err)
+		}
+	}
+	if got := d.hooks[len(d.hooks)-1]; !strings.HasPrefix(got, "1 pre-tool-use ") {
+		t.Fatalf("the refused tool use did not reach the daemon: %v", d.hooks)
+	}
+	if errOut, err := run(`{"toolName":"bash","toolArgs":{"command":"babysitter watch reply 1 done"}}`, "pre-tool-use", "--watch", "1"); err != nil || errOut != "" {
+		t.Fatalf("hook of a reply = %q, %v", errOut, err)
 	}
 	var out, errOut bytes.Buffer
 	root := NewRootCmd()

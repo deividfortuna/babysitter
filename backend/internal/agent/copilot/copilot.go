@@ -74,9 +74,26 @@ func (c *Runner) Command(l agent.Launch) ([]string, []string, error) {
 	if err != nil {
 		return nil, nil, err
 	}
-	if err := installHooks(l.WorktreeDir, l.Hook); err != nil {
+	if err := removeWorktreeHooks(l.WorktreeDir); err != nil {
+		return nil, nil, err
+	}
+	plugin, err := pluginArgs(l)
+	if err != nil {
 		return nil, nil, err
 	}
 	env = append(env, "COPILOT_ALLOW_ALL=true")
-	return args, env, nil
+	return append(args, plugin...), env, nil
+}
+
+func pluginArgs(l agent.Launch) ([]string, error) {
+	if len(l.Hook) == 0 {
+		return nil, nil
+	}
+	if l.PluginDir == "" {
+		return nil, fmt.Errorf("a plugin directory is required for the hooks")
+	}
+	if err := installPlugin(l.PluginDir, l.Hook); err != nil {
+		return nil, err
+	}
+	return []string{"--plugin-dir", l.PluginDir}, nil
 }

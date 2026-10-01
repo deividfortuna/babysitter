@@ -2,6 +2,8 @@ package copilot
 
 import (
 	"context"
+	"errors"
+	"os"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -15,6 +17,7 @@ func launch(t *testing.T) agent.Launch {
 	return agent.Launch{
 		WorktreeDir: t.TempDir(), Model: "", SessionID: "0d5f4b5e-6f1e-4f8e-9c9a-2d4b7e1c3a10", Name: "PR #3",
 		Hook: []string{"/usr/local/bin/babysitter", "watch", "hook", "--watch", "7"}, HooksDir: filepath.Join(t.TempDir(), "hooks"),
+		PluginDir:    filepath.Join(t.TempDir(), "agent-plugins", "7"),
 		ScreenReader: true,
 	}
 }
@@ -47,16 +50,57 @@ func TestTheAgentCannotDecideForTheAuthor(t *testing.T) {
 	}
 }
 
-func TestTheAgentCannotDecideForTheAuthorWithAnotherSpelling(t *testing.T) {
+func TestTheHooksRefuseADecisionOfTheAuthorWithAnotherSpelling(t *testing.T) {
 	t.Parallel()
-	argv, _, err := New("", "").Command(launch(t))
+	l := launch(t)
+	argv, _, err := New("", "").Command(l)
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, sub := range []string{"mode", "approve", "reject", "retry", "merge", "stop"} {
-		if rule := "shell(*babysitter* watch " + sub + ":*)"; !slices.Contains(argv, rule) {
-			t.Errorf("argv lacks the rule %s", rule)
-		}
+	if v, _ := flag(argv, "--plugin-dir"); v != l.PluginDir {
+		t.Fatalf("plugin dir = %q in %v", v, argv)
+	}
+	if got := readHooks(t, l.PluginDir).Hooks["preToolUse"]; len(got) != 1 || !strings.HasSuffix(got[0].Bash, "'"+agent.EventPreToolUse+"'") {
+		t.Fatalf("preToolUse = %+v, want the hook that refuses the decisions of the author", got)
+	}
+	if slices.ContainsFunc(argv, func(a string) bool { return strings.HasPrefix(a, "shell(*") }) {
+		t.Fatalf("argv has a rule that copilot matches as a literal prefix: %v", argv)
+	}
+}
+
+func TestTheHooksStayOutOfTheWorktree(t *testing.T) {
+	t.Parallel()
+	l := launch(t)
+	path := filepath.Join(l.WorktreeDir, filepath.FromSlash(worktreeHooksFile))
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(path, []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := New("", "").Command(l); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("the agent can edit the hooks in the worktree: %v", err)
+	}
+}
+
+func TestCommandWithoutAHookLoadsNoPlugin(t *testing.T) {
+	t.Parallel()
+	l := launch(t)
+	l.Hook = nil
+	argv, _, err := New("", "").Command(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(argv, "--plugin-dir") {
+		t.Fatalf("a session without a hook loads the plugin: %v", argv)
+	}
+	l = launch(t)
+	l.PluginDir = ""
+	if _, _, err := New("", "").Command(l); err == nil {
+		t.Fatal("Command() with a hook and no plugin dir succeeded")
 	}
 }
 
@@ -64,7 +108,6 @@ func TestCommandPassesTheReasoningEffortOfTheWatch(t *testing.T) {
 	t.Parallel()
 	c := New("", "")
 	l := launch(t)
-	l.WorktreeDir, _ = linkedWorktree(t)
 	l.Effort = "xhigh"
 	argv, _, err := c.Command(l)
 	if err != nil {
@@ -79,7 +122,6 @@ func TestCommandWithoutScreenReader(t *testing.T) {
 	t.Parallel()
 	c := New("", "")
 	l := launch(t)
-	l.WorktreeDir, _ = linkedWorktree(t)
 	l.ScreenReader = false
 	argv, _, err := c.Command(l)
 	if err != nil {
@@ -94,7 +136,6 @@ func TestCommand(t *testing.T) {
 	t.Parallel()
 	c := New("", "")
 	l := launch(t)
-	l.WorktreeDir, _ = linkedWorktree(t)
 	argv, env, err := c.Command(l)
 	if err != nil {
 		t.Fatalf("Command() error = %v", err)
@@ -155,7 +196,6 @@ func TestCommandOfAResumeCarriesNoName(t *testing.T) {
 	t.Parallel()
 	c := New("", "")
 	l := launch(t)
-	l.WorktreeDir, _ = linkedWorktree(t)
 	l.Resume = true
 	argv, _, err := c.Command(l)
 	if err != nil {
@@ -173,7 +213,6 @@ func TestCommandOfANewSessionNamesIt(t *testing.T) {
 	t.Parallel()
 	c := New("", "")
 	l := launch(t)
-	l.WorktreeDir, _ = linkedWorktree(t)
 	argv, _, err := c.Command(l)
 	if err != nil {
 		t.Fatalf("Command() error = %v", err)

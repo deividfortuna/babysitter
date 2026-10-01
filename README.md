@@ -1192,9 +1192,10 @@ place. A session that exited starts again with the next message, on the
 same conversation, so nothing it learned is lost. A daemon that
 restarts starts the session of every watch at once, on the same
 conversation. Claude Code takes its hooks on the
-command line. Copilot CLI reads them from `.github/hooks/babysitter.json`
-in the worktree, which the daemon writes before the start and hides from
-git through the exclude file of the checkout.
+command line. Copilot CLI loads them from a plugin in
+`<data dir>/agent-plugins/<watch id>`, which the daemon writes before the
+start with `--plugin-dir`. The plugin is outside the worktree, so the
+agent cannot change its hooks.
 
 `watch output` prints the last lines the agent printed, as its terminal
 drew them. `watch send` types a message into the session: an answer to
@@ -1314,7 +1315,12 @@ What the agent may never do, whatever a comment or a log says:
 - push. The daemon pushes the work branch when the turn ends
 - post on GitHub beside the daemon, for example with `gh api -f`
 - run `babysitter watch mode`, `approve`, `reject`, `retry`, `merge`,
-  `stop`, `takeover` or `handback`, so it cannot approve its own work
+  `stop`, `takeover` or `handback`, so it cannot approve its own work.
+  The hook before each tool call refuses these commands also with a
+  flag before `watch` such as `-o json`, a full path, `sh -c` or shell
+  quotes such as `baby''sitter`. Claude Code has deny rules for them
+  too. The hook reads the text of the command, so a shell variable, a
+  command substitution or a script can still hide a decision
 - fetch the web or start a subagent: `WebFetch`, `WebSearch`, `Task`,
   `Agent`, `curl` and `wget` are refused
 - merge, approve, dismiss a review, open or close a pull request

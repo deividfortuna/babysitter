@@ -4,7 +4,7 @@ import "github.com/deividfortuna/babysitter/internal/agent"
 
 func authorRules(l agent.Launch) []string {
 	var out []string
-	for _, command := range append(agent.AuthorCommands(l), agent.AuthorPatterns()...) {
+	for _, command := range agent.AuthorCommands(l) {
 		out = append(out, "shell("+command+":*)")
 	}
 	return out
