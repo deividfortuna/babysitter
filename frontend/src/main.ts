@@ -16,7 +16,6 @@ import {
 import { existsSync, mkdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import started from "electron-squirrel-startup";
 import { autoUpdater } from "electron-updater";
 import { createUpdateController } from "./main/app-updater";
 import { AppLog } from "./main/app-log";
@@ -70,13 +69,7 @@ import { canvasColor, isThemePreference, windowControlsColors, type ThemePrefere
 import { MAC_WINDOW_BUTTON_POSITION, TITLEBAR_HEIGHT } from "./shared/titlebar";
 import { readStoredTheme, writeStoredTheme } from "./main/theme-preference";
 
-if (started) {
-  app.quit();
-}
-
-// Windows shows a toast under the identity of the app, and Squirrel gives
-// the shortcut it makes this one: the package and the executable name.
-if (process.platform === "win32") app.setAppUserModelId("com.squirrel.babysitter.babysitter");
+if (process.platform === "win32") app.setAppUserModelId("com.deividfortuna.babysitter");
 
 const dataDir = defaultDataDir(process.platform, process.env, os.homedir());
 
@@ -378,7 +371,7 @@ function createWindow() {
     icon: appIconPath(),
     ...titleBar(),
     webPreferences: {
-      preload: path.join(__dirname, "preload.js"),
+      preload: path.join(__dirname, "preload.cjs"),
     },
   });
 
@@ -401,18 +394,16 @@ function createWindow() {
     return { action: "deny" };
   });
 
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    void mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
+  const devServerUrl = app.isPackaged ? undefined : process.env.VITE_DEV_SERVER_URL;
+  if (devServerUrl) {
+    void mainWindow.loadURL(devServerUrl);
     mainWindow.webContents.openDevTools({ mode: "detach" });
   } else {
-    void mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`));
+    void mainWindow.loadFile(path.join(__dirname, "..", "dist", "renderer", "index.html"));
   }
 }
 
 app.on("ready", () => {
-  // A launch by the Squirrel installer only makes or removes the
-  // shortcuts and quits: it starts no daemon it would then have to kill.
-  if (started) return;
   nativeTheme.themeSource = themePreference;
   void daemon.start();
   createWindow();

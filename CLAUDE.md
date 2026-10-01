@@ -30,15 +30,19 @@ and the watch flow in detail. Read it before changing `httpd`, `prwatch`,
 
 - `backend/`: Go module `github.com/deividfortuna/babysitter`, Go 1.27,
   cgo for SQLite. `go.work` at the root points to it.
-- `frontend/`: Electron Forge + Vite+ + React 19 + Tailwind 4 + shadcn.
-  Node 26, see `.node-version`. TypeScript 7 type checks it. Vite+ (`vp`)
-  runs Vitest, Oxlint and Oxfmt; `frontend/vite.config.ts` holds their
-  `test`, `lint` and `fmt` blocks. Forge builds with the
-  `vite.{main,preload,renderer}.config.mts` files, not `vite.config.ts`.
-  pnpm 12 installs it. `frontend/pnpm-workspace.yaml` holds the pnpm
-  settings: `nodeLinker: hoisted`, which Forge needs, the `vite` and
-  `vitest` overrides, and `allowBuilds`, the only packages whose install
-  scripts run.
+- `frontend/`: Electron + electron-builder + Vite+ + React 19 + Tailwind 4
+  + shadcn. Node 26, see `.node-version`. TypeScript 7 type checks it.
+  Vite+ (`vp`) runs Vitest, Oxlint and Oxfmt, and `vp pack` bundles the
+  main process and the preload into `dist-electron/`;
+  `frontend/vite.config.ts` holds their `test`, `lint`, `fmt` and `pack`
+  blocks. `vite.renderer.config.mts` builds the renderer into
+  `dist/renderer/`. `scripts/build-desktop.mjs` stages the bundles in
+  `out/stage` and runs electron-builder with `scripts/desktop-builder.ts`;
+  the DMG, the zip, the NSIS installer and the update feed go to
+  `out/release`. pnpm 12 installs it. `frontend/pnpm-workspace.yaml` holds
+  the pnpm settings: `nodeLinker: hoisted`, the `vite` and `vitest`
+  overrides, and `allowBuilds`, the only packages whose install scripts
+  run.
 - `codegen/`: openapi-typescript, which writes `frontend/src/api/schema.ts`
   from `openapi.yaml`. It has its own lockfile because it uses the compiler
   API of TypeScript 5, which TypeScript 7 does not have.
@@ -131,7 +135,8 @@ directly over HTTP with openapi-fetch (`src/renderer/lib/api-client.ts`) and
 refetches TanStack Query caches on each SSE frame
 (`src/renderer/lib/event-transport.ts`). `src/api/schema.ts` is generated;
 never edit it by hand. `scripts/build-daemon.mjs` compiles the Go binary
-into `frontend/daemon/` before `start`, `package` and `make`.
+into `frontend/daemon/` before `start`, `package` and `make`, for the
+platform and the arch of the build.
 The agent terminal is read only. `src/renderer/lib/ghostty/` parses the
 output with libghostty-vt compiled to WebAssembly and draws it on a canvas.
 It opens in a panel at the bottom of the watch view, and the user drags

@@ -33,9 +33,9 @@ updates:
     versioning-strategy: increase
     open-pull-requests-limit: 10
     groups:
-      electron-forge:
+      electron-builder:
         patterns:
-          - "@electron-forge/*"
+          - electron-builder
           - "@electron/*"
       react:
         patterns:

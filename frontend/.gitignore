@@ -85,14 +85,12 @@ typings/
 # Webpack
 .webpack/
 
-# Vite
-.vite/
-
-# Electron-Forge
-out/
-
-# Vite build output
+# Output of vp pack and of the Vite build of the renderer
+dist-electron/
 dist/
+
+# Stage and release of electron-builder
+out/
 
 # Go daemon compiled by scripts/build-daemon.mjs
 daemon/

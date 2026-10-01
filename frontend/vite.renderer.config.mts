@@ -40,6 +40,8 @@ const injectCspMeta: Plugin = {
 };
 
 export default defineConfig({
+  base: "./",
+  build: { outDir: "dist/renderer", emptyOutDir: true },
   assetsInclude: ["**/*.wasm"],
   resolve: {
     alias: [
