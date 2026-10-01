@@ -124,3 +124,33 @@ test("the channel picks between stable versions and nightlies", async () => {
 
   expect(setSettings).toHaveBeenCalledWith({ channel: "nightly" });
 });
+
+test("a downloaded update restarts the app from the version row", async () => {
+  renderPanel({ state: "downloaded", currentVersion: "0.1.0", version: "0.2.0" });
+  const install = vi.spyOn(bridge.updates, "install").mockResolvedValue();
+  const user = userEvent.setup();
+
+  expect(await screen.findByText("Restart to finish installing 0.2.0.")).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Check for updates" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "Restart now" }));
+
+  expect(install).toHaveBeenCalledOnce();
+});
+
+test("a restart cannot start while one runs", async () => {
+  renderPanel({ state: "installing", currentVersion: "0.1.0", version: "0.2.0" });
+
+  expect(await screen.findByRole("button", { name: /Restarting/ })).toBeDisabled();
+});
+
+test("a restart that failed says why and offers the restart again", async () => {
+  renderPanel({
+    state: "downloaded",
+    currentVersion: "0.1.0",
+    version: "0.2.0",
+    message: "The app did not restart in 30 seconds. Try again.",
+  });
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("The app did not restart in 30 seconds. Try again.");
+  expect(screen.getByRole("button", { name: "Restart now" })).toBeEnabled();
+});

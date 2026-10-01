@@ -1,4 +1,6 @@
 import { useAppUpdate, useUpdateSettings } from "@/hooks/useAppUpdate";
+import { AppIcon } from "@/components/app-icon";
+import { RestartButton } from "@/components/restart-button";
 import { SettingsCard, SettingsError, SettingsRow, SettingsSection, useTrackSave } from "@/components/settings-page";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -7,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { relativeTime } from "@/lib/time";
 import {
   isBusy,
+  isRestartable,
   isUpdateChannel,
   type UpdateChannel,
   type UpdateSettings,
@@ -32,16 +35,33 @@ function describe(status: UpdateStatus): string {
     case "downloading":
       return `Downloading ${version}: ${Math.floor(status.percent ?? 0)}%.`;
     case "downloaded":
-      return `Babysitter ${version} is ready. Restart the app to update.`;
+      return `Restart to finish installing ${version}.`;
     case "installing":
-      return "Restarting…";
+      return `Installing ${version}. The app restarts, and the watches continue.`;
     default:
       return "Babysitter checks for a new version every hour.";
   }
 }
 
+type VersionActionProps = {
+  status: UpdateStatus;
+  check: () => Promise<unknown>;
+  install: () => Promise<unknown>;
+};
+
+function VersionAction({ status, check, install }: VersionActionProps) {
+  if (isRestartable(status.state)) return <RestartButton status={status} install={install} label="Restart now" />;
+  const checking = status.state === "checking";
+  return (
+    <Button variant="outline" size="sm" disabled={isBusy(status.state)} onClick={() => void check()}>
+      {checking ? <Spinner data-icon="inline-start" /> : null}
+      {checking ? "Checking…" : "Check for updates"}
+    </Button>
+  );
+}
+
 export function UpdatesPanel() {
-  const { status, check } = useAppUpdate();
+  const { status, check, install } = useAppUpdate();
   const { settings, save } = useUpdateSettings();
   const track = useTrackSave();
 
@@ -51,6 +71,7 @@ export function UpdatesPanel() {
     return (
       <SettingsCard>
         <SettingsRow
+          icon={<AppIcon className="size-10" />}
           label={`Babysitter ${status.currentVersion}`}
           description="This build does not update itself. Install a new version with Homebrew or from the release page."
         />
@@ -58,18 +79,18 @@ export function UpdatesPanel() {
     );
   }
 
-  const checking = status.state === "checking";
   const write = (patch: Partial<UpdateSettings>) => track(save(patch));
 
   return (
     <div className="flex flex-col gap-4.5">
       <SettingsSection label="This version">
         <SettingsCard>
-          <SettingsRow label={`Babysitter ${status.currentVersion}`} description={describe(status)}>
-            <Button variant="outline" size="sm" disabled={isBusy(status.state)} onClick={() => void check()}>
-              {checking ? <Spinner data-icon="inline-start" /> : null}
-              {checking ? "Checking…" : "Check for updates"}
-            </Button>
+          <SettingsRow
+            icon={<AppIcon className="size-10" />}
+            label={`Babysitter ${status.currentVersion}`}
+            description={describe(status)}
+          >
+            <VersionAction status={status} check={check} install={install} />
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>

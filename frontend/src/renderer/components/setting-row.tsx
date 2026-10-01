@@ -5,15 +5,17 @@ type Props = {
   label: string;
   htmlFor?: string;
   description?: ReactNode;
+  icon?: ReactNode;
   disabled?: boolean;
   className?: string;
   children?: ReactNode;
 };
 
-export function SettingRow({ label, htmlFor, description, disabled, className, children }: Props) {
+export function SettingRow({ label, htmlFor, description, icon, disabled, className, children }: Props) {
   const Label = htmlFor ? "label" : "span";
   return (
     <div data-disabled={disabled || undefined} className={cn("group/row flex items-center gap-3", className)}>
+      {icon}
       <div className="flex min-w-0 flex-1 flex-col gap-1 group-data-disabled/row:opacity-60">
         <Label htmlFor={htmlFor} className="text-sm font-medium">
           {label}

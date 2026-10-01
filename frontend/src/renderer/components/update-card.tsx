@@ -2,8 +2,8 @@ import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Spinner } from "@/components/ui/spinner";
-import { releaseUrl, type UpdateStatus } from "../../shared/updates";
+import { RestartButton } from "@/components/restart-button";
+import { isRestartable, releaseUrl, type UpdateStatus } from "../../shared/updates";
 
 const SHOWN_STATES: UpdateStatus["state"][] = ["available", "downloading", "downloaded", "installing"];
 
@@ -23,8 +23,7 @@ export function UpdateCard() {
   if (!worthShowing(status)) return null;
 
   const percent = Math.floor(status.percent ?? 0);
-  const installing = status.state === "installing";
-  const restartable = status.state === "downloaded" || installing;
+  const restartable = isRestartable(status.state);
   const downloadFailed = status.state === "available" && status.message !== undefined;
 
   return (
@@ -75,10 +74,7 @@ export function UpdateCard() {
       ) : null}
       {restartable ? (
         <CardFooter className="px-3">
-          <Button size="sm" className="h-7 w-full text-body" disabled={installing} onClick={() => void install()}>
-            {installing ? <Spinner data-icon="inline-start" /> : null}
-            {installing ? "Restarting…" : "Restart to update"}
-          </Button>
+          <RestartButton status={status} install={install} label="Restart to update" className="h-7 w-full text-body" />
         </CardFooter>
       ) : null}
     </Card>
