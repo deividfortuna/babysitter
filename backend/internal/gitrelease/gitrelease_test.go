@@ -105,6 +105,33 @@ func TestFetchFromReadsTheBranchOfAnotherRepository(t *testing.T) {
 	}
 }
 
+func TestAShallowCheckoutSaysItIsShallow(t *testing.T) {
+	t.Parallel()
+	origin, work, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	shallow := filepath.Join(t.TempDir(), "shallow")
+	git(t, work, "clone", "-q", "--depth", "1", "-b", "fix", "file://"+origin, shallow)
+
+	base, err := g.Fetch(ctx, shallow, "main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	head, err := g.Fetch(ctx, shallow, "fix")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if from, err := g.MergeBase(ctx, shallow, base, head); err == nil {
+		t.Fatalf("MergeBase() in a shallow checkout = %s, want no merge base", from)
+	}
+	if ok, err := g.Shallow(ctx, shallow); err != nil || !ok {
+		t.Fatalf("Shallow() of a depth 1 clone = %v, %v, want true", ok, err)
+	}
+	if ok, err := g.Shallow(ctx, work); err != nil || ok {
+		t.Fatalf("Shallow() of a full clone = %v, %v, want false", ok, err)
+	}
+}
+
 func TestThePinnedLeaseRefusesABranchSomebodyMoved(t *testing.T) {
 	t.Parallel()
 	origin, work, other := repos(t)

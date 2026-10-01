@@ -85,6 +85,21 @@ func TestDiffGoesFromTheMergeBaseToThePushedHead(t *testing.T) {
 	}
 }
 
+func TestDiffInAShallowCheckoutSaysToUnshallowIt(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.rel.set(func(f *fakeRelease) {
+		f.branches = map[string]string{"main": "m2"}
+		f.shallow = true
+	})
+	w := fx.start()
+
+	_, err := fx.svc.Diff(context.Background(), w.ID)
+	if !errors.Is(err, ErrShallowCheckout) || !strings.Contains(err.Error(), "git fetch --unshallow") {
+		t.Fatalf("Diff() in a shallow checkout error = %v, want ErrShallowCheckout with the command that fixes it", err)
+	}
+}
+
 func TestDiffOfAForkReadsTheBaseFromTheBaseRepository(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

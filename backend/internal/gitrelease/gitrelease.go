@@ -37,6 +37,7 @@ type Git interface {
 	Parent(ctx context.Context, dir, sha string) (string, error)
 	Contains(ctx context.Context, dir, sha, ancestor string) (bool, error)
 	MergeBase(ctx context.Context, dir, a, b string) (string, error)
+	Shallow(ctx context.Context, dir string) (bool, error)
 	FastForward(ctx context.Context, dir, sha string) error
 	Reset(ctx context.Context, dir, sha string) error
 	HasMerges(ctx context.Context, dir, since, sha string) (bool, error)
@@ -133,6 +134,11 @@ func (g *Runner) Contains(ctx context.Context, dir, sha, ancestor string) (bool,
 		return false, nil
 	}
 	return false, err
+}
+
+func (g *Runner) Shallow(ctx context.Context, dir string) (bool, error) {
+	out, err := g.git(ctx, dir, "rev-parse", "--is-shallow-repository")
+	return out == "true", err
 }
 
 func (g *Runner) MergeBase(ctx context.Context, dir, a, b string) (string, error) {

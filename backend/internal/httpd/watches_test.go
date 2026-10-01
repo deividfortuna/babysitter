@@ -436,6 +436,9 @@ func (f *fakeWatches) Diff(ctx context.Context, id int64) (prwatch.PullDiff, err
 	if w.Status == store.WatchStopped {
 		return prwatch.PullDiff{}, prwatch.ErrWatchStopped
 	}
+	if w.Number == 5 {
+		return prwatch.PullDiff{}, prwatch.ErrShallowCheckout
+	}
 	return prwatch.PullDiff{Base: "m1", Head: "abc", Diff: "diff --git a/x.go b/x.go\n"}, nil
 }
 
@@ -631,6 +634,7 @@ func TestViewAndDiffRoutes(t *testing.T) {
 	for _, w := range []store.Watch{
 		{Owner: "octo", Name: "hello", Number: 3, Provider: prwatch.ProviderClaude, StartedAt: time.Now()},
 		{Owner: "octo", Name: "hello", Number: 4, Provider: prwatch.ProviderSelf, StartedAt: time.Now()},
+		{Owner: "octo", Name: "hello", Number: 5, Provider: prwatch.ProviderClaude, StartedAt: time.Now()},
 	} {
 		if _, err := st.CreateWatch(context.Background(), w); err != nil {
 			t.Fatal(err)
@@ -663,6 +667,9 @@ func TestViewAndDiffRoutes(t *testing.T) {
 	}
 	if rec := call(t, h, http.MethodGet, "/watches/2/diff", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "watch_stopped") {
 		t.Fatalf("diff of a stopped watch: %d %s", rec.Code, rec.Body)
+	}
+	if rec := call(t, h, http.MethodGet, "/watches/3/diff", "", nil); rec.Code != http.StatusConflict || !strings.Contains(rec.Body.String(), "shallow_checkout") {
+		t.Fatalf("diff in a shallow checkout: %d %s", rec.Code, rec.Body)
 	}
 	if rec := call(t, h, http.MethodGet, "/watches/9/diff", "", nil); rec.Code != http.StatusNotFound {
 		t.Fatalf("diff missing: %d", rec.Code)

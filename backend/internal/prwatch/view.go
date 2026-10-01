@@ -16,6 +16,8 @@ import (
 
 var ErrNoSnapshot = errors.New("the daemon has not read the pull request since it started: try again after the next poll")
 
+var ErrShallowCheckout = errors.New("the checkout is shallow, so it does not have the commit where the head left the base")
+
 type PullDiff struct {
 	Base      string
 	Head      string
@@ -75,13 +77,20 @@ func (s *Service) Diff(ctx context.Context, id int64) (PullDiff, error) {
 	}
 	from, err := s.rel.MergeBase(ctx, dir, base, head)
 	if err != nil {
-		return PullDiff{}, err
+		return PullDiff{}, s.noMergeBase(ctx, dir, err)
 	}
 	d := PullDiff{Base: from, Head: head}
 	if d.Diff, d.Truncated, err = s.rel.Diff(ctx, dir, from, head, maxDiff); err != nil {
 		return PullDiff{}, err
 	}
 	return d, nil
+}
+
+func (s *Service) noMergeBase(ctx context.Context, dir string, err error) error {
+	if shallow, _ := s.rel.Shallow(ctx, dir); shallow {
+		return fmt.Errorf("%w: run git fetch --unshallow in %s", ErrShallowCheckout, dir)
+	}
+	return err
 }
 
 func (s *Service) fetchBase(ctx context.Context, dir string, w store.Watch) (string, error) {

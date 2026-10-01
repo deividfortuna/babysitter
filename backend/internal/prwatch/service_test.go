@@ -302,6 +302,7 @@ type fakeRelease struct {
 	upstream    map[string]string
 	fetchDirs   []string
 	fetchURLs   []string
+	shallow     bool
 	work        string
 	history     map[string][]string
 	missing     []string
@@ -409,6 +410,12 @@ func (f *fakeRelease) MergeBase(_ context.Context, _, a, b string) (string, erro
 		}
 	}
 	return "", errors.New("no merge base")
+}
+
+func (f *fakeRelease) Shallow(context.Context, string) (bool, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return f.shallow, nil
 }
 
 func (f *fakeRelease) FastForward(_ context.Context, _, sha string) error {

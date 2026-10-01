@@ -228,6 +228,7 @@ var (
 	diffErrors = newErrorMap("diff_failed",
 		notFound("watch_not_found", store.ErrWatchNotFound),
 		conflict("watch_stopped", prwatch.ErrWatchStopped),
+		conflict("shallow_checkout", prwatch.ErrShallowCheckout),
 		unavailable("watch_unavailable", errWatchUnavailable),
 	)
 	resizeErrors = newErrorMap("resize_failed",
