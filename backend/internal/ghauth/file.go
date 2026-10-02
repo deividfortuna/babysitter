@@ -34,8 +34,17 @@ func newCredentialsFile(dataDir string) credentialsFile {
 	return credentialsFile{path: filepath.Join(dataDir, signInFileName)}
 }
 
+func (f credentialsFile) read() ([]byte, error) {
+	var b []byte
+	err := runfile.WhileBusy(func() (err error) {
+		b, err = os.ReadFile(f.path)
+		return err
+	})
+	return b, err
+}
+
 func (f credentialsFile) Load() (Credentials, error) {
-	b, err := os.ReadFile(f.path)
+	b, err := f.read()
 	if errors.Is(err, os.ErrNotExist) {
 		return Credentials{}, ErrSignedOut
 	}
@@ -86,7 +95,7 @@ func (f credentialsFile) MarkSignedOut(at time.Time) error {
 }
 
 func (f credentialsFile) SignedOutAt() time.Time {
-	b, err := os.ReadFile(f.path)
+	b, err := f.read()
 	if err != nil {
 		return time.Time{}
 	}
