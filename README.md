@@ -121,7 +121,7 @@ terminal:
 ```sh
 babysitter auth login        # prints a code; enter it at https://github.com/login/device
 babysitter auth status       # where the token comes from, the account and the installations
-babysitter auth logout       # back to the next source: the gh CLI
+babysitter auth logout       # back to the gh CLI, when --token and GITHUB_TOKEN are not set
 ```
 
 Or from the desktop app: **Settings > GitHub > Sign in with GitHub**. The
@@ -134,8 +134,10 @@ remove repositories.
 
 The sign in uses the device flow of GitHub. It needs no server and no
 secret: the daemon asks GitHub from your machine. The token of the app
-lasts 8 hours, and the daemon and the CLI renew it on their own for 6
-months; after that, sign in again. The sign in lives in
+lasts 8 hours, and the daemon and the CLI renew it on their own with a
+refresh token. Each renewal gives a new refresh token that lasts 6
+months, so you sign in again only when a refresh token expires before
+it is used, or when GitHub revokes it. The sign in lives in
 `<data dir>/github-app.json` with mode `0600`. The CLI and the daemon
 share it, and a lock next to it makes sure only one of them renews the
 token at a time.

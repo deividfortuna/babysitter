@@ -23,10 +23,12 @@ request.
 
 The daemon reaches GitHub with `--token`, `GITHUB_TOKEN`, the babysitter
 GitHub App or the `gh` CLI, in this order. `babysitter auth status` says
-which one it uses. When a command says that there is no token, or that the
-sign in of the app expired, tell the user to run `babysitter auth login`
-or `gh auth login`. Do not run `auth login` or `auth logout` yourself: the
-user enters the code on GitHub, and the access is theirs to choose.
+which one it uses. When a command says that the sign in of the app
+expired, tell the user to run `babysitter auth login`: the daemon does
+not go back to `gh` on its own. When a command says that there is no
+token, tell the user to run `babysitter auth login` or `gh auth login`.
+Do not run `auth login` or `auth logout` yourself: the user enters the
+code on GitHub, and the access is theirs to choose.
 
 ## 1. Start the watch
 
