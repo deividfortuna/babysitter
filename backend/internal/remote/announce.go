@@ -9,6 +9,7 @@ import (
 	"net/netip"
 	"os/exec"
 	"runtime"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
@@ -183,7 +184,8 @@ func (an *announcer) askedFor(questions []dnsmessage.Question) []dnsmessage.Ques
 
 func (an *announcer) serves(name dnsmessage.Name) bool {
 	asked := strings.ToLower(name.String())
-	return asked == strings.ToLower(an.service.String()) || asked == strings.ToLower(an.instance.String())
+	served := []dnsmessage.Name{an.service, an.instance, an.host}
+	return slices.ContainsFunc(served, func(n dnsmessage.Name) bool { return asked == strings.ToLower(n.String()) })
 }
 
 func (an *announcer) send(to *net.UDPAddr, id uint16, questions []dnsmessage.Question, ttl uint32) {

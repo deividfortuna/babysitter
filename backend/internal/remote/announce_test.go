@@ -28,13 +28,13 @@ func startAnnouncer(t *testing.T) *net.UDPAddr {
 	return conn.LocalAddr().(*net.UDPAddr)
 }
 
-func query(t *testing.T, name string) []byte {
+func query(t *testing.T, name string, kind dnsmessage.Type) []byte {
 	t.Helper()
 	b := dnsmessage.NewBuilder(nil, dnsmessage.Header{ID: 42})
 	if err := b.StartQuestions(); err != nil {
 		t.Fatal(err)
 	}
-	q := dnsmessage.Question{Name: dnsmessage.MustNewName(name), Type: dnsmessage.TypePTR, Class: dnsmessage.ClassINET}
+	q := dnsmessage.Question{Name: dnsmessage.MustNewName(name), Type: kind, Class: dnsmessage.ClassINET}
 	if err := b.Question(q); err != nil {
 		t.Fatal(err)
 	}
@@ -45,14 +45,14 @@ func query(t *testing.T, name string) []byte {
 	return msg
 }
 
-func ask(t *testing.T, to *net.UDPAddr, name string) ([]dnsmessage.Resource, bool) {
+func ask(t *testing.T, to *net.UDPAddr, name string, kind dnsmessage.Type) ([]dnsmessage.Resource, bool) {
 	t.Helper()
 	client, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer client.Close()
-	if _, err := client.WriteToUDP(query(t, name), to); err != nil {
+	if _, err := client.WriteToUDP(query(t, name, kind), to); err != nil {
 		t.Fatal(err)
 	}
 	if err := client.SetReadDeadline(time.Now().Add(300 * time.Millisecond)); err != nil {
@@ -76,7 +76,7 @@ func ask(t *testing.T, to *net.UDPAddr, name string) ([]dnsmessage.Resource, boo
 func TestAnnouncerAnswersAQueryForTheService(t *testing.T) {
 	addr := startAnnouncer(t)
 
-	answers, ok := ask(t, addr, ServiceType)
+	answers, ok := ask(t, addr, ServiceType, dnsmessage.TypePTR)
 	if !ok {
 		t.Fatal("no answer to a query for the service")
 	}
@@ -111,7 +111,25 @@ func TestAnnouncerAnswersAQueryForTheService(t *testing.T) {
 func TestAnnouncerIgnoresOtherServices(t *testing.T) {
 	addr := startAnnouncer(t)
 
-	if _, ok := ask(t, addr, "_airplay._tcp.local."); ok {
+	if _, ok := ask(t, addr, "_airplay._tcp.local.", dnsmessage.TypePTR); ok {
 		t.Fatal("the announcer answered a query for another service")
 	}
+}
+
+func TestAnnouncerAnswersAQueryForItsHostName(t *testing.T) {
+	addr := startAnnouncer(t)
+
+	answers, ok := ask(t, addr, "studio.local.", dnsmessage.TypeA)
+	if !ok {
+		t.Fatal("no answer to a query for the host name")
+	}
+	for _, rr := range answers {
+		if body, isA := rr.Body.(*dnsmessage.AResource); isA && rr.Header.Name.String() == "studio.local." {
+			if got := netip.AddrFrom4(body.A).String(); got != "192.168.1.20" {
+				t.Fatalf("A of studio.local. = %s, want 192.168.1.20", got)
+			}
+			return
+		}
+	}
+	t.Fatalf("answers %v hold no A record of studio.local.", answers)
 }
