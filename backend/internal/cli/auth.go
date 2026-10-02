@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"time"
@@ -108,7 +109,7 @@ func newAuthLoginCmd(opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			opts.tellTheDaemon(ctx)
+			opts.tellTheDaemon(ctx, cmd.ErrOrStderr())
 			fmt.Fprintf(out, "Signed in to GitHub as %s with the babysitter GitHub App.\n", creds.Login)
 			fmt.Fprintf(out, "Install the app on the repositories it may watch: %s\n", auth.App().InstallURL())
 			if st := auth.Status(ctx); st.State == ghauth.StateNotInUse {
@@ -169,13 +170,15 @@ func installationAccounts(cmd *cobra.Command, opts *options) ([]string, error) {
 	return accounts, nil
 }
 
-func (o *options) tellTheDaemon(ctx context.Context) {
+func (o *options) tellTheDaemon(ctx context.Context, w io.Writer) {
 	c, err := o.daemonClient(o.authDir)
-	if err != nil {
-		return
+	if err == nil {
+		var st httpd.Auth
+		err = c.get(ctx, "/auth", &st)
 	}
-	var st httpd.Auth
-	_ = c.get(ctx, "/auth", &st)
+	if err != nil && !errors.Is(err, errNoDaemon) {
+		fmt.Fprintf(w, "the daemon did not see the change, it sees it at its next poll: %v\n", err)
+	}
 }
 
 func newAuthLogoutCmd(opts *options) *cobra.Command {
@@ -191,7 +194,7 @@ func newAuthLogoutCmd(opts *options) *cobra.Command {
 			if err := auth.SignOut(cmd.Context()); err != nil {
 				return err
 			}
-			opts.tellTheDaemon(cmd.Context())
+			opts.tellTheDaemon(cmd.Context(), cmd.ErrOrStderr())
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Signed out of the babysitter GitHub App.")
 			return err
 		},

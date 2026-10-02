@@ -21,6 +21,12 @@ import (
 
 func runAuth(t *testing.T, g *ghfake.GitHub, dir string, args ...string) (string, error) {
 	t.Helper()
+	out, _, err := runAuthWithStderr(t, g, dir, args...)
+	return out, err
+}
+
+func runAuthWithStderr(t *testing.T, g *ghfake.GitHub, dir string, args ...string) (string, string, error) {
+	t.Helper()
 	srv := g.Serve(t)
 	root := NewRootCmd(
 		WithClientFactory(func(string, time.Duration) (*github.Client, error) { return srv.NewClient() }),
@@ -30,12 +36,12 @@ func runAuth(t *testing.T, g *ghfake.GitHub, dir string, args ...string) (string
 			ghauth.WithGH(func(context.Context) (string, error) { return "", errors.New("gh is not installed") }),
 		),
 	)
-	var out bytes.Buffer
+	var out, errOut bytes.Buffer
 	root.SetOut(&out)
-	root.SetErr(&bytes.Buffer{})
+	root.SetErr(&errOut)
 	root.SetArgs(append(args, "--data-dir", dir))
 	err := root.ExecuteContext(context.Background())
-	return out.String(), err
+	return out.String(), errOut.String(), err
 }
 
 func approveOnPoll(g *ghfake.GitHub) {
@@ -215,5 +221,40 @@ func TestAuthLoginAndLogoutTellTheRunningDaemon(t *testing.T) {
 	}
 	if n := reads.Load(); n != 2 {
 		t.Fatalf("the daemon read the sign in %d times after auth logout, want 2", n)
+	}
+}
+
+func TestAuthLoginAndLogoutWarnWhenTheRunningDaemonCannotBeTold(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	g := ghfake.New()
+	approveOnPoll(g)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET "+httpd.Prefix+"/auth", func(w http.ResponseWriter, r *http.Request) {
+		http.Error(w, "broken", http.StatusInternalServerError)
+	})
+	dir := serveDaemon(t, mux, "")
+
+	for _, cmd := range []string{"login", "logout"} {
+		_, errOut, err := runAuthWithStderr(t, g, dir, "auth", cmd)
+		if err != nil {
+			t.Fatalf("auth %s: %v", cmd, err)
+		}
+		if !strings.Contains(errOut, "the daemon did not see the change") {
+			t.Fatalf("auth %s stderr = %q, want a warning that the daemon did not see the change", cmd, errOut)
+		}
+	}
+}
+
+func TestAuthLoginSaysNothingWithoutADaemon(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	g := ghfake.New()
+	approveOnPoll(g)
+
+	_, errOut, err := runAuthWithStderr(t, g, t.TempDir(), "auth", "login")
+	if err != nil {
+		t.Fatalf("auth login: %v", err)
+	}
+	if errOut != "" {
+		t.Fatalf("auth login stderr = %q without a daemon, want nothing", errOut)
 	}
 }
