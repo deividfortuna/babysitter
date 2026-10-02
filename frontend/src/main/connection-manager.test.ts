@@ -300,3 +300,18 @@ test("a switch to a remote shows that remote as starting before the local daemon
   stopped();
   await switching;
 });
+
+test("pairing again with a daemon of the same name at a new address replaces its saved entry", async () => {
+  const stored: Connections = {
+    activeId: "local",
+    remotes: [{ id: "r1", name: "studio", url: "http://192.168.1.20:7420", token: "old" }],
+  };
+  const { manager, saved } = setup(stored);
+  managers.push(manager);
+  await manager.start();
+
+  const result = await manager.pair({ link: "http://192.168.1.30:7420/#token=secret" });
+
+  expect(result).toMatchObject({ ok: true, connection: { id: "r1", name: "studio", url: "http://192.168.1.30:7420" } });
+  expect(saved.at(-1)?.remotes).toEqual([{ id: "r1", name: "studio", url: "http://192.168.1.30:7420", token: TOKEN }]);
+});

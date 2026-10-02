@@ -214,7 +214,10 @@ starts on the Mac for mDNSResponder.
 In the app, the switcher at the top of the sidebar lists this computer,
 the paired daemons, and the daemons found on the network. Pick a found
 daemon and paste the token, or use "Connect to a remote daemon" and
-paste a pairing link. Settings > Connections shows the same list. While
+paste a pairing link. Settings > Connections shows the same list. The app
+keeps a found daemon by its address. When that address changes, pair with
+the daemon again: a pairing with the same daemon name replaces the saved
+entry. While
 the app shows a remote daemon, it stops the daemon of this computer, also
 one started from a terminal, so the two do not poll the same
 repositories. When you show this computer again, the app starts its

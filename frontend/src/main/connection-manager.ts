@@ -145,10 +145,12 @@ export class ConnectionManager {
     }
     const check = await this.opts.check(target.url, target.token);
     if (!check.ok) return check;
-    const existing = this.connections.remotes.find((remote) => remote.url === target.url);
+    const name = request.name?.trim() || check.name;
+    const sameDaemon = (remote: RemoteConnection) => remote.url === target.url || remote.name === name;
+    const existing = this.connections.remotes.find(sameDaemon);
     const connection: RemoteConnection = {
       id: existing?.id ?? randomUUID(),
-      name: request.name?.trim() || check.name,
+      name,
       url: target.url,
       token: target.token,
     };
