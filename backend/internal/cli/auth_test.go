@@ -89,7 +89,7 @@ func TestAuthLoginStatusLogout(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &st); err != nil {
 		t.Fatalf("invalid JSON %q: %v", out, err)
 	}
-	st.ExpiresAt = nil
+	st.ExpiresAt = time.Time{}
 	want := authOutput{
 		State: ghauth.StateConnected, Origin: ghauth.OriginApp, AppAvailable: true, Login: "alice",
 		InstallURL: "https://github.com/apps/babysitter/installations/new", Installations: []string{"alice"},

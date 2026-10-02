@@ -4,15 +4,10 @@ import (
 	"bytes"
 	"context"
 	"net/http"
-	"net/http/httptest"
-	"net/url"
-	"os"
-	"strconv"
 	"strings"
 	"testing"
 
 	"github.com/deividfortuna/babysitter/internal/httpd"
-	"github.com/deividfortuna/babysitter/internal/runfile"
 )
 
 func tokenDaemon(t *testing.T, token string) string {
@@ -30,22 +25,7 @@ func tokenDaemon(t *testing.T, token string) string {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write([]byte(`{"token":"` + token + `"}`))
 	})
-	srv := httptest.NewServer(mux)
-	t.Cleanup(srv.Close)
-	u, err := url.Parse(srv.URL)
-	if err != nil {
-		t.Fatal(err)
-	}
-	port, err := strconv.Atoi(u.Port())
-	if err != nil {
-		t.Fatal(err)
-	}
-	dataDir := t.TempDir()
-	info := runfile.Info{PID: os.Getpid(), Port: port, Owner: runfile.OwnerCLI, TokenSecret: "s3cret"}
-	if err := runfile.Write(runfile.Path(dataDir), info); err != nil {
-		t.Fatal(err)
-	}
-	return dataDir
+	return serveDaemon(t, mux, "s3cret")
 }
 
 func runGitCredential(t *testing.T, dataDir, operation, request string) (string, error) {

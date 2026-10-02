@@ -16,7 +16,7 @@ type authOutput struct {
 	Origin        ghauth.Origin `json:"origin"`
 	AppAvailable  bool          `json:"appAvailable"`
 	Login         string        `json:"login,omitempty"`
-	ExpiresAt     *time.Time    `json:"expiresAt,omitempty"`
+	ExpiresAt     time.Time     `json:"expiresAt,omitzero"`
 	InstallURL    string        `json:"installUrl"`
 	Installations []string      `json:"installations,omitempty"`
 	InstallsError string        `json:"installationsError,omitempty"`
@@ -130,13 +130,11 @@ func newAuthStatusCmd(opts *options) *cobra.Command {
 				Origin:       st.Origin,
 				AppAvailable: auth.App().Available(),
 				Login:        st.Login,
+				ExpiresAt:    st.ExpiresAt,
 				InstallURL:   auth.App().InstallURL(),
 			}
 			if st.Err != nil {
 				out.Error = st.Err.Error()
-			}
-			if !st.ExpiresAt.IsZero() {
-				out.ExpiresAt = &st.ExpiresAt
 			}
 			if st.Origin == ghauth.OriginApp {
 				out.Installations, err = installationAccounts(cmd, opts)

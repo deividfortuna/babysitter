@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { streamUrl, subscribeApiBaseUrl } from "./api-client";
 import {
   authQueryKey,
+  invalidateAuth,
   logLevelQueryKey,
   notificationsQueryKey,
   providersQueryKey,
@@ -138,10 +139,7 @@ export function connectEventTransport(
       es.addEventListener(type, scheduleRefetch);
     }
     es.addEventListener("settings_changed", settings.request);
-    es.addEventListener("auth_changed", () => {
-      void queryClient.invalidateQueries({ queryKey: authQueryKey });
-      void queryClient.invalidateQueries({ queryKey: viewerQueryKey });
-    });
+    es.addEventListener("auth_changed", () => invalidateAuth(queryClient));
     es.addEventListener("log_level_changed", () => {
       void queryClient.invalidateQueries({ queryKey: logLevelQueryKey });
     });

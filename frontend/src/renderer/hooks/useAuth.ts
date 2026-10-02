@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api/schema";
 import { api, apiErrorMessage } from "../lib/api-client";
-import { authQueryKey, viewerQueryKey } from "../lib/query-keys";
+import { authQueryKey, invalidateAuth } from "../lib/query-keys";
 
 export type Auth = components["schemas"]["HttpdAuth"];
 export type SignInPrompt = components["schemas"]["HttpdSignInPrompt"];
@@ -26,10 +26,7 @@ function useAuthChange<T>(mutationFn: () => Promise<T>) {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn,
-    onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: authQueryKey });
-      void queryClient.invalidateQueries({ queryKey: viewerQueryKey });
-    },
+    onSettled: () => invalidateAuth(queryClient),
   });
 }
 

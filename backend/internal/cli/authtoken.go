@@ -42,7 +42,7 @@ func newAuthGitCredentialCmd(opts *options) *cobra.Command {
 			if !readCredentialRequest(cmd.InOrStdin()).forGitHub() {
 				return nil
 			}
-			token := opts.daemonAppTokenOrNone(cmd.Context())
+			token, _ := opts.daemonAppToken(cmd.Context())
 			if token == "" {
 				return nil
 			}
@@ -69,14 +69,6 @@ func readCredentialRequest(r io.Reader) credentialRequest {
 
 func (r credentialRequest) forGitHub() bool {
 	return r["protocol"] == "https" && r["host"] == "github.com"
-}
-
-func (o *options) daemonAppTokenOrNone(ctx context.Context) string {
-	token, err := o.daemonAppToken(ctx)
-	if err != nil {
-		return ""
-	}
-	return token
 }
 
 func (o *options) daemonAppToken(ctx context.Context) (string, error) {

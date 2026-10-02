@@ -8,6 +8,8 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+
+	"github.com/deividfortuna/babysitter/internal/runfile"
 )
 
 func AppGitConfigPath(dataDir string) string {
@@ -50,29 +52,10 @@ func writeGHShim(l Launch) (bool, error) {
 	if holds(path, script) {
 		return true, nil
 	}
-	if err := replaceFile(path, script, 0o750); err != nil {
+	if err := runfile.ReplaceFile(path, script, 0o750); err != nil {
 		return false, fmt.Errorf("write the gh shim: %w", err)
 	}
 	return true, nil
-}
-
-func replaceFile(path string, content []byte, mode os.FileMode) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*")
-	if err != nil {
-		return err
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if _, err := tmp.Write(content); err != nil {
-		_ = tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-	if err := os.Chmod(tmp.Name(), mode); err != nil {
-		return err
-	}
-	return os.Rename(tmp.Name(), path)
 }
 
 func holds(path string, content []byte) bool {

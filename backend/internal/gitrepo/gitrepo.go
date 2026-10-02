@@ -6,12 +6,23 @@ import (
 	"fmt"
 	"os/exec"
 	"slices"
+	"strconv"
 	"strings"
 )
 
 var ErrDetachedHead = errors.New("HEAD is detached, check out a branch or name the pull request")
 
 var NoPromptEnv = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
+
+const GHHelper = "!gh auth git-credential"
+
+func ConfigEnv(pairs [][2]string) []string {
+	env := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(len(pairs))}
+	for i, p := range pairs {
+		env = append(env, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, p[0]), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, p[1]))
+	}
+	return env
+}
 
 type AuthEnv func(ctx context.Context) ([]string, error)
 

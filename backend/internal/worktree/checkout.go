@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 
 const (
 	gitHubHelperKey     = "credential.https://github.com.helper"
-	ghHelper            = "!gh auth git-credential"
 	gitTimeout          = 10 * time.Minute
 	gitConfigKeyMissing = 5
 )
@@ -74,12 +74,23 @@ func restoreOrigin(ctx context.Context, dir, url string) error {
 
 func (c *Checkouts) helpers() []string {
 	if c.Helper == "" {
-		return []string{ghHelper}
+		return []string{gitrepo.GHHelper}
 	}
-	return []string{c.Helper, ghHelper}
+	return []string{c.Helper, gitrepo.GHHelper}
+}
+
+func configuredHelpers(ctx context.Context, dir string) []string {
+	out, err := execx.RunIn(ctx, dir, "", nil, "git", "config", "--local", "--get-all", gitHubHelperKey)
+	if err != nil {
+		return nil
+	}
+	return strings.Split(strings.TrimSpace(out), "\n")
 }
 
 func (c *Checkouts) restoreHelpers(ctx context.Context, dir string) error {
+	if slices.Equal(configuredHelpers(ctx, dir), c.helpers()) {
+		return nil
+	}
 	_, err := execx.RunIn(ctx, dir, "", nil, "git", "config", "--unset-all", gitHubHelperKey)
 	if err != nil && execx.ExitCode(err) != gitConfigKeyMissing {
 		return fmt.Errorf("restore the credential helpers of %s: %w", dir, err)

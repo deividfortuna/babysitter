@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import type { ComponentProps, ReactNode } from "react";
 import { CheckIcon, CircleAlertIcon, CopyIcon, ExternalLinkIcon, FolderPlusIcon, InfoIcon } from "lucide-react";
 import { GitHubIcon } from "@/components/github-icon";
 import { SettingsCard, SettingsError, SettingsSection } from "@/components/settings-page";
@@ -104,6 +104,17 @@ function AccountAvatar({ login, src, className }: { login: string; src?: string;
   );
 }
 
+type PendingButtonProps = ComponentProps<typeof Button> & { pending: boolean };
+
+function PendingButton({ pending, children, ...props }: PendingButtonProps) {
+  return (
+    <Button disabled={pending} {...props}>
+      {pending ? <Spinner data-icon="inline-start" /> : null}
+      {children}
+    </Button>
+  );
+}
+
 function failureOf(auth: Auth, start: StartSignIn): string | undefined {
   if (start.error) return start.error.message;
   if (!auth.signInFailure) return undefined;
@@ -121,10 +132,9 @@ function ConnectCard({ auth, start }: { auth: Auth; start: StartSignIn }) {
       title="Connect your GitHub account"
       description="Sign in with the babysitter GitHub App. The daemon then reaches only the repositories you choose, and keeps no personal token."
       action={
-        <Button disabled={start.isPending} onClick={() => start.mutate()}>
-          {start.isPending ? <Spinner data-icon="inline-start" /> : null}
+        <PendingButton pending={start.isPending} onClick={() => start.mutate()}>
           {label}
-        </Button>
+        </PendingButton>
       }
       footer={
         <ol className="grid grid-cols-3 gap-4 px-5 py-3.5">
@@ -248,10 +258,9 @@ function AccountCard({ auth, badge, description, alert, children }: AccountCardP
 
 function SignOutButton({ signOut, variant = "outline" }: { signOut: SignOut; variant?: "outline" | "ghost" }) {
   return (
-    <Button variant={variant} size="sm" disabled={signOut.isPending} onClick={() => signOut.mutate()}>
-      {signOut.isPending ? <Spinner data-icon="inline-start" /> : null}
+    <PendingButton variant={variant} size="sm" pending={signOut.isPending} onClick={() => signOut.mutate()}>
       Sign out
-    </Button>
+    </PendingButton>
   );
 }
 
@@ -350,30 +359,16 @@ function InstalledOn({ installUrl, children }: { installUrl: string; children: R
   );
 }
 
-function Connected({ auth, signOut }: { auth: Auth; signOut: SignOut }) {
+type SignedInProps = { auth: Auth; signOut: SignOut; badge: ReactNode; children?: ReactNode };
+
+function SignedIn({ auth, signOut, badge, children }: SignedInProps) {
   return (
     <>
-      <AccountCard
-        auth={auth}
-        badge={<StateBadge label="connected" pip="bg-success" />}
-        description="Signed in with the babysitter GitHub App"
-      >
+      <AccountCard auth={auth} badge={badge} description="Signed in with the babysitter GitHub App">
         <SignOutButton signOut={signOut} />
       </AccountCard>
-      <Installations auth={auth} />
+      {children}
     </>
-  );
-}
-
-function NotInUse({ auth, signOut }: { auth: Auth; signOut: SignOut }) {
-  return (
-    <AccountCard
-      auth={auth}
-      badge={<StateBadge label="not in use" pip="bg-muted-foreground" />}
-      description="Signed in with the babysitter GitHub App"
-    >
-      <SignOutButton signOut={signOut} />
-    </AccountCard>
   );
 }
 
@@ -386,10 +381,9 @@ function Unreachable({ auth, signOut }: { auth: Auth; signOut: SignOut }) {
       description="Signed in, but the daemon cannot get the token of the app right now."
     >
       <SignOutButton signOut={signOut} variant="ghost" />
-      <Button variant="outline" size="sm" disabled={recheck.isFetching} onClick={() => void recheck.refetch()}>
-        {recheck.isFetching ? <Spinner data-icon="inline-start" /> : null}
+      <PendingButton variant="outline" size="sm" pending={recheck.isFetching} onClick={() => void recheck.refetch()}>
         Try again
-      </Button>
+      </PendingButton>
     </AccountCard>
   );
 }
@@ -408,10 +402,9 @@ function Expired({ auth, signOut, start }: { auth: Auth; signOut: SignOut; start
         alert={failureOf(auth, start)}
       >
         <SignOutButton signOut={signOut} variant="ghost" />
-        <Button size="sm" disabled={start.isPending} onClick={() => start.mutate()}>
-          {start.isPending ? <Spinner data-icon="inline-start" /> : null}
+        <PendingButton size="sm" pending={start.isPending} onClick={() => start.mutate()}>
           Sign in again
-        </Button>
+        </PendingButton>
       </AccountCard>
       <Note icon={CircleAlertIcon}>
         The daemon does not fall back to another token, so it cannot reach GitHub until you sign in again.
@@ -450,8 +443,14 @@ function AccessState({ auth }: { auth: Auth }) {
   const views: Record<Auth["state"], ReactNode> = {
     signed_out: <SignedOut auth={auth} start={start} />,
     waiting: auth.signIn ? <CodeCard prompt={auth.signIn} /> : null,
-    connected: <Connected auth={auth} signOut={signOut} />,
-    not_in_use: <NotInUse auth={auth} signOut={signOut} />,
+    connected: (
+      <SignedIn auth={auth} signOut={signOut} badge={<StateBadge label="connected" pip="bg-success" />}>
+        <Installations auth={auth} />
+      </SignedIn>
+    ),
+    not_in_use: (
+      <SignedIn auth={auth} signOut={signOut} badge={<StateBadge label="not in use" pip="bg-muted-foreground" />} />
+    ),
     expired: <Expired auth={auth} signOut={signOut} start={start} />,
     unreachable: <Unreachable auth={auth} signOut={signOut} />,
   };

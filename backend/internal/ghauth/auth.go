@@ -96,12 +96,7 @@ func New(dataDir string, opts ...Option) *Auth {
 	for _, opt := range opts {
 		opt(a)
 	}
-	if a.oauth.ClientID == "" {
-		a.oauth.ClientID = a.app.ClientID
-	}
-	if a.oauth.Now == nil {
-		a.oauth.Now = a.now
-	}
+	a.oauth.ClientID, a.oauth.Now = a.app.ClientID, a.now
 	return a
 }
 
@@ -143,14 +138,7 @@ func (a *Auth) GitEnv(ctx context.Context) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
-	return gitEnvFor(token), nil
-}
-
-func gitEnvFor(token string) []string {
-	if token == "" {
-		return nil
-	}
-	return gitEnv(token)
+	return gitEnv(token), nil
 }
 
 func (a *Auth) SignOut(ctx context.Context) error {
@@ -340,32 +328,28 @@ type identity struct {
 }
 
 func (a *Auth) observe(id identity) {
-	a.mu.Lock()
-	changed := a.known && a.identity != id
-	a.known, a.identity = true, id
-	fn := a.onChange
-	a.mu.Unlock()
-	if changed {
-		a.notify(fn)
+	if a.remember(id) {
+		a.changed()
 	}
 }
 
 func (a *Auth) announce(id identity) {
+	a.remember(id)
+	a.changed()
+}
+
+func (a *Auth) remember(id identity) bool {
 	a.mu.Lock()
+	defer a.mu.Unlock()
+	changed := a.known && a.identity != id
 	a.known, a.identity = true, id
-	fn := a.onChange
-	a.mu.Unlock()
-	a.notify(fn)
+	return changed
 }
 
 func (a *Auth) changed() {
 	a.mu.Lock()
 	fn := a.onChange
 	a.mu.Unlock()
-	a.notify(fn)
-}
-
-func (a *Auth) notify(fn func()) {
 	if fn != nil {
 		go fn()
 	}

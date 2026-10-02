@@ -3,8 +3,10 @@ package ghauth
 import (
 	"encoding/base64"
 	"fmt"
-	"strconv"
+	"slices"
 	"strings"
+
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 const (
@@ -20,21 +22,29 @@ func (r urlRule) configKey() string {
 	return "url." + r.base + "." + r.key
 }
 
+var (
+	urlRules     = gitHubURLRules()
+	urlRulePairs = configPairs(urlRules)
+)
+
 func gitEnv(token string) []string {
+	if token == "" {
+		return nil
+	}
 	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
-	var pairs [][2]string
-	for _, rule := range urlRules() {
-		pairs = append(pairs, [2]string{rule.configKey(), rule.prefix})
-	}
-	pairs = append(pairs, [2]string{"http.https://github.com/.extraheader", "AUTHORIZATION: basic " + basic})
-	env := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(len(pairs))}
-	for i, p := range pairs {
-		env = append(env, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, p[0]), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, p[1]))
-	}
-	return env
+	header := [2]string{"http.https://github.com/.extraheader", "AUTHORIZATION: basic " + basic}
+	return gitrepo.ConfigEnv(append(slices.Clone(urlRulePairs), header))
 }
 
-func urlRules() []urlRule {
+func configPairs(rules []urlRule) [][2]string {
+	pairs := make([][2]string, 0, len(rules))
+	for _, rule := range rules {
+		pairs = append(pairs, [2]string{rule.configKey(), rule.prefix})
+	}
+	return pairs
+}
+
+func gitHubURLRules() []urlRule {
 	rules := []urlRule{
 		{gitHubHTTPS, "insteadOf", "git@github.com:"},
 		{gitHubHTTPS, "insteadOf", "ssh://git@github.com/"},
@@ -69,7 +79,7 @@ func (a *Auth) usesApp() bool {
 
 func appGitConfig(helper string) string {
 	var b strings.Builder
-	for _, rule := range urlRules() {
+	for _, rule := range urlRules {
 		fmt.Fprintf(&b, "[url %s]\n\t%s = %s\n", gitConfigQuote(rule.base), rule.key, rule.prefix)
 	}
 	if helper == "" {
@@ -77,11 +87,9 @@ func appGitConfig(helper string) string {
 	}
 	fmt.Fprintf(&b, "[credential %s]\n\thelper =\n", gitConfigQuote("https://github.com"))
 	fmt.Fprintf(&b, "\thelper = %s\n", gitConfigQuote(helper))
-	fmt.Fprintf(&b, "\thelper = %s\n", gitConfigQuote(ghHelper))
+	fmt.Fprintf(&b, "\thelper = %s\n", gitConfigQuote(gitrepo.GHHelper))
 	return b.String()
 }
-
-const ghHelper = "!gh auth git-credential"
 
 func gitConfigQuote(s string) string {
 	return `"` + strings.NewReplacer(`\`, `\\`, `"`, `\"`).Replace(s) + `"`

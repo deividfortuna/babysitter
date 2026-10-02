@@ -19,16 +19,15 @@ type authController struct {
 	newClient watcher.ClientFunc
 }
 
-func newAuthController(ctx context.Context, cfg Config, bus *events.Bus, log *slog.Logger, exe string) *authController {
-	gitConfig := agent.AppGitConfigPath(cfg.DataDir)
-	helper := agent.CredentialHelper(exe, cfg.DataDir)
+func newAuthController(ctx context.Context, cfg Config, bus *events.Bus, log *slog.Logger, helper string) *authController {
+	auth, gitConfig := cfg.Auth, agent.AppGitConfigPath(cfg.DataDir)
 	writeGitConfig := func() {
-		if err := cfg.Auth.WriteGitConfig(gitConfig, helper); err != nil {
+		if err := auth.WriteGitConfig(gitConfig, helper); err != nil {
 			log.Warn("the agent sessions may reach GitHub without the app", "err", err)
 		}
 	}
 	writeGitConfig()
-	cfg.Auth.OnChange(func() {
+	auth.OnChange(func() {
 		writeGitConfig()
 		bus.Publish(events.AuthChanged, "", 0)
 	})
@@ -52,7 +51,8 @@ func (c *authController) Status(ctx context.Context) httpd.Auth {
 		Installations: []httpd.AuthInstallation{},
 	}
 	if prompt, waiting := c.signIns.Current(); waiting {
-		out.State, out.SignIn = httpd.AuthWaiting, signInPrompt(prompt)
+		signIn := signInPrompt(prompt)
+		out.State, out.SignIn = httpd.AuthWaiting, &signIn
 	}
 	if err := c.signIns.Err(); err != nil {
 		out.SignInFailure, out.SignInError = signInFailure(err), err.Error()
@@ -76,8 +76,8 @@ func (c *authController) AppToken(ctx context.Context) (string, error) {
 	return c.auth.AppToken(ctx)
 }
 
-func signInPrompt(p ghauth.Prompt) *httpd.SignInPrompt {
-	return &httpd.SignInPrompt{UserCode: p.UserCode, VerificationURI: p.VerificationURI, ExpiresAt: p.ExpiresAt}
+func signInPrompt(p ghauth.Prompt) httpd.SignInPrompt {
+	return httpd.SignInPrompt{UserCode: p.UserCode, VerificationURI: p.VerificationURI, ExpiresAt: p.ExpiresAt}
 }
 
 func signInFailure(err error) string {
@@ -111,7 +111,7 @@ func (c *authController) StartSignIn(ctx context.Context) (httpd.SignInPrompt, e
 	if err != nil {
 		return httpd.SignInPrompt{}, err
 	}
-	return *signInPrompt(prompt), nil
+	return signInPrompt(prompt), nil
 }
 
 func (c *authController) CancelSignIn() {

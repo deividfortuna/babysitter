@@ -5,8 +5,9 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
-	"strconv"
 	"strings"
+
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 var authorDecisions = [][]string{
@@ -78,7 +79,7 @@ func SessionEnv(l Launch) ([]string, error) {
 	if l.DataDir != "" {
 		config = append(config, [2]string{"include.path", AppGitConfigPath(l.DataDir)})
 	}
-	env := gitConfigEnv(config)
+	env := gitrepo.ConfigEnv(config)
 	shimmed, err := writeGHShim(l)
 	if err != nil {
 		return nil, err
@@ -87,12 +88,4 @@ func SessionEnv(l Launch) ([]string, error) {
 		env = append(env, "PATH="+l.BinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
 	}
 	return env, nil
-}
-
-func gitConfigEnv(pairs [][2]string) []string {
-	env := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(len(pairs))}
-	for i, p := range pairs {
-		env = append(env, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, p[0]), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, p[1]))
-	}
-	return env
 }

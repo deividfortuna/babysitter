@@ -98,7 +98,8 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("the agent sessions report nothing: the babysitter command is not known", "err", err)
 		exe = ""
 	}
-	auth := newAuthController(ctx, cfg, bus, log, exe)
+	credentialHelper := agent.CredentialHelper(exe, cfg.DataDir)
+	auth := newAuthController(ctx, cfg, bus, log, credentialHelper)
 	tokenSecret := rand.Text()
 
 	stored, err := st.Settings(ctx)
@@ -128,7 +129,7 @@ func Run(ctx context.Context, cfg Config) error {
 	git.Auth = cfg.Auth.GitEnv
 	checkouts := worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts"))
 	checkouts.Auth = cfg.Auth.GitEnv
-	checkouts.Helper = agent.CredentialHelper(exe, cfg.DataDir)
+	checkouts.Helper = credentialHelper
 	release := gitrelease.New()
 	release.Auth = cfg.Auth.GitEnv
 	watches := prwatch.New(prwatch.Deps{
