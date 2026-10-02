@@ -56,7 +56,7 @@ export function ConnectionsPanel() {
           <SettingsRow
             icon={<RowIcon remote={false} />}
             label={list.localName}
-            description="The app starts a daemon here and stops it when you quit."
+            description="The app uses the daemon that runs here, or starts one. When you quit, it stops only a daemon it started."
           >
             <ActiveOrUse
               active={list.activeId === LOCAL_CONNECTION_ID}
