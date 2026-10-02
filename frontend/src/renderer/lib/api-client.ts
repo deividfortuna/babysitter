@@ -28,8 +28,21 @@ export function subscribeApiBaseUrl(listener: () => void): () => void {
 
 export function api() {
   if (!baseUrl) throw new Error("The daemon is not available yet.");
-  client ??= createClient<paths>({ baseUrl: new URL(baseUrl).origin, headers: authorization(token ?? undefined) });
+  client ??= clientOf(baseUrl, token);
   return client;
+}
+
+function clientOf(daemonBaseUrl: string, daemonToken: string | null) {
+  const created = createClient<paths>({
+    baseUrl: new URL(daemonBaseUrl).origin,
+    headers: authorization(daemonToken ?? undefined),
+  });
+  created.use({
+    onResponse: () => {
+      if (baseUrl !== daemonBaseUrl) throw new Error("The app shows another daemon now.");
+    },
+  });
+  return created;
 }
 
 export function streamUrl(path: string, params: Record<string, string> = {}): string | null {

@@ -6,6 +6,7 @@ import { http, HttpResponse } from "msw";
 import { buildSettings } from "@test/fixtures";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { createQueryClientForTests, deferred } from "@test/test-utils";
+import { setApiBaseUrl } from "@/lib/api-client";
 import { settingsQueryKey } from "@/lib/query-keys";
 import { useSettings, useWriteSettings, type Settings } from "./useSettings";
 
@@ -176,4 +177,19 @@ test("a reload while a write runs keeps the change on screen", async () => {
   turns[0].resolve();
   await act(() => saving);
   expect(shown()?.includeOwn).toBe(true);
+});
+
+test("a save that ends after the app shows another daemon leaves the settings of that daemon alone", async () => {
+  const { queryClient, write } = await harness(buildSettings({ keepWorktree: false }));
+  const { bodies, turns } = heldSaves();
+  const otherDaemon = buildSettings({ includeOwn: true, keepWorktree: false });
+
+  const saving = write({ keepWorktree: true });
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  setApiBaseUrl("http://127.0.0.1:9090/api/v1", "token-of-b");
+  queryClient.setQueryData(settingsQueryKey, otherDaemon);
+  turns[0].resolve();
+
+  await expect(saving).rejects.toThrow("The app shows another daemon now.");
+  expect(queryClient.getQueryData<Settings>(settingsQueryKey)).toEqual(otherDaemon);
 });
