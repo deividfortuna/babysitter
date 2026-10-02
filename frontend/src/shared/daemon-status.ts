@@ -11,6 +11,7 @@ export type DaemonStatus = {
   step?: "environment" | "daemon";
   source?: "spawned" | "attached";
   pid?: number;
+  startedAtMs?: number;
   port?: number;
   baseUrl?: string;
   token?: string;

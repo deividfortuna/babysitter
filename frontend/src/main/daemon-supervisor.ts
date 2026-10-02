@@ -253,7 +253,14 @@ export class DaemonSupervisor {
 }
 
 function ready(info: RunFileInfo, source: "spawned" | "attached"): DaemonStatus {
-  return { state: "ready", source, pid: info.pid, port: info.port, baseUrl: apiBaseUrl(info.port) };
+  return {
+    state: "ready",
+    source,
+    pid: info.pid,
+    startedAtMs: info.startedAtMs,
+    port: info.port,
+    baseUrl: apiBaseUrl(info.port),
+  };
 }
 
 function timeLeft(deadline: number): number {

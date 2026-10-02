@@ -315,3 +315,54 @@ test("pairing again with a daemon of the same name at a new address replaces its
   expect(result).toMatchObject({ ok: true, connection: { id: "r1", name: "studio", url: "http://192.168.1.30:7420" } });
   expect(saved.at(-1)?.remotes).toEqual([{ id: "r1", name: "studio", url: "http://192.168.1.30:7420", token: TOKEN }]);
 });
+
+const LOCAL_START = Date.parse("2026-10-02T08:00:00.120Z");
+
+function localDaemonAttached(local: ReturnType<typeof fakeLocal>) {
+  local.getStatus = () => ({
+    state: "ready",
+    source: "attached",
+    pid: 4242,
+    port: 5000,
+    startedAtMs: LOCAL_START,
+    baseUrl: "http://127.0.0.1:5000/api/v1",
+  });
+}
+
+test("pairing with the daemon that runs as this computer is refused, so the app does not stop it", async () => {
+  const sameDaemon = async (): Promise<RemoteCheck> => ({
+    ok: true,
+    name: "studio",
+    version: "1.0.0",
+    pid: 4242,
+    startedAtMs: Date.parse("2026-10-02T08:00:00Z"),
+  });
+  const { manager, local, saved } = setup(NO_CONNECTIONS, sameDaemon);
+  managers.push(manager);
+  await manager.start();
+  localDaemonAttached(local);
+
+  const result = await manager.pair({ link: "http://studio.local:7420/#token=secret" });
+
+  expect(result).toMatchObject({ ok: false, error: expect.stringContaining("This Mac") });
+  expect(saved).toEqual([]);
+  expect(local.stopAnyOwner).not.toHaveBeenCalled();
+});
+
+test("a daemon of another machine with the same pid as the local daemon still pairs", async () => {
+  const otherMachine = async (): Promise<RemoteCheck> => ({
+    ok: true,
+    name: "studio",
+    version: "1.0.0",
+    pid: 4242,
+    startedAtMs: Date.parse("2026-09-30T11:00:00Z"),
+  });
+  const { manager, local } = setup(NO_CONNECTIONS, otherMachine);
+  managers.push(manager);
+  await manager.start();
+  localDaemonAttached(local);
+
+  const result = await manager.pair({ link: "http://studio.local:7420/#token=secret" });
+
+  expect(result).toMatchObject({ ok: true });
+});

@@ -2,11 +2,13 @@ import { apiBase } from "../shared/connections";
 
 const CHECK_TIMEOUT_MS = 4_000;
 
-export type RemoteCheck = { ok: true; name: string; version: string } | { ok: false; error: string };
+type Identity = { pid?: number; startedAtMs?: number };
+
+export type RemoteCheck = ({ ok: true; name: string; version: string } & Identity) | { ok: false; error: string };
 
 type Fetch = typeof fetch;
 
-type Health = { name?: string; version: string };
+type Health = { name?: string; version: string } & Identity;
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
@@ -14,9 +16,15 @@ function text(value: unknown): string | undefined {
 
 function babysitterHealth(body: unknown): Health | null {
   if (typeof body !== "object" || body === null) return null;
-  const { status, name, version } = body as Record<string, unknown>;
+  const { status, name, version, pid, startedAt } = body as Record<string, unknown>;
   const answersAsADaemon = status === "ok" && typeof version === "string";
-  return answersAsADaemon ? { name: text(name), version } : null;
+  if (!answersAsADaemon) return null;
+  return {
+    name: text(name),
+    version,
+    pid: typeof pid === "number" ? pid : undefined,
+    startedAtMs: typeof startedAt === "string" ? Date.parse(startedAt) : undefined,
+  };
 }
 
 async function health(url: string, fetcher: Fetch): Promise<Health | null> {
@@ -49,5 +57,11 @@ export async function checkRemote(url: string, token: string, fetcher: Fetch = f
     return { ok: false, error: "The daemon refused the token. Run babysitter daemon pair on it again." };
   }
   if (!settings.ok) return { ok: false, error: `The daemon at ${url} answered with HTTP ${settings.status}.` };
-  return { ok: true, name: answer.name || new URL(url).hostname, version: answer.version };
+  return {
+    ok: true,
+    name: answer.name || new URL(url).hostname,
+    version: answer.version,
+    pid: answer.pid,
+    startedAtMs: answer.startedAtMs,
+  };
 }

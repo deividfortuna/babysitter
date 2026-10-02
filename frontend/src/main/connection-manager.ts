@@ -15,6 +15,7 @@ import type { DaemonConnection, DaemonStatus } from "../shared/daemon-status";
 import type { RemoteCheck } from "./remote-check";
 
 const PROBE_MS = 15_000;
+const SAME_START_MS = 2_000;
 
 export type LocalDaemon = {
   getStatus(): DaemonStatus;
@@ -145,6 +146,10 @@ export class ConnectionManager {
     }
     const check = await this.opts.check(target.url, target.token);
     if (!check.ok) return check;
+    if (this.runsHere(check)) {
+      const error = `${check.name} is the daemon of this computer. Pick ${this.opts.localName} in the switcher to see its watches.`;
+      return { ok: false, error };
+    }
     const name = request.name?.trim() || check.name;
     const sameDaemon = (remote: RemoteConnection) => remote.url === target.url || remote.name === name;
     const existing = this.connections.remotes.find(sameDaemon);
@@ -160,6 +165,15 @@ export class ConnectionManager {
     if (connection.id === this.connections.activeId) await this.inTurn(() => this.connectRemote());
     else await this.use(connection.id);
     return { ok: true, connection: { id: connection.id, name: connection.name, url: connection.url } };
+  }
+
+  // The API and running.json take the start time of the daemon a moment
+  // apart, and a daemon on another machine can have the same pid.
+  private runsHere(daemon: { pid?: number; startedAtMs?: number }): boolean {
+    const local = this.opts.local.getStatus();
+    const samePid = daemon.pid !== undefined && daemon.pid === local.pid;
+    const sameStart = Math.abs((daemon.startedAtMs ?? NaN) - (local.startedAtMs ?? NaN)) < SAME_START_MS;
+    return samePid && sameStart;
   }
 
   async remove(id: string): Promise<void> {
