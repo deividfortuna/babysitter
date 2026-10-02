@@ -76,9 +76,11 @@ export class ConnectionManager {
     });
   }
 
-  async retry(): Promise<void> {
-    if (this.localActive) return this.opts.local.restart();
-    return this.connectRemote();
+  retry(): Promise<void> {
+    return this.inTurn(async () => {
+      if (this.localActive) return this.opts.local.restart();
+      return this.connectRemote();
+    });
   }
 
   getStatus(): DaemonStatus {
@@ -151,7 +153,7 @@ export class ConnectionManager {
     const others = this.connections.remotes.filter((remote) => remote.id !== connection.id);
     this.save({ ...this.connections, remotes: [...others, connection] });
     this.log(`connections: paired with ${connection.name} at ${connection.url}`);
-    if (connection.id === this.connections.activeId) await this.connectRemote();
+    if (connection.id === this.connections.activeId) await this.inTurn(() => this.connectRemote());
     else await this.use(connection.id);
     return { ok: true, connection: { id: connection.id, name: connection.name, url: connection.url } };
   }

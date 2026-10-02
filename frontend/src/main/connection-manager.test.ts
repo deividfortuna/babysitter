@@ -230,3 +230,42 @@ test("showing this computer while a switch to a remote still stops the local dae
   expect(manager.list().activeId).toBe("local");
   expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { kind: "local" } });
 });
+
+function remoteShownAtLaunchWithASlowLocalStop() {
+  const stored: Connections = {
+    activeId: "r1",
+    remotes: [{ id: "r1", name: "studio", url: "http://studio.local:7420", token: TOKEN }],
+  };
+  const harness = setup(stored);
+  managers.push(harness.manager);
+  let stopped: () => void = () => undefined;
+  harness.local.stopAnyOwner.mockImplementationOnce(() => new Promise<void>((resolve) => (stopped = resolve)));
+  const starting = harness.manager.start();
+  return { ...harness, starting, stopLocal: () => stopped() };
+}
+
+test("pairing again with the remote that is shown waits for the local daemon to stop", async () => {
+  const { manager, local, starting, stopLocal } = remoteShownAtLaunchWithASlowLocalStop();
+  await vi.waitFor(() => expect(local.stopAnyOwner).toHaveBeenCalledOnce());
+
+  const pairing = manager.pair({ link: "http://studio.local:7420/#token=secret" });
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(manager.getStatus().state).not.toBe("ready");
+  stopLocal();
+  await Promise.all([starting, pairing]);
+  expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { id: "r1" } });
+});
+
+test("a retry of the remote that is shown waits for the local daemon to stop", async () => {
+  const { manager, local, starting, stopLocal } = remoteShownAtLaunchWithASlowLocalStop();
+  await vi.waitFor(() => expect(local.stopAnyOwner).toHaveBeenCalledOnce());
+
+  const retrying = manager.retry();
+  await new Promise((resolve) => setTimeout(resolve, 0));
+
+  expect(manager.getStatus().state).not.toBe("ready");
+  stopLocal();
+  await Promise.all([starting, retrying]);
+  expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { id: "r1" } });
+});
