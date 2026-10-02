@@ -49,6 +49,7 @@ export class ConnectionManager {
   private readonly listListeners = new Set<(list: ConnectionList) => void>();
   private probe: ReturnType<typeof setInterval> | null = null;
   private generation = 0;
+  private changes: Promise<void> = Promise.resolve();
   private readonly log: (msg: string) => void;
 
   constructor(private readonly opts: ConnectionManagerOptions) {
@@ -67,10 +68,12 @@ export class ConnectionManager {
     return this.connections.remotes.find((remote) => remote.id === this.connections.activeId);
   }
 
-  async start(): Promise<void> {
-    if (this.localActive) return this.opts.local.start();
-    await this.opts.local.stopAnyOwner();
-    return this.connectRemote();
+  start(): Promise<void> {
+    return this.inTurn(async () => {
+      if (this.localActive) return this.opts.local.start();
+      await this.opts.local.stopAnyOwner();
+      return this.connectRemote();
+    });
   }
 
   async retry(): Promise<void> {
@@ -105,7 +108,17 @@ export class ConnectionManager {
     return this.opts.discover();
   }
 
-  async use(id: string): Promise<void> {
+  use(id: string): Promise<void> {
+    return this.inTurn(() => this.switchTo(id));
+  }
+
+  private inTurn(change: () => Promise<void>): Promise<void> {
+    const turn = this.changes.then(change);
+    this.changes = turn.catch(() => undefined);
+    return turn;
+  }
+
+  private async switchTo(id: string): Promise<void> {
     if (id === this.connections.activeId) return;
     const known = isLocal(id) || this.connections.remotes.some((remote) => remote.id === id);
     if (!known) return;

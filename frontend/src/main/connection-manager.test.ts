@@ -206,3 +206,27 @@ test("a remote shown at launch connects only after the daemon of this computer s
   expect(check).toHaveBeenCalledOnce();
   expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { id: "r1" } });
 });
+
+test("showing this computer while a switch to a remote still stops the local daemon waits for that stop", async () => {
+  const stored: Connections = {
+    activeId: "local",
+    remotes: [{ id: "r1", name: "studio", url: "http://studio.local:7420", token: TOKEN }],
+  };
+  const { manager, local } = setup(stored);
+  managers.push(manager);
+  await manager.start();
+  let stopped: () => void = () => undefined;
+  local.stopAnyOwner.mockImplementationOnce(() => new Promise<void>((resolve) => (stopped = resolve)));
+
+  const toRemote = manager.use("r1");
+  await vi.waitFor(() => expect(local.stopAnyOwner).toHaveBeenCalledOnce());
+  const backToLocal = manager.use("local");
+  await Promise.resolve();
+
+  expect(local.start).toHaveBeenCalledOnce();
+  stopped();
+  await Promise.all([toRemote, backToLocal]);
+  expect(local.start).toHaveBeenCalledTimes(2);
+  expect(manager.list().activeId).toBe("local");
+  expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { kind: "local" } });
+});
