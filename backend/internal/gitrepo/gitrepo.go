@@ -99,7 +99,7 @@ func remoteHost(remoteURL string) (scheme, host string) {
 }
 
 func isGitHubHost(host string) bool {
-	host = strings.ToLower(host)
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
 	return host == "github.com" || strings.HasSuffix(host, ".github.com")
 }
 
