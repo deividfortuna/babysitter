@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"time"
 
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/events"
@@ -19,22 +20,46 @@ type authController struct {
 	newClient watcher.ClientFunc
 }
 
-func newAuthController(ctx context.Context, cfg Config, bus *events.Bus, log *slog.Logger, helper string) *authController {
+const gitConfigRetry = 30 * time.Second
+
+func newAuthController(ctx context.Context, cfg Config, bus *events.Bus, log *slog.Logger, helper string) (*authController, error) {
 	auth, gitConfig := cfg.Auth, agent.AppGitConfigPath(cfg.DataDir)
-	writeGitConfig := func() {
-		if err := auth.WriteGitConfig(gitConfig, helper); err != nil {
-			log.Warn("the agent sessions may reach GitHub without the app", "err", err)
-		}
+	writeGitConfig := func() error {
+		return auth.WriteGitConfig(gitConfig, helper)
 	}
-	writeGitConfig()
+	if err := writeGitConfig(); err != nil {
+		return nil, err
+	}
+	changes := make(chan struct{}, 1)
+	go keepGitConfig(ctx, changes, writeGitConfig, gitConfigRetry, log)
 	auth.OnChange(func() {
-		writeGitConfig()
+		select {
+		case changes <- struct{}{}:
+		default:
+		}
 		bus.Publish(events.AuthChanged, "", 0)
 	})
 	return &authController{
 		auth:      cfg.Auth,
 		signIns:   cfg.Auth.SignIns(ctx, cfg.Whoami),
 		newClient: cfg.NewClient,
+	}, nil
+}
+
+func keepGitConfig(ctx context.Context, changes <-chan struct{}, write func() error, retryAfter time.Duration, log *slog.Logger) {
+	var retry <-chan time.Time
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-changes:
+		case <-retry:
+		}
+		retry = nil
+		if err := write(); err != nil {
+			log.Warn("the agent sessions may reach GitHub without the app; babysitter writes their git config again soon", "err", err)
+			retry = time.After(retryAfter)
+		}
 	}
 }
 

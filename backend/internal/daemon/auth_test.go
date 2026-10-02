@@ -3,13 +3,16 @@ package daemon
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/http"
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/httpd"
@@ -59,5 +62,42 @@ func TestStatusSaysWhenTheInstallationsCannotBeRead(t *testing.T) {
 	}
 	if st.Error != "" {
 		t.Fatalf("Error = %q, want the failure only in installationsError", st.Error)
+	}
+}
+
+func TestTheDaemonDoesNotStartWithoutTheGitConfigOfTheSessions(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "git"), nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg := Config{DataDir: dir, Auth: ghauth.New(dir, ghauth.WithGH(func(context.Context) (string, error) { return "", errors.New("no gh") }))}
+
+	if _, err := newAuthController(t.Context(), cfg, events.NewBus(), slog.New(slog.DiscardHandler), ""); err == nil {
+		t.Fatal("err = nil, want the failed write of the git config of the sessions")
+	}
+}
+
+func TestAFailedWriteOfTheGitConfigIsTriedAgain(t *testing.T) {
+	t.Parallel()
+	changes := make(chan struct{}, 1)
+	written := make(chan struct{})
+	failures := 2
+	write := func() error {
+		if failures > 0 {
+			failures--
+			return errors.New("disk full")
+		}
+		close(written)
+		return nil
+	}
+	go keepGitConfig(t.Context(), changes, write, time.Millisecond, slog.New(slog.DiscardHandler))
+
+	changes <- struct{}{}
+
+	select {
+	case <-written:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the git config was not written again after the failure")
 	}
 }

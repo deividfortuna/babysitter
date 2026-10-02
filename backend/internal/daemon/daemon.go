@@ -99,7 +99,10 @@ func Run(ctx context.Context, cfg Config) error {
 		exe = ""
 	}
 	credentialHelper := agent.CredentialHelper(exe, cfg.DataDir)
-	auth := newAuthController(ctx, cfg, bus, log, credentialHelper)
+	auth, err := newAuthController(ctx, cfg, bus, log, credentialHelper)
+	if err != nil {
+		return err
+	}
 	tokenSecret := rand.Text()
 
 	stored, err := st.Settings(ctx)
