@@ -40,6 +40,8 @@ type DeviceCode struct {
 	VerificationURI string `json:"verification_uri"`
 	ExpiresIn       int    `json:"expires_in"`
 	Interval        int    `json:"interval"`
+
+	requestedAt time.Time
 }
 
 const defaultCodeLifetime = 900

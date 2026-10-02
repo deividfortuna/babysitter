@@ -225,3 +225,29 @@ func TestSignInsKeepsTheRefusal(t *testing.T) {
 		t.Fatalf("Err = %v, want ErrDenied", err)
 	}
 }
+
+func TestASignOutWhileTheCodeIsRequestedEndsTheSignIn(t *testing.T) {
+	h := newHarness(t)
+	a := h.auth()
+	h.g.React(ghfake.RouteDeviceCode, func(ghfake.Action) (ghfake.Response, bool) {
+		h.clock.Advance(time.Second)
+		if err := h.auth().SignOut(context.Background()); err != nil {
+			t.Errorf("SignOut of the other process: %v", err)
+		}
+		return ghfake.Response{}, false
+	})
+	code, err := a.RequestCode(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.g.ApproveDevice()
+
+	_, err = a.Complete(context.Background(), code, h.whoami(t))
+
+	if !errors.Is(err, ErrSignedOutMeanwhile) {
+		t.Fatalf("Complete = %v, want ErrSignedOutMeanwhile", err)
+	}
+	if _, err := newCredentialsFile(h.dir).Load(); !errors.Is(err, ErrSignedOut) {
+		t.Fatalf("Load = %v, want ErrSignedOut: the sign in undid the sign out", err)
+	}
+}

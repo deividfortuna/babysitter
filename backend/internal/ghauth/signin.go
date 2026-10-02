@@ -29,11 +29,17 @@ func (a *Auth) RequestCode(ctx context.Context) (DeviceCode, error) {
 	if !a.app.Available() {
 		return DeviceCode{}, ErrNoApp
 	}
-	return a.oauth.RequestCode(ctx)
+	requestedAt := a.now()
+	code, err := a.oauth.RequestCode(ctx)
+	code.requestedAt = requestedAt
+	return code, err
 }
 
 func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Credentials, error) {
-	started := a.now()
+	started := code.requestedAt
+	if started.IsZero() {
+		started = a.now()
+	}
 	tok, err := a.oauth.Wait(ctx, code)
 	if err != nil {
 		return Credentials{}, err
