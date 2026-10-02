@@ -32,6 +32,9 @@ updates:
       default-days: 7
     versioning-strategy: increase
     open-pull-requests-limit: 10
+    ignore:
+      - dependency-name: vitest
+      - dependency-name: "@vitest/*"
     groups:
       electron-builder:
         patterns:
