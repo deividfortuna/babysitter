@@ -367,6 +367,27 @@ func TestRefusedRefreshTokenIsNotSentAgain(t *testing.T) {
 	}
 }
 
+func TestAnotherProcessDoesNotSendARefusedRefreshTokenAgain(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.g.RevokeRefresh()
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	if _, err := h.auth().Credential(context.Background()); !errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("err = %v, want ErrSessionExpired", err)
+	}
+
+	cli := h.auth()
+	if _, err := cli.Credential(context.Background()); !errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("err = %v, want ErrSessionExpired", err)
+	}
+	if st := cli.Status(context.Background()); st.State != StateExpired || st.Login != "alice" {
+		t.Fatalf("Status = %+v, want the expired sign in of alice", st)
+	}
+	if n := refreshes(h.g); n != 1 {
+		t.Fatalf("%d renewals, want 1: GitHub already refused that refresh token", n)
+	}
+}
+
 func TestExpiredRefreshTokenEndsTheSessionWithoutAsking(t *testing.T) {
 	h := newHarness(t)
 	h.signIn(t, h.auth())

@@ -228,6 +228,8 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 	tok, err := a.oauth.Refresh(rotation, c.RefreshToken)
 	if errors.Is(err, errRefreshRefused) {
 		a.refused = c.RefreshToken
+		c.RefreshToken, c.RefreshExpiresAt = "", time.Time{}
+		a.keep(c, onFile)
 		return Credentials{}, fmt.Errorf("%w: %w", ErrSessionExpired, err)
 	}
 	if err != nil {
