@@ -11,6 +11,8 @@ const TokenQueryParam = "token"
 
 var localOnlySuffixes = []string{"/control/shutdown", "/hook"}
 
+var eventStreamSuffixes = []string{"/events", "/logs/stream"}
+
 func Guard(token string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isPreflight(r) || isHealthCheck(r.URL.Path) {
@@ -41,6 +43,9 @@ func presented(r *http.Request) string {
 	if bearer, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
 		return strings.TrimSpace(bearer)
 	}
+	if !isEventStream(r.URL.Path) {
+		return ""
+	}
 	return r.URL.Query().Get(TokenQueryParam)
 }
 
@@ -49,7 +54,15 @@ func matches(want, got string) bool {
 }
 
 func isLocalOnly(path string) bool {
-	for _, suffix := range localOnlySuffixes {
+	return hasAnySuffix(path, localOnlySuffixes)
+}
+
+func isEventStream(path string) bool {
+	return hasAnySuffix(path, eventStreamSuffixes)
+}
+
+func hasAnySuffix(path string, suffixes []string) bool {
+	for _, suffix := range suffixes {
 		if strings.HasSuffix(path, suffix) {
 			return true
 		}

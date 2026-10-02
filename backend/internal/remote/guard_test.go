@@ -28,9 +28,20 @@ func TestGuardLetsTheTokenThrough(t *testing.T) {
 		t.Fatalf("bearer token: status %d, want %d", got, http.StatusTeapot)
 	}
 
-	query := httptest.NewRequest(http.MethodGet, "/api/v1/events?token=secret", nil)
-	if got := serve(h, query); got != http.StatusTeapot {
-		t.Fatalf("token in the query: status %d, want %d", got, http.StatusTeapot)
+	for _, path := range []string{"/api/v1/events", "/api/v1/logs/stream"} {
+		query := httptest.NewRequest(http.MethodGet, path+"?token=secret", nil)
+		if got := serve(h, query); got != http.StatusTeapot {
+			t.Fatalf("%s with the token in the query: status %d, want %d", path, got, http.StatusTeapot)
+		}
+	}
+}
+
+func TestGuardTakesTheTokenInTheQueryOnlyForTheEventStreams(t *testing.T) {
+	h := guarded(t)
+
+	query := httptest.NewRequest(http.MethodGet, "/api/v1/watches?token=secret", nil)
+	if got := serve(h, query); got != http.StatusUnauthorized {
+		t.Fatalf("token in the query of an API route: status %d, want %d", got, http.StatusUnauthorized)
 	}
 }
 
