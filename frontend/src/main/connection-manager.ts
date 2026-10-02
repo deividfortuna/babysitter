@@ -22,6 +22,7 @@ export type LocalDaemon = {
   start(): Promise<void>;
   restart(): Promise<void>;
   stop(): Promise<void>;
+  stopAnyOwner(): Promise<void>;
 };
 
 export type ConnectionManagerOptions = {
@@ -68,7 +69,7 @@ export class ConnectionManager {
 
   async start(): Promise<void> {
     if (this.localActive) return this.opts.local.start();
-    return this.connectRemote();
+    await Promise.all([this.opts.local.stopAnyOwner(), this.connectRemote()]);
   }
 
   async retry(): Promise<void> {
@@ -107,7 +108,6 @@ export class ConnectionManager {
     if (id === this.connections.activeId) return;
     const known = isLocal(id) || this.connections.remotes.some((remote) => remote.id === id);
     if (!known) return;
-    const leavingLocal = this.localActive;
     this.save({ ...this.connections, activeId: id });
     this.log(`connections: now showing ${this.describe(id)}`);
     if (isLocal(id)) {
@@ -116,7 +116,7 @@ export class ConnectionManager {
       this.emitStatus();
       return this.opts.local.start();
     }
-    if (leavingLocal) await this.opts.local.stop();
+    await this.opts.local.stopAnyOwner();
     return this.connectRemote();
   }
 

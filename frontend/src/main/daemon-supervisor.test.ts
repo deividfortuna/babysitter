@@ -345,3 +345,51 @@ test("an install stops waiting at the deadline when the daemon keeps answering",
   expect(Date.now() - started).toBeGreaterThanOrEqual(500);
   expect(Date.now() - started).toBeLessThan(2_500);
 });
+
+test("a stop of any owner stops a daemon started from the terminal that the app never attached to", async () => {
+  const running = daemonOnPort(50131, { downAfterShutdown: true });
+  const { daemon, dataDir } = supervisor(async () => ({ PATH: "/usr/bin" }));
+  writeFileSync(path.join(dataDir, "running.json"), JSON.stringify({ pid: 99, port: 50131, owner: "cli" }));
+
+  await daemon.stopAnyOwner();
+
+  expect(running.shutdowns).toBe(1);
+  expect(spawn).not.toHaveBeenCalled();
+  expect(daemon.getStatus()).toEqual({ state: "stopped" });
+});
+
+test("a stop of any owner stops a daemon started from the terminal that the app attached to", async () => {
+  const running = daemonOnPort(50132, { downAfterShutdown: true });
+  const { daemon, dataDir } = supervisor(async () => ({ PATH: "/usr/bin" }));
+  writeFileSync(path.join(dataDir, "running.json"), JSON.stringify({ pid: 99, port: 50132, owner: "cli" }));
+  await daemon.start();
+
+  await daemon.stopAnyOwner();
+
+  expect(running.shutdowns).toBe(1);
+  expect(daemon.getStatus()).toEqual({ state: "stopped" });
+});
+
+test("a stop of any owner asks the daemon the app spawned to stop once", async () => {
+  const running = daemonOnPort(50133, { downAfterShutdown: true });
+  const { daemon, dataDir } = supervisor(async () => ({ PATH: "/usr/bin" }));
+  await daemon.start();
+  writeFileSync(path.join(dataDir, "running.json"), JSON.stringify({ pid: 4242, port: 50133, owner: "app" }));
+  await vi.waitFor(() => expect(daemon.getStatus()).toMatchObject({ state: "ready", source: "spawned" }), {
+    timeout: 2_000,
+  });
+
+  await daemon.stopAnyOwner();
+
+  expect(running.shutdowns).toBe(1);
+  expect(daemon.getStatus()).toEqual({ state: "stopped" });
+});
+
+test("a stop of any owner with no daemon running asks nothing", async () => {
+  const { daemon } = supervisor(async () => ({ PATH: "/usr/bin" }));
+
+  await daemon.stopAnyOwner();
+
+  expect(spawn).not.toHaveBeenCalled();
+  expect(daemon.getStatus()).toEqual({ state: "stopped" });
+});

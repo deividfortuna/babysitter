@@ -192,6 +192,16 @@ export class DaemonSupervisor {
     await requestShutdown(current.port, requestTimeoutMs);
   }
 
+  async stopAnyOwner(requestTimeoutMs = SHUTDOWN_REQUEST_TIMEOUT_MS): Promise<void> {
+    const spawned = this.child !== null;
+    await this.stop(requestTimeoutMs);
+    if (spawned) return;
+    const running = await this.runningDaemon();
+    if (!running) return;
+    this.log(`daemon: asking pid ${running.pid} on port ${running.port} (owner ${running.owner}) to stop`);
+    await requestShutdown(running.port, requestTimeoutMs);
+  }
+
   async stopAndWait(timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     const port = this.ownedPort();

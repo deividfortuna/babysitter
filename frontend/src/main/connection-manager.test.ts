@@ -22,6 +22,7 @@ function fakeLocal() {
     start: vi.fn(async () => set({ state: "ready", baseUrl: "http://127.0.0.1:5000/api/v1", port: 5000 })),
     restart: vi.fn(async () => undefined),
     stop: vi.fn(async () => set({ state: "stopped" })),
+    stopAnyOwner: vi.fn(async () => set({ state: "stopped" })),
   };
 }
 
@@ -69,7 +70,7 @@ test("a pairing saves the remote, stops the local daemon and points the app at t
 
   expect(result).toMatchObject({ ok: true, connection: { name: "studio", url: "http://studio.local:7420" } });
   expect(result.ok && "token" in result.connection).toBe(false);
-  expect(local.stop).toHaveBeenCalledOnce();
+  expect(local.stopAnyOwner).toHaveBeenCalledOnce();
   expect(saved.at(-1)?.remotes).toEqual([expect.objectContaining({ url: "http://studio.local:7420", token: TOKEN })]);
   expect(manager.getStatus()).toMatchObject({
     state: "ready",
@@ -89,7 +90,7 @@ test("a refused token saves nothing and leaves the local daemon running", async 
 
   expect(result).toEqual({ ok: false, error: "The daemon refused the token." });
   expect(saved).toEqual([]);
-  expect(local.stop).not.toHaveBeenCalled();
+  expect(local.stopAnyOwner).not.toHaveBeenCalled();
 });
 
 test("a remote that does not answer shows as an error of that remote, not of the local daemon", async () => {
@@ -151,5 +152,35 @@ test("a save that fails leaves the list and the daemon that is shown as they wer
 
   expect(manager.list().activeId).toBe("local");
   expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { kind: "local" } });
-  expect(local.stop).not.toHaveBeenCalled();
+  expect(local.stopAnyOwner).not.toHaveBeenCalled();
+});
+
+test("a remote shown at launch stops the daemon that runs on this computer, also one started from a terminal", async () => {
+  const stored: Connections = {
+    activeId: "r1",
+    remotes: [{ id: "r1", name: "studio", url: "http://studio.local:7420", token: TOKEN }],
+  };
+  const { manager, local } = setup(stored);
+  managers.push(manager);
+
+  await manager.start();
+
+  expect(local.stopAnyOwner).toHaveBeenCalledOnce();
+  expect(local.start).not.toHaveBeenCalled();
+  expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { id: "r1", kind: "remote" } });
+});
+
+test("showing this computer again after a remote starts its daemon again", async () => {
+  const stored: Connections = {
+    activeId: "r1",
+    remotes: [{ id: "r1", name: "studio", url: "http://studio.local:7420", token: TOKEN }],
+  };
+  const { manager, local } = setup(stored);
+  managers.push(manager);
+  await manager.start();
+
+  await manager.use("local");
+
+  expect(local.start).toHaveBeenCalledOnce();
+  expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { kind: "local" } });
 });
