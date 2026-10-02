@@ -11,6 +11,7 @@ import (
 
 const (
 	gitHubHTTPS     = "https://github.com/"
+	extraHeaderKey  = "http." + gitHubHTTPS + ".extraheader"
 	ownerFirstChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 )
 
@@ -32,8 +33,9 @@ func gitEnv(token string) []string {
 		return nil
 	}
 	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
-	header := [2]string{"http.https://github.com/.extraheader", "AUTHORIZATION: basic " + basic}
-	return gitrepo.ConfigEnv(append(slices.Clone(urlRulePairs), header))
+	clearHeaders := [2]string{extraHeaderKey, ""}
+	header := [2]string{extraHeaderKey, "AUTHORIZATION: basic " + basic}
+	return gitrepo.ConfigEnv(append(slices.Clone(urlRulePairs), clearHeaders, header))
 }
 
 func configPairs(rules []urlRule) [][2]string {
@@ -82,6 +84,7 @@ func appGitConfig(helper string) string {
 	for _, rule := range urlRules {
 		fmt.Fprintf(&b, "[url %s]\n\t%s = %s\n", gitConfigQuote(rule.base), rule.key, rule.prefix)
 	}
+	fmt.Fprintf(&b, "[http %s]\n\textraHeader =\n", gitConfigQuote(gitHubHTTPS))
 	if helper == "" {
 		return b.String()
 	}

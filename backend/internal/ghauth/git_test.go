@@ -1,11 +1,14 @@
 package ghauth
 
 import (
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -206,5 +209,67 @@ func TestTheGitConfigKeepsGitHubPushesOnHTTPSThroughAnInclude(t *testing.T) {
 
 	if got := gitPushURL(t, pushToSSH, env, "https://github.com/octo/hello.git"); got != "https://github.com/octo/hello.git" {
 		t.Fatalf("git pushes to %s, want https", got)
+	}
+}
+
+func authorizationsGitSends(t *testing.T, env func(toServer *strings.Replacer) []string) []string {
+	t.Helper()
+	var (
+		mu   sync.Mutex
+		sent []string
+	)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		mu.Lock()
+		defer mu.Unlock()
+		sent = append(sent, r.Header.Values("Authorization")...)
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	t.Cleanup(srv.Close)
+	toServer := strings.NewReplacer(gitHubHTTPS, srv.URL+"/")
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	personal := "[http \"" + srv.URL + "/\"]\n\textraHeader = AUTHORIZATION: bearer ghp_personal\n"
+	if err := os.WriteFile(global, []byte(personal), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "ls-remote", srv.URL+"/octo/hello.git")
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+global, "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
+	cmd.Env = append(cmd.Env, env(toServer)...)
+	_ = cmd.Run()
+	mu.Lock()
+	defer mu.Unlock()
+	return sent
+}
+
+func TestGitEnvSendsOnlyTheHeaderOfTheApp(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	sent := authorizationsGitSends(t, func(toServer *strings.Replacer) []string {
+		var env []string
+		for _, e := range gitEnv("ghu_abc") {
+			env = append(env, toServer.Replace(e))
+		}
+		return env
+	})
+
+	if len(sent) == 0 || strings.Contains(strings.Join(sent, "\n"), "ghp_personal") {
+		t.Fatalf("git sent %q, want only the header of the app", sent)
+	}
+}
+
+func TestTheGitConfigDropsTheGitHubHeadersOfTheUser(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	sent := authorizationsGitSends(t, func(toServer *strings.Replacer) []string {
+		include := filepath.Join(t.TempDir(), "app.gitconfig")
+		if err := os.WriteFile(include, []byte(toServer.Replace(appGitConfig(""))), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		return []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=include.path", "GIT_CONFIG_VALUE_0=" + include}
+	})
+
+	if len(sent) != 0 {
+		t.Fatalf("git sent %q, want no header of the user", sent)
 	}
 }
