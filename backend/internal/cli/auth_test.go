@@ -124,6 +124,27 @@ func TestAuthLoginTellsWhenATokenComesFirst(t *testing.T) {
 	}
 }
 
+func TestAuthStatusDoesNotClaimNoInstallationsWhenItDidNotReadThem(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "ghp_from_env")
+	g := ghfake.New()
+	g.Install("alice")
+	approveOnPoll(g)
+	dir := t.TempDir()
+	if _, err := runAuth(t, g, dir, "auth", "login"); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runAuth(t, g, dir, "auth", "status")
+	if err != nil {
+		t.Fatalf("auth status: %v", err)
+	}
+	for _, want := range []string{"App:           signed in, not in use", "Installed on:  not checked, the app does not give the token now"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("auth status printed %q, want %q in it", out, want)
+		}
+	}
+}
+
 func TestAuthLoginRefused(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "")
 	g := ghfake.New()

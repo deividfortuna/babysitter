@@ -40,6 +40,9 @@ var stateWords = map[ghauth.State]string{
 }
 
 func installedWord(a authOutput) string {
+	if a.Origin != ghauth.OriginApp {
+		return "not checked, the app does not give the token now"
+	}
 	if a.InstallsError != "" {
 		return "unknown, " + a.InstallsError
 	}
