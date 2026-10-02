@@ -228,6 +228,47 @@ func TestSignInWaitsWhileTheCodeIsPending(t *testing.T) {
 	}
 }
 
+func TestSignInOutlivesAFewFailedPolls(t *testing.T) {
+	for _, tc := range []struct {
+		name     string
+		failures int
+		status   int
+		ok       bool
+		polls    int
+	}{
+		{"three 5xx answers", 3, http.StatusBadGateway, true, 4},
+		{"four 5xx answers", 4, http.StatusBadGateway, false, 4},
+		{"one 4xx answer", 1, http.StatusNotFound, false, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			h := newHarness(t)
+			a := h.auth()
+			ctx := context.Background()
+			code, err := a.RequestCode(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			h.g.ApproveDevice()
+			var polls atomic.Int32
+			h.g.React(ghfake.RouteOAuthGrant, func(ghfake.Action) (ghfake.Response, bool) {
+				if polls.Add(1) > int32(tc.failures) {
+					return ghfake.Response{}, false
+				}
+				return ghfake.Response{Status: tc.status, Message: http.StatusText(tc.status)}, true
+			})
+
+			_, err = a.Complete(ctx, code, h.whoami(t))
+
+			if signedIn := err == nil; signedIn != tc.ok {
+				t.Fatalf("Complete = %v after %d answers %d, want signed in %v", err, tc.failures, tc.status, tc.ok)
+			}
+			if n := int(polls.Load()); n != tc.polls {
+				t.Fatalf("%d polls, want %d", n, tc.polls)
+			}
+		})
+	}
+}
+
 func TestRequestCodeWithoutApp(t *testing.T) {
 	h := newHarness(t)
 

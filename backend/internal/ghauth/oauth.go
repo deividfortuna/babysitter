@@ -19,6 +19,8 @@ const (
 	deviceGrant  = "urn:ietf:params:oauth:grant-type:device_code"
 	refreshGrant = "refresh_token"
 	slowDownStep = 5
+
+	allowedPollFailures = 3
 )
 
 var (
@@ -41,6 +43,10 @@ type DeviceCode struct {
 }
 
 const defaultCodeLifetime = 900
+
+func (c DeviceCode) complete() bool {
+	return c.DeviceCode != "" && c.UserCode != ""
+}
 
 func (c DeviceCode) Lifetime() time.Duration {
 	return time.Duration(cmp.Or(c.ExpiresIn, defaultCodeLifetime)) * time.Second
@@ -76,7 +82,7 @@ func (o OAuth) RequestCode(ctx context.Context) (DeviceCode, error) {
 	if err := o.post(ctx, "/login/device/code", url.Values{"client_id": {o.ClientID}}, &code); err != nil {
 		return DeviceCode{}, fmt.Errorf("ask GitHub for a device code: %w", err)
 	}
-	if code.DeviceCode == "" || code.UserCode == "" {
+	if !code.complete() {
 		return DeviceCode{}, errors.New("ask GitHub for a device code: the answer has no code")
 	}
 	return code, nil
@@ -85,23 +91,52 @@ func (o OAuth) RequestCode(ctx context.Context) (DeviceCode, error) {
 func (o OAuth) Wait(ctx context.Context, code DeviceCode) (Token, error) {
 	interval := max(code.Interval, 1)
 	deadline := o.Now().Add(code.Lifetime())
+	failures := 0
 	for {
 		if err := o.sleep(ctx, interval); err != nil {
 			return Token{}, err
 		}
 		tok, err := o.exchange(ctx, code.DeviceCode)
+		failures = failuresAfter(failures, err)
 		switch {
 		case err == nil:
 			return tok, nil
+		case failures > allowedPollFailures:
+			return Token{}, err
 		case errors.Is(err, errSlowDown):
 			interval += slowDownStep
-		case !errors.Is(err, errPending):
+		case temporary(err), errors.Is(err, errPending):
+		default:
 			return Token{}, err
 		}
 		if !o.Now().Before(deadline) {
 			return Token{}, ErrCodeExpired
 		}
 	}
+}
+
+func failuresAfter(failures int, err error) int {
+	if temporary(err) {
+		return failures + 1
+	}
+	return 0
+}
+
+type statusError struct {
+	code   int
+	status string
+}
+
+func (e statusError) Error() string {
+	return "GitHub answered " + e.status
+}
+
+func temporary(err error) bool {
+	if se, ok := errors.AsType[statusError](err); ok {
+		return se.code >= http.StatusInternalServerError
+	}
+	_, transport := errors.AsType[*url.Error](err)
+	return transport
 }
 
 func (o OAuth) Refresh(ctx context.Context, refreshToken string) (Token, error) {
@@ -165,7 +200,7 @@ func (o OAuth) post(ctx context.Context, path string, form url.Values, out any) 
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("GitHub answered %s", resp.Status)
+		return statusError{code: resp.StatusCode, status: resp.Status}
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
 }
