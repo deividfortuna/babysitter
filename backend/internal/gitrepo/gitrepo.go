@@ -44,7 +44,10 @@ func (a AuthEnv) Env(ctx context.Context, command string) ([]string, error) {
 	return append(slices.Clone(NoPromptEnv), "GIT_NO_LAZY_FETCH=1"), nil
 }
 
-var ErrNotHTTPS = errors.New("the GitHub App reaches GitHub only over HTTPS")
+var (
+	ErrNotHTTPS   = errors.New("the GitHub App reaches GitHub only over HTTPS")
+	ErrTokenInURL = errors.New("the URL of the remote holds a password or token, which git would use in place of the GitHub App")
+)
 
 var scpRemote = regexp.MustCompile(`^(?:[^@/]+@)?([^:/]+):`)
 
@@ -76,26 +79,37 @@ func (a AuthEnv) usesApp(ctx context.Context) bool {
 	return err == nil && len(extra) > 0
 }
 
-func CheckAppRemote(remoteURL string) error {
-	scheme, host := remoteHost(remoteURL)
-	if scheme == "https" || !isGitHubHost(host) {
-		return nil
-	}
-	return fmt.Errorf("%w: give the remote %s an https://github.com/ URL", ErrNotHTTPS, remoteURL)
+type remote struct {
+	scheme, host, shown string
+	password            bool
 }
 
-func remoteHost(remoteURL string) (scheme, host string) {
+func CheckAppRemote(remoteURL string) error {
+	r := parseRemote(remoteURL)
+	switch {
+	case !isGitHubHost(r.host):
+		return nil
+	case r.scheme != "https":
+		return fmt.Errorf("%w: give the remote %s an https://github.com/ URL", ErrNotHTTPS, r.shown)
+	case r.password:
+		return fmt.Errorf("%w: remove it from the remote %s", ErrTokenInURL, r.shown)
+	}
+	return nil
+}
+
+func parseRemote(remoteURL string) remote {
 	if strings.Contains(remoteURL, "://") {
 		u, err := url.Parse(remoteURL)
 		if err != nil {
-			return "", ""
+			return remote{shown: "with a URL that cannot be read"}
 		}
-		return strings.ToLower(u.Scheme), u.Hostname()
+		_, password := u.User.Password()
+		return remote{scheme: strings.ToLower(u.Scheme), host: u.Hostname(), shown: u.Redacted(), password: password}
 	}
 	if m := scpRemote.FindStringSubmatch(remoteURL); m != nil {
-		return "ssh", m[1]
+		return remote{scheme: "ssh", host: m[1], shown: remoteURL}
 	}
-	return "", ""
+	return remote{shown: remoteURL}
 }
 
 func isGitHubHost(host string) bool {

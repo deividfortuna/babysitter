@@ -135,12 +135,25 @@ func TestCheckAppRemote(t *testing.T) {
 		{"http://github.com/octo/hello.git", ErrNotHTTPS},
 		{"git@github.com.:octo/hello.git", ErrNotHTTPS},
 		{"ssh://git@GitHub.com./octo/hello.git", ErrNotHTTPS},
+		{"https://me:ghp_personal@github.com/octo/hello.git", ErrTokenInURL},
+		{"https://me@github.com/octo/hello.git", nil},
+		{"https://me:secret@gitlab.com/octo/hello.git", nil},
 		{"git@gitlab.com:octo/hello.git", nil},
 		{"github-work:octo/hello.git", nil},
 		{"/tmp/origin.git", nil},
 	} {
 		if err := CheckAppRemote(tc.url); !errors.Is(err, tc.want) {
 			t.Errorf("CheckAppRemote(%q) = %v, want %v", tc.url, err, tc.want)
+		}
+	}
+}
+
+func TestCheckAppRemoteKeepsTheTokenOutOfTheError(t *testing.T) {
+	t.Parallel()
+	for _, url := range []string{"https://me:ghp_personal@github.com/octo/hello.git", "http://me:ghp_personal@github.com/octo/hello.git"} {
+		err := CheckAppRemote(url)
+		if err == nil || strings.Contains(err.Error(), "ghp_personal") {
+			t.Errorf("CheckAppRemote(%q) = %v, want an error without the token", url, err)
 		}
 	}
 }

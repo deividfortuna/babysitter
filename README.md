@@ -155,7 +155,9 @@ HTTPS: a remote `git@github.com:owner/name` is read as
 A remote that uses another SSH host name keeps your own credentials. A
 github.com remote that git cannot read as HTTPS, such as
 `git@GitHub.com:owner/name`, stops the fetch and the push of the daemon:
-give the remote an `https://github.com/` URL.
+give the remote an `https://github.com/` URL. A github.com URL with a
+password or token in it stops them too, because git would use it in
+place of the app.
 
 To build with your own GitHub App, set `appClientID` and `appSlug` in
 `backend/internal/ghauth/app.go`, or set `BABYSITTER_GITHUB_APP_CLIENT_ID`
