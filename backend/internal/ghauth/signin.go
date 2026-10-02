@@ -2,9 +2,12 @@ package ghauth
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"time"
 )
+
+var ErrSignInCancelled = errors.New("the sign in was cancelled before GitHub gave a code")
 
 type Identity struct {
 	Login     string
@@ -67,6 +70,7 @@ type SignIns struct {
 	mu      sync.Mutex
 	active  *attempt
 	lastErr error
+	cancels int
 }
 
 func (a *Auth) SignIns(base context.Context, whoami Whoami) *SignIns {
@@ -79,6 +83,7 @@ func (s *SignIns) Start(ctx context.Context) (Prompt, error) {
 	if prompt, waiting := s.Current(); waiting {
 		return prompt, nil
 	}
+	cancels := s.cancelCount()
 	code, err := s.auth.RequestCode(ctx)
 	if err != nil {
 		return Prompt{}, err
@@ -92,12 +97,23 @@ func (s *SignIns) Start(ctx context.Context) (Prompt, error) {
 		},
 		cancel: cancel,
 	}
-	s.mu.Lock()
-	s.active, s.lastErr = att, nil
-	s.mu.Unlock()
+	if !s.install(att, cancels) {
+		cancel()
+		return Prompt{}, ErrSignInCancelled
+	}
 	go s.complete(run, att, code)
 	s.auth.changed()
 	return att.prompt, nil
+}
+
+func (s *SignIns) install(att *attempt, cancels int) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cancels != cancels {
+		return false
+	}
+	s.active, s.lastErr = att, nil
+	return true
 }
 
 func (s *SignIns) Current() (Prompt, bool) {
@@ -115,10 +131,17 @@ func (s *SignIns) Err() error {
 	return s.lastErr
 }
 
+func (s *SignIns) cancelCount() int {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return s.cancels
+}
+
 func (s *SignIns) Cancel() {
 	s.mu.Lock()
 	att := s.active
 	s.active = nil
+	s.cancels++
 	s.mu.Unlock()
 	if att == nil {
 		return

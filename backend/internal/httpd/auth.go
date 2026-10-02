@@ -57,6 +57,7 @@ var (
 
 	signInErrors = newErrorMap("signin_failed",
 		unavailable("app_unavailable", ghauth.ErrNoApp, errNoAuth),
+		conflict("signin_cancelled", ghauth.ErrSignInCancelled),
 	)
 	signOutErrors = newErrorMap("signout_failed",
 		unavailable("auth_unavailable", errNoAuth),

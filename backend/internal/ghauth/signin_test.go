@@ -127,6 +127,36 @@ func TestSignInsCurrentDoesNotWaitForASlowCode(t *testing.T) {
 	}
 }
 
+func TestSignInsCancelWhileGitHubGivesTheCode(t *testing.T) {
+	h := newHarness(t)
+	release := make(chan struct{})
+	h.g.React(ghfake.RouteDeviceCode, func(ghfake.Action) (ghfake.Response, bool) {
+		<-release
+		return ghfake.Response{}, false
+	})
+	s, _ := h.signIns(t)
+	started := make(chan error, 1)
+	go func() {
+		_, err := s.Start(context.Background())
+		started <- err
+	}()
+	testutil.Eventually(t, func() bool { return h.g.Count(ghfake.RouteDeviceCode) == 1 }, "GitHub is asked for a code")
+
+	s.Cancel()
+	close(release)
+
+	if err := <-started; !errors.Is(err, ErrSignInCancelled) {
+		t.Fatalf("Start = %v, want ErrSignInCancelled", err)
+	}
+	if _, waiting := s.Current(); waiting {
+		t.Fatal("the cancelled sign in waits for the code on GitHub")
+	}
+	h.g.ApproveDevice()
+	if n := testutil.Settle(t, func() int { return h.g.Count(ghfake.RouteOAuthGrant) }, "the token requests"); n != 0 {
+		t.Fatalf("%d token requests, want 0: the cancelled sign in still waits on GitHub", n)
+	}
+}
+
 func TestCancelledSignInDoesNotSave(t *testing.T) {
 	h := newHarness(t)
 	a := h.auth()
