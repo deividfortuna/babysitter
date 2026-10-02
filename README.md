@@ -106,10 +106,13 @@ can change at any time.
   on those repositories and only with the permissions of the app. No
   personal token is used, and `git` fetches and pushes with the token of
   the app too. The agent sessions get the same token: their `git` asks
-  the daemon through `babysitter auth git-credential` before `gh`, and
-  their `gh` runs through a small script that sets `GH_TOKEN` to the
-  token of the app. The script needs `gh` to be installed, and there is
-  no script on Windows.
+  the daemon through `babysitter auth git-credential` before your own
+  credential helpers and `gh`, and their `gh` runs through a small
+  script that sets `GH_TOKEN` to the token of the app. The script needs
+  `gh` to be installed, and there is no script on Windows. While the app
+  is in use, git reaches github.com over HTTPS, even when your git
+  configuration sends `https://github.com/` to SSH; a rule of yours for
+  one owner, such as `https://github.com/my-org/`, still comes first.
 
 The app is [babysitter-orchestrator](https://github.com/apps/babysitter-orchestrator).
 Install it on the repositories it may touch, then sign in from the
@@ -261,7 +264,9 @@ The data directory holds `running.json`, the supervisor socket, the
 `worktrees/` of the watches, the `sessions/` logs of the agents, the
 `logs/` of the daemon and the app (see [Logs](#logs)), the
 `git-hooks/` the daemon installs, the `agent-bin/gh` script that gives
-the `gh` of the agent sessions the token of the GitHub App, and the
+the `gh` of the agent sessions the token of the GitHub App, the
+`git/app.gitconfig` that the git of the agent sessions includes while
+the app is in use, and the
 `update-settings.json` and
 `theme.json` of the app. By default it holds `babysitter.db` too. It
 comes from, in this order:
@@ -914,7 +919,7 @@ watch gets its worktree from it. The clone fetches and pushes on
 github.com with the token of the babysitter GitHub App when the daemon
 uses the app, and with `gh auth git-credential` when it does not. In
 that case, `gh` must be logged in.
-If your git configuration has
+When the daemon does not use the app and your git configuration has
 `url.git@github.com:.insteadOf https://github.com/`, the clone uses SSH
 with your keys instead, and `gh` does not need to be logged in. The
 agent commits with the `user.name` and `user.email` of your global git

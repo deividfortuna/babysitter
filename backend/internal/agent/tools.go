@@ -75,8 +75,8 @@ func SessionEnv(l Launch) ([]string, error) {
 		}
 	}
 	config := [][2]string{{"core.hooksPath", l.HooksDir}}
-	if helper := CredentialHelper(l.Exe, l.DataDir); helper != "" {
-		config = append(config, [2]string{gitHubHelperKey, helper})
+	if l.DataDir != "" {
+		config = append(config, [2]string{"include.path", AppGitConfigPath(l.DataDir)})
 	}
 	env := gitConfigEnv(config)
 	shimmed, err := writeGHShim(l)

@@ -87,7 +87,12 @@ func Run(ctx context.Context, cfg Config) error {
 
 	bus := events.NewBus()
 	st.SetPublisher(bus)
-	auth := newAuthController(ctx, cfg, bus)
+	exe, err := os.Executable()
+	if err != nil {
+		log.Warn("the agent sessions report nothing: the babysitter command is not known", "err", err)
+		exe = ""
+	}
+	auth := newAuthController(ctx, cfg, bus, log, exe)
 	tokenSecret := rand.Text()
 
 	stored, err := st.Settings(ctx)
@@ -113,11 +118,6 @@ func Run(ctx context.Context, cfg Config) error {
 		watcher.WithLongestCheckWait(settings.CheckMaxInterval), watcher.WithLogger(log),
 		watcher.WithAfterPass(func(ctx context.Context) { autoStart(ctx) }))
 	watchOpts := []prwatch.Option{prwatch.WithInterval(settings.WatchInterval), prwatch.WithMaxInterval(settings.WatchMaxInterval)}
-	exe, err := os.Executable()
-	if err != nil {
-		log.Warn("the agent sessions report nothing: the babysitter command is not known", "err", err)
-		exe = ""
-	}
 	git := worktree.New()
 	git.Auth = cfg.Auth.GitEnv
 	checkouts := worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts"))

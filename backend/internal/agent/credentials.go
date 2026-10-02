@@ -10,7 +10,9 @@ import (
 	"runtime"
 )
 
-const gitHubHelperKey = "credential.https://github.com.helper"
+func AppGitConfigPath(dataDir string) string {
+	return filepath.Join(dataDir, "git", "app.gitconfig")
+}
 
 func CredentialHelper(exe, dataDir string) string {
 	if exe == "" {

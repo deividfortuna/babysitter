@@ -570,19 +570,12 @@ func TestGitEnvOnlyForTheApp(t *testing.T) {
 	}
 }
 
-func TestGitEnvSendsTheTokenAsAHeaderAndRewritesSSH(t *testing.T) {
+func TestGitEnvSendsTheTokenAsAHeader(t *testing.T) {
 	env := gitEnv("ghu_abc")
-	want := []string{
-		"GIT_CONFIG_COUNT=3",
-		"GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf",
-		"GIT_CONFIG_VALUE_0=git@github.com:",
-		"GIT_CONFIG_KEY_1=url.https://github.com/.insteadOf",
-		"GIT_CONFIG_VALUE_1=ssh://git@github.com/",
-		"GIT_CONFIG_KEY_2=http.https://github.com/.extraheader",
-		"GIT_CONFIG_VALUE_2=AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46Z2h1X2FiYw==",
-	}
-	if !slices.Equal(env, want) {
-		t.Fatalf("GitEnv = %v, want %v", env, want)
+
+	header := "AUTHORIZATION: basic eC1hY2Nlc3MtdG9rZW46Z2h1X2FiYw=="
+	if !slices.ContainsFunc(env, func(e string) bool { return strings.HasSuffix(e, "="+header) }) {
+		t.Fatalf("GitEnv = %v, want the header %q", env, header)
 	}
 }
 

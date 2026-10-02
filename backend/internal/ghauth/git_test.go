@@ -1,0 +1,146 @@
+package ghauth
+
+import (
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"testing"
+)
+
+func gitURL(t *testing.T, globalConfig string, env []string, url string) string {
+	t.Helper()
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, []byte(globalConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("git", "ls-remote", "--get-url", url)
+	cmd.Env = append(os.Environ(), append(env, "GIT_CONFIG_GLOBAL="+global, "GIT_CONFIG_NOSYSTEM=1")...)
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git ls-remote --get-url %s: %v", url, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+func TestGitEnvKeepsGitHubOnHTTPS(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	toSSH := "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/\n"
+	env := gitEnv("ghu_abc")
+
+	for _, tc := range []struct {
+		name, global, url, want string
+	}{
+		{"https under a rule of the user to SSH", toSSH, "https://github.com/octo/hello.git", "https://github.com/octo/hello.git"},
+		{"an owner that starts with a digit", toSSH, "https://github.com/9lives/hello.git", "https://github.com/9lives/hello.git"},
+		{"an owner in upper case", toSSH, "https://github.com/Octo/hello.git", "https://github.com/Octo/hello.git"},
+		{"scp-like SSH", "", "git@github.com:octo/hello.git", "https://github.com/octo/hello.git"},
+		{"SSH URL", "", "ssh://git@github.com/octo/hello.git", "https://github.com/octo/hello.git"},
+		{"another host", toSSH, "https://gitlab.com/octo/hello.git", "https://gitlab.com/octo/hello.git"},
+		{"a rule of the user for one owner", "[url \"git@github.com:octo/\"]\n\tinsteadOf = https://github.com/octo/\n", "https://github.com/octo/hello.git", "git@github.com:octo/hello.git"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := gitURL(t, tc.global, env, tc.url); got != tc.want {
+				t.Fatalf("git uses %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestWriteGitConfigOnlyWhileTheAppIsInUse(t *testing.T) {
+	h := newHarness(t)
+	a := h.auth()
+	path := filepath.Join(h.dir, "git", "app.gitconfig")
+	read := func() string {
+		t.Helper()
+		if err := a.WriteGitConfig(path, "!babysitter auth git-credential"); err != nil {
+			t.Fatal(err)
+		}
+		b, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(b)
+	}
+
+	if got := read(); got != "" {
+		t.Fatalf("signed out: config = %q, want it empty", got)
+	}
+	h.signIn(t, a)
+	if got := read(); got != appGitConfig("!babysitter auth git-credential") {
+		t.Fatalf("signed in: config = %q, want the rules of the app", got)
+	}
+	t.Setenv("GITHUB_TOKEN", "ghp_env")
+	if got := read(); got != "" {
+		t.Fatalf("GITHUB_TOKEN first: config = %q, want it empty", got)
+	}
+}
+
+func TestTheGitConfigKeepsGitHubOnHTTPSThroughAnInclude(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	include := filepath.Join(t.TempDir(), "app.gitconfig")
+	if err := os.WriteFile(include, []byte(appGitConfig("")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=include.path", "GIT_CONFIG_VALUE_0=" + include}
+	toSSH := "[url \"git@github.com:\"]\n\tinsteadOf = https://github.com/\n"
+
+	if got := gitURL(t, toSSH, env, "https://github.com/octo/hello.git"); got != "https://github.com/octo/hello.git" {
+		t.Fatalf("git uses %s, want https", got)
+	}
+	if got := gitURL(t, "", env, "git@github.com:octo/hello.git"); got != "https://github.com/octo/hello.git" {
+		t.Fatalf("git uses %s, want https", got)
+	}
+}
+
+func TestTheGitConfigAsksTheAppBeforeTheHelpersOfTheUser(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake helpers are shell scripts")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	dir := filepath.Join(t.TempDir(), "my tools")
+	personal := helperScript(t, dir, "personal", "gho_personal")
+	app := helperScript(t, dir, "babysitter", "ghu_app")
+	include := filepath.Join(t.TempDir(), "app.gitconfig")
+	if err := os.WriteFile(include, []byte(appGitConfig("!'"+app+"'")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	userHelpers := "[credential \"https://github.com\"]\n\thelper =\n\thelper = !'" + personal + "'\n"
+	if err := os.WriteFile(global, []byte(userHelpers), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("git", "credential", "fill")
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+global, "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0",
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=include.path", "GIT_CONFIG_VALUE_0="+include)
+	cmd.Stdin = strings.NewReader("protocol=https\nhost=github.com\n\n")
+	out, err := cmd.Output()
+	if err != nil {
+		t.Fatalf("git credential fill: %v", err)
+	}
+
+	if !strings.Contains(string(out), "password=ghu_app\n") {
+		t.Fatalf("git credential fill = %q, want the token of the app before the helper of the user", out)
+	}
+}
+
+func helperScript(t *testing.T, dir, name, password string) string {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, name)
+	body := "#!/bin/sh\n[ \"$1\" = get ] || exit 0\nprintf 'username=x-access-token\\npassword=" + password + "\\n'\n"
+	if err := os.WriteFile(path, []byte(body), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	return path
+}

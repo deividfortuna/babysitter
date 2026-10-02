@@ -1,80 +1,45 @@
 package agent
 
 import (
-	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"strconv"
 	"strings"
 	"testing"
 )
 
-func TestSessionEnvAsksBabysitterForGitCredentials(t *testing.T) {
+func TestSessionEnvIncludesTheGitConfigOfTheApp(t *testing.T) {
 	t.Parallel()
-	l := Launch{HooksDir: filepath.Join(t.TempDir(), "hooks"), Exe: "/opt/my tools/babysitter", DataDir: "/data"}
+	l := Launch{HooksDir: filepath.Join(t.TempDir(), "hooks"), Exe: "/opt/babysitter", DataDir: "/data"}
 
 	env, err := SessionEnv(l)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	want := []string{
-		"GIT_CONFIG_COUNT=2",
-		"GIT_CONFIG_KEY_1=credential.https://github.com.helper",
-		"GIT_CONFIG_VALUE_1=!'/opt/my tools/babysitter' auth git-credential --data-dir '/data'",
+	config := gitConfig(env)
+	if got, want := config["include.path"], filepath.Join("/data", "git", "app.gitconfig"); got != want {
+		t.Fatalf("include.path = %q, want %q", got, want)
 	}
-	for _, w := range want {
-		if !slices.Contains(env, w) {
-			t.Fatalf("env = %q, lacks %q", env, w)
-		}
+	if helper, ok := config["credential.https://github.com.helper"]; ok {
+		t.Fatalf("credential helper = %q, want it in the included file only", helper)
 	}
 }
 
-func TestGitRunsTheBabysitterHelper(t *testing.T) {
-	t.Parallel()
-	if runtime.GOOS == "windows" {
-		t.Skip("the fake babysitter is a shell script")
+func gitConfig(env []string) map[string]string {
+	vars := map[string]string{}
+	for _, e := range env {
+		k, v, _ := strings.Cut(e, "=")
+		vars[k] = v
 	}
-	if _, err := exec.LookPath("git"); err != nil {
-		t.Skip("git is not installed")
+	config := map[string]string{}
+	for i := 0; vars["GIT_CONFIG_KEY_"+strconv.Itoa(i)] != ""; i++ {
+		config[vars["GIT_CONFIG_KEY_"+strconv.Itoa(i)]] = vars["GIT_CONFIG_VALUE_"+strconv.Itoa(i)]
 	}
-	dir := filepath.Join(t.TempDir(), "my tools")
-	if err := os.MkdirAll(dir, 0o750); err != nil {
-		t.Fatal(err)
-	}
-	babysitter := script(t, dir, "babysitter", "#!/bin/sh\n"+
-		"[ \"$*\" = \"auth git-credential --data-dir /data dir get\" ] || exit 1\n"+
-		"printf 'username=x-access-token\\npassword=ghu_app\\n'\n")
-	env, err := SessionEnv(Launch{HooksDir: filepath.Join(t.TempDir(), "hooks"), Exe: babysitter, DataDir: "/data dir"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	cmd := exec.Command("git", "credential", "fill")
-	cmd.Env = append(os.Environ(), append(env, "GIT_TERMINAL_PROMPT=0", "GIT_CONFIG_GLOBAL="+os.DevNull, "GIT_CONFIG_NOSYSTEM=1")...)
-	cmd.Stdin = strings.NewReader("protocol=https\nhost=github.com\n\n")
-	out, err := cmd.Output()
-	if err != nil {
-		t.Fatalf("git credential fill: %v %s", err, stderr(err))
-	}
-	if !strings.Contains(string(out), "password=ghu_app\n") {
-		t.Fatalf("git credential fill = %q, want the app token", out)
-	}
-}
-
-func TestSessionEnvWithoutTheBabysitterCommandHasNoHelper(t *testing.T) {
-	t.Parallel()
-
-	env, err := SessionEnv(Launch{HooksDir: filepath.Join(t.TempDir(), "hooks"), DataDir: "/data"})
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	if !slices.Contains(env, "GIT_CONFIG_COUNT=1") {
-		t.Fatalf("env = %q, want the hooks path only", env)
-	}
+	return config
 }
 
 func TestTheGHShimGivesGHTheAppToken(t *testing.T) {
@@ -127,13 +92,6 @@ func TestNoGHShimWithoutGH(t *testing.T) {
 	if slices.ContainsFunc(env, func(e string) bool { return strings.HasPrefix(e, "PATH=") }) {
 		t.Fatalf("env = %q, want the PATH of the daemon when gh is not installed", env)
 	}
-}
-
-func stderr(err error) string {
-	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
-		return string(exitErr.Stderr)
-	}
-	return ""
 }
 
 func script(t *testing.T, dir, name, body string) string {

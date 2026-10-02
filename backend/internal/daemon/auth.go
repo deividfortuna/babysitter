@@ -3,7 +3,9 @@ package daemon
 import (
 	"context"
 	"errors"
+	"log/slog"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
@@ -17,8 +19,19 @@ type authController struct {
 	newClient watcher.ClientFunc
 }
 
-func newAuthController(ctx context.Context, cfg Config, bus *events.Bus) *authController {
-	cfg.Auth.OnChange(func() { bus.Publish(events.AuthChanged, "", 0) })
+func newAuthController(ctx context.Context, cfg Config, bus *events.Bus, log *slog.Logger, exe string) *authController {
+	gitConfig := agent.AppGitConfigPath(cfg.DataDir)
+	helper := agent.CredentialHelper(exe, cfg.DataDir)
+	writeGitConfig := func() {
+		if err := cfg.Auth.WriteGitConfig(gitConfig, helper); err != nil {
+			log.Warn("the agent sessions may reach GitHub without the app", "err", err)
+		}
+	}
+	writeGitConfig()
+	cfg.Auth.OnChange(func() {
+		writeGitConfig()
+		bus.Publish(events.AuthChanged, "", 0)
+	})
 	return &authController{
 		auth:      cfg.Auth,
 		signIns:   cfg.Auth.SignIns(ctx, cfg.Whoami),
