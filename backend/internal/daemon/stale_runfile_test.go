@@ -9,6 +9,7 @@ import (
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/runfile"
 	"github.com/deividfortuna/babysitter/internal/testutil"
@@ -27,6 +28,7 @@ func TestRunReplacesARunFileThatNamesThisProcess(t *testing.T) {
 	gh := ghfake.New().Serve(t)
 	cfg := Config{
 		DataDir:    dir,
+		Auth:       ghauth.New(dir, ghauth.WithFlag("token")),
 		DBPath:     filepath.Join(dir, "babysitter.db"),
 		AgentBin:   agentOff,
 		CopilotBin: filepath.Join(dir, "no-copilot"),

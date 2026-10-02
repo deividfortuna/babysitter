@@ -835,11 +835,6 @@ export interface components {
             avatarUrl?: string;
             /** @description Why the token of the daemon or the installations cannot be read */
             error?: string;
-            /**
-             * Format: date-time
-             * @description When the token of the app expires; the daemon renews it before
-             */
-            expiresAt?: string | null;
             /** @description Where the user installs the app on more repositories */
             installUrl: string;
             /** @description The accounts the app is installed on, read only while the app gives the token */

@@ -8,6 +8,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/deividfortuna/babysitter/internal/ghclient"
 )
 
 const (
@@ -24,19 +26,15 @@ type Credentials struct {
 	Token
 }
 
-type File struct {
+type credentialsFile struct {
 	path string
 }
 
-func NewFile(dataDir string) File {
-	return File{path: filepath.Join(dataDir, signInFileName)}
+func newCredentialsFile(dataDir string) credentialsFile {
+	return credentialsFile{path: filepath.Join(dataDir, signInFileName)}
 }
 
-func (f File) Path() string {
-	return f.path
-}
-
-func (f File) Load() (Credentials, error) {
+func (f credentialsFile) Load() (Credentials, error) {
 	b, err := os.ReadFile(f.path)
 	if errors.Is(err, os.ErrNotExist) {
 		return Credentials{}, ErrSignedOut
@@ -54,37 +52,37 @@ func (f File) Load() (Credentials, error) {
 	return c, nil
 }
 
-func (f File) Save(c Credentials) error {
+func (f credentialsFile) Save(c Credentials) error {
 	b, err := json.MarshalIndent(c, "", "  ")
 	if err != nil {
 		return err
 	}
-	if err := os.MkdirAll(filepath.Dir(f.path), 0o700); err != nil {
-		return fmt.Errorf("save the GitHub App sign in: %w", err)
-	}
-	tmp, err := os.CreateTemp(filepath.Dir(f.path), signInFileName+".*")
-	if err != nil {
-		return fmt.Errorf("save the GitHub App sign in: %w", err)
-	}
-	defer func() { _ = os.Remove(tmp.Name()) }()
-	if err := tmp.Chmod(0o600); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("save the GitHub App sign in: %w", err)
-	}
-	if _, err := tmp.Write(b); err != nil {
-		_ = tmp.Close()
-		return fmt.Errorf("save the GitHub App sign in: %w", err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("save the GitHub App sign in: %w", err)
-	}
-	if err := os.Rename(tmp.Name(), f.path); err != nil {
+	if err := writeAtomic(f.path, b); err != nil {
 		return fmt.Errorf("save the GitHub App sign in: %w", err)
 	}
 	return nil
 }
 
-func (f File) Remove() error {
+func writeAtomic(path string, b []byte) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return err
+	}
+	tmp, err := os.CreateTemp(filepath.Dir(path), filepath.Base(path)+".*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(b); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
+}
+
+func (f credentialsFile) Remove() error {
 	err := os.Remove(f.path)
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return fmt.Errorf("remove the GitHub App sign in: %w", err)
@@ -92,7 +90,7 @@ func (f File) Remove() error {
 	return nil
 }
 
-func (f File) Lock(ctx context.Context) (unlock func(), err error) {
+func (f credentialsFile) Lock(ctx context.Context) (unlock func(), err error) {
 	path := f.path + ".lock"
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
@@ -107,12 +105,8 @@ func (f File) Lock(ctx context.Context) (unlock func(), err error) {
 			return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
 		}
 		removeStale(path)
-		t := time.NewTimer(lockRetry)
-		select {
-		case <-ctx.Done():
-			t.Stop()
-			return nil, fmt.Errorf("lock the GitHub App sign in: %w", ctx.Err())
-		case <-t.C:
+		if err := ghclient.SleepCtx(ctx, lockRetry); err != nil {
+			return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
 		}
 	}
 }

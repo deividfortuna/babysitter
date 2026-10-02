@@ -1,7 +1,8 @@
-import { useEffect, useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { CheckIcon, CircleAlertIcon, CopyIcon, ExternalLinkIcon, FolderPlusIcon, InfoIcon } from "lucide-react";
 import { GitHubIcon } from "@/components/github-icon";
 import { SettingsCard, SettingsError, SettingsSection } from "@/components/settings-page";
+import { LiveDot } from "@/components/status-badges";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,7 +18,9 @@ import {
   type SignInPrompt,
   type TokenOrigin,
 } from "@/hooks/useAuth";
+import { useNow } from "@/hooks/use-now";
 import { useCopy } from "@/hooks/useCopy";
+import { avatarSource } from "@/lib/avatar";
 import { initials } from "@/lib/initials";
 import { cn } from "@/lib/utils";
 
@@ -53,11 +56,31 @@ function Description({ children }: { children: ReactNode }) {
   return <p className="text-body/4.5 text-muted-foreground">{children}</p>;
 }
 
-function IconTile({ children }: { children: ReactNode }) {
+type IconCardProps = {
+  icon: ReactNode;
+  title: string;
+  description: ReactNode;
+  action?: ReactNode;
+  children?: ReactNode;
+  footer?: ReactNode;
+};
+
+function IconCard({ icon, title, description, action, children, footer }: IconCardProps) {
   return (
-    <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background [&_svg]:size-5">
-      {children}
-    </div>
+    <SettingsCard>
+      <div className="flex items-start gap-4 p-5">
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg border bg-background [&_svg]:size-5">
+          {icon}
+        </div>
+        <div className="flex min-w-0 flex-1 flex-col gap-1">
+          <Title>{title}</Title>
+          <Description>{description}</Description>
+          {children}
+        </div>
+        {action}
+      </div>
+      {footer}
+    </SettingsCard>
   );
 }
 
@@ -81,10 +104,6 @@ function AccountAvatar({ login, src, className }: { login: string; src?: string;
   );
 }
 
-function Pip({ className }: { className: string }) {
-  return <span aria-hidden className={cn("size-1.5 rounded-full", className)} />;
-}
-
 function failureOf(auth: Auth, start: StartSignIn): string | undefined {
   if (start.error) return start.error.message;
   if (!auth.signInFailure) return undefined;
@@ -97,78 +116,55 @@ function ConnectCard({ auth, start }: { auth: Auth; start: StartSignIn }) {
   const failure = failureOf(auth, start);
   const label = auth.signInFailure === "expired" ? "Get a new code" : "Sign in with GitHub";
   return (
-    <SettingsCard>
-      <div className="flex items-start gap-4 p-5">
-        <IconTile>
-          <GitHubIcon />
-        </IconTile>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Title>Connect your GitHub account</Title>
-          <Description>
-            Sign in with the babysitter GitHub App. The daemon then reaches only the repositories you choose, and keeps
-            no personal token.
-          </Description>
-          {failure ? (
-            <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-body/4.5 text-destructive">
-              <CircleAlertIcon className="mt-px size-4 shrink-0" />
-              <span>{failure}</span>
-            </p>
-          ) : null}
-        </div>
+    <IconCard
+      icon={<GitHubIcon />}
+      title="Connect your GitHub account"
+      description="Sign in with the babysitter GitHub App. The daemon then reaches only the repositories you choose, and keeps no personal token."
+      action={
         <Button disabled={start.isPending} onClick={() => start.mutate()}>
           {start.isPending ? <Spinner data-icon="inline-start" /> : null}
           {label}
         </Button>
-      </div>
-      <ol className="grid grid-cols-3 gap-4 px-5 py-3.5">
-        {steps.map((step, index) => (
-          <li key={step} className="flex flex-col gap-1">
-            <span className="eyebrow">Step {index + 1}</span>
-            <span className="text-body/4.5">{step}</span>
-          </li>
-        ))}
-      </ol>
-    </SettingsCard>
+      }
+      footer={
+        <ol className="grid grid-cols-3 gap-4 px-5 py-3.5">
+          {steps.map((step, index) => (
+            <li key={step} className="flex flex-col gap-1">
+              <span className="eyebrow">Step {index + 1}</span>
+              <span className="text-body/4.5">{step}</span>
+            </li>
+          ))}
+        </ol>
+      }
+    >
+      {failure ? (
+        <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-body/4.5 text-destructive">
+          <CircleAlertIcon className="mt-px size-4 shrink-0" />
+          <span>{failure}</span>
+        </p>
+      ) : null}
+    </IconCard>
   );
 }
 
 function NotInBuild() {
   return (
-    <SettingsCard>
-      <div className="flex items-start gap-4 p-5">
-        <IconTile>
-          <GitHubIcon />
-        </IconTile>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Title>Not in this build</Title>
-          <Description>This build of babysitter has no GitHub App.</Description>
-        </div>
-      </div>
-    </SettingsCard>
+    <IconCard
+      icon={<GitHubIcon />}
+      title="Not in this build"
+      description="This build of babysitter has no GitHub App."
+    />
   );
 }
 
 function useSecondsLeft(until: string) {
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), 1_000);
-    return () => clearInterval(id);
-  }, []);
+  const now = useNow(1_000);
   return Math.max(0, Math.round((Date.parse(until) - now) / 1_000));
 }
 
 function clock(seconds: number) {
   const minutes = Math.floor(seconds / 60);
   return `${minutes}:${String(seconds % 60).padStart(2, "0")}`;
-}
-
-function LiveDot() {
-  return (
-    <span aria-hidden className="relative inline-flex size-2 shrink-0">
-      <span className="absolute inset-0 animate-ping rounded-full bg-attention opacity-60 motion-reduce:animate-none" />
-      <span className="absolute inset-0 rounded-full bg-attention" />
-    </span>
-  );
 }
 
 function CodeCard({ prompt }: { prompt: SignInPrompt }) {
@@ -208,7 +204,7 @@ function CodeCard({ prompt }: { prompt: SignInPrompt }) {
         </Button>
       </div>
       <div role="status" className="flex items-center gap-2.5 rounded-b-lg border-t bg-muted/60 px-5 py-2.5">
-        <LiveDot />
+        <LiveDot tone="attention" title="" className="size-2" />
         <span className="flex-1 text-body/4.5 text-muted-foreground">
           Waiting for you to approve on GitHub. This page moves on by itself.
         </span>
@@ -256,7 +252,7 @@ function SignOutButton({ signOut, variant = "outline" }: { signOut: SignOut; var
 function StateBadge({ label, pip }: { label: string; pip: string }) {
   return (
     <Badge variant="outline" className="h-5 gap-1.5 text-foreground">
-      <Pip className={pip} />
+      <span aria-hidden className={cn("size-1.5 rounded-full", pip)} />
       {label}
     </Badge>
   );
@@ -264,33 +260,30 @@ function StateBadge({ label, pip }: { label: string; pip: string }) {
 
 function ChooseRepositories({ installUrl }: { installUrl: string }) {
   return (
-    <SettingsCard>
-      <div className="flex items-start gap-4 p-5">
-        <IconTile>
-          <FolderPlusIcon />
-        </IconTile>
-        <div className="flex min-w-0 flex-1 flex-col gap-1">
-          <Title>Choose the repositories babysitter may watch</Title>
-          <Description>
-            The app is not installed on any account yet, so the daemon cannot reach a repository. Install it on GitHub,
-            then come back here.
-          </Description>
-        </div>
+    <IconCard
+      icon={<FolderPlusIcon />}
+      title="Choose the repositories babysitter may watch"
+      description="The app is not installed on any account yet, so the daemon cannot reach a repository. Install it on GitHub, then come back here."
+      action={
         <Button asChild>
           <a href={installUrl} target="_blank" rel="noreferrer">
             Choose repositories
             <ExternalLinkIcon data-icon="inline-end" />
           </a>
         </Button>
-      </div>
-    </SettingsCard>
+      }
+    />
   );
 }
 
 function InstallationRow({ installation }: { installation: AuthInstallation }) {
   return (
     <div className="flex items-center gap-2.5 px-5 py-3">
-      <AccountAvatar login={installation.login} src={installation.avatarUrl} className="size-5" />
+      <AccountAvatar
+        login={installation.login}
+        src={avatarSource(installation.login, false, installation.avatarUrl)}
+        className="size-5"
+      />
       <span className="flex-1 text-sm font-medium">{installation.login}</span>
       <span className="font-mono text-2xs text-muted-foreground">
         {installation.organization ? "organization" : "personal account"}

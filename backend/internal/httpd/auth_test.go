@@ -19,6 +19,7 @@ type fakeAuth struct {
 	cancels    int
 	signOuts   int
 	signOutErr error
+	bus        *events.Bus
 }
 
 func (f *fakeAuth) Status(context.Context) Auth { return f.status }
@@ -29,6 +30,9 @@ func (f *fakeAuth) CancelSignIn() { f.cancels++ }
 
 func (f *fakeAuth) SignOut() error {
 	f.signOuts++
+	if f.bus != nil {
+		f.bus.Publish(events.AuthChanged, "", 0)
+	}
 	return f.signOutErr
 }
 
@@ -39,7 +43,7 @@ func authRouter(t *testing.T, auth AuthController) (http.Handler, *events.Bus) {
 
 func TestGetAuthAnswersTheStatus(t *testing.T) {
 	want := Auth{
-		State: AuthConnected, Origin: "app", AppAvailable: true, Login: "octocat",
+		State: "connected", Origin: "app", AppAvailable: true, Login: "octocat",
 		InstallURL:    "https://github.com/apps/babysitter/installations/new",
 		Installations: []AuthInstallation{{Login: "acme", AvatarURL: "https://avatars.githubusercontent.com/acme", Organization: true}},
 	}
@@ -64,11 +68,9 @@ func TestAuthIsUnavailableWithoutController(t *testing.T) {
 	}
 }
 
-func TestStartSignInAnswersThePromptAndTellsTheFeed(t *testing.T) {
+func TestStartSignInAnswersThePrompt(t *testing.T) {
 	prompt := SignInPrompt{UserCode: "ABCD-1234", VerificationURI: "https://github.com/login/device", ExpiresAt: time.Date(2026, 10, 2, 9, 15, 0, 0, time.UTC)}
-	h, bus := authRouter(t, &fakeAuth{prompt: prompt})
-	var seen []events.Type
-	bus.Subscribe(func(e events.Event) { seen = append(seen, e.Type) })
+	h, _ := authRouter(t, &fakeAuth{prompt: prompt})
 
 	var got SignInPrompt
 	if rec := call(t, h, http.MethodPost, "/auth/signin", "", &got); rec.Code != http.StatusAccepted {
@@ -76,9 +78,6 @@ func TestStartSignInAnswersThePromptAndTellsTheFeed(t *testing.T) {
 	}
 	if got != prompt {
 		t.Fatalf("prompt = %+v, want %+v", got, prompt)
-	}
-	if len(seen) != 1 || seen[0] != events.AuthChanged {
-		t.Fatalf("events = %v, want one auth_changed", seen)
 	}
 }
 
@@ -108,8 +107,8 @@ func TestCancelSignIn(t *testing.T) {
 }
 
 func TestSignOutForgetsTheViewer(t *testing.T) {
-	auth := &fakeAuth{}
 	bus := events.NewBus()
+	auth := &fakeAuth{bus: bus}
 	logins := []string{"from-the-app", "from-gh"}
 	h := NewRouter(Deps{Log: testutil.Logger(t), Bus: bus, Auth: auth, Viewer: func(context.Context) (Viewer, error) {
 		login := logins[0]

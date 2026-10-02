@@ -12,33 +12,39 @@ import (
 )
 
 type authOutput struct {
-	Origin        string     `json:"origin"`
-	AppAvailable  bool       `json:"appAvailable"`
-	SignedIn      bool       `json:"signedIn"`
-	Login         string     `json:"login,omitempty"`
-	ExpiresAt     *time.Time `json:"expiresAt,omitempty"`
-	InstallURL    string     `json:"installUrl"`
-	Installations []string   `json:"installations,omitempty"`
-	Error         string     `json:"error,omitempty"`
+	State         ghauth.State  `json:"state"`
+	Origin        ghauth.Origin `json:"origin"`
+	AppAvailable  bool          `json:"appAvailable"`
+	Login         string        `json:"login,omitempty"`
+	ExpiresAt     *time.Time    `json:"expiresAt,omitempty"`
+	InstallURL    string        `json:"installUrl"`
+	Installations []string      `json:"installations,omitempty"`
+	Error         string        `json:"error,omitempty"`
 }
 
-var originWords = map[string]string{
-	"":                        "none",
-	string(ghauth.OriginFlag): "the --token flag",
-	string(ghauth.OriginEnv):  "the GITHUB_TOKEN environment variable",
-	string(ghauth.OriginApp):  "the babysitter GitHub App",
-	string(ghauth.OriginGH):   "the gh CLI",
+var originWords = map[ghauth.Origin]string{
+	"":                "none",
+	ghauth.OriginFlag: "the --token flag",
+	ghauth.OriginEnv:  "the GITHUB_TOKEN environment variable",
+	ghauth.OriginApp:  "the babysitter GitHub App",
+	ghauth.OriginGH:   "the gh CLI",
+}
+
+var stateWords = map[ghauth.State]string{
+	ghauth.StateSignedOut: "not signed in",
+	ghauth.StateConnected: "connected",
+	ghauth.StateNotInUse:  "signed in, not in use",
+	ghauth.StateExpired:   "the sign in expired, run 'babysitter auth login'",
 }
 
 func (a authOutput) writeText(w io.Writer) error {
 	fmt.Fprintf(w, "Token from:    %s\n", originWords[a.Origin])
-	if a.SignedIn {
+	fmt.Fprintf(w, "App:           %s\n", stateWords[a.State])
+	if a.State != ghauth.StateSignedOut {
 		fmt.Fprintf(w, "App account:   %s\n", a.Login)
 		fmt.Fprintf(w, "Installed on:  %s\n", kindsWord(a.Installations))
-	} else {
-		fmt.Fprintln(w, "App account:   not signed in")
 	}
-	if a.SignedIn && a.Origin != string(ghauth.OriginApp) && a.Error == "" {
+	if a.State == ghauth.StateNotInUse {
 		fmt.Fprintf(w, "Note:          %s comes before the app\n", originWords[a.Origin])
 	}
 	if a.Error != "" {
@@ -90,8 +96,8 @@ func newAuthLoginCmd(opts *options) *cobra.Command {
 			}
 			fmt.Fprintf(out, "Signed in to GitHub as %s with the babysitter GitHub App.\n", creds.Login)
 			fmt.Fprintf(out, "Install the app on the repositories it may watch: %s\n", auth.App().InstallURL())
-			if st := auth.Status(ctx); st.Origin != ghauth.OriginApp {
-				fmt.Fprintf(out, "Note: %s comes before the app, so babysitter does not use the app yet.\n", originWords[string(st.Origin)])
+			if st := auth.Status(ctx); st.State == ghauth.StateNotInUse {
+				fmt.Fprintf(out, "Note: %s comes before the app, so babysitter does not use the app yet.\n", originWords[st.Origin])
 			}
 			return nil
 		},
@@ -111,16 +117,16 @@ func newAuthStatusCmd(opts *options) *cobra.Command {
 			}
 			st := auth.Status(ctx)
 			out := authOutput{
-				Origin:       string(st.Origin),
-				AppAvailable: st.Available,
-				SignedIn:     st.SignedIn,
+				State:        st.State,
+				Origin:       st.Origin,
+				AppAvailable: auth.App().Available(),
 				Login:        st.Login,
-				InstallURL:   st.InstallURL,
+				InstallURL:   auth.App().InstallURL(),
 			}
 			if st.Err != nil {
 				out.Error = st.Err.Error()
 			}
-			if st.SignedIn && !st.ExpiresAt.IsZero() {
+			if !st.ExpiresAt.IsZero() {
 				out.ExpiresAt = &st.ExpiresAt
 			}
 			if st.Origin == ghauth.OriginApp {

@@ -583,7 +583,7 @@ func TestGitNeverPromptsAndPushesWithoutTheHooks(t *testing.T) {
 	}
 }
 
-func TestFetchAndPushCarryTheAuthEnvAndLocalCommandsDoNot(t *testing.T) {
+func TestEveryGitCommandCarriesTheAuthEnv(t *testing.T) {
 	t.Parallel()
 	envs := map[string][]string{}
 	g := &Runner{
@@ -600,13 +600,10 @@ func TestFetchAndPushCarryTheAuthEnvAndLocalCommandsDoNot(t *testing.T) {
 	if err := g.Push(ctx, "/wt", Push{SHA: "abc", Branch: "fix"}); err != nil {
 		t.Fatal(err)
 	}
-	for _, cmd := range []string{"fetch", "push"} {
+	for _, cmd := range []string{"fetch", "push", "rev-parse"} {
 		if !slices.Contains(envs[cmd], "GIT_CONFIG_COUNT=1") || !slices.Contains(envs[cmd], "GIT_TERMINAL_PROMPT=0") {
-			t.Errorf("env of %s = %v, want the auth env and no prompt", cmd, envs[cmd])
+			t.Errorf("env of %s = %v, want the auth env and no prompt: a partial clone fetches objects on any command", cmd, envs[cmd])
 		}
-	}
-	if slices.Contains(envs["rev-parse"], "GIT_CONFIG_COUNT=1") {
-		t.Errorf("env of rev-parse = %v, want no auth env", envs["rev-parse"])
 	}
 }
 

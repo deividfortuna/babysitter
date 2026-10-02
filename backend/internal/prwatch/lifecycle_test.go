@@ -209,7 +209,10 @@ func TestStartStopsWhenTheTokenCannotReachTheRepository(t *testing.T) {
 		t.Fatalf("Start() error = %v, want %v", err, notInstalled)
 	}
 	if !slices.Equal(asked, []string{"octo/hello"}) {
-		t.Fatalf("access asked for %v, want the head repository", asked)
+		t.Fatalf("access asked for %v, want the repository once", asked)
+	}
+	if n := fx.api.Count(ghfake.RoutePull); n != 0 {
+		t.Fatalf("the start read the pull request %d times before the access check refused it", n)
 	}
 	if created := fx.git.createdDirs(); len(created) != 0 {
 		t.Fatalf("a rejected start made a worktree: %v", created)

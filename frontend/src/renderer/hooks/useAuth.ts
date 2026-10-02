@@ -8,14 +8,11 @@ export type SignInPrompt = components["schemas"]["HttpdSignInPrompt"];
 export type AuthInstallation = components["schemas"]["HttpdAuthInstallation"];
 export type TokenOrigin = Auth["origin"];
 
-const WAITING_POLL_MS = 5_000;
-
 export function useAuth() {
   return useQuery({
     queryKey: authQueryKey,
     staleTime: Infinity,
     retry: false,
-    refetchInterval: (query) => (query.state.data?.signIn ? WAITING_POLL_MS : false),
     queryFn: async () => {
       const { data, error } = await api().GET("/api/v1/auth");
       if (error) throw new Error(apiErrorMessage(error, "Could not read the GitHub access of the daemon."));

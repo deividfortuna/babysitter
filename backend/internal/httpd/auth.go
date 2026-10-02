@@ -11,11 +11,7 @@ import (
 )
 
 const (
-	AuthSignedOut = "signed_out"
-	AuthWaiting   = "waiting"
-	AuthConnected = "connected"
-	AuthNotInUse  = "not_in_use"
-	AuthExpired   = "expired"
+	AuthWaiting = "waiting"
 
 	SignInCodeExpired = "expired"
 	SignInDenied      = "denied"
@@ -28,7 +24,6 @@ type Auth struct {
 	AppAvailable  bool               `json:"appAvailable" description:"This build of babysitter knows the babysitter GitHub App"`
 	Login         string             `json:"login,omitempty" description:"The account signed in with the app"`
 	AvatarURL     string             `json:"avatarUrl,omitempty" description:"The avatar of the account signed in with the app"`
-	ExpiresAt     *time.Time         `json:"expiresAt,omitempty" description:"When the token of the app expires; the daemon renews it before"`
 	InstallURL    string             `json:"installUrl" description:"Where the user installs the app on more repositories"`
 	Installations []AuthInstallation `json:"installations" description:"The accounts the app is installed on, read only while the app gives the token"`
 	SignIn        *SignInPrompt      `json:"signIn,omitempty" description:"The sign in that waits for the user to enter the code on GitHub"`
@@ -84,7 +79,6 @@ func (a *api) handleStartSignIn(w http.ResponseWriter, r *http.Request) {
 	if signInErrors.write(w, err) {
 		return
 	}
-	a.publishAuth()
 	writeJSON(w, http.StatusAccepted, prompt)
 }
 
@@ -103,14 +97,7 @@ func (a *api) handleSignOut(w http.ResponseWriter, r *http.Request) {
 	if signOutErrors.write(w, a.auth.SignOut()) {
 		return
 	}
-	a.publishAuth()
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func (a *api) publishAuth() {
-	if a.bus != nil {
-		a.bus.Publish(events.AuthChanged, "", 0)
-	}
 }
 
 func (a *api) forgetViewerOnAuthChange() {

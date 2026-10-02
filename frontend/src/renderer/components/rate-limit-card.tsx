@@ -1,5 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAlwaysShowRateLimit } from "@/hooks/use-always-show-rate-limit";
+import { useNow } from "@/hooks/use-now";
 import { useRateLimit, type RateLimit } from "@/hooks/useRateLimit";
 import { Button } from "@/components/ui/button";
 import { Card, CardAction, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
@@ -34,15 +35,6 @@ const TICK_MS = 15_000;
 const RELEVANT_USED_PERCENT = 50;
 
 const count = new Intl.NumberFormat("en-US");
-
-function useNow(intervalMs: number) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(id);
-  }, [intervalMs]);
-  return now;
-}
 
 function minutesUntil(iso: string, now: number): number {
   return Math.max(1, Math.ceil((new Date(iso).getTime() - now) / 60_000));

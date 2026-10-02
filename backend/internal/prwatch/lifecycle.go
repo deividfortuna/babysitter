@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -183,9 +184,8 @@ func (s *Service) checkStart(ctx context.Context, client *github.Client, req Sta
 		approvals int
 		wg        sync.WaitGroup
 	)
-	errs := make([]error, 5)
+	errs := make([]error, 4)
 	wg.Go(func() { errs[0] = checkPush(ctx, client, c) })
-	wg.Go(func() { errs[4] = s.checkAccess(ctx, client, c.headOwner, c.headName) })
 	wg.Go(func() { acc.botLogin, errs[1] = currentLogin(ctx, client) })
 	wg.Go(func() { acc.userName, acc.userEmail, errs[2] = gitIdentity(ctx, c.dir) })
 	wg.Go(func() { approvals, errs[3] = s.approvalsRequired(ctx, client, req, key, pr.BaseBranch) })
@@ -199,6 +199,30 @@ func (s *Service) checkStart(ctx context.Context, client *github.Client, req Sta
 		return access{}, 0, err
 	}
 	return acc, approvals, nil
+}
+
+func (s *Service) reachable(ctx context.Context, client *github.Client, repos ...string) error {
+	for _, repo := range repos {
+		owner, name, err := store.ParseFullName(repo)
+		if err != nil {
+			return err
+		}
+		if err := s.checkAccess(ctx, client, owner, name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func unchecked(checked []string, repos ...string) []string {
+	var out []string
+	for _, repo := range repos {
+		seen := slices.ContainsFunc(slices.Concat(checked, out), func(c string) bool { return strings.EqualFold(c, repo) })
+		if !seen {
+			out = append(out, repo)
+		}
+	}
+	return out
 }
 
 func (s *Service) readyHead(ctx context.Context, c checkout, headRef string) error {
@@ -258,9 +282,19 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	if err != nil {
 		return store.Watch{}, err
 	}
+	var checked []string
+	if req.Target.Complete() {
+		checked = []string{req.Target.Owner + "/" + req.Target.Name}
+		if err := s.reachable(ctx, client, checked...); err != nil {
+			return store.Watch{}, err
+		}
+	}
 	now := s.now()
 	snap, err := snapshot.Collect(ctx, client, s.store, req.Target, s.snapshotOptions(req.SourceDir))
 	if err != nil {
+		return store.Watch{}, err
+	}
+	if err := s.reachable(ctx, client, unchecked(checked, snap.PR.Repo, snap.PR.HeadRepo)...); err != nil {
 		return store.Watch{}, err
 	}
 	if snap.PR.Merged || snap.PR.Closed {

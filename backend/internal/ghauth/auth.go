@@ -31,13 +31,12 @@ var (
 type Credential struct {
 	Token  string
 	Origin Origin
-	Login  string
 }
 
 type Auth struct {
 	app   App
 	flag  string
-	file  File
+	file  credentialsFile
 	oauth OAuth
 	gh    func(ctx context.Context) (string, error)
 	now   func() time.Time
@@ -73,7 +72,7 @@ func WithClock(now func() time.Time) Option {
 }
 
 func New(dataDir string, opts ...Option) *Auth {
-	a := &Auth{app: DefaultApp(), file: NewFile(dataDir), gh: ghCLIToken, now: time.Now}
+	a := &Auth{app: DefaultApp(), file: newCredentialsFile(dataDir), gh: ghCLIToken, now: time.Now}
 	for _, opt := range opts {
 		opt(a)
 	}
@@ -97,15 +96,12 @@ func (a *Auth) OnChange(fn func()) {
 }
 
 func (a *Auth) Credential(ctx context.Context) (Credential, error) {
-	if a.flag != "" {
-		return Credential{Token: a.flag, Origin: OriginFlag}, nil
+	if c, ok := a.override(); ok {
+		return c, nil
 	}
-	if t := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); t != "" {
-		return Credential{Token: t, Origin: OriginEnv}, nil
-	}
-	c, err := a.AppCredentials(ctx)
+	c, err := a.appCredentials(ctx)
 	if err == nil {
-		return Credential{Token: c.AccessToken, Origin: OriginApp, Login: c.Login}, nil
+		return Credential{Token: c.AccessToken, Origin: OriginApp}, nil
 	}
 	if !errors.Is(err, ErrSignedOut) {
 		return Credential{}, err
@@ -123,28 +119,46 @@ func (a *Auth) Token(ctx context.Context) (string, error) {
 }
 
 func (a *Auth) GitEnv(ctx context.Context) ([]string, error) {
-	c, err := a.Credential(ctx)
-	if errors.Is(err, ErrNoToken) {
-		return nil, nil
-	}
+	token, err := a.appToken(ctx)
 	if err != nil {
 		return nil, err
 	}
-	if c.Origin != OriginApp {
+	if token == "" {
 		return nil, nil
 	}
-	return GitEnv(c.Token), nil
+	return gitEnv(token), nil
 }
 
 func (a *Auth) SignOut() error {
 	if err := a.file.Remove(); err != nil {
 		return err
 	}
-	a.observe("")
+	a.announce("")
 	return nil
 }
 
-func (a *Auth) AppCredentials(ctx context.Context) (Credentials, error) {
+func (a *Auth) override() (Credential, bool) {
+	if a.flag != "" {
+		return Credential{Token: a.flag, Origin: OriginFlag}, true
+	}
+	if t := strings.TrimSpace(os.Getenv("GITHUB_TOKEN")); t != "" {
+		return Credential{Token: t, Origin: OriginEnv}, true
+	}
+	return Credential{}, false
+}
+
+func (a *Auth) appToken(ctx context.Context) (string, error) {
+	if _, ok := a.override(); ok {
+		return "", nil
+	}
+	c, err := a.appCredentials(ctx)
+	if errors.Is(err, ErrSignedOut) {
+		return "", nil
+	}
+	return c.AccessToken, err
+}
+
+func (a *Auth) appCredentials(ctx context.Context) (Credentials, error) {
 	c, err := a.file.Load()
 	if errors.Is(err, ErrSignedOut) {
 		a.observe("")
@@ -178,7 +192,7 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 		return Credentials{}, ErrSessionExpired
 	}
 	tok, err := a.oauth.Refresh(ctx, c.RefreshToken)
-	if errors.Is(err, ErrRefreshRefused) {
+	if errors.Is(err, errRefreshRefused) {
 		return Credentials{}, fmt.Errorf("%w: %w", ErrSessionExpired, err)
 	}
 	if err != nil {
@@ -206,7 +220,28 @@ func (a *Auth) observe(login string) {
 	a.known, a.identity = true, login
 	fn := a.onChange
 	a.mu.Unlock()
-	if changed && fn != nil {
+	if changed {
+		a.notify(fn)
+	}
+}
+
+func (a *Auth) announce(login string) {
+	a.mu.Lock()
+	a.known, a.identity = true, login
+	fn := a.onChange
+	a.mu.Unlock()
+	a.notify(fn)
+}
+
+func (a *Auth) changed() {
+	a.mu.Lock()
+	fn := a.onChange
+	a.mu.Unlock()
+	a.notify(fn)
+}
+
+func (a *Auth) notify(fn func()) {
+	if fn != nil {
 		fn()
 	}
 }
@@ -221,29 +256,4 @@ func ghCLIToken(ctx context.Context) (string, error) {
 		return "", ErrNoToken
 	}
 	return t, nil
-}
-
-type Status struct {
-	Origin     Origin
-	Available  bool
-	SignedIn   bool
-	Login      string
-	AvatarURL  string
-	ExpiresAt  time.Time
-	InstallURL string
-	Err        error
-}
-
-func (s Status) Expired() bool {
-	return s.SignedIn && errors.Is(s.Err, ErrSessionExpired)
-}
-
-func (a *Auth) Status(ctx context.Context) Status {
-	st := Status{Available: a.app.Available(), InstallURL: a.app.InstallURL()}
-	cred, err := a.Credential(ctx)
-	st.Origin, st.Err = cred.Origin, err
-	if c, err := a.file.Load(); err == nil {
-		st.SignedIn, st.Login, st.AvatarURL, st.ExpiresAt = true, c.Login, c.AvatarURL, c.ExpiresAt
-	}
-	return st
 }

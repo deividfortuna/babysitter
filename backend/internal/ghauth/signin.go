@@ -27,14 +27,6 @@ func (a *Auth) RequestCode(ctx context.Context) (DeviceCode, error) {
 	return a.oauth.RequestCode(ctx)
 }
 
-func (a *Auth) PromptFor(code DeviceCode) Prompt {
-	return Prompt{
-		UserCode:        code.UserCode,
-		VerificationURI: code.VerificationURI,
-		ExpiresAt:       a.now().Add(time.Duration(code.ExpiresIn) * time.Second),
-	}
-}
-
 func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Credentials, error) {
 	tok, err := a.oauth.Wait(ctx, code)
 	if err != nil {
@@ -53,7 +45,7 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 	if err := a.file.Save(c); err != nil {
 		return Credentials{}, err
 	}
-	a.observe(who.Login)
+	a.announce(who.Login)
 	return c, nil
 }
 
@@ -61,7 +53,6 @@ type SignIns struct {
 	auth   *Auth
 	whoami Whoami
 	base   context.Context
-	onEnd  func()
 
 	mu      sync.Mutex
 	prompt  *Prompt
@@ -69,8 +60,8 @@ type SignIns struct {
 	lastErr error
 }
 
-func (a *Auth) SignIns(base context.Context, whoami Whoami, onEnd func()) *SignIns {
-	return &SignIns{auth: a, whoami: whoami, base: base, onEnd: onEnd}
+func (a *Auth) SignIns(base context.Context, whoami Whoami) *SignIns {
+	return &SignIns{auth: a, whoami: whoami, base: base}
 }
 
 func (s *SignIns) Start(ctx context.Context) (Prompt, error) {
@@ -83,10 +74,15 @@ func (s *SignIns) Start(ctx context.Context) (Prompt, error) {
 	if err != nil {
 		return Prompt{}, err
 	}
-	prompt := s.auth.PromptFor(code)
-	run, cancel := context.WithTimeout(s.base, time.Duration(code.ExpiresIn)*time.Second)
+	prompt := Prompt{
+		UserCode:        code.UserCode,
+		VerificationURI: code.VerificationURI,
+		ExpiresAt:       s.auth.now().Add(time.Duration(code.ExpiresIn) * time.Second),
+	}
+	run, cancel := context.WithCancel(s.base)
 	s.prompt, s.cancel, s.lastErr = &prompt, cancel, nil
 	go s.complete(run, cancel, code)
+	s.auth.changed()
 	return prompt, nil
 }
 
@@ -117,16 +113,11 @@ func (s *SignIns) Cancel() {
 func (s *SignIns) complete(ctx context.Context, cancel context.CancelFunc, code DeviceCode) {
 	defer cancel()
 	_, err := s.auth.Complete(ctx, code, s.whoami)
-	if errors.Is(err, context.DeadlineExceeded) {
-		err = ErrCodeExpired
-	}
 	if errors.Is(err, context.Canceled) {
 		err = nil
 	}
 	s.mu.Lock()
 	s.prompt, s.cancel, s.lastErr = nil, nil, err
 	s.mu.Unlock()
-	if s.onEnd != nil {
-		s.onEnd()
-	}
+	s.auth.changed()
 }

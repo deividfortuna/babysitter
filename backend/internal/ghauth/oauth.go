@@ -10,23 +10,26 @@ import (
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/deividfortuna/babysitter/internal/ghclient"
 )
 
 const (
-	GitHubURL        = "https://github.com"
-	deviceGrant      = "urn:ietf:params:oauth:grant-type:device_code"
-	refreshGrant     = "refresh_token"
-	slowDownStep     = 5
-	oauthHTTPTimeout = 30 * time.Second
+	gitHubURL    = "https://github.com"
+	deviceGrant  = "urn:ietf:params:oauth:grant-type:device_code"
+	refreshGrant = "refresh_token"
+	slowDownStep = 5
 )
 
 var (
-	ErrCodeExpired    = errors.New("the code expired before it was entered on GitHub: sign in again")
-	ErrDenied         = errors.New("the sign in was cancelled on GitHub")
-	ErrRefreshRefused = errors.New("GitHub refused to renew the app token")
+	ErrCodeExpired = errors.New("the code expired before it was entered on GitHub: sign in again")
+	ErrDenied      = errors.New("the sign in was cancelled on GitHub")
 
-	errPending  = errors.New("authorization_pending")
-	errSlowDown = errors.New("slow_down")
+	errRefreshRefused = errors.New("GitHub refused to renew the app token")
+	errPending        = errors.New("authorization_pending")
+	errSlowDown       = errors.New("slow_down")
+
+	oauthHTTP = &http.Client{Timeout: 30 * time.Second}
 )
 
 type DeviceCode struct {
@@ -47,7 +50,6 @@ type Token struct {
 type OAuth struct {
 	BaseURL  string
 	ClientID string
-	HTTP     *http.Client
 	Now      func() time.Time
 
 	PollUnit time.Duration
@@ -76,7 +78,7 @@ func (o OAuth) RequestCode(ctx context.Context) (DeviceCode, error) {
 
 func (o OAuth) Wait(ctx context.Context, code DeviceCode) (Token, error) {
 	interval := max(code.Interval, 1)
-	deadline := o.now().Add(time.Duration(cmp.Or(code.ExpiresIn, 900)) * time.Second)
+	deadline := o.Now().Add(time.Duration(cmp.Or(code.ExpiresIn, 900)) * time.Second)
 	for {
 		if err := o.sleep(ctx, interval); err != nil {
 			return Token{}, err
@@ -90,7 +92,7 @@ func (o OAuth) Wait(ctx context.Context, code DeviceCode) (Token, error) {
 		case !errors.Is(err, errPending):
 			return Token{}, err
 		}
-		if !o.now().Before(deadline) {
+		if !o.Now().Before(deadline) {
 			return Token{}, ErrCodeExpired
 		}
 	}
@@ -103,7 +105,7 @@ func (o OAuth) Refresh(ctx context.Context, refreshToken string) (Token, error) 
 		return Token{}, fmt.Errorf("renew the app token: %w", err)
 	}
 	if answer.Error != "" {
-		return Token{}, fmt.Errorf("%w: %s", ErrRefreshRefused, cmp.Or(answer.ErrorDescription, answer.Error))
+		return Token{}, fmt.Errorf("%w: %s", errRefreshRefused, cmp.Or(answer.ErrorDescription, answer.Error))
 	}
 	return o.token(answer)
 }
@@ -133,7 +135,7 @@ func (o OAuth) token(answer tokenAnswer) (Token, error) {
 	if answer.AccessToken == "" {
 		return Token{}, errors.New("GitHub answered without a token")
 	}
-	now := o.now()
+	now := o.Now()
 	tok := Token{AccessToken: answer.AccessToken, RefreshToken: answer.RefreshToken}
 	if answer.ExpiresIn > 0 {
 		tok.ExpiresAt = now.Add(time.Duration(answer.ExpiresIn) * time.Second)
@@ -145,13 +147,13 @@ func (o OAuth) token(answer tokenAnswer) (Token, error) {
 }
 
 func (o OAuth) post(ctx context.Context, path string, form url.Values, out any) error {
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cmp.Or(o.BaseURL, GitHubURL)+path, strings.NewReader(form.Encode()))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, cmp.Or(o.BaseURL, gitHubURL)+path, strings.NewReader(form.Encode()))
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 	req.Header.Set("Accept", "application/json")
-	resp, err := o.client().Do(req)
+	resp, err := oauthHTTP.Do(req)
 	if err != nil {
 		return err
 	}
@@ -162,27 +164,6 @@ func (o OAuth) post(ctx context.Context, path string, form url.Values, out any) 
 	return json.NewDecoder(resp.Body).Decode(out)
 }
 
-func (o OAuth) client() *http.Client {
-	if o.HTTP != nil {
-		return o.HTTP
-	}
-	return &http.Client{Timeout: oauthHTTPTimeout}
-}
-
-func (o OAuth) now() time.Time {
-	if o.Now != nil {
-		return o.Now()
-	}
-	return time.Now()
-}
-
 func (o OAuth) sleep(ctx context.Context, intervals int) error {
-	t := time.NewTimer(time.Duration(intervals) * cmp.Or(o.PollUnit, time.Second))
-	defer t.Stop()
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	case <-t.C:
-		return nil
-	}
+	return ghclient.SleepCtx(ctx, time.Duration(intervals)*cmp.Or(o.PollUnit, time.Second))
 }

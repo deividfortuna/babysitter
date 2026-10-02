@@ -2199,11 +2199,6 @@ components:
           description: Why the token of the daemon or the installations cannot be
             read
           type: string
-        expiresAt:
-          description: When the token of the app expires; the daemon renews it before
-          format: date-time
-          nullable: true
-          type: string
         installUrl:
           description: Where the user installs the app on more repositories
           type: string

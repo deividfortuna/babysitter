@@ -45,15 +45,16 @@ export function ToneBadge({ tone, className, ...props }: ComponentProps<typeof B
   );
 }
 
-export function LiveDot({ className }: { className?: string }) {
+const LIVE_TONES = { success: "bg-success", attention: "bg-attention" };
+
+type LiveDotProps = { className?: string; tone?: keyof typeof LIVE_TONES; title?: string };
+
+export function LiveDot({ className, tone = "success", title = "The agent works right now" }: LiveDotProps) {
+  const color = LIVE_TONES[tone];
   return (
-    <span
-      aria-hidden="true"
-      title="The agent works right now"
-      className={cn("relative inline-flex size-1.5 shrink-0", className)}
-    >
-      <span className="absolute inset-0 animate-ping rounded-full bg-success opacity-75 motion-reduce:animate-none" />
-      <span className="relative size-full rounded-full bg-success" />
+    <span aria-hidden="true" title={title} className={cn("relative inline-flex size-1.5 shrink-0", className)}>
+      <span className={cn("absolute inset-0 animate-ping rounded-full opacity-75 motion-reduce:animate-none", color)} />
+      <span className={cn("relative size-full rounded-full", color)} />
     </span>
   );
 }

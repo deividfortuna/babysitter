@@ -18,7 +18,7 @@ type Installation struct {
 
 func UserInstallations(ctx context.Context, c *github.Client) ([]Installation, error) {
 	var out []Installation
-	for inst, err := range c.Apps.ListUserInstallationsIter(ctx, &github.ListOptions{PerPage: 100}) {
+	for inst, err := range c.Apps.ListUserInstallationsIter(ctx, &github.ListOptions{PerPage: maxPerPage}) {
 		if err != nil {
 			return nil, fmt.Errorf("list the installations of the GitHub App: %w", err)
 		}
@@ -51,7 +51,7 @@ func AppInstalled(ctx context.Context, c *github.Client, owner, name string) (bo
 }
 
 func installationHas(ctx context.Context, c *github.Client, id int64, name string) (bool, error) {
-	for repo, err := range c.Apps.ListUserReposIter(ctx, id, &github.ListOptions{PerPage: 100}) {
+	for repo, err := range c.Apps.ListUserReposIter(ctx, id, &github.ListOptions{PerPage: maxPerPage}) {
 		if err != nil {
 			return false, fmt.Errorf("list the repositories of the GitHub App: %w", err)
 		}

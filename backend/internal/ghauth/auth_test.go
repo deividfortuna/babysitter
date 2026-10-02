@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -160,11 +161,11 @@ func TestSignInSavesTheAccountAndTheToken(t *testing.T) {
 		t.Fatalf("ExpiresAt = %v, want %v", c.ExpiresAt, want)
 	}
 	cred, err := a.Credential(context.Background())
-	if err != nil || cred.Origin != OriginApp || cred.Token != c.AccessToken || cred.Login != "alice" {
+	if err != nil || cred.Origin != OriginApp || cred.Token != c.AccessToken {
 		t.Fatalf("Credential = %+v, %v", cred, err)
 	}
 	if runtime.GOOS != "windows" {
-		info, err := os.Stat(NewFile(h.dir).Path())
+		info, err := os.Stat(filepath.Join(h.dir, signInFileName))
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -189,7 +190,7 @@ func TestSignInRefusedOnGitHub(t *testing.T) {
 	if !errors.Is(err, ErrDenied) {
 		t.Fatalf("err = %v, want ErrDenied", err)
 	}
-	if _, err := NewFile(h.dir).Load(); !errors.Is(err, ErrSignedOut) {
+	if _, err := newCredentialsFile(h.dir).Load(); !errors.Is(err, ErrSignedOut) {
 		t.Fatalf("Load = %v, want ErrSignedOut", err)
 	}
 }
@@ -288,7 +289,7 @@ func TestRevokedRefreshTokenEndsTheSession(t *testing.T) {
 	if !errors.Is(err, ErrSessionExpired) {
 		t.Fatalf("err = %v, want ErrSessionExpired and no quiet switch to gh", err)
 	}
-	if st := h.auth(WithGH(gh)).Status(context.Background()); !st.Expired() || st.Login != "alice" {
+	if st := h.auth(WithGH(gh)).Status(context.Background()); st.State != StateExpired || st.Login != "alice" {
 		t.Fatalf("Status = %+v, want the expired sign in of alice", st)
 	}
 }
@@ -355,13 +356,13 @@ func TestGitEnvOnlyForTheApp(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(env, GitEnv(c.AccessToken)) {
+	if !slices.Equal(env, gitEnv(c.AccessToken)) {
 		t.Fatalf("GitEnv = %v, want the env of the app token", env)
 	}
 }
 
 func TestGitEnvSendsTheTokenAsAHeaderAndRewritesSSH(t *testing.T) {
-	env := GitEnv("ghu_abc")
+	env := gitEnv("ghu_abc")
 	want := []string{
 		"GIT_CONFIG_COUNT=3",
 		"GIT_CONFIG_KEY_0=url.https://github.com/.insteadOf",
@@ -410,6 +411,43 @@ func TestCheckRepoSkipsOtherSources(t *testing.T) {
 	}
 	if n := h.g.Count(ghfake.RouteInstallations); n != 0 {
 		t.Fatalf("%d calls to the installations, want 0", n)
+	}
+}
+
+func TestGitEnvAndCheckRepoNeverAskGH(t *testing.T) {
+	h := newHarness(t)
+	var asked atomic.Int32
+	gh := func(context.Context) (string, error) {
+		asked.Add(1)
+		return "gho_from_gh", nil
+	}
+	a := h.auth(WithGH(gh))
+
+	if env, err := a.GitEnv(context.Background()); err != nil || env != nil {
+		t.Fatalf("GitEnv = %v, %v; want nothing for the gh CLI", env, err)
+	}
+	if err := a.CheckRepo(context.Background(), h.srv.Client(t), "acme", "api"); err != nil {
+		t.Fatalf("CheckRepo = %v, want nil for the gh CLI", err)
+	}
+	if n := asked.Load(); n != 0 {
+		t.Fatalf("gh asked %d times, want 0: only the app token matters there", n)
+	}
+}
+
+func TestStatusStates(t *testing.T) {
+	h := newHarness(t)
+	gh := func(context.Context) (string, error) { return "gho_from_gh", nil }
+	signedOut := h.auth(WithGH(gh)).Status(context.Background())
+	if signedOut.State != StateSignedOut || signedOut.Origin != OriginGH || signedOut.Err != nil {
+		t.Fatalf("signed out Status = %+v", signedOut)
+	}
+	h.signIn(t, h.auth())
+	if st := h.auth().Status(context.Background()); st.State != StateConnected || st.Origin != OriginApp {
+		t.Fatalf("signed in Status = %+v", st)
+	}
+	t.Setenv("GITHUB_TOKEN", "ghp_env")
+	if st := h.auth().Status(context.Background()); st.State != StateNotInUse || st.Origin != OriginEnv {
+		t.Fatalf("Status with GITHUB_TOKEN = %+v", st)
 	}
 }
 

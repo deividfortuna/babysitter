@@ -11,6 +11,7 @@ import (
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/runfile"
@@ -48,6 +49,7 @@ func TestADaemonFindsTheAnswersOfTheDaemonBefore(t *testing.T) {
 	dir := t.TempDir()
 	cfg := Config{
 		DataDir:    dir,
+		Auth:       ghauth.New(dir, ghauth.WithFlag("token")),
 		DBPath:     filepath.Join(dir, "babysitter.db"),
 		AgentBin:   agentOff,
 		CopilotBin: filepath.Join(dir, "no-copilot"),

@@ -116,11 +116,11 @@ func Run(ctx context.Context, cfg Config) error {
 		exe = ""
 	}
 	git := worktree.New()
-	git.Auth = auth.gitEnv()
+	git.Auth = cfg.Auth.GitEnv
 	checkouts := worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts"))
-	checkouts.Auth = auth.gitEnv()
+	checkouts.Auth = cfg.Auth.GitEnv
 	release := gitrelease.New()
-	release.Auth = auth.gitEnv()
+	release.Auth = cfg.Auth.GitEnv
 	watches := prwatch.New(prwatch.Deps{
 		Store:         st,
 		NewClient:     cfg.NewClient,
@@ -135,7 +135,7 @@ func Run(ctx context.Context, cfg Config) error {
 		DataDir:       cfg.DataDir,
 		Guard:         w.Guard(),
 		Bus:           bus,
-		CheckAccess:   auth.checkAccess(),
+		CheckAccess:   cfg.Auth.CheckRepo,
 	}, watchOpts...)
 	viewer := func(ctx context.Context) (httpd.Viewer, error) {
 		c, err := cfg.NewClient(ctx)
@@ -183,7 +183,7 @@ func Run(ctx context.Context, cfg Config) error {
 			return rateLimit(ghclient.SharedRates().Status(w.Guard().Floor))
 		},
 		Logs: cfg.Logs,
-		Auth: auth.controller(),
+		Auth: auth,
 	})
 	srv, err = httpd.Listen(ctx, cfg.Port, handler)
 	if err != nil {

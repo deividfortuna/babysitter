@@ -6,7 +6,7 @@ import (
 	"strconv"
 )
 
-func GitEnv(token string) []string {
+func gitEnv(token string) []string {
 	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
 	pairs := [][2]string{
 		{"url.https://github.com/.insteadOf", "git@github.com:"},

@@ -81,6 +81,10 @@ func WithExec(f func(dir string, argv []string) error) Option {
 	return func(o *options) { o.exec = f }
 }
 
+func (o *options) authIn(dir string) *ghauth.Auth {
+	return ghauth.New(dir, append([]ghauth.Option{ghauth.WithFlag(o.token)}, o.authOpts...)...)
+}
+
 func (o *options) githubAuth() (*ghauth.Auth, error) {
 	o.authOnce.Do(func() {
 		dir, err := o.dataDir(o.authDir)
@@ -88,7 +92,7 @@ func (o *options) githubAuth() (*ghauth.Auth, error) {
 			o.authErr = err
 			return
 		}
-		o.auth = ghauth.New(dir, append([]ghauth.Option{ghauth.WithFlag(o.token)}, o.authOpts...)...)
+		o.auth = o.authIn(dir)
 	})
 	return o.auth, o.authErr
 }
@@ -98,11 +102,17 @@ func (o *options) client(ctx context.Context) (*github.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	token, err := auth.Token(ctx)
-	if err != nil {
-		return nil, err
+	return o.clientWith(auth)(ctx)
+}
+
+func (o *options) clientWith(auth *ghauth.Auth) func(ctx context.Context) (*github.Client, error) {
+	return func(ctx context.Context) (*github.Client, error) {
+		token, err := auth.Token(ctx)
+		if err != nil {
+			return nil, err
+		}
+		return o.newClient(token, o.timeout)
 	}
-	return o.newClient(token, o.timeout)
 }
 
 func (o *options) whoami(ctx context.Context, token string) (ghauth.Identity, error) {

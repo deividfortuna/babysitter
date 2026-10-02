@@ -66,7 +66,7 @@ func TestAuthLoginStatusLogout(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &st); err != nil {
 		t.Fatalf("invalid JSON %q: %v", out, err)
 	}
-	if st.Origin != "app" || !st.SignedIn || st.Login != "alice" || len(st.Installations) != 1 || st.Installations[0] != "alice" {
+	if st.Origin != ghauth.OriginApp || st.State != ghauth.StateConnected || st.Login != "alice" || len(st.Installations) != 1 || st.Installations[0] != "alice" {
 		t.Fatalf("status = %+v", st)
 	}
 
