@@ -6,11 +6,20 @@ export type RemoteCheck = { ok: true; name: string; version: string } | { ok: fa
 
 type Fetch = typeof fetch;
 
-async function health(url: string, fetcher: Fetch): Promise<{ name?: string; version?: string } | null> {
+type Health = { name?: string; version?: string };
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+async function health(url: string, fetcher: Fetch): Promise<Health | null> {
   try {
     const response = await fetcher(`${apiBase(url)}/healthz`, { signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
     if (!response.ok) return null;
-    return (await response.json()) as { name?: string; version?: string };
+    const body: unknown = await response.json();
+    if (typeof body !== "object" || body === null) return {};
+    const { name, version } = body as Record<string, unknown>;
+    return { name: text(name), version: text(version) };
   } catch {
     return null;
   }
