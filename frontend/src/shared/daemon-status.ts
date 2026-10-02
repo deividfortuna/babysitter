@@ -3,6 +3,7 @@ export type DaemonConnection = {
   kind: "local" | "remote";
   name: string;
   url?: string;
+  version?: string;
 };
 
 export type DaemonStatus = {

@@ -55,3 +55,5 @@ export const rateLimitQueryKey = ["ratelimit"] as const;
 export const logLevelQueryKey = ["logs", "level"] as const;
 
 export const discoveryQueryKey = ["connections", "discovered"] as const;
+
+export const appVersionQueryKey = ["app", "version"] as const;

@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { originOf, parsePairingLink, parsePairRequest } from "./connections";
+import { originOf, parsePairingLink, parsePairRequest, versionsDiffer } from "./connections";
 
 test("a pairing link gives the origin of the daemon and the token in its fragment", () => {
   expect(parsePairingLink("http://studio.local:7420/#token=abc")).toEqual({
@@ -24,6 +24,14 @@ test("an address without a token or with another scheme is no pairing target", (
   expect(parsePairingLink("http://studio.local:7420")).toBeNull();
   expect(parsePairingLink("ftp://studio.local/#token=abc")).toBeNull();
   expect(parsePairingLink("   ")).toBeNull();
+});
+
+test("versions differ only when both are known and not the same, with or without a v", () => {
+  expect(versionsDiffer("0.2.0", "0.1.0")).toBe(true);
+  expect(versionsDiffer("0.2.0", "dev")).toBe(true);
+  expect(versionsDiffer("0.2.0", "v0.2.0")).toBe(false);
+  expect(versionsDiffer("0.2.0", "")).toBe(false);
+  expect(versionsDiffer("0.2.0")).toBe(false);
 });
 
 test("a pair request from the renderer keeps only its text fields", () => {

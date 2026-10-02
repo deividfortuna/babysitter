@@ -81,6 +81,20 @@ export function parsePairRequest(value: unknown): PairRequest {
   return { link: text("link") ?? "", token: text("token"), name: text("name") };
 }
 
+function plainVersion(version?: string): string {
+  return version?.trim().replace(/^v/, "") ?? "";
+}
+
+export function versionsDiffer(app: string, daemon?: string): boolean {
+  const ours = plainVersion(app);
+  const theirs = plainVersion(daemon);
+  return ours !== "" && theirs !== "" && ours !== theirs;
+}
+
+export function versionWarning(name: string, daemon: string, app: string): string {
+  return `${name} runs babysitter ${daemon}, and this app is ${app}. Some views can fail until both run the same version: update the older one.`;
+}
+
 export function authorization(token?: string): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }

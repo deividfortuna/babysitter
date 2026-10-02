@@ -12,6 +12,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
+import { VersionWarning } from "@/components/version-warning";
 import { cn } from "@/lib/utils";
 
 type Props = {
@@ -40,6 +41,7 @@ export function ConnectionSwitcher({ status, onPair, onManage }: Props) {
   const remote = status.connection?.kind === "remote";
   const name = status.connection?.name ?? list.localName;
   const Icon = remote ? ServerIcon : LaptopIcon;
+  const remoteVersion = remote ? status.connection?.version : undefined;
 
   return (
     <SidebarMenu>
@@ -61,6 +63,7 @@ export function ConnectionSwitcher({ status, onPair, onManage }: Props) {
                 <span className="truncate text-sm font-medium">{name}</span>
                 <span className="truncate text-2xs text-muted-foreground">{statusWord(status)}</span>
               </span>
+              <VersionWarning name={name} version={remoteVersion} />
               {found.length > 0 ? (
                 <span className="rounded-full bg-attention/15 px-1.5 font-mono text-2xs text-attention">
                   {found.length} new
@@ -84,7 +87,12 @@ export function ConnectionSwitcher({ status, onPair, onManage }: Props) {
                     <span className="truncate">{saved.name}</span>
                     <span className="truncate font-mono text-2xs text-muted-foreground">{hostOf(saved.url)}</span>
                   </span>
-                  {list.activeId === saved.id ? <CheckIcon /> : null}
+                  {list.activeId === saved.id ? (
+                    <>
+                      <VersionWarning name={saved.name} version={remoteVersion} />
+                      <CheckIcon />
+                    </>
+                  ) : null}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuGroup>
@@ -102,6 +110,7 @@ export function ConnectionSwitcher({ status, onPair, onManage }: Props) {
                           {daemon.address}:{daemon.port}
                         </span>
                       </span>
+                      <VersionWarning name={daemon.name} version={daemon.version} />
                       <span className="text-2xs text-muted-foreground">Pair</span>
                     </DropdownMenuItem>
                   ))}

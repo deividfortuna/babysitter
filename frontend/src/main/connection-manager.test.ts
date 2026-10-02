@@ -75,7 +75,7 @@ test("a pairing saves the remote, stops the local daemon and points the app at t
     state: "ready",
     baseUrl: "http://studio.local:7420/api/v1",
     token: TOKEN,
-    connection: { kind: "remote", name: "studio" },
+    connection: { kind: "remote", name: "studio", version: "1.0.0" },
   });
 });
 

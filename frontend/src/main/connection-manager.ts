@@ -168,7 +168,8 @@ export class ConnectionManager {
     if (generation !== this.generation) return;
     const connection = this.remoteConnection(remote);
     if (result.ok) {
-      this.setRemoteStatus({ state: "ready", baseUrl: apiBase(remote.url), token: remote.token, connection });
+      const ready = { ...connection, version: result.version };
+      this.setRemoteStatus({ state: "ready", baseUrl: apiBase(remote.url), token: remote.token, connection: ready });
       return;
     }
     this.setRemoteStatus({ state: "error", message: result.error, connection });
@@ -176,7 +177,9 @@ export class ConnectionManager {
 
   private setRemoteStatus(next: DaemonStatus) {
     const unchanged = next.state === this.remoteStatus.state && next.message === this.remoteStatus.message;
-    const sameRemote = next.connection?.id === this.remoteStatus.connection?.id;
+    const sameRemote =
+      next.connection?.id === this.remoteStatus.connection?.id &&
+      next.connection?.version === this.remoteStatus.connection?.version;
     this.remoteStatus = next;
     if (unchanged && sameRemote) return;
     if (next.state === "error") this.log(`connections: ${next.connection?.name}: ${next.message}`);

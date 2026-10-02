@@ -8,7 +8,9 @@ import {
   useUnpairedDaemons,
   useUseConnection,
 } from "@/hooks/useConnections";
+import { useDaemonStatus } from "@/hooks/useDaemonStatus";
 import { PairDialog } from "@/components/pair-dialog";
+import { VersionWarning } from "@/components/version-warning";
 import { SettingsCard, SettingsRow, SettingsSection } from "@/components/settings-page";
 import { Tip } from "@/components/tip";
 import { Badge } from "@/components/ui/badge";
@@ -39,6 +41,7 @@ export function ConnectionsPanel() {
   const remove = useRemoveConnection();
   const discovery = useDiscoveredDaemons(true);
   const found = useUnpairedDaemons(true, list.remotes);
+  const shownVersion = useDaemonStatus().connection?.version;
   const [pairing, setPairing] = useState<{ open: boolean; found: DiscoveredDaemon | null }>({
     open: false,
     found: null,
@@ -68,6 +71,7 @@ export function ConnectionsPanel() {
               label={remote.name}
               description={<span className="font-mono text-2xs">{hostOf(remote.url)}</span>}
             >
+              {list.activeId === remote.id ? <VersionWarning name={remote.name} version={shownVersion} /> : null}
               <ActiveOrUse
                 active={list.activeId === remote.id}
                 busy={use.isPending}
@@ -109,6 +113,7 @@ export function ConnectionsPanel() {
                 </span>
               }
             >
+              <VersionWarning name={daemon.name} version={daemon.version} />
               <Button size="sm" onClick={() => openPair(daemon)}>
                 Pair
               </Button>

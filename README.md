@@ -216,7 +216,9 @@ the paired daemons, and the daemons found on the network. Pick a found
 daemon and paste the token, or use "Connect to a remote daemon" and
 paste a pairing link. Settings > Connections shows the same list. While
 the app shows a remote daemon, it stops the daemon of this computer, so
-the two do not poll the same repositories. The app keeps the paired
+the two do not poll the same repositories. When a daemon runs another
+version than the app, a warning icon shows next to its name, and its
+tooltip gives both versions. The app keeps the paired
 daemons and their tokens in `<dataDir>/connections.json`, readable only
 by the user.
 
