@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"time"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
+	"github.com/deividfortuna/babysitter/internal/httpd"
 )
 
 type authOutput struct {
@@ -106,6 +108,7 @@ func newAuthLoginCmd(opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			opts.tellTheDaemon(ctx)
 			fmt.Fprintf(out, "Signed in to GitHub as %s with the babysitter GitHub App.\n", creds.Login)
 			fmt.Fprintf(out, "Install the app on the repositories it may watch: %s\n", auth.App().InstallURL())
 			if st := auth.Status(ctx); st.State == ghauth.StateNotInUse {
@@ -166,6 +169,15 @@ func installationAccounts(cmd *cobra.Command, opts *options) ([]string, error) {
 	return accounts, nil
 }
 
+func (o *options) tellTheDaemon(ctx context.Context) {
+	c, err := o.daemonClient(o.authDir)
+	if err != nil {
+		return
+	}
+	var st httpd.Auth
+	_ = c.get(ctx, "/auth", &st)
+}
+
 func newAuthLogoutCmd(opts *options) *cobra.Command {
 	return &cobra.Command{
 		Use:   "logout",
@@ -179,6 +191,7 @@ func newAuthLogoutCmd(opts *options) *cobra.Command {
 			if err := auth.SignOut(cmd.Context()); err != nil {
 				return err
 			}
+			opts.tellTheDaemon(cmd.Context())
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Signed out of the babysitter GitHub App.")
 			return err
 		},

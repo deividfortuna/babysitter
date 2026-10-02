@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"reflect"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -15,6 +16,7 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
+	"github.com/deividfortuna/babysitter/internal/httpd"
 )
 
 func runAuth(t *testing.T, g *ghfake.GitHub, dir string, args ...string) (string, error) {
@@ -186,5 +188,32 @@ func TestCommandsUseTheAppAfterLogin(t *testing.T) {
 	}
 	if len(tokens) != 1 || !strings.HasPrefix(tokens[0], "ghu_") {
 		t.Fatalf("whoami used %v, want the token of the app", tokens)
+	}
+}
+
+func TestAuthLoginAndLogoutTellTheRunningDaemon(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	g := ghfake.New()
+	approveOnPoll(g)
+	var reads atomic.Int32
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET "+httpd.Prefix+"/auth", func(w http.ResponseWriter, r *http.Request) {
+		reads.Add(1)
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"state":"connected"}`))
+	})
+	dir := serveDaemon(t, mux, "")
+
+	if _, err := runAuth(t, g, dir, "auth", "login"); err != nil {
+		t.Fatalf("auth login: %v", err)
+	}
+	if n := reads.Load(); n != 1 {
+		t.Fatalf("the daemon read the sign in %d times after auth login, want 1", n)
+	}
+	if _, err := runAuth(t, g, dir, "auth", "logout"); err != nil {
+		t.Fatalf("auth logout: %v", err)
+	}
+	if n := reads.Load(); n != 2 {
+		t.Fatalf("the daemon read the sign in %d times after auth logout, want 2", n)
 	}
 }
