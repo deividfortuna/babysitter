@@ -69,7 +69,8 @@ export class ConnectionManager {
 
   async start(): Promise<void> {
     if (this.localActive) return this.opts.local.start();
-    await Promise.all([this.opts.local.stopAnyOwner(), this.connectRemote()]);
+    await this.opts.local.stopAnyOwner();
+    return this.connectRemote();
   }
 
   async retry(): Promise<void> {

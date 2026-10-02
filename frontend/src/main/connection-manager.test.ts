@@ -30,16 +30,17 @@ function setup(stored: Connections = NO_CONNECTIONS, check?: ConnectionManagerOp
   const local = fakeLocal();
   const saved: Connections[] = [];
   const answers = check ?? (async (): Promise<RemoteCheck> => ({ ok: true, name: "studio", version: "1.0.0" }));
+  const checkRemote = vi.fn(answers);
   const manager = new ConnectionManager({
     local,
     localName: "This Mac",
     read: () => stored,
     write: (next) => saved.push(next),
-    check: vi.fn(answers),
+    check: checkRemote,
     discover: async () => [],
     probeMs: 60_000,
   });
-  return { manager, local, saved };
+  return { manager, local, saved, check: checkRemote };
 }
 
 const managers: ConnectionManager[] = [];
@@ -183,4 +184,25 @@ test("showing this computer again after a remote starts its daemon again", async
 
   expect(local.start).toHaveBeenCalledOnce();
   expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { kind: "local" } });
+});
+
+test("a remote shown at launch connects only after the daemon of this computer stopped", async () => {
+  const stored: Connections = {
+    activeId: "r1",
+    remotes: [{ id: "r1", name: "studio", url: "http://studio.local:7420", token: TOKEN }],
+  };
+  const { manager, local, check } = setup(stored);
+  managers.push(manager);
+  let stopped: () => void = () => undefined;
+  local.stopAnyOwner.mockImplementationOnce(() => new Promise<void>((resolve) => (stopped = resolve)));
+
+  const starting = manager.start();
+  await vi.waitFor(() => expect(local.stopAnyOwner).toHaveBeenCalledOnce());
+
+  expect(check).not.toHaveBeenCalled();
+  expect(manager.getStatus().state).not.toBe("ready");
+  stopped();
+  await starting;
+  expect(check).toHaveBeenCalledOnce();
+  expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { id: "r1" } });
 });
