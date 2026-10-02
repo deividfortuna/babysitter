@@ -73,7 +73,7 @@ func readCredentialRequest(r io.Reader) credentialRequest {
 }
 
 func (r credentialRequest) forGitHub() bool {
-	return r["protocol"] == "https" && r["host"] == "github.com"
+	return strings.EqualFold(r["protocol"], "https") && strings.EqualFold(r["host"], "github.com")
 }
 
 func (o *options) daemonAppToken(ctx context.Context) (string, error) {

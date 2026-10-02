@@ -73,6 +73,19 @@ func TestGitCredentialGivesTheAppToken(t *testing.T) {
 	}
 }
 
+func TestGitCredentialGivesTheAppTokenForGitHubInAnyCase(t *testing.T) {
+	t.Parallel()
+	dataDir := tokenDaemon(t, "ghu_app")
+
+	out, err := runGitCredential(t, dataDir, "get", "protocol=HTTPS\nhost=GitHub.com\n\n")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := "username=x-access-token\npassword=ghu_app\n"; out != want {
+		t.Fatalf("output = %q, want %q, so git does not ask the gh helper", out, want)
+	}
+}
+
 func TestGitCredentialGivesNothingSoGitAsksTheNextHelper(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
