@@ -388,6 +388,28 @@ func TestAnotherProcessDoesNotSendARefusedRefreshTokenAgain(t *testing.T) {
 	}
 }
 
+func TestAnErrorOfTheClientKeepsTheRefreshToken(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	h.g.React(ghfake.RouteOAuthGrant, func(a ghfake.Action) (ghfake.Response, bool) {
+		if !strings.Contains(string(a.Body), "grant_type=refresh_token") {
+			return ghfake.Response{}, false
+		}
+		return ghfake.Response{Status: http.StatusOK, Body: `{"error":"incorrect_client_credentials","error_description":"The client_id is incorrect."}`}, true
+	})
+
+	_, err := h.auth().Credential(context.Background())
+
+	if err == nil || errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("err = %v, want the error of GitHub, not an expired sign in", err)
+	}
+	c, err := newCredentialsFile(h.dir).Load()
+	if err != nil || c.RefreshToken == "" {
+		t.Fatalf("sign in = %+v, %v, want the refresh token kept for the next try", c, err)
+	}
+}
+
 func TestExpiredRefreshTokenEndsTheSessionWithoutAsking(t *testing.T) {
 	h := newHarness(t)
 	h.signIn(t, h.auth())

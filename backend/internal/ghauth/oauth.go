@@ -145,10 +145,13 @@ func (o OAuth) Refresh(ctx context.Context, refreshToken string) (Token, error) 
 	if err := o.post(ctx, "/login/oauth/access_token", form, &answer); err != nil {
 		return Token{}, fmt.Errorf("renew the app token: %w", err)
 	}
-	if answer.Error != "" {
+	switch answer.Error {
+	case "":
+		return o.token(answer)
+	case "bad_refresh_token", "invalid_grant":
 		return Token{}, fmt.Errorf("%w: %s", errRefreshRefused, cmp.Or(answer.ErrorDescription, answer.Error))
 	}
-	return o.token(answer)
+	return Token{}, fmt.Errorf("renew the app token: %s", cmp.Or(answer.ErrorDescription, answer.Error))
 }
 
 func (o OAuth) exchange(ctx context.Context, deviceCode string) (Token, error) {
