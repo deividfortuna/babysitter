@@ -3,6 +3,7 @@ package cli
 import (
 	"bufio"
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"strings"
@@ -20,7 +21,7 @@ func newAuthTokenCmd(opts *options) *cobra.Command {
 		Args:   cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			token, err := opts.daemonAppToken(cmd.Context())
-			if err != nil {
+			if err != nil || token == "" {
 				return err
 			}
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), token)
@@ -42,11 +43,15 @@ func newAuthGitCredentialCmd(opts *options) *cobra.Command {
 			if !readCredentialRequest(cmd.InOrStdin()).forGitHub() {
 				return nil
 			}
-			token, _ := opts.daemonAppToken(cmd.Context())
+			token, err := opts.daemonAppToken(cmd.Context())
+			if err != nil {
+				fmt.Fprintln(cmd.OutOrStdout(), "quit=1")
+				return err
+			}
 			if token == "" {
 				return nil
 			}
-			_, err := fmt.Fprintf(cmd.OutOrStdout(), "username=x-access-token\npassword=%s\n", token)
+			_, err = fmt.Fprintf(cmd.OutOrStdout(), "username=x-access-token\npassword=%s\n", token)
 			return err
 		},
 	}
@@ -73,12 +78,21 @@ func (r credentialRequest) forGitHub() bool {
 
 func (o *options) daemonAppToken(ctx context.Context) (string, error) {
 	c, err := o.daemonClient(o.authDir)
+	if errors.Is(err, errNoDaemon) {
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}
 	var out httpd.AppToken
-	if err := c.get(ctx, "/auth/token", &out); err != nil {
-		return "", err
+	err = c.get(ctx, "/auth/token", &out)
+	if appNotInUse(err) {
+		return "", nil
 	}
-	return out.Token, nil
+	return out.Token, err
+}
+
+func appNotInUse(err error) bool {
+	code := errorCode(err)
+	return code == "app_not_in_use" || code == "auth_unavailable"
 }

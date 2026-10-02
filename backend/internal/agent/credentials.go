@@ -25,7 +25,8 @@ func CredentialHelper(exe, dataDir string) string {
 
 func ghShim(exe, dataDir, gh string) string {
 	return "#!/bin/sh\n" +
-		"token=$(" + shellQuote(exe) + " auth token --data-dir " + shellQuote(dataDir) + " 2>/dev/null) && [ -n \"$token\" ] && export GH_TOKEN=\"$token\"\n" +
+		"token=$(" + shellQuote(exe) + " auth token --data-dir " + shellQuote(dataDir) + ") || exit 1\n" +
+		"[ -n \"$token\" ] && export GH_TOKEN=\"$token\"\n" +
 		"exec " + shellQuote(gh) + " \"$@\"\n"
 }
 

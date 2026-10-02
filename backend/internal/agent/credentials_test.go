@@ -58,7 +58,7 @@ func TestTheGHShimGivesGHTheAppToken(t *testing.T) {
 		want  string
 	}{
 		{"the app is in use", "echo ghu_app", "gh api /user as ghu_app\n"},
-		{"the app is not in use", "exit 1", "gh api /user as nobody\n"},
+		{"the app is not in use", "exit 0", "gh api /user as nobody\n"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			babysitter := script(t, t.TempDir(), "babysitter", "#!/bin/sh\n"+tc.token+"\n")
@@ -78,6 +78,32 @@ func TestTheGHShimGivesGHTheAppToken(t *testing.T) {
 				t.Fatalf("output = %q, want %q", out, tc.want)
 			}
 		})
+	}
+}
+
+func TestTheGHShimStopsWhenTheAppTokenFails(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the shim is a shell script")
+	}
+	tools := t.TempDir()
+	script(t, tools, "gh", "#!/bin/sh\necho \"gh $* as ${GH_TOKEN:-nobody}\"\n")
+	t.Setenv("PATH", tools+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Setenv("GH_TOKEN", "ghp_personal")
+	babysitter := script(t, t.TempDir(), "babysitter", "#!/bin/sh\nexit 1\n")
+	l := Launch{HooksDir: filepath.Join(t.TempDir(), "hooks"), BinDir: filepath.Join(t.TempDir(), "bin"), Exe: babysitter, DataDir: "/data"}
+	env, err := SessionEnv(l)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("sh", "-c", "gh api /user")
+	cmd.Env = append(os.Environ(), env...)
+	out, err := cmd.Output()
+	if err == nil {
+		t.Fatalf("gh ran with output %q, want the shim to stop before it", out)
+	}
+	if len(out) != 0 {
+		t.Fatalf("output = %q, want none", out)
 	}
 }
 
