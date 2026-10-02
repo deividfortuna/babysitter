@@ -44,7 +44,7 @@ afterEach(() => {
   spawn.mockClear();
 });
 
-function supervisor(env: () => Promise<Env>, output?: (line: string) => void) {
+function supervisor(env: () => Promise<Env>, output?: (line: string) => void, log?: (msg: string) => void) {
   const dataDir = mkdtempSync(path.join(os.tmpdir(), "babysitter-supervisor-"));
   dataDirs.push(dataDir);
   const daemon = new DaemonSupervisor({
@@ -52,6 +52,7 @@ function supervisor(env: () => Promise<Env>, output?: (line: string) => void) {
     dataDir,
     env,
     output,
+    log,
   });
   return { daemon, dataDir };
 }
@@ -392,4 +393,40 @@ test("a stop of any owner with no daemon running asks nothing", async () => {
 
   expect(spawn).not.toHaveBeenCalled();
   expect(daemon.getStatus()).toEqual({ state: "stopped" });
+});
+
+test("a stop of any owner waits until a daemon started from the terminal stops answering", async () => {
+  const running = daemonOnPort(50134, { downAfterShutdown: true });
+  const { daemon, dataDir } = supervisor(async () => ({ PATH: "/usr/bin" }));
+  writeFileSync(path.join(dataDir, "running.json"), JSON.stringify({ pid: 99, port: 50134, owner: "cli" }));
+
+  await daemon.stopAnyOwner(5_000);
+
+  expect(running.shutdowns).toBe(1);
+  expect(running.up).toBe(false);
+});
+
+test("a stop of any owner kills the daemon it spawned when that daemon still answers at the deadline", async () => {
+  daemonOnPort(50135, { downAfterShutdown: false });
+  const { daemon, dataDir } = supervisor(async () => ({ PATH: "/usr/bin" }));
+  await daemon.start();
+  writeFileSync(path.join(dataDir, "running.json"), JSON.stringify({ pid: 4242, port: 50135, owner: "app" }));
+  await vi.waitFor(() => expect(daemon.getStatus()).toMatchObject({ state: "ready", source: "spawned" }), {
+    timeout: 2_000,
+  });
+
+  await daemon.stopAnyOwner(500);
+
+  expect(children[0].kill).toHaveBeenCalledWith("SIGKILL");
+});
+
+test("a stop of any owner says so when a daemon started from the terminal still answers at the deadline", async () => {
+  daemonOnPort(50136, { downAfterShutdown: false });
+  const log = vi.fn();
+  const { daemon, dataDir } = supervisor(async () => ({ PATH: "/usr/bin" }), undefined, log);
+  writeFileSync(path.join(dataDir, "running.json"), JSON.stringify({ pid: 99, port: 50136, owner: "cli" }));
+
+  await daemon.stopAnyOwner(500);
+
+  expect(log).toHaveBeenCalledWith(expect.stringContaining("pid 99 on port 50136 still runs"));
 });
