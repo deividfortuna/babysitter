@@ -39,7 +39,7 @@ func (a AuthEnv) Env(ctx context.Context, command string) ([]string, error) {
 	if slices.Contains(networkCommands, command) {
 		return nil, err
 	}
-	return NoPromptEnv, nil
+	return append(slices.Clone(NoPromptEnv), "GIT_NO_LAZY_FETCH=1"), nil
 }
 
 func CurrentBranch(ctx context.Context, dir string) (string, error) {

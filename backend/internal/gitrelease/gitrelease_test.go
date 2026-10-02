@@ -648,8 +648,9 @@ func TestLocalCommandsRunWhenTheAuthEnvFails(t *testing.T) {
 	if err != nil || head != "abc" {
 		t.Fatalf("Head() = %q, %v; want the local command to run without the token", head, err)
 	}
-	if !slices.Equal(env, gitrepo.NoPromptEnv) {
-		t.Fatalf("env = %v, want only %v", env, gitrepo.NoPromptEnv)
+	want := append(slices.Clone(gitrepo.NoPromptEnv), "GIT_NO_LAZY_FETCH=1")
+	if !slices.Equal(env, want) {
+		t.Fatalf("env = %v, want %v, so git fetches no missing object without the token", env, want)
 	}
 }
 

@@ -3,7 +3,9 @@ package gitrepo
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -79,5 +81,41 @@ func TestConfigValue(t *testing.T) {
 	}
 	if v, err := ConfigValue(ctx, dir, "babysitter.nothing"); err != nil || v != "" {
 		t.Fatalf("ConfigValue(missing) = %q, %v", v, err)
+	}
+}
+
+func TestALocalCommandDoesNotFetchWithoutTheAppToken(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	ctx := context.Background()
+	source, remote, clone := t.TempDir(), t.TempDir(), t.TempDir()
+	git(t, source, "init", "-q", "-b", "main")
+	git(t, source, "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init")
+	if err := os.WriteFile(filepath.Join(source, "file"), []byte("hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git(t, source, "add", "file")
+	git(t, source, "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "file")
+	git(t, remote, "clone", "-q", "--bare", source, ".")
+	git(t, remote, "config", "uploadpack.allowFilter", "true")
+	git(t, clone, "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+remote, ".")
+
+	noToken := AuthEnv(func(context.Context) ([]string, error) { return nil, errors.New("the GitHub App sign in expired") })
+	env, err := noToken.Env(ctx, "cat-file")
+	if err != nil {
+		t.Fatalf("Env of a local command: %v", err)
+	}
+
+	local := exec.Command("git", "rev-parse", "HEAD")
+	local.Dir, local.Env = clone, append(os.Environ(), env...)
+	if out, err := local.CombinedOutput(); err != nil {
+		t.Fatalf("git rev-parse without the token: %v\n%s", err, out)
+	}
+	lazy := exec.Command("git", "cat-file", "-p", "HEAD:file")
+	lazy.Dir, lazy.Env = clone, append(os.Environ(), env...)
+	if out, err := lazy.CombinedOutput(); err == nil {
+		t.Fatalf("git cat-file fetched the missing blob without the token: %q", out)
 	}
 }
