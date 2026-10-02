@@ -443,6 +443,68 @@ func TestFailedRenewalKeepsATokenThatStillWorks(t *testing.T) {
 	}
 }
 
+func TestFailedRenewalWaitsLongerBeforeEachTry(t *testing.T) {
+	h := newHarness(t)
+	first := h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime*time.Second - 4*time.Minute)
+	h.g.React(ghfake.RouteOAuthGrant, func(ghfake.Action) (ghfake.Response, bool) {
+		return ghfake.Response{Status: http.StatusBadGateway, Message: "bad gateway"}, true
+	})
+	daemon := h.auth()
+
+	for _, step := range []struct {
+		advance time.Duration
+		want    int
+	}{
+		{0, 1},
+		{0, 1},
+		{14 * time.Second, 1},
+		{time.Second, 2},
+		{29 * time.Second, 2},
+		{time.Second, 3},
+	} {
+		h.clock.Advance(step.advance)
+		got, err := daemon.Token(context.Background())
+		if err != nil || got != first.AccessToken {
+			t.Fatalf("Token = %q, %v; want the stored token while it still works", got, err)
+		}
+		if n := refreshes(h.g); n != step.want {
+			t.Fatalf("%d renewals, want %d", n, step.want)
+		}
+	}
+}
+
+func TestRenewalBackoffEndsAtTheExpiry(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime*time.Second - 10*time.Second)
+	h.g.React(ghfake.RouteOAuthGrant, func(ghfake.Action) (ghfake.Response, bool) {
+		return ghfake.Response{Status: http.StatusBadGateway, Message: "bad gateway"}, true
+	})
+	daemon := h.auth()
+	if _, err := daemon.Token(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	h.clock.Advance(10 * time.Second)
+	_, last := daemon.Token(context.Background())
+	if last == nil {
+		t.Fatal("Token after the expiry worked with a renewal that failed")
+	}
+	if n := refreshes(h.g); n != 2 {
+		t.Fatalf("%d renewals, want 2: the expiry ends the backoff", n)
+	}
+
+	_, err := daemon.Token(context.Background())
+
+	if !errors.Is(err, last) {
+		t.Fatalf("Token = %v, want the error of the last renewal %v", err, last)
+	}
+	if n := refreshes(h.g); n != 2 {
+		t.Fatalf("%d renewals, want 2: a call during the backoff does not ask GitHub", n)
+	}
+}
+
 func TestGitEnvOnlyForTheApp(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("GITHUB_TOKEN", "ghp_env")

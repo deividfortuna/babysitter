@@ -20,7 +20,11 @@ const (
 	OriginGH   Origin = "gh"
 )
 
-const refreshMargin = 5 * time.Minute
+const (
+	refreshMargin = 5 * time.Minute
+	firstRetry    = 15 * time.Second
+	maxDoublings  = 3
+)
 
 var (
 	ErrNoToken        = errors.New("no GitHub token found: run 'babysitter auth login', set GITHUB_TOKEN or run 'gh auth login'")
@@ -43,6 +47,9 @@ type Auth struct {
 
 	refreshMu sync.Mutex
 	refused   string
+	failures  int
+	retryAt   time.Time
+	lastErr   error
 
 	mu       sync.Mutex
 	unsaved  *renewal
@@ -224,21 +231,40 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 	if !a.renewable(c.Token) {
 		return Credentials{}, ErrSessionExpired
 	}
+	if a.now().Before(a.retryAt) {
+		return a.fallback(c)
+	}
 	rotation := context.WithoutCancel(ctx)
 	tok, err := a.oauth.Refresh(rotation, c.RefreshToken)
 	if errors.Is(err, errRefreshRefused) {
 		a.refused = c.RefreshToken
 		return Credentials{}, fmt.Errorf("%w: %w", ErrSessionExpired, err)
 	}
-	if err != nil && a.usable(c.Token) {
-		return c, nil
-	}
 	if err != nil {
-		return Credentials{}, err
+		a.backOff(c.Token, err)
+		return a.fallback(c)
 	}
+	a.failures, a.retryAt, a.lastErr = 0, time.Time{}, nil
 	c.Token = tok
 	a.keep(c, onFile)
 	return c, nil
+}
+
+func (a *Auth) backOff(t Token, err error) {
+	wait := firstRetry << min(a.failures, maxDoublings)
+	if a.usable(t) {
+		wait = min(wait, t.ExpiresAt.Sub(a.now()))
+	}
+	a.failures++
+	a.retryAt = a.now().Add(wait)
+	a.lastErr = err
+}
+
+func (a *Auth) fallback(c Credentials) (Credentials, error) {
+	if a.usable(c.Token) {
+		return c, nil
+	}
+	return Credentials{}, a.lastErr
 }
 
 func (a *Auth) load() (Credentials, error) {
