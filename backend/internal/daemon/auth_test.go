@@ -48,8 +48,14 @@ func TestStatusSaysWhenTheInstallationsCannotBeRead(t *testing.T) {
 
 	st := c.Status(context.Background())
 
-	if st.State != string(ghauth.StateConnected) || st.InstallsError == "" || len(st.Installations) != 0 {
-		t.Fatalf("Status = %+v, want connected with the reason the installations are unknown", st)
+	if st.State != string(ghauth.StateConnected) {
+		t.Fatalf("State = %q, want connected", st.State)
+	}
+	if st.InstallsError == "" {
+		t.Fatal("InstallsError is empty, want the reason the installations are unknown")
+	}
+	if len(st.Installations) != 0 {
+		t.Fatalf("Installations = %v, want none", st.Installations)
 	}
 	if st.Error != "" {
 		t.Fatalf("Error = %q, want the failure only in installationsError", st.Error)

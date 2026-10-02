@@ -593,7 +593,7 @@ func TestEveryGitCommandCarriesTheAuthEnv(t *testing.T) {
 			envs[args[0]] = env
 			return "", nil
 		},
-		Auth: func(context.Context) ([]string, error) { return []string{"GIT_CONFIG_COUNT=1"}, nil },
+		Auth: func(context.Context, bool) ([]string, error) { return []string{"GIT_CONFIG_COUNT=1"}, nil },
 	}
 	ctx := context.Background()
 	if _, err := g.Fetch(ctx, "/wt", "fix"); err != nil {
@@ -618,7 +618,7 @@ func TestPushStopsWhenTheAuthEnvFails(t *testing.T) {
 			ran = true
 			return "", nil
 		},
-		Auth: func(context.Context) ([]string, error) { return nil, expired },
+		Auth: func(context.Context, bool) ([]string, error) { return nil, expired },
 	}
 
 	err := g.Push(context.Background(), "/wt", Push{SHA: "abc", Branch: "fix"})
@@ -640,7 +640,7 @@ func TestLocalCommandsRunWhenTheAuthEnvFails(t *testing.T) {
 			env = e
 			return "abc", nil
 		},
-		Auth: func(context.Context) ([]string, error) { return nil, expired },
+		Auth: func(context.Context, bool) ([]string, error) { return nil, expired },
 	}
 
 	head, err := g.Head(context.Background(), "/wt")

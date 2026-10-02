@@ -78,6 +78,35 @@ func TestStartTakesTheConversationIdFromTheRunner(t *testing.T) {
 	}
 }
 
+func TestStartOfAWatchedPullRequestSkipsTheAccessCheck(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	existing, err := fx.st.CreateWatch(context.Background(), store.Watch{
+		Owner: "octo", Name: "hello", Number: 3, HeadRef: "fix", StartedAt: fx.clock(),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	checked := false
+	fx.access = func(context.Context, *github.Client, ...string) error {
+		checked = true
+		return errors.New("the GitHub App is not installed on the repository")
+	}
+	fx.svc = fx.newService()
+
+	got, err := fx.svc.Start(context.Background(), fx.startRequest())
+
+	if !errors.Is(err, store.ErrWatchExists) {
+		t.Fatalf("Start() error = %v, want %v", err, store.ErrWatchExists)
+	}
+	if got.ID != existing.ID {
+		t.Fatalf("Start() = watch %d, want the existing %d", got.ID, existing.ID)
+	}
+	if checked {
+		t.Fatal("the access check ran for a pull request that is already watched")
+	}
+}
+
 func TestStartRemovesTheWorktreeWhenTheWatchCannotBeCreated(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

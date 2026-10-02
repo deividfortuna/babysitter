@@ -40,6 +40,12 @@ type DeviceCode struct {
 	Interval        int    `json:"interval"`
 }
 
+const defaultCodeLifetime = 900
+
+func (c DeviceCode) Lifetime() time.Duration {
+	return time.Duration(cmp.Or(c.ExpiresIn, defaultCodeLifetime)) * time.Second
+}
+
 type Token struct {
 	AccessToken      string    `json:"accessToken"`
 	ExpiresAt        time.Time `json:"expiresAt,omitzero"`
@@ -78,7 +84,7 @@ func (o OAuth) RequestCode(ctx context.Context) (DeviceCode, error) {
 
 func (o OAuth) Wait(ctx context.Context, code DeviceCode) (Token, error) {
 	interval := max(code.Interval, 1)
-	deadline := o.Now().Add(time.Duration(cmp.Or(code.ExpiresIn, 900)) * time.Second)
+	deadline := o.Now().Add(code.Lifetime())
 	for {
 		if err := o.sleep(ctx, interval); err != nil {
 			return Token{}, err

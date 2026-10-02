@@ -4,8 +4,11 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
+
+	"golang.org/x/sync/singleflight"
 
 	"github.com/deividfortuna/babysitter/internal/redact"
 )
@@ -23,7 +26,8 @@ type ViewerFunc func(ctx context.Context) (Viewer, error)
 var errNoViewer = errors.New("the daemon cannot ask GitHub who the token belongs to")
 
 type viewerCache struct {
-	fn ViewerFunc
+	fn     ViewerFunc
+	flight singleflight.Group
 
 	mu         sync.Mutex
 	value      Viewer
@@ -42,16 +46,19 @@ func (c *viewerCache) get(ctx context.Context) (Viewer, error) {
 	if c.fn == nil {
 		return Viewer{}, errNoViewer
 	}
-	v, err := c.fn(ctx)
+	v, err, _ := c.flight.Do(strconv.Itoa(generation), func() (any, error) {
+		return c.fn(context.WithoutCancel(ctx))
+	})
 	if err != nil {
 		return Viewer{}, err
 	}
+	viewer := v.(Viewer)
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.generation == generation {
-		c.value, c.at = v, time.Now()
+		c.value, c.at = viewer, time.Now()
 	}
-	return v, nil
+	return viewer, nil
 }
 
 func (c *viewerCache) reset() {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"reflect"
 	"testing"
 	"time"
 
@@ -53,7 +54,7 @@ func TestGetAuthAnswersTheStatus(t *testing.T) {
 	if rec := call(t, h, http.MethodGet, "/auth", "", &got); rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if got.State != want.State || got.Login != want.Login || len(got.Installations) != 1 || got.Installations[0] != want.Installations[0] {
+	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("auth = %+v, want %+v", got, want)
 	}
 }

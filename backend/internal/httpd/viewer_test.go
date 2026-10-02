@@ -5,6 +5,8 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -77,5 +79,28 @@ func TestViewerAnswersWhenTheLookupTellsAnAuthChange(t *testing.T) {
 		}
 	case <-time.After(5 * time.Second):
 		t.Fatal("GET /viewer hangs when the token lookup tells an auth change")
+	}
+}
+
+func TestViewerRequestsShareOneLookup(t *testing.T) {
+	var calls atomic.Int32
+	release := make(chan struct{})
+	h := NewRouter(Deps{Log: testutil.Logger(t), Bus: events.NewBus(), Viewer: func(context.Context) (Viewer, error) {
+		calls.Add(1)
+		<-release
+		return Viewer{Login: "octocat"}, nil
+	}})
+
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() { call(t, h, http.MethodGet, "/viewer", "", nil) })
+	}
+	testutil.Eventually(t, func() bool { return calls.Load() >= 1 }, "the first lookup starts")
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("GitHub asked %d times for 5 requests at once, want 1", n)
 	}
 }

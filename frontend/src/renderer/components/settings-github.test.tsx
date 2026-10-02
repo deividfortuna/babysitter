@@ -1,4 +1,5 @@
-import { screen, waitFor, within } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
+import { focusManager } from "@tanstack/react-query";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { http, HttpResponse } from "msw";
@@ -152,6 +153,40 @@ test("connected names the account and the accounts the app is installed on", asy
   expect(screen.getByText("organization")).toBeVisible();
   expect(screen.getByText("acme")).toBeVisible();
   expect(screen.getByRole("link", { name: "Manage on GitHub" })).toHaveAttribute("href", installUrl);
+});
+
+test("a sign in whose token cannot be read is never shown as connected", async () => {
+  serveApi({
+    auth: {
+      ...connected,
+      state: "unreachable",
+      origin: "",
+      installations: [],
+      error: "renew the app token: GitHub answered 502",
+    },
+  });
+  renderWithProviders(<GitHubPanel />);
+
+  expect(await screen.findByText("cannot reach GitHub")).toBeVisible();
+  expect(screen.queryByText("connected")).not.toBeInTheDocument();
+  expect(screen.getByText("renew the app token: GitHub answered 502")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Try again" })).toBeVisible();
+});
+
+test("coming back to the app reads the installations again", async () => {
+  serveApi();
+  const setAuth = serveAuthSequence([{ ...connected, installations: [] }, connected]);
+  renderWithProviders(<GitHubPanel />);
+  expect(await screen.findByText("Choose the repositories babysitter may watch")).toBeVisible();
+
+  setAuth(1);
+  act(() => {
+    focusManager.setFocused(false);
+    focusManager.setFocused(true);
+  });
+
+  expect(await screen.findByRole("heading", { name: "Installed on" })).toBeVisible();
+  focusManager.setFocused(undefined);
 });
 
 test("installations that cannot be read are not called missing", async () => {

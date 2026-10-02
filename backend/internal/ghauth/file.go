@@ -14,7 +14,6 @@ import (
 
 const (
 	signInFileName = "github-app.json"
-	lockStale      = 2 * time.Minute
 	lockRetry      = 50 * time.Millisecond
 )
 
@@ -95,25 +94,25 @@ func (f credentialsFile) Lock(ctx context.Context) (unlock func(), err error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
 	}
-	for {
-		lock, err := os.OpenFile(path, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o600)
-		if err == nil {
-			_ = lock.Close()
-			return func() { _ = os.Remove(path) }, nil
-		}
-		if !errors.Is(err, os.ErrExist) {
-			return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
-		}
-		removeStale(path)
-		if err := ghclient.SleepCtx(ctx, lockRetry); err != nil {
-			return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
-		}
+	lock, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
 	}
-}
-
-func removeStale(path string) {
-	info, err := os.Stat(path)
-	if err == nil && time.Since(info.ModTime()) > lockStale {
-		_ = os.Remove(path)
+	for {
+		held, err := tryLock(lock)
+		if err != nil {
+			_ = lock.Close()
+			return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
+		}
+		if held {
+			return func() {
+				unlockFile(lock)
+				_ = lock.Close()
+			}, nil
+		}
+		if err := ghclient.SleepCtx(ctx, lockRetry); err != nil {
+			_ = lock.Close()
+			return nil, fmt.Errorf("lock the GitHub App sign in: %w", err)
+		}
 	}
 }

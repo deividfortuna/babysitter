@@ -9,10 +9,11 @@ import (
 type State string
 
 const (
-	StateSignedOut State = "signed_out"
-	StateConnected State = "connected"
-	StateNotInUse  State = "not_in_use"
-	StateExpired   State = "expired"
+	StateSignedOut   State = "signed_out"
+	StateConnected   State = "connected"
+	StateNotInUse    State = "not_in_use"
+	StateExpired     State = "expired"
+	StateUnreachable State = "unreachable"
 )
 
 type Status struct {
@@ -51,6 +52,8 @@ func stateOf(signedIn bool, origin Origin, err error) State {
 		return StateExpired
 	case origin.comesFirst():
 		return StateNotInUse
+	case reportable(err):
+		return StateUnreachable
 	}
 	return StateConnected
 }

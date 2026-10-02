@@ -5,6 +5,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net/http"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -41,6 +43,27 @@ func approveOnPoll(g *ghfake.GitHub) {
 	})
 }
 
+func TestAuthStatusPrintsWhenTheInstallationsCannotBeRead(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	g := ghfake.New()
+	approveOnPoll(g)
+	dir := t.TempDir()
+	if _, err := runAuth(t, g, dir, "auth", "login"); err != nil {
+		t.Fatal(err)
+	}
+	g.Fail(ghfake.RouteInstallations, http.StatusBadGateway, "bad gateway")
+
+	out, err := runAuth(t, g, dir, "auth", "status")
+	if err != nil {
+		t.Fatalf("auth status: %v", err)
+	}
+	for _, want := range []string{"App:           connected", "App account:   alice", "Installed on:  unknown, "} {
+		if !strings.Contains(out, want) {
+			t.Errorf("auth status printed %q, want %q in it", out, want)
+		}
+	}
+}
+
 func TestAuthLoginStatusLogout(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "")
 	g := ghfake.New()
@@ -66,8 +89,13 @@ func TestAuthLoginStatusLogout(t *testing.T) {
 	if err := json.Unmarshal([]byte(out), &st); err != nil {
 		t.Fatalf("invalid JSON %q: %v", out, err)
 	}
-	if st.Origin != ghauth.OriginApp || st.State != ghauth.StateConnected || st.Login != "alice" || len(st.Installations) != 1 || st.Installations[0] != "alice" {
-		t.Fatalf("status = %+v", st)
+	st.ExpiresAt = nil
+	want := authOutput{
+		State: ghauth.StateConnected, Origin: ghauth.OriginApp, AppAvailable: true, Login: "alice",
+		InstallURL: "https://github.com/apps/babysitter/installations/new", Installations: []string{"alice"},
+	}
+	if !reflect.DeepEqual(st, want) {
+		t.Fatalf("status = %+v, want %+v", st, want)
 	}
 
 	if _, err := runAuth(t, g, dir, "auth", "logout"); err != nil {

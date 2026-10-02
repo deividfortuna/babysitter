@@ -12,6 +12,7 @@ export function useAuth() {
   return useQuery({
     queryKey: authQueryKey,
     staleTime: Infinity,
+    refetchOnWindowFocus: "always",
     retry: false,
     queryFn: async () => {
       const { data, error } = await api().GET("/api/v1/auth");

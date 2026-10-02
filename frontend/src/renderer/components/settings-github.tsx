@@ -377,6 +377,23 @@ function NotInUse({ auth, signOut }: { auth: Auth; signOut: SignOut }) {
   );
 }
 
+function Unreachable({ auth, signOut }: { auth: Auth; signOut: SignOut }) {
+  const recheck = useAuth();
+  return (
+    <AccountCard
+      auth={auth}
+      badge={<StateBadge label="cannot reach GitHub" pip="bg-destructive" />}
+      description="Signed in, but the daemon cannot get the token of the app right now."
+    >
+      <SignOutButton signOut={signOut} variant="ghost" />
+      <Button variant="outline" size="sm" disabled={recheck.isFetching} onClick={() => void recheck.refetch()}>
+        {recheck.isFetching ? <Spinner data-icon="inline-start" /> : null}
+        Try again
+      </Button>
+    </AccountCard>
+  );
+}
+
 function Expired({ auth, signOut, start }: { auth: Auth; signOut: SignOut; start: StartSignIn }) {
   return (
     <>
@@ -436,6 +453,7 @@ function AccessState({ auth }: { auth: Auth }) {
     connected: <Connected auth={auth} signOut={signOut} />,
     not_in_use: <NotInUse auth={auth} signOut={signOut} />,
     expired: <Expired auth={auth} signOut={signOut} start={start} />,
+    unreachable: <Unreachable auth={auth} signOut={signOut} />,
   };
   return (
     <>

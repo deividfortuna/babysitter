@@ -19,6 +19,7 @@ type authOutput struct {
 	ExpiresAt     *time.Time    `json:"expiresAt,omitempty"`
 	InstallURL    string        `json:"installUrl"`
 	Installations []string      `json:"installations,omitempty"`
+	InstallsError string        `json:"installationsError,omitempty"`
 	Error         string        `json:"error,omitempty"`
 }
 
@@ -31,10 +32,18 @@ var originWords = map[ghauth.Origin]string{
 }
 
 var stateWords = map[ghauth.State]string{
-	ghauth.StateSignedOut: "not signed in",
-	ghauth.StateConnected: "connected",
-	ghauth.StateNotInUse:  "signed in, not in use",
-	ghauth.StateExpired:   "the sign in expired, run 'babysitter auth login'",
+	ghauth.StateSignedOut:   "not signed in",
+	ghauth.StateConnected:   "connected",
+	ghauth.StateNotInUse:    "signed in, not in use",
+	ghauth.StateExpired:     "the sign in expired, run 'babysitter auth login'",
+	ghauth.StateUnreachable: "signed in, but babysitter cannot get the token of the app now",
+}
+
+func installedWord(a authOutput) string {
+	if a.InstallsError != "" {
+		return "unknown, " + a.InstallsError
+	}
+	return kindsWord(a.Installations)
 }
 
 func (a authOutput) writeText(w io.Writer) error {
@@ -42,7 +51,7 @@ func (a authOutput) writeText(w io.Writer) error {
 	fmt.Fprintf(w, "App:           %s\n", stateWords[a.State])
 	if a.State != ghauth.StateSignedOut {
 		fmt.Fprintf(w, "App account:   %s\n", a.Login)
-		fmt.Fprintf(w, "Installed on:  %s\n", kindsWord(a.Installations))
+		fmt.Fprintf(w, "Installed on:  %s\n", installedWord(a))
 	}
 	if a.State == ghauth.StateNotInUse {
 		fmt.Fprintf(w, "Note:          %s comes before the app\n", originWords[a.Origin])
@@ -131,9 +140,9 @@ func newAuthStatusCmd(opts *options) *cobra.Command {
 			}
 			if st.Origin == ghauth.OriginApp {
 				out.Installations, err = installationAccounts(cmd, opts)
-				if err != nil {
-					return err
-				}
+			}
+			if err != nil {
+				out.InstallsError = err.Error()
 			}
 			return opts.print(cmd.OutOrStdout(), out)
 		},

@@ -47,7 +47,7 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 	if err := a.file.Save(c); err != nil {
 		return Credentials{}, err
 	}
-	a.announce(who.Login)
+	a.announce(identity{login: who.Login})
 	return c, nil
 }
 
@@ -87,7 +87,7 @@ func (s *SignIns) Start(ctx context.Context) (Prompt, error) {
 		prompt: Prompt{
 			UserCode:        code.UserCode,
 			VerificationURI: code.VerificationURI,
-			ExpiresAt:       s.auth.now().Add(time.Duration(code.ExpiresIn) * time.Second),
+			ExpiresAt:       s.auth.now().Add(code.Lifetime()),
 		},
 		cancel: cancel,
 	}

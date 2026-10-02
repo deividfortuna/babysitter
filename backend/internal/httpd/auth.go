@@ -19,7 +19,7 @@ const (
 )
 
 type Auth struct {
-	State         string             `json:"state" enum:"signed_out,waiting,connected,not_in_use,expired" description:"The sign in with the babysitter GitHub App: none, a code that waits on GitHub, in use, signed in while a token that comes first is in use, or expired"`
+	State         string             `json:"state" enum:"signed_out,waiting,connected,not_in_use,expired,unreachable" description:"The sign in with the babysitter GitHub App: none, a code that waits on GitHub, in use, signed in while a token that comes first is in use, expired, or signed in while the daemon cannot get its token now"`
 	Origin        string             `json:"origin" enum:",flag,env,app,gh" description:"Where the token of the daemon comes from: the --token flag, GITHUB_TOKEN, the babysitter GitHub App or the gh CLI; empty when there is no token"`
 	AppAvailable  bool               `json:"appAvailable" description:"This build of babysitter knows the babysitter GitHub App"`
 	Login         string             `json:"login,omitempty" description:"The account signed in with the app"`

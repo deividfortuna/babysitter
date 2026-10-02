@@ -288,9 +288,6 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	if snap.PR.Merged || snap.PR.Closed {
 		return store.Watch{}, fmt.Errorf("%w: %s#%d is %s", ErrNotOpen, snap.PR.Repo, snap.PR.Number, snap.PR.State)
 	}
-	if err := s.checkAccess(ctx, client, distinctRepos(snap.PR.Repo, snap.PR.HeadRepo)...); err != nil {
-		return store.Watch{}, err
-	}
 	owner, name, err := store.ParseFullName(snap.PR.Repo)
 	if err != nil {
 		return store.Watch{}, err
@@ -299,6 +296,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	if existing, err := s.store.FindActiveWatch(ctx, key); err == nil {
 		return existing, store.ErrWatchExists
 	} else if !errors.Is(err, store.ErrWatchNotFound) {
+		return store.Watch{}, err
+	}
+	if err := s.checkAccess(ctx, client, distinctRepos(snap.PR.Repo, snap.PR.HeadRepo)...); err != nil {
 		return store.Watch{}, err
 	}
 	if co.source, err = s.orManagedSource(ctx, co.source, snap.PR.HeadRepo); err != nil {

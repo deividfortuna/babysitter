@@ -45,7 +45,7 @@ type Auth struct {
 
 	mu       sync.Mutex
 	known    bool
-	identity string
+	identity identity
 	onChange func()
 }
 
@@ -118,15 +118,22 @@ func (a *Auth) Token(ctx context.Context) (string, error) {
 	return c.Token, err
 }
 
-func (a *Auth) GitEnv(ctx context.Context) ([]string, error) {
+func (a *Auth) GitEnv(ctx context.Context, network bool) ([]string, error) {
+	if !network {
+		return gitEnvFor(a.storedToken()), nil
+	}
 	token, err := a.appToken(ctx)
 	if err != nil {
 		return nil, err
 	}
+	return gitEnvFor(token), nil
+}
+
+func gitEnvFor(token string) []string {
 	if token == "" {
-		return nil, nil
+		return nil
 	}
-	return gitEnv(token), nil
+	return gitEnv(token)
 }
 
 func (a *Auth) SignOut(ctx context.Context) error {
@@ -138,7 +145,7 @@ func (a *Auth) SignOut(ctx context.Context) error {
 	if err := a.file.Remove(); err != nil {
 		return err
 	}
-	a.announce("")
+	a.announce(identity{})
 	return nil
 }
 
@@ -166,16 +173,18 @@ func (a *Auth) appToken(ctx context.Context) (string, error) {
 func (a *Auth) appCredentials(ctx context.Context) (Credentials, error) {
 	c, err := a.file.Load()
 	if errors.Is(err, ErrSignedOut) {
-		a.observe("")
+		a.observe(identity{})
 	}
 	if err != nil {
 		return Credentials{}, err
 	}
-	a.observe(c.Login)
 	if a.fresh(c.Token) {
+		a.observe(identity{login: c.Login})
 		return c, nil
 	}
-	return a.refresh(ctx)
+	renewed, err := a.refresh(ctx)
+	a.observe(identity{login: c.Login, expired: errors.Is(err, ErrSessionExpired)})
+	return renewed, err
 }
 
 func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
@@ -196,7 +205,8 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 	if !a.renewable(c.Token) {
 		return Credentials{}, ErrSessionExpired
 	}
-	tok, err := a.oauth.Refresh(ctx, c.RefreshToken)
+	rotation := context.WithoutCancel(ctx)
+	tok, err := a.oauth.Refresh(rotation, c.RefreshToken)
 	if errors.Is(err, errRefreshRefused) {
 		return Credentials{}, fmt.Errorf("%w: %w", ErrSessionExpired, err)
 	}
@@ -213,12 +223,26 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 	return c, nil
 }
 
+func (a *Auth) storedToken() string {
+	if _, ok := a.override(); ok {
+		return ""
+	}
+	c, err := a.file.Load()
+	if err != nil {
+		return ""
+	}
+	if !a.usable(c.Token) {
+		return ""
+	}
+	return c.AccessToken
+}
+
 func (a *Auth) fresh(t Token) bool {
 	return t.ExpiresAt.IsZero() || a.now().Add(refreshMargin).Before(t.ExpiresAt)
 }
 
 func (a *Auth) usable(t Token) bool {
-	return a.now().Before(t.ExpiresAt)
+	return t.ExpiresAt.IsZero() || a.now().Before(t.ExpiresAt)
 }
 
 func (a *Auth) renewable(t Token) bool {
@@ -226,10 +250,15 @@ func (a *Auth) renewable(t Token) bool {
 	return t.RefreshToken != "" && refreshLives
 }
 
-func (a *Auth) observe(login string) {
+type identity struct {
+	login   string
+	expired bool
+}
+
+func (a *Auth) observe(id identity) {
 	a.mu.Lock()
-	changed := a.known && a.identity != login
-	a.known, a.identity = true, login
+	changed := a.known && a.identity != id
+	a.known, a.identity = true, id
 	fn := a.onChange
 	a.mu.Unlock()
 	if changed {
@@ -237,9 +266,9 @@ func (a *Auth) observe(login string) {
 	}
 }
 
-func (a *Auth) announce(login string) {
+func (a *Auth) announce(id identity) {
 	a.mu.Lock()
-	a.known, a.identity = true, login
+	a.known, a.identity = true, id
 	fn := a.onChange
 	a.mu.Unlock()
 	a.notify(fn)

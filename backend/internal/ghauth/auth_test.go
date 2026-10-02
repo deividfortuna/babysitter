@@ -155,15 +155,25 @@ func TestSignInSavesTheAccountAndTheToken(t *testing.T) {
 
 	c := h.signIn(t, a)
 
-	if c.Login != "alice" || c.AvatarURL != "https://avatars.githubusercontent.com/u/1" || !strings.HasPrefix(c.AccessToken, "ghu_") || !strings.HasPrefix(c.RefreshToken, "ghr_") {
-		t.Fatalf("credentials = %+v", c)
+	identity := Identity{Login: c.Login, AvatarURL: c.AvatarURL}
+	if want := (Identity{Login: "alice", AvatarURL: "https://avatars.githubusercontent.com/u/1"}); identity != want {
+		t.Errorf("identity = %+v, want %+v", identity, want)
+	}
+	if !strings.HasPrefix(c.AccessToken, "ghu_") {
+		t.Errorf("AccessToken = %q, want a ghu_ token", c.AccessToken)
+	}
+	if !strings.HasPrefix(c.RefreshToken, "ghr_") {
+		t.Errorf("RefreshToken = %q, want a ghr_ token", c.RefreshToken)
 	}
 	if want := h.clock.Now().Add(ghfake.TokenLifetime * time.Second); !c.ExpiresAt.Equal(want) {
 		t.Fatalf("ExpiresAt = %v, want %v", c.ExpiresAt, want)
 	}
 	cred, err := a.Credential(context.Background())
-	if err != nil || cred.Origin != OriginApp || cred.Token != c.AccessToken {
-		t.Fatalf("Credential = %+v, %v", cred, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if want := (Credential{Token: c.AccessToken, Origin: OriginApp}); cred != want {
+		t.Fatalf("Credential = %+v, want %+v", cred, want)
 	}
 	if runtime.GOOS != "windows" {
 		info, err := os.Stat(filepath.Join(h.dir, signInFileName))
@@ -415,19 +425,19 @@ func TestFailedRenewalKeepsATokenThatStillWorks(t *testing.T) {
 func TestGitEnvOnlyForTheApp(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("GITHUB_TOKEN", "ghp_env")
-	env, err := h.auth().GitEnv(context.Background())
+	env, err := h.auth().GitEnv(context.Background(), true)
 	if err != nil || env != nil {
 		t.Fatalf("GitEnv with GITHUB_TOKEN = %v, %v; want nothing, so git keeps the credentials of the user", env, err)
 	}
 
 	t.Setenv("GITHUB_TOKEN", "")
-	env, err = h.auth().GitEnv(context.Background())
+	env, err = h.auth().GitEnv(context.Background(), true)
 	if err != nil || env != nil {
 		t.Fatalf("GitEnv without a token = %v, %v; want nothing", env, err)
 	}
 
 	c := h.signIn(t, h.auth())
-	env, err = h.auth().GitEnv(context.Background())
+	env, err = h.auth().GitEnv(context.Background(), true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -485,8 +495,12 @@ func TestCheckReposListsTheInstallationsOnce(t *testing.T) {
 
 	err := h.auth().CheckRepos(context.Background(), h.srv.Client(t), "acme/api", "alice/fork", "alice/other")
 
-	if !errors.Is(err, ErrNotInstalled) || !strings.Contains(err.Error(), "alice/other") || strings.Contains(err.Error(), "acme/api") {
-		t.Fatalf("CheckRepos = %v, want only alice/other named", err)
+	want := ErrNotInstalled.Error() + ": alice/other, install it at https://github.com/apps/babysitter/installations/new"
+	if err == nil {
+		t.Fatalf("CheckRepos = nil, want %q", want)
+	}
+	if err.Error() != want {
+		t.Fatalf("CheckRepos = %q, want %q", err, want)
 	}
 	if n := h.g.Count(ghfake.RouteInstallations); n != 1 {
 		t.Fatalf("%d listings of the installations, want 1", n)
@@ -514,7 +528,7 @@ func TestGitEnvAndCheckRepoNeverAskGH(t *testing.T) {
 	}
 	a := h.auth(WithGH(gh))
 
-	if env, err := a.GitEnv(context.Background()); err != nil || env != nil {
+	if env, err := a.GitEnv(context.Background(), true); err != nil || env != nil {
 		t.Fatalf("GitEnv = %v, %v; want nothing for the gh CLI", env, err)
 	}
 	if err := a.CheckRepos(context.Background(), h.srv.Client(t), "acme/api"); err != nil {
@@ -528,17 +542,112 @@ func TestGitEnvAndCheckRepoNeverAskGH(t *testing.T) {
 func TestStatusStates(t *testing.T) {
 	h := newHarness(t)
 	gh := func(context.Context) (string, error) { return "gho_from_gh", nil }
-	signedOut := h.auth(WithGH(gh)).Status(context.Background())
-	if signedOut.State != StateSignedOut || signedOut.Origin != OriginGH || signedOut.Err != nil {
-		t.Fatalf("signed out Status = %+v", signedOut)
+	type seen struct {
+		State  State
+		Origin Origin
+		Err    error
 	}
+	check := func(name string, st Status, want seen) {
+		t.Helper()
+		if got := (seen{st.State, st.Origin, st.Err}); got != want {
+			t.Fatalf("%s: Status = %+v, want %+v", name, got, want)
+		}
+	}
+
+	check("signed out", h.auth(WithGH(gh)).Status(context.Background()), seen{StateSignedOut, OriginGH, nil})
 	h.signIn(t, h.auth())
-	if st := h.auth().Status(context.Background()); st.State != StateConnected || st.Origin != OriginApp {
-		t.Fatalf("signed in Status = %+v", st)
-	}
+	check("signed in", h.auth().Status(context.Background()), seen{StateConnected, OriginApp, nil})
 	t.Setenv("GITHUB_TOKEN", "ghp_env")
-	if st := h.auth().Status(context.Background()); st.State != StateNotInUse || st.Origin != OriginEnv {
-		t.Fatalf("Status with GITHUB_TOKEN = %+v", st)
+	check("with GITHUB_TOKEN", h.auth().Status(context.Background()), seen{StateNotInUse, OriginEnv, nil})
+}
+
+func TestLocalGitCommandsNeverRenew(t *testing.T) {
+	h := newHarness(t)
+	c := h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime*time.Second - time.Minute)
+
+	env, err := h.auth().GitEnv(context.Background(), false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(env, gitEnv(c.AccessToken)) {
+		t.Fatalf("GitEnv = %v, want the stored token that still works", env)
+	}
+	if n := refreshes(h.g); n != 0 {
+		t.Fatalf("%d renewals for a local command, want 0", n)
+	}
+	h.clock.Advance(2 * time.Minute)
+	if env, err := h.auth().GitEnv(context.Background(), false); err != nil || env != nil {
+		t.Fatalf("GitEnv after the expiry = %v, %v; want no token and no error", env, err)
+	}
+}
+
+func TestExpiryIsTold(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	daemon := h.auth()
+	var changes atomic.Int32
+	daemon.OnChange(func() { changes.Add(1) })
+	if _, err := daemon.Credential(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	h.g.RevokeRefresh()
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+
+	if _, err := daemon.Credential(context.Background()); !errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("err = %v, want ErrSessionExpired", err)
+	}
+
+	testutil.Eventually(t, func() bool { return changes.Load() == 1 }, "the expiry is told")
+}
+
+func TestStatusUnreachableWhenNoTokenCanBeRead(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	h.g.React(ghfake.RouteOAuthGrant, func(ghfake.Action) (ghfake.Response, bool) {
+		return ghfake.Response{Status: http.StatusBadGateway, Message: "bad gateway"}, true
+	})
+
+	st := h.auth().Status(context.Background())
+
+	if st.State != StateUnreachable {
+		t.Fatalf("State = %q, want %q", st.State, StateUnreachable)
+	}
+	if st.Err == nil {
+		t.Fatal("Err = nil, want the reason the token cannot be read")
+	}
+}
+
+func TestRenewalSavesWhenTheCallerGoesAway(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	ctx, cancel := context.WithCancel(context.Background())
+	h.g.React(ghfake.RouteOAuthGrant, func(ghfake.Action) (ghfake.Response, bool) {
+		cancel()
+		return ghfake.Response{}, false
+	})
+
+	renewed, err := h.auth().Token(ctx)
+	if err != nil {
+		t.Fatalf("Token = %v, want the renewed token even though the caller left", err)
+	}
+	saved, err := newCredentialsFile(h.dir).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.AccessToken != renewed {
+		t.Fatalf("saved token = %q, want the renewed %q: the new refresh token was lost", saved.AccessToken, renewed)
+	}
+}
+
+func TestCodeLifetimeDefault(t *testing.T) {
+	if got := (DeviceCode{}).Lifetime(); got != 15*time.Minute {
+		t.Fatalf("Lifetime without expires_in = %v, want 15m", got)
+	}
+	if got := (DeviceCode{ExpiresIn: 60}).Lifetime(); got != time.Minute {
+		t.Fatalf("Lifetime = %v, want 1m", got)
 	}
 }
 

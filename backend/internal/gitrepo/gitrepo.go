@@ -13,7 +13,7 @@ var ErrDetachedHead = errors.New("HEAD is detached, check out a branch or name t
 
 var NoPromptEnv = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
 
-type AuthEnv func(ctx context.Context) ([]string, error)
+type AuthEnv func(ctx context.Context, network bool) ([]string, error)
 
 var networkCommands = []string{"fetch", "push", "clone", "pull", "ls-remote"}
 
@@ -21,11 +21,12 @@ func (a AuthEnv) Env(ctx context.Context, command string) ([]string, error) {
 	if a == nil {
 		return NoPromptEnv, nil
 	}
-	extra, err := a(ctx)
+	network := slices.Contains(networkCommands, command)
+	extra, err := a(ctx, network)
 	if err == nil {
 		return append(slices.Clone(NoPromptEnv), extra...), nil
 	}
-	if slices.Contains(networkCommands, command) {
+	if network {
 		return nil, err
 	}
 	return NoPromptEnv, nil
