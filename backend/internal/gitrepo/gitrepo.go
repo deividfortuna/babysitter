@@ -45,7 +45,7 @@ func (a AuthEnv) Env(ctx context.Context, command string) ([]string, error) {
 }
 
 var (
-	ErrNotHTTPS   = errors.New("the GitHub App reaches GitHub only over HTTPS")
+	ErrNotHTTPS   = errors.New("the GitHub App reaches GitHub only at https://github.com/")
 	ErrTokenInURL = errors.New("the URL of the remote holds a password or token, which git would use in place of the GitHub App")
 )
 
@@ -86,10 +86,11 @@ type remote struct {
 
 func CheckAppRemote(remoteURL string) error {
 	r := parseRemote(remoteURL)
+	usesTheAppRules := r.scheme == "https" && isGitHubDotCom(r.host)
 	switch {
 	case !isGitHubHost(r.host):
 		return nil
-	case r.scheme != "https":
+	case !usesTheAppRules:
 		return fmt.Errorf("%w: give the remote %s an https://github.com/ URL", ErrNotHTTPS, r.shown)
 	case r.password:
 		return fmt.Errorf("%w: remove it from the remote %s", ErrTokenInURL, r.shown)
@@ -161,4 +162,8 @@ func ConfigValue(ctx context.Context, dir, key string) (string, error) {
 		return "", fmt.Errorf("git config --get %s: %w", key, err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func isGitHubDotCom(host string) bool {
+	return strings.TrimSuffix(strings.ToLower(host), ".") == "github.com"
 }
