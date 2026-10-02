@@ -105,11 +105,11 @@ export function InboxGroup({ heading, empty, children }: InboxGroupProps) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-1.5">
-      <h2 id={headingId} className="flex px-3.5 py-1 text-body font-medium text-muted-foreground">
+      <h2 id={headingId} className="flex py-1 text-body font-medium text-muted-foreground">
         {heading}
       </h2>
       {empty ? (
-        <p className="px-3.5 py-3 text-body text-muted-foreground">{empty}</p>
+        <p className="py-3 text-body text-muted-foreground">{empty}</p>
       ) : (
         <ItemGroup className="gap-1.5">{children}</ItemGroup>
       )}
