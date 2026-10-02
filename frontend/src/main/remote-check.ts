@@ -25,13 +25,12 @@ async function health(url: string, fetcher: Fetch): Promise<Health | null> {
   }
 }
 
-async function tokenAccepted(url: string, token: string, fetcher: Fetch): Promise<boolean | null> {
+async function settingsWithToken(url: string, token: string, fetcher: Fetch): Promise<Response | null> {
   try {
-    const response = await fetcher(`${apiBase(url)}/settings`, {
+    return await fetcher(`${apiBase(url)}/settings`, {
       headers: { Authorization: `Bearer ${token}` },
       signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
     });
-    return response.ok;
   } catch {
     return null;
   }
@@ -40,8 +39,11 @@ async function tokenAccepted(url: string, token: string, fetcher: Fetch): Promis
 export async function checkRemote(url: string, token: string, fetcher: Fetch = fetch): Promise<RemoteCheck> {
   const answer = await health(url, fetcher);
   if (!answer) return { ok: false, error: `No babysitter daemon answers at ${url}.` };
-  const accepted = await tokenAccepted(url, token, fetcher);
-  if (accepted === null) return { ok: false, error: `The daemon at ${url} stopped answering.` };
-  if (!accepted) return { ok: false, error: "The daemon refused the token. Run babysitter daemon pair on it again." };
+  const settings = await settingsWithToken(url, token, fetcher);
+  if (!settings) return { ok: false, error: `The daemon at ${url} stopped answering.` };
+  if (settings.status === 401) {
+    return { ok: false, error: "The daemon refused the token. Run babysitter daemon pair on it again." };
+  }
+  if (!settings.ok) return { ok: false, error: `The daemon at ${url} answered with HTTP ${settings.status}.` };
   return { ok: true, name: answer.name || new URL(url).hostname, version: answer.version ?? "" };
 }
