@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AddRepoDialog } from "@/components/add-repo-dialog";
 import { TitlebarNav } from "@/components/app-header";
@@ -6,6 +6,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { DaemonDown } from "@/components/daemon-down";
 import { LoadingScreen } from "@/components/loading-screen";
 import { NotificationsView } from "@/components/notifications-view";
+import { PairDialog } from "@/components/pair-dialog";
 import { RepoView } from "@/components/repo-view";
 import { SettingsDialog, type SettingsCategory } from "@/components/settings-dialog";
 import { StartWatchDialog } from "@/components/start-watch-dialog";
@@ -26,6 +27,8 @@ import { useViewHistory } from "@/hooks/use-view-history";
 import { connectEventTransport, type EventsConnection, type ReadyFrame } from "@/lib/event-transport";
 import { isMac, isWindows } from "@/lib/platform";
 import { presents } from "@/lib/presenting";
+import { discoveryQueryKey } from "@/lib/query-keys";
+import type { DiscoveredDaemon } from "../shared/connections";
 import { cn } from "@/lib/utils";
 import {
   TITLEBAR_HEIGHT,
@@ -66,6 +69,20 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("appearance");
   const [stopped, setStopped] = useState<Watch | null>(null);
+  const [pairing, setPairing] = useState<{ open: boolean; found: DiscoveredDaemon | null }>({
+    open: false,
+    found: null,
+  });
+
+  const connectionId = status.connection?.id ?? null;
+  const shownConnection = useRef(connectionId);
+  useEffect(() => {
+    const previous = shownConnection.current;
+    shownConnection.current = connectionId;
+    if (previous === null || previous === connectionId) return;
+    queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== discoveryQueryKey[0] });
+    navigate({ kind: "watching" });
+  }, [connectionId, queryClient, navigate]);
 
   const supported = useNotificationsPresent();
   const settings = useSettings(ready);
@@ -86,6 +103,7 @@ export function App() {
     setStartOpen(true);
   }, []);
   const openAddRepo = useCallback(() => setAddRepoOpen(true), []);
+  const openPair = useCallback((found?: DiscoveredDaemon) => setPairing({ open: true, found: found ?? null }), []);
   const openSettings = useCallback((category: SettingsCategory = "appearance") => {
     setSettingsCategory(category);
     setSettingsOpen(true);
@@ -150,6 +168,8 @@ export function App() {
         onWatchPR={openStart}
         onAddRepo={openAddRepo}
         onOpenSettings={openSettings}
+        status={status}
+        onPair={openPair}
         width={sidebar.width}
         onResize={sidebar.setWidth}
         onResetWidth={sidebar.resetWidth}
@@ -157,7 +177,7 @@ export function App() {
       />
       <SidebarInset className="h-svh overflow-hidden">
         <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
-          {ready ? screen() : <DaemonDown status={status} />}
+          {ready ? screen() : <DaemonDown status={status} onManage={() => openSettings("connections")} />}
         </div>
       </SidebarInset>
       <TitlebarNav {...history} />
@@ -170,6 +190,11 @@ export function App() {
         onStarted={(watch) => navigate({ kind: "watch", id: watch.id })}
       />
       <AddRepoDialog open={addRepoOpen} onOpenChange={setAddRepoOpen} enabled={ready} />
+      <PairDialog
+        open={pairing.open}
+        found={pairing.found}
+        onOpenChange={(open) => setPairing((current) => ({ ...current, open }))}
+      />
       <SettingsDialog category={settingsCategory} open={settingsOpen} onOpenChange={setSettingsOpen} />
       <StopSummaryDialog
         watch={stopped}

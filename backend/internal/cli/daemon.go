@@ -88,6 +88,7 @@ The data directory comes from, in this order:
 		newDaemonStatusCmd(opts, &dataDirFlag),
 		newDaemonLogsCmd(opts, &dataDirFlag),
 		newDaemonLogLevelCmd(opts, &dataDirFlag),
+		newDaemonPairCmd(opts, &dataDirFlag),
 	)
 	return cmd
 }
@@ -105,6 +106,8 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 		copilotModel  string
 		owner         string
 		logLevel      string
+		remoteAddr    string
+		remoteName    string
 	)
 	cmd := &cobra.Command{
 		Use:   "start",
@@ -149,6 +152,8 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				CopilotModel:     copilotModel,
 				Owner:            owner,
 				Version:          opts.version,
+				RemoteAddr:       remoteAddr,
+				RemoteName:       remoteName,
 				NewClient:        opts.client,
 				Notifier:         opts.newNotifier(),
 				Log:              logger,
@@ -170,6 +175,8 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().StringVar(&copilotBin, "copilot-bin", "copilot", "Copilot CLI command that babysits watched pull requests")
 	cmd.Flags().StringVar(&copilotModel, "copilot-model", "", "model of Copilot CLI, empty for its default")
 	cmd.Flags().StringVar(&owner, "owner", runfile.OwnerCLI, "who started the daemon: cli or app")
+	cmd.Flags().StringVar(&remoteAddr, "remote", "", "also serve the API to other machines on this address, for example :7420; a client needs the token that 'daemon pair' prints")
+	cmd.Flags().StringVar(&remoteName, "remote-name", "", "name the daemon shows to other machines, the host name if empty")
 	cmd.Flags().StringVar(&logLevel, "log-level", "info", "lowest level the daemon logs: "+strings.Join(logbook.LevelNames, ", ")+"; 'daemon log-level' changes it while the daemon runs")
 	return cmd
 }

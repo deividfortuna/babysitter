@@ -6,11 +6,13 @@ import {
   GitPullRequestIcon,
   PaletteIcon,
   ScrollTextIcon,
+  ServerIcon,
   SparkleIcon,
   type LucideIcon,
 } from "lucide-react";
 import { AppearancePanel } from "@/components/settings-appearance";
 import { AgentPanel } from "@/components/settings-agent";
+import { ConnectionsPanel } from "@/components/settings-connections";
 import { LogsPanel } from "@/components/settings-logs";
 import { NotificationsPanel } from "@/components/settings-notifications";
 import { SaveElsewhere, SaveFailure, SaveMark, SaveTracker, useSaveState } from "@/components/settings-page";
@@ -22,7 +24,15 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { cn } from "@/lib/utils";
 
-export type SettingsCategory = "appearance" | "notifications" | "updates" | "agent" | "review" | "polling" | "logs";
+export type SettingsCategory =
+  | "appearance"
+  | "notifications"
+  | "updates"
+  | "connections"
+  | "agent"
+  | "review"
+  | "polling"
+  | "logs";
 
 type Page = {
   id: SettingsCategory;
@@ -51,6 +61,14 @@ const GROUPS: Group[] = [
       },
       { id: "notifications", label: "Notifications", Icon: BellIcon, Panel: NotificationsPanel },
       { id: "updates", label: "Updates", Icon: DownloadIcon, Panel: UpdatesPanel },
+      {
+        id: "connections",
+        label: "Connections",
+        description:
+          "The daemon whose watches the app shows: the one of this computer, or one that runs on another machine.",
+        Icon: ServerIcon,
+        Panel: ConnectionsPanel,
+      },
     ],
   },
   {

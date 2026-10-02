@@ -1,3 +1,10 @@
+export type DaemonConnection = {
+  id: string;
+  kind: "local" | "remote";
+  name: string;
+  url?: string;
+};
+
 export type DaemonStatus = {
   state: "starting" | "ready" | "stopped" | "error";
   step?: "environment" | "daemon";
@@ -5,6 +12,8 @@ export type DaemonStatus = {
   pid?: number;
   port?: number;
   baseUrl?: string;
+  token?: string;
+  connection?: DaemonConnection;
   message?: string;
   details?: string;
 };

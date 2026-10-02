@@ -1,6 +1,12 @@
 export const DAEMON_GET_STATUS_CHANNEL = "daemon:get-status";
 export const DAEMON_STATUS_CHANNEL = "daemon:status";
 export const DAEMON_RESTART_CHANNEL = "daemon:restart";
+export const CONNECTIONS_LIST_CHANNEL = "connections:list";
+export const CONNECTIONS_CHANGED_CHANNEL = "connections:changed";
+export const CONNECTIONS_USE_CHANNEL = "connections:use";
+export const CONNECTIONS_PAIR_CHANNEL = "connections:pair";
+export const CONNECTIONS_REMOVE_CHANNEL = "connections:remove";
+export const CONNECTIONS_DISCOVER_CHANNEL = "connections:discover";
 export const APP_GET_VERSION_CHANNEL = "app:get-version";
 export const APP_MENU_POPUP_CHANNEL = "app:menu-popup";
 export const DIALOG_PICK_DIRECTORY_CHANNEL = "dialog:pick-directory";

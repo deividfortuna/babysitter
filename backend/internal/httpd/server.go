@@ -19,8 +19,12 @@ type Server struct {
 }
 
 func Listen(ctx context.Context, port int, handler http.Handler) (*Server, error) {
+	return ListenAddr(ctx, fmt.Sprintf("127.0.0.1:%d", port), handler)
+}
+
+func ListenAddr(ctx context.Context, addr string, handler http.Handler) (*Server, error) {
 	var lc net.ListenConfig
-	ln, err := lc.Listen(ctx, "tcp", fmt.Sprintf("127.0.0.1:%d", port))
+	ln, err := lc.Listen(ctx, "tcp", addr)
 	if err != nil {
 		return nil, fmt.Errorf("listen: %w", err)
 	}

@@ -12,6 +12,7 @@ func (a *api) handleHealth(w http.ResponseWriter, r *http.Request) {
 		Version:   a.version,
 		PID:       a.pid,
 		StartedAt: a.startedAt.Format(timeLayout),
+		Name:      a.name,
 	})
 }
 

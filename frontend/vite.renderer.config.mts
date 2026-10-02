@@ -12,7 +12,7 @@ function contentSecurityPolicy(inlineScriptHashes: string[]): string {
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: https:",
     "font-src 'self' data:",
-    "connect-src 'self' http://127.0.0.1:*",
+    "connect-src 'self' http: https:",
     "object-src 'none'",
     "base-uri 'self'",
     "frame-src 'none'",

@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { MenuAnchor } from "./shared/app-menu";
+import type { ConnectionList, DiscoveredDaemon, PairRequest, PairResult } from "./shared/connections";
 import type { DaemonStatus } from "./shared/daemon-status";
 import type { LogRecord, OpenLogFolderResult } from "./shared/logs";
 import type { DesktopNotification, NotificationClick } from "./shared/notifications";
@@ -8,6 +9,12 @@ import type { ThemePreference } from "./shared/theme";
 import {
   APP_GET_VERSION_CHANNEL,
   APP_MENU_POPUP_CHANNEL,
+  CONNECTIONS_CHANGED_CHANNEL,
+  CONNECTIONS_DISCOVER_CHANNEL,
+  CONNECTIONS_LIST_CHANNEL,
+  CONNECTIONS_PAIR_CHANNEL,
+  CONNECTIONS_REMOVE_CHANNEL,
+  CONNECTIONS_USE_CHANNEL,
   DAEMON_GET_STATUS_CHANNEL,
   DAEMON_RESTART_CHANNEL,
   DAEMON_STATUS_CHANNEL,
@@ -38,6 +45,14 @@ export type BabysitterBridge = {
     getStatus(): Promise<DaemonStatus>;
     onStatus(listener: (status: DaemonStatus) => void): () => void;
     restart(): Promise<void>;
+  };
+  connections: {
+    list(): Promise<ConnectionList>;
+    onChange(listener: (list: ConnectionList) => void): () => void;
+    use(id: string): Promise<void>;
+    pair(request: PairRequest): Promise<PairResult>;
+    remove(id: string): Promise<void>;
+    discover(): Promise<DiscoveredDaemon[]>;
   };
   app: {
     getVersion(): Promise<string>;
@@ -85,6 +100,18 @@ const bridge: BabysitterBridge = {
       return () => ipcRenderer.off(DAEMON_STATUS_CHANNEL, handler);
     },
     restart: () => ipcRenderer.invoke(DAEMON_RESTART_CHANNEL),
+  },
+  connections: {
+    list: () => ipcRenderer.invoke(CONNECTIONS_LIST_CHANNEL),
+    onChange: (listener) => {
+      const handler = (_event: IpcRendererEvent, list: ConnectionList) => listener(list);
+      ipcRenderer.on(CONNECTIONS_CHANGED_CHANNEL, handler);
+      return () => ipcRenderer.off(CONNECTIONS_CHANGED_CHANNEL, handler);
+    },
+    use: (id) => ipcRenderer.invoke(CONNECTIONS_USE_CHANNEL, id),
+    pair: (request) => ipcRenderer.invoke(CONNECTIONS_PAIR_CHANNEL, request),
+    remove: (id) => ipcRenderer.invoke(CONNECTIONS_REMOVE_CHANNEL, id),
+    discover: () => ipcRenderer.invoke(CONNECTIONS_DISCOVER_CHANNEL),
   },
   app: {
     getVersion: () => ipcRenderer.invoke(APP_GET_VERSION_CHANNEL),
