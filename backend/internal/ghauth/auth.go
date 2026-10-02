@@ -42,11 +42,22 @@ type Auth struct {
 	now   func() time.Time
 
 	refreshMu sync.Mutex
+	refused   string
 
 	mu       sync.Mutex
+	unsaved  *renewal
 	known    bool
 	identity identity
 	onChange func()
+}
+
+type renewal struct {
+	Credentials
+	onFile string
+}
+
+func (r *renewal) follows(stored Credentials) bool {
+	return r != nil && stored.RefreshToken == r.onFile
 }
 
 type Option func(*Auth)
@@ -145,6 +156,7 @@ func (a *Auth) SignOut(ctx context.Context) error {
 	if err := a.file.Remove(); err != nil {
 		return err
 	}
+	a.hold(nil)
 	a.announce(identity{})
 	return nil
 }
@@ -171,20 +183,30 @@ func (a *Auth) appToken(ctx context.Context) (string, error) {
 }
 
 func (a *Auth) appCredentials(ctx context.Context) (Credentials, error) {
-	c, err := a.file.Load()
+	c, err := a.load()
 	if errors.Is(err, ErrSignedOut) {
 		a.observe(identity{})
 	}
 	if err != nil {
 		return Credentials{}, err
 	}
-	if a.fresh(c.Token) {
+	if a.settled(c.Token) {
 		a.observe(identity{login: c.Login})
 		return c, nil
 	}
 	renewed, err := a.refresh(ctx)
-	a.observe(identity{login: c.Login, expired: errors.Is(err, ErrSessionExpired)})
+	a.observe(identityAfter(c, renewed, err))
 	return renewed, err
+}
+
+func identityAfter(before, after Credentials, err error) identity {
+	switch {
+	case err == nil:
+		return identity{login: after.Login}
+	case errors.Is(err, ErrSignedOut):
+		return identity{}
+	}
+	return identity{login: before.Login, expired: errors.Is(err, ErrSessionExpired)}
 }
 
 func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
@@ -195,7 +217,7 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 		return Credentials{}, err
 	}
 	defer unlock()
-	c, err := a.file.Load()
+	c, onFile, err := a.lockedLoad()
 	if err != nil {
 		return Credentials{}, err
 	}
@@ -208,6 +230,7 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 	rotation := context.WithoutCancel(ctx)
 	tok, err := a.oauth.Refresh(rotation, c.RefreshToken)
 	if errors.Is(err, errRefreshRefused) {
+		a.refused = c.RefreshToken
 		return Credentials{}, fmt.Errorf("%w: %w", ErrSessionExpired, err)
 	}
 	if err != nil && a.usable(c.Token) {
@@ -217,17 +240,53 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 		return Credentials{}, err
 	}
 	c.Token = tok
-	if err := a.file.Save(c); err != nil {
-		return Credentials{}, err
-	}
+	a.keep(c, onFile)
 	return c, nil
+}
+
+func (a *Auth) load() (Credentials, error) {
+	if r := a.held(); r != nil {
+		return r.Credentials, nil
+	}
+	return a.file.Load()
+}
+
+func (a *Auth) lockedLoad() (Credentials, string, error) {
+	stored, err := a.file.Load()
+	r := a.held()
+	if !r.follows(stored) {
+		a.hold(nil)
+		return stored, stored.RefreshToken, err
+	}
+	return r.Credentials, a.keep(r.Credentials, r.onFile), nil
+}
+
+func (a *Auth) keep(c Credentials, onFile string) string {
+	if err := a.file.Save(c); err != nil {
+		a.hold(&renewal{Credentials: c, onFile: onFile})
+		return onFile
+	}
+	a.hold(nil)
+	return c.RefreshToken
+}
+
+func (a *Auth) held() *renewal {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	return a.unsaved
+}
+
+func (a *Auth) hold(r *renewal) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	a.unsaved = r
 }
 
 func (a *Auth) storedToken() string {
 	if _, ok := a.override(); ok {
 		return ""
 	}
-	c, err := a.file.Load()
+	c, err := a.load()
 	if err != nil {
 		return ""
 	}
@@ -235,6 +294,10 @@ func (a *Auth) storedToken() string {
 		return ""
 	}
 	return c.AccessToken
+}
+
+func (a *Auth) settled(t Token) bool {
+	return a.fresh(t) && a.held() == nil
 }
 
 func (a *Auth) fresh(t Token) bool {
@@ -247,7 +310,7 @@ func (a *Auth) usable(t Token) bool {
 
 func (a *Auth) renewable(t Token) bool {
 	refreshLives := t.RefreshExpiresAt.IsZero() || a.now().Before(t.RefreshExpiresAt)
-	return t.RefreshToken != "" && refreshLives
+	return t.RefreshToken != "" && t.RefreshToken != a.refused && refreshLives
 }
 
 type identity struct {

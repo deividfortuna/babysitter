@@ -28,7 +28,7 @@ type Status struct {
 func (a *Auth) Status(ctx context.Context) Status {
 	cred, err := a.Credential(ctx)
 	st := Status{Origin: cred.Origin}
-	c, loadErr := a.file.Load()
+	c, loadErr := a.load()
 	signedIn := loadErr == nil
 	if signedIn {
 		st.Login, st.AvatarURL, st.ExpiresAt = c.Login, c.AvatarURL, c.ExpiresAt

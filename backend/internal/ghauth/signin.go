@@ -47,6 +47,7 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 	if err := a.file.Save(c); err != nil {
 		return Credentials{}, err
 	}
+	a.hold(nil)
 	a.announce(identity{login: who.Login})
 	return c, nil
 }

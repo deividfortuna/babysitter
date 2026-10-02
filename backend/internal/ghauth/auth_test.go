@@ -305,6 +305,27 @@ func TestRevokedRefreshTokenEndsTheSession(t *testing.T) {
 	}
 }
 
+func TestRefusedRefreshTokenIsNotSentAgain(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.g.RevokeRefresh()
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	daemon := h.auth()
+
+	for range 3 {
+		if _, err := daemon.Credential(context.Background()); !errors.Is(err, ErrSessionExpired) {
+			t.Fatalf("err = %v, want ErrSessionExpired", err)
+		}
+	}
+	if st := daemon.Status(context.Background()); st.State != StateExpired {
+		t.Fatalf("State = %q, want %q", st.State, StateExpired)
+	}
+
+	if n := refreshes(h.g); n != 1 {
+		t.Fatalf("%d renewals, want 1: GitHub already refused that refresh token", n)
+	}
+}
+
 func TestExpiredRefreshTokenEndsTheSessionWithoutAsking(t *testing.T) {
 	h := newHarness(t)
 	h.signIn(t, h.auth())
@@ -639,6 +660,85 @@ func TestRenewalSavesWhenTheCallerGoesAway(t *testing.T) {
 	}
 	if saved.AccessToken != renewed {
 		t.Fatalf("saved token = %q, want the renewed %q: the new refresh token was lost", saved.AccessToken, renewed)
+	}
+}
+
+func TestRenewalThatCannotBeSavedIsKeptUntilItIs(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	daemon := h.auth()
+	readOnly(t, h.dir)
+
+	renewed, err := daemon.Token(context.Background())
+	if err != nil {
+		t.Fatalf("Token = %v, want the renewed token although the save failed", err)
+	}
+	again, err := daemon.Token(context.Background())
+	if err != nil || again != renewed {
+		t.Fatalf("Token = %q, %v; want the renewed %q from memory", again, err, renewed)
+	}
+	if env, _ := daemon.GitEnv(context.Background(), false); !slices.Equal(env, gitEnv(renewed)) {
+		t.Fatal("local git commands do not get the renewed token")
+	}
+
+	writable(t, h.dir)
+	if _, err := daemon.Token(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := newCredentialsFile(h.dir).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.AccessToken != renewed {
+		t.Fatalf("saved token = %q, want the renewed %q: the new refresh token was lost", saved.AccessToken, renewed)
+	}
+	if n := refreshes(h.g); n != 1 {
+		t.Fatalf("%d renewals, want 1", n)
+	}
+}
+
+func TestUnsavedRenewalGivesWayToASignOut(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	daemon := h.auth()
+	readOnly(t, h.dir)
+	if _, err := daemon.Token(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	writable(t, h.dir)
+
+	if err := h.auth().SignOut(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := daemon.Credential(context.Background()); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("err = %v, want ErrNoToken after the sign out of another process", err)
+	}
+	if _, err := newCredentialsFile(h.dir).Load(); !errors.Is(err, ErrSignedOut) {
+		t.Fatalf("Load = %v, want ErrSignedOut: the unsaved renewal wrote the sign in back", err)
+	}
+}
+
+func readOnly(t *testing.T, dir string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("a read only directory does not stop a rename on Windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root writes to a read only directory")
+	}
+	if err := os.Chmod(dir, 0o500); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Chmod(dir, 0o700) })
+}
+
+func writable(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.Chmod(dir, 0o700); err != nil {
+		t.Fatal(err)
 	}
 }
 
