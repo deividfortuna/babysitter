@@ -183,3 +183,65 @@ func TestAnnounceOfAWildcardAddressUsesEveryInterface(t *testing.T) {
 		t.Fatalf("boundInterface() = %v, %v, want every interface", iface, err)
 	}
 }
+
+func TestAnnouncerSendsItsMulticastOnEachLANInterface(t *testing.T) {
+	answers, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { answers.Close() })
+	group, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { group.Close() })
+	an, err := newAnnouncer(nil, answers, Announcement{Instance: "studio", Host: "studio", Port: 7420}, testutil.Logger(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	an.addrs = func() []netip.Addr { return []netip.Addr{netip.MustParseAddr("192.168.1.20")} }
+	an.group = group.LocalAddr().(*net.UDPAddr)
+	an.outgoing = []net.Interface{{Index: 4, Name: "eth0"}, {Index: 5, Name: "wlan0"}}
+	var used []string
+	an.useInterface = func(iface net.Interface) error {
+		used = append(used, iface.Name)
+		return nil
+	}
+
+	an.multicast(recordTTL)
+
+	if !slices.Equal(used, []string{"eth0", "wlan0"}) {
+		t.Fatalf("multicast went out on %v, want eth0 and wlan0", used)
+	}
+	buf := make([]byte, readBuffer)
+	for range 2 {
+		if err := group.SetReadDeadline(time.Now().Add(300 * time.Millisecond)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := group.Read(buf); err != nil {
+			t.Fatalf("one announcement per interface, but a read failed: %v", err)
+		}
+	}
+}
+
+func TestAnnouncerAnnouncesOnInterfacesThatCarryMulticastAndALANAddress(t *testing.T) {
+	lan := []net.Addr{&net.IPNet{IP: net.IPv4(192, 168, 1, 20), Mask: net.CIDRMask(24, 32)}}
+	linkLocal := []net.Addr{&net.IPNet{IP: net.IPv4(169, 254, 3, 4), Mask: net.CIDRMask(16, 32)}}
+	cases := []struct {
+		name  string
+		flags net.Flags
+		addrs []net.Addr
+		want  bool
+	}{
+		{"ethernet", net.FlagUp | net.FlagMulticast, lan, true},
+		{"down", net.FlagMulticast, lan, false},
+		{"loopback", net.FlagUp | net.FlagMulticast | net.FlagLoopback, lan, false},
+		{"no multicast, such as a VPN tunnel", net.FlagUp | net.FlagPointToPoint, lan, false},
+		{"only a link-local address", net.FlagUp | net.FlagMulticast, linkLocal, false},
+	}
+	for _, c := range cases {
+		if got := canAnnounceOn(net.Interface{Name: c.name, Flags: c.flags}, c.addrs); got != c.want {
+			t.Errorf("%s: canAnnounceOn = %v, want %v", c.name, got, c.want)
+		}
+	}
+}

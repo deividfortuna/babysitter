@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
@@ -40,14 +41,18 @@ type Announcement struct {
 }
 
 type announcer struct {
-	queries  *net.UDPConn
-	answers  *net.UDPConn
-	service  dnsmessage.Name
-	instance dnsmessage.Name
-	host     dnsmessage.Name
-	a        Announcement
-	addrs    func() []netip.Addr
-	log      *slog.Logger
+	queries      *net.UDPConn
+	answers      *net.UDPConn
+	service      dnsmessage.Name
+	instance     dnsmessage.Name
+	host         dnsmessage.Name
+	a            Announcement
+	addrs        func() []netip.Addr
+	log          *slog.Logger
+	group        *net.UDPAddr
+	outgoing     []net.Interface
+	useInterface func(net.Interface) error
+	multicastMu  sync.Mutex
 }
 
 func Announce(ctx context.Context, a Announcement, log *slog.Logger) error {
@@ -135,6 +140,9 @@ func announceWithResponder(ctx context.Context, a Announcement, iface *net.Inter
 	if err != nil {
 		return err
 	}
+	if iface == nil {
+		an.outgoing = joinGroupOnLAN(queries, log)
+	}
 	go func() {
 		<-ctx.Done()
 		an.goodbye()
@@ -182,7 +190,41 @@ func newAnnouncer(queries, answers *net.UDPConn, a Announcement, log *slog.Logge
 	if err != nil {
 		return nil, err
 	}
-	return &announcer{queries: queries, answers: answers, service: service, instance: instance, host: host, a: a, addrs: a.addrs(), log: log}, nil
+	an := &announcer{queries: queries, answers: answers, service: service, instance: instance, host: host, a: a, addrs: a.addrs(), log: log, group: mdnsGroup}
+	an.useInterface = func(iface net.Interface) error {
+		return ipv4.NewPacketConn(an.answers).SetMulticastInterface(&iface)
+	}
+	return an, nil
+}
+
+// A socket that joins the group with no interface hears only the one the
+// system picks, so a daemon on all addresses joins on each LAN interface.
+func joinGroupOnLAN(queries *net.UDPConn, log *slog.Logger) []net.Interface {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil
+	}
+	conn := ipv4.NewPacketConn(queries)
+	var joined []net.Interface
+	for _, iface := range ifaces {
+		addrs, err := iface.Addrs()
+		if err != nil || !canAnnounceOn(iface, addrs) {
+			continue
+		}
+		if err := conn.JoinGroup(&iface, mdnsGroup); err != nil {
+			log.Debug("mdns: join the group", "interface", iface.Name, "err", err)
+		}
+		joined = append(joined, iface)
+	}
+	return joined
+}
+
+func canAnnounceOn(iface net.Interface, addrs []net.Addr) bool {
+	carriesMulticast := isLAN(iface) && iface.Flags&net.FlagMulticast != 0
+	return carriesMulticast && slices.ContainsFunc(addrs, func(a net.Addr) bool {
+		_, ok := ipv4Of(a)
+		return ok
+	})
 }
 
 func label(name string) string {
@@ -195,7 +237,7 @@ func label(name string) string {
 
 func (an *announcer) announce(ctx context.Context) {
 	for range announceRepeats {
-		an.send(mdnsGroup, 0, nil, recordTTL)
+		an.multicast(recordTTL)
 		select {
 		case <-ctx.Done():
 			return
@@ -205,7 +247,7 @@ func (an *announcer) announce(ctx context.Context) {
 }
 
 func (an *announcer) goodbye() {
-	an.send(mdnsGroup, 0, nil, 0)
+	an.multicast(0)
 }
 
 func (an *announcer) serve() {
@@ -237,7 +279,7 @@ func (an *announcer) answer(packet []byte, from *net.UDPAddr) {
 		return
 	}
 	if from.Port == mdnsPort {
-		an.send(mdnsGroup, 0, nil, recordTTL)
+		an.multicast(recordTTL)
 		return
 	}
 	an.send(from, header.ID, asked, legacyUnicastTTL)
@@ -256,6 +298,24 @@ func (an *announcer) serves(name dnsmessage.Name) bool {
 	asked := strings.ToLower(name.String())
 	served := []dnsmessage.Name{an.service, an.instance, an.host}
 	return slices.ContainsFunc(served, func(n dnsmessage.Name) bool { return asked == strings.ToLower(n.String()) })
+}
+
+// The announcer, the goodbye and the answers to queries all multicast, and
+// each one sets the outgoing interface of the shared socket before it writes.
+func (an *announcer) multicast(ttl uint32) {
+	an.multicastMu.Lock()
+	defer an.multicastMu.Unlock()
+	if len(an.outgoing) == 0 {
+		an.send(an.group, 0, nil, ttl)
+		return
+	}
+	for _, iface := range an.outgoing {
+		if err := an.useInterface(iface); err != nil {
+			an.log.Debug("mdns: send on interface", "interface", iface.Name, "err", err)
+			continue
+		}
+		an.send(an.group, 0, nil, ttl)
+	}
 }
 
 func (an *announcer) send(to *net.UDPAddr, id uint16, questions []dnsmessage.Question, ttl uint32) {
