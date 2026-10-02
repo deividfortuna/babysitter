@@ -45,6 +45,8 @@ type Auth struct {
 	gh    func(ctx context.Context) (string, error)
 	now   func() time.Time
 
+	gitConfigMu sync.Mutex
+
 	refreshMu sync.Mutex
 	refused   string
 	failures  int

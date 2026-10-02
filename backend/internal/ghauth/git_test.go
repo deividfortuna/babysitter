@@ -144,3 +144,67 @@ func helperScript(t *testing.T, dir, name, password string) string {
 	}
 	return path
 }
+
+func gitPushURL(t *testing.T, globalConfig string, env []string, origin string) string {
+	t.Helper()
+	dir := t.TempDir()
+	global := filepath.Join(dir, "gitconfig")
+	if err := os.WriteFile(global, []byte(globalConfig), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	repo := filepath.Join(dir, "repo")
+	if err := os.MkdirAll(repo, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	run := func(args ...string) string {
+		t.Helper()
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		cmd.Env = append(os.Environ(), append(env, "GIT_CONFIG_GLOBAL="+global, "GIT_CONFIG_NOSYSTEM=1")...)
+		out, err := cmd.Output()
+		if err != nil {
+			t.Fatalf("git %v: %v", args, err)
+		}
+		return strings.TrimSpace(string(out))
+	}
+	run("init", "-q")
+	run("remote", "add", "origin", origin)
+	return run("remote", "get-url", "--push", "origin")
+}
+
+func TestGitEnvKeepsGitHubPushesOnHTTPS(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	pushToSSH := "[url \"git@github.com:\"]\n\tpushInsteadOf = https://github.com/\n"
+	env := gitEnv("ghu_abc")
+
+	for _, tc := range []struct {
+		name, global, origin, want string
+	}{
+		{"https under a push rule of the user to SSH", pushToSSH, "https://github.com/octo/hello.git", "https://github.com/octo/hello.git"},
+		{"scp-like SSH", "", "git@github.com:octo/hello.git", "https://github.com/octo/hello.git"},
+		{"a push rule of the user for one owner", "[url \"git@github.com:octo/\"]\n\tpushInsteadOf = https://github.com/octo/\n", "https://github.com/octo/hello.git", "git@github.com:octo/hello.git"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := gitPushURL(t, tc.global, env, tc.origin); got != tc.want {
+				t.Fatalf("git pushes to %s, want %s", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestTheGitConfigKeepsGitHubPushesOnHTTPSThroughAnInclude(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	include := filepath.Join(t.TempDir(), "app.gitconfig")
+	if err := os.WriteFile(include, []byte(appGitConfig("")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	env := []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=include.path", "GIT_CONFIG_VALUE_0=" + include}
+	pushToSSH := "[url \"git@github.com:\"]\n\tpushInsteadOf = https://github.com/\n"
+
+	if got := gitPushURL(t, pushToSSH, env, "https://github.com/octo/hello.git"); got != "https://github.com/octo/hello.git" {
+		t.Fatalf("git pushes to %s, want https", got)
+	}
+}

@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -77,6 +78,45 @@ func TestTheGHShimGivesGHTheAppToken(t *testing.T) {
 				t.Fatalf("output = %q, want %q", out, tc.want)
 			}
 		})
+	}
+}
+
+func TestANewGHShimLeavesTheOldOneWhole(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the shim is a shell script")
+	}
+	first, second := t.TempDir(), t.TempDir()
+	script(t, first, "gh", "#!/bin/sh\n")
+	script(t, second, "gh", "#!/bin/sh\n")
+	l := Launch{HooksDir: filepath.Join(t.TempDir(), "hooks"), BinDir: filepath.Join(t.TempDir(), "bin"), Exe: "/opt/babysitter", DataDir: "/data"}
+	t.Setenv("PATH", first)
+	if _, err := SessionEnv(l); err != nil {
+		t.Fatal(err)
+	}
+	running, err := os.Open(filepath.Join(l.BinDir, "gh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer running.Close()
+
+	t.Setenv("PATH", second)
+	if _, err := SessionEnv(l); err != nil {
+		t.Fatal(err)
+	}
+
+	old, err := io.ReadAll(running)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(old), filepath.Join(first, "gh")) {
+		t.Fatalf("the shim a session has open = %q, want it whole, with the first gh", old)
+	}
+	current, err := os.ReadFile(filepath.Join(l.BinDir, "gh"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(current), filepath.Join(second, "gh")) {
+		t.Fatalf("the shim = %q, want the second gh", current)
 	}
 }
 

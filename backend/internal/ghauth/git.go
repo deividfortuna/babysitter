@@ -12,9 +12,21 @@ const (
 	ownerFirstChars = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
 )
 
+type urlRule struct {
+	base, key, prefix string
+}
+
+func (r urlRule) configKey() string {
+	return "url." + r.base + "." + r.key
+}
+
 func gitEnv(token string) []string {
 	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
-	pairs := append(urlRules(), [2]string{"http.https://github.com/.extraheader", "AUTHORIZATION: basic " + basic})
+	var pairs [][2]string
+	for _, rule := range urlRules() {
+		pairs = append(pairs, [2]string{rule.configKey(), rule.prefix})
+	}
+	pairs = append(pairs, [2]string{"http.https://github.com/.extraheader", "AUTHORIZATION: basic " + basic})
 	env := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(len(pairs))}
 	for i, p := range pairs {
 		env = append(env, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, p[0]), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, p[1]))
@@ -22,19 +34,21 @@ func gitEnv(token string) []string {
 	return env
 }
 
-func urlRules() [][2]string {
-	rules := [][2]string{
-		{"url." + gitHubHTTPS + ".insteadOf", "git@github.com:"},
-		{"url." + gitHubHTTPS + ".insteadOf", "ssh://git@github.com/"},
+func urlRules() []urlRule {
+	rules := []urlRule{
+		{gitHubHTTPS, "insteadOf", "git@github.com:"},
+		{gitHubHTTPS, "insteadOf", "ssh://git@github.com/"},
 	}
 	for _, c := range ownerFirstChars {
 		owner := gitHubHTTPS + string(c)
-		rules = append(rules, [2]string{"url." + owner + ".insteadOf", owner})
+		rules = append(rules, urlRule{owner, "insteadOf", owner}, urlRule{owner, "pushInsteadOf", owner})
 	}
 	return rules
 }
 
 func (a *Auth) WriteGitConfig(path, helper string) error {
+	a.gitConfigMu.Lock()
+	defer a.gitConfigMu.Unlock()
 	content := ""
 	if a.usesApp() {
 		content = appGitConfig(helper)
@@ -56,8 +70,7 @@ func (a *Auth) usesApp() bool {
 func appGitConfig(helper string) string {
 	var b strings.Builder
 	for _, rule := range urlRules() {
-		base := strings.TrimSuffix(strings.TrimPrefix(rule[0], "url."), ".insteadOf")
-		fmt.Fprintf(&b, "[url %s]\n\tinsteadOf = %s\n", gitConfigQuote(base), rule[1])
+		fmt.Fprintf(&b, "[url %s]\n\t%s = %s\n", gitConfigQuote(rule.base), rule.key, rule.prefix)
 	}
 	if helper == "" {
 		return b.String()
