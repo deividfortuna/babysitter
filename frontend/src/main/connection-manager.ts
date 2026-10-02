@@ -193,8 +193,8 @@ export class ConnectionManager {
   }
 
   private save(next: Connections) {
-    this.connections = next;
     this.opts.write(next);
+    this.connections = next;
     const list = this.list();
     for (const listener of this.listListeners) listener(list);
   }

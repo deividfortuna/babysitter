@@ -126,3 +126,30 @@ test("forgetting the remote that is shown goes back to the local daemon", async 
   expect(saved.at(-1)).toEqual({ activeId: "local", remotes: [] });
   expect(manager.list()).toEqual({ activeId: "local", localName: "This Mac", remotes: [] });
 });
+
+test("a save that fails leaves the list and the daemon that is shown as they were", async () => {
+  const stored: Connections = {
+    activeId: "local",
+    remotes: [{ id: "r1", name: "studio", url: "http://studio.local:7420", token: TOKEN }],
+  };
+  const local = fakeLocal();
+  const manager = new ConnectionManager({
+    local,
+    localName: "This Mac",
+    read: () => stored,
+    write: () => {
+      throw new Error("disk full");
+    },
+    check: async () => ({ ok: true, name: "studio", version: "1.0.0" }),
+    discover: async () => [],
+    probeMs: 60_000,
+  });
+  managers.push(manager);
+  await manager.start();
+
+  await expect(manager.use("r1")).rejects.toThrow("disk full");
+
+  expect(manager.list().activeId).toBe("local");
+  expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { kind: "local" } });
+  expect(local.stop).not.toHaveBeenCalled();
+});
