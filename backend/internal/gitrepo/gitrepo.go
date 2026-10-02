@@ -91,13 +91,14 @@ func (a AuthEnv) usesApp(ctx context.Context) bool {
 }
 
 type remote struct {
-	scheme, host, shown string
-	password            bool
+	scheme, host, port, shown string
+	password                  bool
 }
 
 func CheckAppRemote(remoteURL string) error {
 	r := parseRemote(remoteURL)
-	usesTheAppRules := r.scheme == "https" && isGitHubDotCom(r.host)
+	defaultPort := r.port == "" || r.port == "443"
+	usesTheAppRules := r.scheme == "https" && isGitHubDotCom(r.host) && defaultPort
 	switch {
 	case !isGitHubHost(r.host):
 		return nil
@@ -116,7 +117,7 @@ func parseRemote(remoteURL string) remote {
 			return remote{shown: "with a URL that cannot be read"}
 		}
 		_, password := u.User.Password()
-		return remote{scheme: strings.ToLower(u.Scheme), host: u.Hostname(), shown: u.Redacted(), password: password}
+		return remote{scheme: strings.ToLower(u.Scheme), host: u.Hostname(), port: u.Port(), shown: u.Redacted(), password: password}
 	}
 	if m := scpRemote.FindStringSubmatch(remoteURL); m != nil {
 		return remote{scheme: "ssh", host: m[1], shown: remoteURL}

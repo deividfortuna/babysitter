@@ -129,6 +129,8 @@ func TestCheckAppRemote(t *testing.T) {
 		{"https://github.com/octo/hello.git", nil},
 		{"https://GitHub.com/octo/hello.git", nil},
 		{"https://github.com./octo/hello.git", nil},
+		{"https://github.com:443/octo/hello.git", nil},
+		{"https://github.com:8443/octo/hello.git", ErrNotHTTPS},
 		{"https://www.github.com/octo/hello.git", ErrNotHTTPS},
 		{"https://ssh.github.com/octo/hello.git", ErrNotHTTPS},
 		{"git@GitHub.com:octo/hello.git", ErrNotHTTPS},
