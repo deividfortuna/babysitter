@@ -1848,6 +1848,15 @@ export interface operations {
                     "application/json": components["schemas"]["HttpdSignInPrompt"];
                 };
             };
+            /** @description Conflict */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
             /** @description Internal Server Error */
             500: {
                 headers: {
