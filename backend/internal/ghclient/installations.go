@@ -9,9 +9,11 @@ import (
 )
 
 type Installation struct {
-	ID      int64
-	Account string
-	AllRepo bool
+	ID           int64
+	Account      string
+	AvatarURL    string
+	Organization bool
+	AllRepo      bool
 }
 
 func UserInstallations(ctx context.Context, c *github.Client) ([]Installation, error) {
@@ -21,9 +23,11 @@ func UserInstallations(ctx context.Context, c *github.Client) ([]Installation, e
 			return nil, fmt.Errorf("list the installations of the GitHub App: %w", err)
 		}
 		out = append(out, Installation{
-			ID:      inst.GetID(),
-			Account: inst.GetAccount().GetLogin(),
-			AllRepo: inst.GetRepositorySelection() == "all",
+			ID:           inst.GetID(),
+			Account:      inst.GetAccount().GetLogin(),
+			AvatarURL:    inst.GetAccount().GetAvatarURL(),
+			Organization: inst.GetAccount().GetType() == "Organization",
+			AllRepo:      inst.GetRepositorySelection() == "all",
 		})
 	}
 	return out, nil

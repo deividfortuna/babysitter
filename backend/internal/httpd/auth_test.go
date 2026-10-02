@@ -38,14 +38,18 @@ func authRouter(t *testing.T, auth AuthController) (http.Handler, *events.Bus) {
 }
 
 func TestGetAuthAnswersTheStatus(t *testing.T) {
-	want := Auth{Origin: "app", AppAvailable: true, SignedIn: true, Login: "octocat", InstallURL: "https://github.com/apps/babysitter/installations/new", Installations: []string{"octocat"}}
+	want := Auth{
+		State: AuthConnected, Origin: "app", AppAvailable: true, Login: "octocat",
+		InstallURL:    "https://github.com/apps/babysitter/installations/new",
+		Installations: []AuthInstallation{{Login: "acme", AvatarURL: "https://avatars.githubusercontent.com/acme", Organization: true}},
+	}
 	h, _ := authRouter(t, &fakeAuth{status: want})
 
 	var got Auth
 	if rec := call(t, h, http.MethodGet, "/auth", "", &got); rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, want 200", rec.Code)
 	}
-	if got.Origin != want.Origin || got.Login != want.Login || len(got.Installations) != 1 {
+	if got.State != want.State || got.Login != want.Login || len(got.Installations) != 1 || got.Installations[0] != want.Installations[0] {
 		t.Fatalf("auth = %+v, want %+v", got, want)
 	}
 }

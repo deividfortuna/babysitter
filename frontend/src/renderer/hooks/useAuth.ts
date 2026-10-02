@@ -5,6 +5,7 @@ import { authQueryKey, viewerQueryKey } from "../lib/query-keys";
 
 export type Auth = components["schemas"]["HttpdAuth"];
 export type SignInPrompt = components["schemas"]["HttpdSignInPrompt"];
+export type AuthInstallation = components["schemas"]["HttpdAuthInstallation"];
 export type TokenOrigin = Auth["origin"];
 
 const WAITING_POLL_MS = 5_000;

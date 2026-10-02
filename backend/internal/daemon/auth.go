@@ -55,22 +55,27 @@ func (c *authController) checkAccess() prwatch.AccessCheck {
 
 func (c *authController) Status(ctx context.Context) httpd.Auth {
 	st := c.auth.Status(ctx)
+	prompt, waiting := c.signIns.Current()
 	out := httpd.Auth{
+		State:         authState(st, waiting),
 		Origin:        string(st.Origin),
 		AppAvailable:  st.Available,
-		SignedIn:      st.SignedIn,
 		Login:         st.Login,
+		AvatarURL:     st.AvatarURL,
 		InstallURL:    st.InstallURL,
-		Installations: []string{},
+		Installations: []httpd.AuthInstallation{},
 	}
 	if st.SignedIn && !st.ExpiresAt.IsZero() {
 		out.ExpiresAt = &st.ExpiresAt
 	}
-	if prompt, ok := c.signIns.Current(); ok {
+	if waiting {
 		out.SignIn = &httpd.SignInPrompt{UserCode: prompt.UserCode, VerificationURI: prompt.VerificationURI, ExpiresAt: prompt.ExpiresAt}
 	}
-	if err := errors.Join(st.Err, c.signIns.Err()); err != nil {
-		out.Error = err.Error()
+	if err := c.signIns.Err(); err != nil {
+		out.SignInFailure, out.SignInError = signInFailure(err), err.Error()
+	}
+	if reportable(st.Err) {
+		out.Error = st.Err.Error()
 	}
 	if st.Origin == ghauth.OriginApp {
 		out.Installations, out.Error = c.installations(ctx, out.Error)
@@ -78,20 +83,49 @@ func (c *authController) Status(ctx context.Context) httpd.Auth {
 	return out
 }
 
-func (c *authController) installations(ctx context.Context, prior string) ([]string, string) {
+func authState(st ghauth.Status, waiting bool) string {
+	switch {
+	case waiting:
+		return httpd.AuthWaiting
+	case !st.SignedIn:
+		return httpd.AuthSignedOut
+	case st.Expired():
+		return httpd.AuthExpired
+	case st.Origin == ghauth.OriginApp:
+		return httpd.AuthConnected
+	}
+	return httpd.AuthNotInUse
+}
+
+func signInFailure(err error) string {
+	switch {
+	case errors.Is(err, ghauth.ErrCodeExpired):
+		return httpd.SignInCodeExpired
+	case errors.Is(err, ghauth.ErrDenied):
+		return httpd.SignInDenied
+	}
+	return httpd.SignInFailed
+}
+
+func reportable(err error) bool {
+	expected := errors.Is(err, ghauth.ErrNoToken) || errors.Is(err, ghauth.ErrSessionExpired)
+	return err != nil && !expected
+}
+
+func (c *authController) installations(ctx context.Context, prior string) ([]httpd.AuthInstallation, string) {
 	client, err := c.newClient(ctx)
 	if err != nil {
-		return []string{}, err.Error()
+		return []httpd.AuthInstallation{}, err.Error()
 	}
 	installs, err := ghclient.UserInstallations(ctx, client)
 	if err != nil {
-		return []string{}, err.Error()
+		return []httpd.AuthInstallation{}, err.Error()
 	}
-	accounts := make([]string, 0, len(installs))
+	out := make([]httpd.AuthInstallation, 0, len(installs))
 	for _, inst := range installs {
-		accounts = append(accounts, inst.Account)
+		out = append(out, httpd.AuthInstallation{Login: inst.Account, AvatarURL: inst.AvatarURL, Organization: inst.Organization})
 	}
-	return accounts, prior
+	return out, prior
 }
 
 func (c *authController) StartSignIn(ctx context.Context) (httpd.SignInPrompt, error) {

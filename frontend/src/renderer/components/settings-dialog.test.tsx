@@ -23,9 +23,9 @@ test("the pages sit in three groups: App, New watches and Daemon", () => {
     within(within(navigation()).getByRole("group", { name: group }))
       .getAllByRole("button")
       .map((button) => button.textContent);
-  expect(pagesOf("App")).toEqual(["Appearance", "Notifications", "Updates"]);
+  expect(pagesOf("App")).toEqual(["Appearance", "Notifications", "Updates", "GitHub"]);
   expect(pagesOf("New watches")).toEqual(["Agent", "Review and merge"]);
-  expect(pagesOf("Daemon")).toEqual(["GitHub access", "Polling", "Logs"]);
+  expect(pagesOf("Daemon")).toEqual(["Polling", "Logs"]);
 });
 
 test("opens on Appearance and shows the theme setting", () => {

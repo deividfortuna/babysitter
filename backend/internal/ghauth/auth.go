@@ -228,9 +228,14 @@ type Status struct {
 	Available  bool
 	SignedIn   bool
 	Login      string
+	AvatarURL  string
 	ExpiresAt  time.Time
 	InstallURL string
 	Err        error
+}
+
+func (s Status) Expired() bool {
+	return s.SignedIn && errors.Is(s.Err, ErrSessionExpired)
 }
 
 func (a *Auth) Status(ctx context.Context) Status {
@@ -238,7 +243,7 @@ func (a *Auth) Status(ctx context.Context) Status {
 	cred, err := a.Credential(ctx)
 	st.Origin, st.Err = cred.Origin, err
 	if c, err := a.file.Load(); err == nil {
-		st.SignedIn, st.Login, st.ExpiresAt = true, c.Login, c.ExpiresAt
+		st.SignedIn, st.Login, st.AvatarURL, st.ExpiresAt = true, c.Login, c.AvatarURL, c.ExpiresAt
 	}
 	return st
 }

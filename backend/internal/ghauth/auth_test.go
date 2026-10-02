@@ -61,9 +61,9 @@ func (h *harness) auth(opts ...Option) *Auth {
 }
 
 func (h *harness) whoami(t *testing.T) Whoami {
-	return func(ctx context.Context, token string) (string, error) {
+	return func(ctx context.Context, token string) (Identity, error) {
 		u, err := ghclient.CurrentUser(ctx, h.srv.Client(t))
-		return u.GetLogin(), err
+		return Identity{Login: u.GetLogin(), AvatarURL: u.GetAvatarURL()}, err
 	}
 }
 
@@ -148,11 +148,12 @@ func TestCredentialTrimsGITHUB_TOKEN(t *testing.T) {
 
 func TestSignInSavesTheAccountAndTheToken(t *testing.T) {
 	h := newHarness(t)
+	h.g.Viewer().AvatarURL = new("https://avatars.githubusercontent.com/u/1")
 	a := h.auth()
 
 	c := h.signIn(t, a)
 
-	if c.Login != "alice" || !strings.HasPrefix(c.AccessToken, "ghu_") || !strings.HasPrefix(c.RefreshToken, "ghr_") {
+	if c.Login != "alice" || c.AvatarURL != "https://avatars.githubusercontent.com/u/1" || !strings.HasPrefix(c.AccessToken, "ghu_") || !strings.HasPrefix(c.RefreshToken, "ghr_") {
 		t.Fatalf("credentials = %+v", c)
 	}
 	if want := h.clock.Now().Add(ghfake.TokenLifetime * time.Second); !c.ExpiresAt.Equal(want) {
@@ -286,6 +287,9 @@ func TestRevokedRefreshTokenEndsTheSession(t *testing.T) {
 
 	if !errors.Is(err, ErrSessionExpired) {
 		t.Fatalf("err = %v, want ErrSessionExpired and no quiet switch to gh", err)
+	}
+	if st := h.auth(WithGH(gh)).Status(context.Background()); !st.Expired() || st.Login != "alice" {
+		t.Fatalf("Status = %+v, want the expired sign in of alice", st)
 	}
 }
 

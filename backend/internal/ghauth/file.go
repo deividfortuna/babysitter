@@ -19,7 +19,8 @@ const (
 var ErrSignedOut = errors.New("not signed in with the GitHub App")
 
 type Credentials struct {
-	Login string `json:"login"`
+	Login     string `json:"login"`
+	AvatarURL string `json:"avatarUrl,omitempty"`
 	Token
 }
 

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 
 	"github.com/google/go-github/v91/github"
 )
@@ -164,11 +165,25 @@ func (c *call) installations() {
 		}
 		out = append(out, &github.Installation{
 			ID:                  new(inst.id),
-			Account:             &github.User{Login: new(inst.account)},
+			Account:             c.g.installationAccount(inst.account),
 			RepositorySelection: new(selection),
 		})
 	}
 	c.json(http.StatusOK, map[string]any{"total_count": len(out), "installations": out})
+}
+
+// installationAccount is the viewer for its own login and an organization
+// for any other account.
+func (g *GitHub) installationAccount(login string) *github.User {
+	kind := "Organization"
+	if strings.EqualFold(login, g.viewer.GetLogin()) {
+		kind = "User"
+	}
+	return &github.User{
+		Login:     new(login),
+		Type:      new(kind),
+		AvatarURL: new("https://avatars.githubusercontent.com/" + login),
+	}
 }
 
 func (c *call) installationRepos() {

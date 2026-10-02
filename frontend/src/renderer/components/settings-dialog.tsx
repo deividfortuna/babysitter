@@ -4,13 +4,13 @@ import {
   BellIcon,
   DownloadIcon,
   GitPullRequestIcon,
-  KeyRoundIcon,
   PaletteIcon,
   ScrollTextIcon,
   SparkleIcon,
   type LucideIcon,
 } from "lucide-react";
 import { AppearancePanel } from "@/components/settings-appearance";
+import { GitHubIcon } from "@/components/github-icon";
 import { AgentPanel } from "@/components/settings-agent";
 import { GitHubPanel } from "@/components/settings-github";
 import { LogsPanel } from "@/components/settings-logs";
@@ -61,6 +61,13 @@ const GROUPS: Group[] = [
       },
       { id: "notifications", label: "Notifications", Icon: BellIcon, Panel: NotificationsPanel },
       { id: "updates", label: "Updates", Icon: DownloadIcon, Panel: UpdatesPanel },
+      {
+        id: "github",
+        label: "GitHub",
+        description: "How babysitter connects to your GitHub account.",
+        Icon: GitHubIcon,
+        Panel: GitHubPanel,
+      },
     ],
   },
   {
@@ -79,13 +86,6 @@ const GROUPS: Group[] = [
   {
     label: "Daemon",
     pages: [
-      {
-        id: "github",
-        label: "GitHub access",
-        description: "How the daemon reaches GitHub.",
-        Icon: KeyRoundIcon,
-        Panel: GitHubPanel,
-      },
       {
         id: "polling",
         label: "Polling",

@@ -831,7 +831,9 @@ export interface components {
         HttpdAuth: {
             /** @description This build of babysitter knows the babysitter GitHub App */
             appAvailable: boolean;
-            /** @description Why the last sign in failed, or why the sign in of the app no longer works */
+            /** @description The avatar of the account signed in with the app */
+            avatarUrl?: string;
+            /** @description Why the token of the daemon or the installations cannot be read */
             error?: string;
             /**
              * Format: date-time
@@ -841,7 +843,7 @@ export interface components {
             /** @description Where the user installs the app on more repositories */
             installUrl: string;
             /** @description The accounts the app is installed on, read only while the app gives the token */
-            installations: string[] | null;
+            installations: components["schemas"]["HttpdAuthInstallation"][] | null;
             /** @description The account signed in with the app */
             login?: string;
             /**
@@ -850,8 +852,24 @@ export interface components {
              */
             origin: "" | "flag" | "env" | "app" | "gh";
             signIn?: components["schemas"]["HttpdSignInPrompt"];
-            /** @description A GitHub account signed in with the babysitter GitHub App */
-            signedIn: boolean;
+            /** @description The message of the last sign in that failed */
+            signInError?: string;
+            /**
+             * @description Why the last sign in ended without an account: the code expired, the user refused it, or another failure
+             * @enum {string}
+             */
+            signInFailure?: "" | "expired" | "denied" | "failed";
+            /**
+             * @description The sign in with the babysitter GitHub App: none, a code that waits on GitHub, in use, signed in while a token that comes first is in use, or expired
+             * @enum {string}
+             */
+            state: "signed_out" | "waiting" | "connected" | "not_in_use" | "expired";
+        };
+        HttpdAuthInstallation: {
+            avatarUrl: string;
+            login: string;
+            /** @description The account is an organization, not a personal account */
+            organization: boolean;
         };
         HttpdErrorBody: {
             code: string;

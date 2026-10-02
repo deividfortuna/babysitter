@@ -105,16 +105,16 @@ func (o *options) client(ctx context.Context) (*github.Client, error) {
 	return o.newClient(token, o.timeout)
 }
 
-func (o *options) whoami(ctx context.Context, token string) (string, error) {
+func (o *options) whoami(ctx context.Context, token string) (ghauth.Identity, error) {
 	client, err := o.newClient(token, o.timeout)
 	if err != nil {
-		return "", err
+		return ghauth.Identity{}, err
 	}
 	user, err := ghclient.CurrentUser(ctx, client)
 	if err != nil {
-		return "", err
+		return ghauth.Identity{}, err
 	}
-	return user.GetLogin(), nil
+	return ghauth.Identity{Login: user.GetLogin(), AvatarURL: user.GetAvatarURL()}, nil
 }
 
 func (o *options) dbPath() (string, error) {

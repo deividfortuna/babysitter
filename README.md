@@ -117,10 +117,13 @@ babysitter auth status       # where the token comes from, the account and the i
 babysitter auth logout       # back to the next source: the gh CLI
 ```
 
-Or from the desktop app: **Settings > GitHub access > Sign in**. The page
-shows the code, a link to GitHub and the accounts the app is installed on.
-**Choose repositories** opens the install page of the app on GitHub, where
-you add or remove repositories.
+Or from the desktop app: **Settings > GitHub > Sign in with GitHub**. The
+page shows the code and the time it has left. **Copy code and open GitHub**
+copies the code and opens the page where you enter it, and the page moves
+on by itself when you approve. Signed in, the page names the account and
+the accounts the app is installed on. **Choose repositories** or
+**Manage on GitHub** opens the install page of the app, where you add or
+remove repositories.
 
 The sign in uses the device flow of GitHub. It needs no server and no
 secret: the daemon asks GitHub from your machine. The token of the app
@@ -267,15 +270,14 @@ comes from, in this order:
 The Settings dialog of the app has three groups of pages:
 
 - **App**: **Appearance** (the theme, light, dark or system, the rate
-  limit card, and the screen reader mode of the agent), **Notifications**
-  and **Updates**.
+  limit card, and the screen reader mode of the agent), **Notifications**,
+  **Updates** and **GitHub**.
 - **New watches**: **Agent** and **Review and merge**, what a watch
   starts with.
-- **Daemon**: **GitHub access**, **Polling** and **Logs**.
+- **Daemon**: **Polling** and **Logs**.
 
-**GitHub access** shows where the token of the daemon comes from, and
-signs in and out of the babysitter GitHub App. See
-[GitHub access](#github-access).
+**GitHub** signs in and out of the babysitter GitHub App, and says which
+token the daemon uses until then. See [GitHub access](#github-access).
 
 Each page saves a change at once and shows "saved" in its header. A
 number field saves when you stop typing. When you go to another page

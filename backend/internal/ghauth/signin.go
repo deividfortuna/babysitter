@@ -7,7 +7,12 @@ import (
 	"time"
 )
 
-type Whoami func(ctx context.Context, token string) (string, error)
+type Identity struct {
+	Login     string
+	AvatarURL string
+}
+
+type Whoami func(ctx context.Context, token string) (Identity, error)
 
 type Prompt struct {
 	UserCode        string
@@ -35,11 +40,11 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 	if err != nil {
 		return Credentials{}, err
 	}
-	login, err := whoami(ctx, tok.AccessToken)
+	who, err := whoami(ctx, tok.AccessToken)
 	if err != nil {
 		return Credentials{}, err
 	}
-	c := Credentials{Login: login, Token: tok}
+	c := Credentials{Login: who.Login, AvatarURL: who.AvatarURL, Token: tok}
 	unlock, err := a.file.Lock(ctx)
 	if err != nil {
 		return Credentials{}, err
@@ -48,7 +53,7 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 	if err := a.file.Save(c); err != nil {
 		return Credentials{}, err
 	}
-	a.observe(login)
+	a.observe(who.Login)
 	return c, nil
 }
 

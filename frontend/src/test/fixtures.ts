@@ -338,10 +338,10 @@ export function buildRateLimit(overrides: Partial<RateLimit> = {}): RateLimit {
 
 export function buildAuth(overrides: Partial<Auth> = {}): Auth {
   return {
+    state: "signed_out",
     origin: "gh",
     appAvailable: true,
-    signedIn: false,
-    installUrl: "https://github.com/apps/babysitter/installations/new",
+    installUrl: "https://github.com/apps/babysitter-orchestrator/installations/new",
     installations: [],
     ...overrides,
   };
