@@ -133,3 +133,53 @@ func TestAnnouncerAnswersAQueryForItsHostName(t *testing.T) {
 	}
 	t.Fatalf("answers %v hold no A record of studio.local.", answers)
 }
+
+func TestAnnouncerOfABoundAddressNamesOnlyThatAddress(t *testing.T) {
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4(127, 0, 0, 1)})
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { conn.Close() })
+	bound := netip.MustParseAddr("192.168.1.20")
+	an, err := newAnnouncer(conn, conn, Announcement{Instance: "studio", Host: "studio", Port: 7420, Addr: bound}, testutil.Logger(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if got := an.addrs(); !slices.Equal(got, []netip.Addr{bound}) {
+		t.Fatalf("announced addresses %v, want only %v", got, bound)
+	}
+}
+
+func TestAnnounceRefusesALoopbackAddress(t *testing.T) {
+	a := Announcement{Instance: "studio", Host: "studio", Port: 7420, Addr: netip.MustParseAddr("127.0.0.1")}
+
+	if _, err := a.boundInterface(); err == nil {
+		t.Fatal("a daemon bound to a loopback address was announced to the network")
+	}
+}
+
+func TestAnnounceFindsTheInterfaceOfTheBoundAddress(t *testing.T) {
+	lan := LANAddrs()
+	if len(lan) == 0 {
+		t.Skip("this machine has no LAN address")
+	}
+	a := Announcement{Instance: "studio", Host: "studio", Port: 7420, Addr: lan[0]}
+
+	iface, err := a.boundInterface()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if iface == nil {
+		t.Fatalf("no interface for the bound address %v", lan[0])
+	}
+}
+
+func TestAnnounceOfAWildcardAddressUsesEveryInterface(t *testing.T) {
+	a := Announcement{Instance: "studio", Host: "studio", Port: 7420}
+
+	iface, err := a.boundInterface()
+	if err != nil || iface != nil {
+		t.Fatalf("boundInterface() = %v, %v, want every interface", iface, err)
+	}
+}

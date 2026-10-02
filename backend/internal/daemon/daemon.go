@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"time"
@@ -276,7 +277,11 @@ func serveRemote(ctx context.Context, g *errgroup.Group, cfg Config, handler htt
 	}
 	log.Info("remote access listening", "addr", srv.Addr(), "name", cfg.name(), "tokenFile", remote.TokenPath(cfg.DataDir))
 	g.Go(func() error { return srv.Serve(ctx) })
-	announcement := remote.Announcement{Instance: cfg.name(), Host: remote.Hostname(), Port: srv.Port(), Version: cfg.Version}
+	bound, err := netip.ParseAddr(host)
+	if err != nil {
+		return 0, "", fmt.Errorf("remote access: %w", err)
+	}
+	announcement := remote.Announcement{Instance: cfg.name(), Host: remote.Hostname(), Port: srv.Port(), Version: cfg.Version, Addr: bound}
 	g.Go(func() error {
 		if err := remote.Announce(ctx, announcement, log.With("component", "mdns")); err != nil {
 			log.Warn("remote access: the daemon is not announced on the local network", "err", err)

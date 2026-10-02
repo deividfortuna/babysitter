@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"golang.org/x/net/dns/dnsmessage"
+	"golang.org/x/net/ipv4"
 )
 
 const ServiceType = "_babysitter._tcp.local."
@@ -35,6 +36,7 @@ type Announcement struct {
 	Host     string
 	Port     int
 	Version  string
+	Addr     netip.Addr
 }
 
 type announcer struct {
@@ -49,10 +51,49 @@ type announcer struct {
 }
 
 func Announce(ctx context.Context, a Announcement, log *slog.Logger) error {
-	if bonjour, ok := systemBonjour(); ok {
-		return announceWithBonjour(ctx, bonjour, a)
+	iface, err := a.boundInterface()
+	if err != nil {
+		return err
 	}
-	return announceWithResponder(ctx, a, log)
+	if bonjour, ok := systemBonjour(); ok {
+		return announceWithBonjour(ctx, bonjour, a, iface)
+	}
+	return announceWithResponder(ctx, a, iface, log)
+}
+
+func (a Announcement) boundInterface() (*net.Interface, error) {
+	if !a.Addr.IsValid() || a.Addr.IsUnspecified() {
+		return nil, nil
+	}
+	if a.Addr.IsLoopback() {
+		return nil, fmt.Errorf("the daemon listens on %v, which no other machine reaches", a.Addr)
+	}
+	if !a.Addr.Is4() {
+		return nil, fmt.Errorf("the daemon listens on %v, and mDNS announces IPv4 addresses only", a.Addr)
+	}
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return nil, err
+	}
+	for _, iface := range ifaces {
+		if hasAddr(iface, a.Addr) {
+			return &iface, nil
+		}
+	}
+	return nil, fmt.Errorf("no network interface has the address %v", a.Addr)
+}
+
+func hasAddr(iface net.Interface, want netip.Addr) bool {
+	addrs, err := iface.Addrs()
+	if err != nil {
+		return false
+	}
+	for _, addr := range addrs {
+		if prefix, err := netip.ParsePrefix(addr.String()); err == nil && prefix.Addr() == want {
+			return true
+		}
+	}
+	return false
 }
 
 func systemBonjour() (string, bool) {
@@ -65,8 +106,13 @@ func systemBonjour() (string, bool) {
 
 // macOS keeps the multicast that starts on the machine for mDNSResponder,
 // so a daemon that answers alone is never found by an app on the same Mac.
-func announceWithBonjour(ctx context.Context, bonjour string, a Announcement) error {
-	args := append([]string{"-R", a.Instance, strings.TrimSuffix(ServiceType, ".local."), "local", strconv.Itoa(a.Port)}, a.txt()...)
+func announceWithBonjour(ctx context.Context, bonjour string, a Announcement, iface *net.Interface) error {
+	var args []string
+	if iface != nil {
+		args = append(args, "-i", iface.Name)
+	}
+	args = append(args, "-R", a.Instance, strings.TrimSuffix(ServiceType, ".local."), "local", strconv.Itoa(a.Port))
+	args = append(args, a.txt()...)
 	err := exec.CommandContext(ctx, bonjour, args...).Run()
 	if err == nil || ctx.Err() != nil {
 		return nil //nolint:nilerr // the context ends dns-sd, and that is how the daemon stops announcing
@@ -74,13 +120,13 @@ func announceWithBonjour(ctx context.Context, bonjour string, a Announcement) er
 	return fmt.Errorf("dns-sd: %w", err)
 }
 
-func announceWithResponder(ctx context.Context, a Announcement, log *slog.Logger) error {
-	queries, err := net.ListenMulticastUDP("udp4", nil, mdnsGroup)
+func announceWithResponder(ctx context.Context, a Announcement, iface *net.Interface, log *slog.Logger) error {
+	queries, err := net.ListenMulticastUDP("udp4", iface, mdnsGroup)
 	if err != nil {
 		return fmt.Errorf("listen for mdns: %w", err)
 	}
 	defer queries.Close()
-	answers, err := net.ListenUDP("udp4", &net.UDPAddr{})
+	answers, err := answerSocket(a, iface)
 	if err != nil {
 		return fmt.Errorf("open the mdns answer socket: %w", err)
 	}
@@ -99,6 +145,30 @@ func announceWithResponder(ctx context.Context, a Announcement, log *slog.Logger
 	return nil
 }
 
+// The answers of a daemon bound to one address leave from that address
+// and its interface, because the app takes the address of the answer.
+func answerSocket(a Announcement, iface *net.Interface) (*net.UDPConn, error) {
+	if iface == nil {
+		return net.ListenUDP("udp4", &net.UDPAddr{})
+	}
+	conn, err := net.ListenUDP("udp4", net.UDPAddrFromAddrPort(netip.AddrPortFrom(a.Addr, 0)))
+	if err != nil {
+		return nil, err
+	}
+	if err := ipv4.NewPacketConn(conn).SetMulticastInterface(iface); err != nil {
+		conn.Close()
+		return nil, err
+	}
+	return conn, nil
+}
+
+func (a Announcement) addrs() func() []netip.Addr {
+	if !a.Addr.IsValid() || a.Addr.IsUnspecified() {
+		return LANAddrs
+	}
+	return func() []netip.Addr { return []netip.Addr{a.Addr} }
+}
+
 func newAnnouncer(queries, answers *net.UDPConn, a Announcement, log *slog.Logger) (*announcer, error) {
 	service, err := dnsmessage.NewName(ServiceType)
 	if err != nil {
@@ -112,7 +182,7 @@ func newAnnouncer(queries, answers *net.UDPConn, a Announcement, log *slog.Logge
 	if err != nil {
 		return nil, err
 	}
-	return &announcer{queries: queries, answers: answers, service: service, instance: instance, host: host, a: a, addrs: LANAddrs, log: log}, nil
+	return &announcer{queries: queries, answers: answers, service: service, instance: instance, host: host, a: a, addrs: a.addrs(), log: log}, nil
 }
 
 func label(name string) string {
