@@ -147,7 +147,7 @@ func (a *Auth) SignOut(ctx context.Context) error {
 		return err
 	}
 	defer unlock()
-	if err := a.file.Remove(); err != nil {
+	if err := a.file.MarkSignedOut(a.now()); err != nil {
 		return err
 	}
 	a.hold(nil)

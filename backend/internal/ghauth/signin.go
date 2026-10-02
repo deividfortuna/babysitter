@@ -7,7 +7,10 @@ import (
 	"time"
 )
 
-var ErrSignInCancelled = errors.New("the sign in was cancelled before GitHub gave a code")
+var (
+	ErrSignInCancelled    = errors.New("the sign in was cancelled before GitHub gave a code")
+	ErrSignedOutMeanwhile = errors.New("a sign out ended this sign in before it was saved")
+)
 
 type Identity struct {
 	Login     string
@@ -30,6 +33,7 @@ func (a *Auth) RequestCode(ctx context.Context) (DeviceCode, error) {
 }
 
 func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Credentials, error) {
+	started := a.now()
 	tok, err := a.oauth.Wait(ctx, code)
 	if err != nil {
 		return Credentials{}, err
@@ -46,6 +50,9 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 	defer unlock()
 	if err := ctx.Err(); err != nil {
 		return Credentials{}, err
+	}
+	if a.file.SignedOutAt().After(started) {
+		return Credentials{}, ErrSignedOutMeanwhile
 	}
 	if err := a.file.Save(c); err != nil {
 		return Credentials{}, err

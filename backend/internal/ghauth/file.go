@@ -70,12 +70,31 @@ func writeAtomic(path string, b []byte) error {
 	return runfile.ReplaceFile(path, b, 0o600)
 }
 
-func (f credentialsFile) Remove() error {
-	err := os.Remove(f.path)
-	if err != nil && !errors.Is(err, os.ErrNotExist) {
+type signOut struct {
+	SignedOutAt time.Time `json:"signedOutAt"`
+}
+
+func (f credentialsFile) MarkSignedOut(at time.Time) error {
+	b, err := json.Marshal(signOut{SignedOutAt: at})
+	if err != nil {
+		return err
+	}
+	if err := writeAtomic(f.path, b); err != nil {
 		return fmt.Errorf("remove the GitHub App sign in: %w", err)
 	}
 	return nil
+}
+
+func (f credentialsFile) SignedOutAt() time.Time {
+	b, err := os.ReadFile(f.path)
+	if err != nil {
+		return time.Time{}
+	}
+	var s signOut
+	if json.Unmarshal(b, &s) != nil {
+		return time.Time{}
+	}
+	return s.SignedOutAt
 }
 
 func (f credentialsFile) Lock(ctx context.Context) (unlock func(), err error) {

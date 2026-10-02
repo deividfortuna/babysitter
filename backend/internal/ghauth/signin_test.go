@@ -181,6 +181,36 @@ func TestCancelledSignInDoesNotSave(t *testing.T) {
 	}
 }
 
+func TestASignOutOfAnotherProcessEndsASignInThatWaits(t *testing.T) {
+	h := newHarness(t)
+	a := h.auth()
+	code, err := a.RequestCode(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	h.g.ApproveDevice()
+	whoami := func(ctx context.Context, token string) (Identity, error) {
+		h.clock.Advance(time.Second)
+		if err := h.auth().SignOut(ctx); err != nil {
+			t.Fatalf("SignOut of the other process: %v", err)
+		}
+		return h.whoami(t)(ctx, token)
+	}
+
+	_, err = a.Complete(context.Background(), code, whoami)
+
+	if !errors.Is(err, ErrSignedOutMeanwhile) {
+		t.Fatalf("Complete = %v, want ErrSignedOutMeanwhile", err)
+	}
+	if _, err := newCredentialsFile(h.dir).Load(); !errors.Is(err, ErrSignedOut) {
+		t.Fatalf("Load = %v, want ErrSignedOut: the sign in undid the sign out", err)
+	}
+	h.clock.Advance(time.Second)
+	if c := h.signIn(t, h.auth()); c.Login != "alice" {
+		t.Fatalf("a sign in after the sign out = %+v, want alice", c)
+	}
+}
+
 func TestSignInsKeepsTheRefusal(t *testing.T) {
 	h := newHarness(t)
 	s, _ := h.signIns(t)
