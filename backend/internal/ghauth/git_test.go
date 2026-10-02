@@ -82,6 +82,26 @@ func TestWriteGitConfigOnlyWhileTheAppIsInUse(t *testing.T) {
 	}
 }
 
+func TestWriteGitConfigKeepsTheAppWhenTheSignInCannotBeRead(t *testing.T) {
+	h := newHarness(t)
+	if err := os.WriteFile(filepath.Join(h.dir, signInFileName), []byte("{not json"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(h.dir, "git", "app.gitconfig")
+
+	if err := h.auth().WriteGitConfig(path, "!babysitter auth git-credential"); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(got) != appGitConfig("!babysitter auth git-credential") {
+		t.Fatalf("config = %q, want the rules of the app, so git asks babysitter and stops", got)
+	}
+}
+
 func TestTheGitConfigKeepsGitHubOnHTTPSThroughAnInclude(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")

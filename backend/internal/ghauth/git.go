@@ -2,6 +2,7 @@ package ghauth
 
 import (
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
@@ -77,7 +78,7 @@ func (a *Auth) usesApp() bool {
 		return false
 	}
 	_, err := a.load()
-	return err == nil
+	return !errors.Is(err, ErrSignedOut)
 }
 
 func appGitConfig(helper string) string {
