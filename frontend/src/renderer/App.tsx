@@ -74,15 +74,15 @@ export function App() {
     found: null,
   });
 
-  const connectionId = status.connection?.id ?? null;
-  const shownConnection = useRef(connectionId);
+  const shownDaemon = status.connection ? `${status.connection.id} ${status.connection.url ?? ""}` : null;
+  const lastShownDaemon = useRef(shownDaemon);
   useEffect(() => {
-    const previous = shownConnection.current;
-    shownConnection.current = connectionId;
-    if (previous === null || previous === connectionId) return;
+    const previous = lastShownDaemon.current;
+    lastShownDaemon.current = shownDaemon;
+    if (previous === null || previous === shownDaemon) return;
     forgetDaemon(queryClient);
     navigate({ kind: "watching" });
-  }, [connectionId, queryClient, navigate]);
+  }, [shownDaemon, queryClient, navigate]);
 
   const supported = useNotificationsPresent();
   const settings = useSettings(ready);
