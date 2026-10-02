@@ -2,11 +2,14 @@ package worktree
 
 import (
 	"context"
+	"errors"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
+
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 func checkouts(t *testing.T, origin string) *Checkouts {
@@ -201,5 +204,26 @@ func TestEnsureKeepsAFolderThatIsNotACheckout(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, "notes.txt")); err != nil {
 		t.Fatalf("Ensure() changed the folder: %v", err)
+	}
+}
+
+func TestEnsureWithTheAppRefusesACloneThatAUserRuleSendsToSSH(t *testing.T) {
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	rule := "[url \"git@github.com:octo/\"]\n\tinsteadOf = https://github.com/octo/\n"
+	if err := os.WriteFile(global, []byte(rule), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	t.Setenv("GIT_CONFIG_NOSYSTEM", "1")
+	c := NewCheckouts(filepath.Join(t.TempDir(), "checkouts"))
+	c.Auth = func(context.Context) ([]string, error) {
+		return gitrepo.ConfigEnv([][2]string{
+			{"http.https://github.com/.extraheader", "AUTHORIZATION: basic eDp5"},
+			{"core.sshCommand", "false"},
+		}), nil
+	}
+
+	if _, err := c.Ensure(context.Background(), "octo/hello"); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Fatalf("Ensure() error = %v, want %v", err, gitrepo.ErrNotHTTPS)
 	}
 }

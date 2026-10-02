@@ -71,6 +71,17 @@ func (a AuthEnv) CheckRemote(ctx context.Context, remote string, push bool, git 
 	return nil
 }
 
+func (a AuthEnv) CheckURL(ctx context.Context, remoteURL string, git func(ctx context.Context, args ...string) (string, error)) error {
+	if !a.usesApp(ctx) {
+		return nil
+	}
+	resolved, err := git(ctx, "ls-remote", "--get-url", remoteURL)
+	if err != nil {
+		return err
+	}
+	return CheckAppRemote(strings.TrimSpace(resolved))
+}
+
 func (a AuthEnv) usesApp(ctx context.Context) bool {
 	if a == nil {
 		return false

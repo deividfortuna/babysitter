@@ -120,6 +120,12 @@ func (c *Checkouts) clone(ctx context.Context, repo, dir string) error {
 	if err != nil {
 		return fmt.Errorf("clone %s: %w", url, err)
 	}
+	git := func(ctx context.Context, args ...string) (string, error) {
+		return execx.RunIn(ctx, "", "", env, "git", args...)
+	}
+	if err := c.Auth.CheckURL(ctx, url, git); err != nil {
+		return fmt.Errorf("clone %s: %w", url, err)
+	}
 	args := []string{"clone", "-q", "--no-checkout", "--filter=blob:none"}
 	for _, helper := range c.helpers() {
 		args = append(args, "--config", gitHubHelperKey+"="+helper)
