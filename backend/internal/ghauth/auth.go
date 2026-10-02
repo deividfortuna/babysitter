@@ -57,7 +57,7 @@ type renewal struct {
 }
 
 func (r *renewal) follows(stored Credentials) bool {
-	return r != nil && stored.RefreshToken == r.onFile
+	return stored.RefreshToken == r.onFile
 }
 
 type Option func(*Auth)
@@ -251,11 +251,21 @@ func (a *Auth) load() (Credentials, error) {
 func (a *Auth) lockedLoad() (Credentials, string, error) {
 	stored, err := a.file.Load()
 	r := a.held()
+	if r == nil {
+		return stored, stored.RefreshToken, err
+	}
+	if unreadable(err) {
+		return r.Credentials, r.onFile, nil
+	}
 	if !r.follows(stored) {
 		a.hold(nil)
 		return stored, stored.RefreshToken, err
 	}
 	return r.Credentials, a.keep(r.Credentials, r.onFile), nil
+}
+
+func unreadable(err error) bool {
+	return err != nil && !errors.Is(err, ErrSignedOut)
 }
 
 func (a *Auth) keep(c Credentials, onFile string) string {

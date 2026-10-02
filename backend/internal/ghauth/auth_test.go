@@ -718,6 +718,42 @@ func TestUnsavedRenewalGivesWayToASignOut(t *testing.T) {
 	}
 }
 
+func TestUnsavedRenewalSurvivesAFileThatCannotBeRead(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	daemon := h.auth()
+	readOnly(t, h.dir)
+	renewed, err := daemon.Token(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(h.dir, signInFileName)
+	if err := os.Chmod(path, 0); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := daemon.Token(context.Background())
+	if err != nil || got != renewed {
+		t.Fatalf("Token = %q, %v; want the renewed %q from memory while the file cannot be read", got, err, renewed)
+	}
+
+	if err := os.Chmod(path, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	writable(t, h.dir)
+	if _, err := daemon.Token(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	saved, err := newCredentialsFile(h.dir).Load()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if saved.AccessToken != renewed {
+		t.Fatalf("saved token = %q, want the renewed %q: the new refresh token was lost", saved.AccessToken, renewed)
+	}
+}
+
 func readOnly(t *testing.T, dir string) {
 	t.Helper()
 	if runtime.GOOS == "windows" {
