@@ -2,6 +2,7 @@ package remote
 
 import (
 	"os"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -19,6 +20,16 @@ func TestTokenIsMadeOnceAndKept(t *testing.T) {
 	}
 	if first == "" || first != second {
 		t.Fatalf("Token = %q then %q, want the same token twice", first, second)
+	}
+}
+
+func TestTokenFileIsPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no permission bits")
+	}
+	dir := t.TempDir()
+	if _, err := Token(dir); err != nil {
+		t.Fatal(err)
 	}
 	info, err := os.Stat(TokenPath(dir))
 	if err != nil {
