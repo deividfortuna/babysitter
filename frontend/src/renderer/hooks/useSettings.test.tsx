@@ -7,6 +7,7 @@ import { buildSettings } from "@test/fixtures";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { createQueryClientForTests, deferred } from "@test/test-utils";
 import { setApiBaseUrl } from "@/lib/api-client";
+import { forgetDaemon } from "@/lib/forget-daemon";
 import { settingsQueryKey } from "@/lib/query-keys";
 import { useSettings, useWriteSettings, type Settings } from "./useSettings";
 
@@ -22,6 +23,7 @@ async function harness(settings: Settings, savedSettings: Settings[] = []) {
     queryClient,
     write: (patch: Partial<Settings>) => view.result.current.write(patch),
     shown: () => view.result.current.settings.data,
+    rerender: () => view.rerender(),
   };
 }
 
@@ -192,4 +194,23 @@ test("a save that ends after the app shows another daemon leaves the settings of
 
   await expect(saving).rejects.toThrow("The app shows another daemon now.");
   expect(queryClient.getQueryData<Settings>(settingsQueryKey)).toEqual(otherDaemon);
+});
+
+test("a save still pending on the daemon before a switch does not show over the settings of the next daemon", async () => {
+  const { queryClient, write, shown, rerender } = await harness(buildSettings({ keepWorktree: false }));
+  const { bodies, turns } = heldSaves();
+  const saving = write({ keepWorktree: true }).catch(() => undefined);
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  await waitFor(() => expect(shown()?.keepWorktree).toBe(true));
+
+  server.use(http.get(apiUrl("/api/v1/settings"), () => HttpResponse.json(buildSettings({ includeOwn: true }))));
+  act(() => {
+    forgetDaemon(queryClient);
+    rerender();
+  });
+
+  await waitFor(() => expect(shown()?.includeOwn).toBe(true));
+  expect(shown()?.keepWorktree).toBe(false);
+  turns[0].resolve();
+  await saving;
 });

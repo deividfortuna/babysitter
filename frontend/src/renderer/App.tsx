@@ -27,7 +27,7 @@ import { useViewHistory } from "@/hooks/use-view-history";
 import { connectEventTransport, type EventsConnection, type ReadyFrame } from "@/lib/event-transport";
 import { isMac, isWindows } from "@/lib/platform";
 import { presents } from "@/lib/presenting";
-import { appVersionQueryKey, discoveryQueryKey } from "@/lib/query-keys";
+import { forgetDaemon } from "@/lib/forget-daemon";
 import type { DiscoveredDaemon } from "../shared/connections";
 import { cn } from "@/lib/utils";
 import {
@@ -38,8 +38,6 @@ import {
   TITLEBAR_NAV_WIDTH_WITH_MENU,
   titlebarNavClearance,
 } from "../shared/titlebar";
-
-const APP_QUERIES = new Set<string>([discoveryQueryKey[0], appVersionQueryKey[0]]);
 
 function titlebarNavLeft(): number {
   return isMac ? TITLEBAR_NAV_LEFT : TITLEBAR_NAV_INSET;
@@ -82,7 +80,7 @@ export function App() {
     const previous = shownConnection.current;
     shownConnection.current = connectionId;
     if (previous === null || previous === connectionId) return;
-    queryClient.removeQueries({ predicate: (query) => !APP_QUERIES.has(String(query.queryKey[0])) });
+    forgetDaemon(queryClient);
     navigate({ kind: "watching" });
   }, [connectionId, queryClient, navigate]);
 
