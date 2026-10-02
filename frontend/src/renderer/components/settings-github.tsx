@@ -209,9 +209,9 @@ function CodeCard({ prompt }: { prompt: SignInPrompt }) {
           </a>
         </Button>
       </div>
-      <div role="status" className="flex items-center gap-2.5 rounded-b-lg border-t bg-muted/60 px-5 py-2.5">
+      <div className="flex items-center gap-2.5 rounded-b-lg border-t bg-muted/60 px-5 py-2.5">
         <LiveDot tone="attention" title="" className="size-2" />
-        <span className="flex-1 text-body/4.5 text-muted-foreground">
+        <span role="status" className="flex-1 text-body/4.5 text-muted-foreground">
           Waiting for you to approve on GitHub. This page moves on by itself.
         </span>
         <span className="font-mono text-2xs text-muted-foreground">expires in {clock(secondsLeft)}</span>

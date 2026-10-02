@@ -102,7 +102,8 @@ test("sign in shows the code, the link to GitHub and the time left", async () =>
     "https://github.com/login/device",
   );
   expect(screen.getByRole("status")).toHaveTextContent("Waiting for you to approve on GitHub.");
-  expect(screen.getByRole("status")).toHaveTextContent("expires in 14:52");
+  expect(screen.getByText("expires in 14:52")).toBeVisible();
+  expect(screen.getByRole("status")).not.toHaveTextContent("expires in");
   expect(started).toBe(1);
 });
 
