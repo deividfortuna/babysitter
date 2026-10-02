@@ -348,6 +348,14 @@ func (a *Auth) remember(id identity) bool {
 	return changed
 }
 
+func (a *Auth) rememberFirst(id identity) {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	if !a.known {
+		a.known, a.identity = true, id
+	}
+}
+
 func (a *Auth) changed() {
 	a.mu.Lock()
 	fn := a.onChange

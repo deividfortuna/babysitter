@@ -449,6 +449,23 @@ func TestOnChangeFollowsTheSignInOfAnotherProcess(t *testing.T) {
 	testutil.Eventually(t, func() bool { return changes.Load() == 2 }, "one more change after the sign out")
 }
 
+func TestTheFirstLookupTellsASignInSinceTheGitConfigWasWritten(t *testing.T) {
+	h := newHarness(t)
+	daemon := h.auth()
+	var changes atomic.Int32
+	daemon.OnChange(func() { changes.Add(1) })
+	if err := daemon.WriteGitConfig(filepath.Join(h.dir, "git", "app.gitconfig"), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	h.signIn(t, h.auth())
+	if _, err := daemon.Credential(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+
+	testutil.Eventually(t, func() bool { return changes.Load() == 1 }, "a change for the sign in of the CLI")
+}
+
 func TestChangesAreToldOutsideTheTokenLookup(t *testing.T) {
 	h := newHarness(t)
 	daemon := h.auth()

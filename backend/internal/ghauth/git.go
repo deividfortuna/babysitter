@@ -77,7 +77,8 @@ func (a *Auth) usesApp() bool {
 	if _, ok := a.override(); ok {
 		return false
 	}
-	_, err := a.load()
+	c, err := a.load()
+	a.rememberFirst(identity{login: c.Login})
 	return !errors.Is(err, ErrSignedOut)
 }
 
