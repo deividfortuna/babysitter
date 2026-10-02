@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
+	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"time"
@@ -22,6 +25,7 @@ import (
 	"github.com/deividfortuna/babysitter/internal/logbook"
 	"github.com/deividfortuna/babysitter/internal/notify"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
+	"github.com/deividfortuna/babysitter/internal/remote"
 	"github.com/deividfortuna/babysitter/internal/runfile"
 	"github.com/deividfortuna/babysitter/internal/session"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -49,6 +53,8 @@ type Config struct {
 	Notifier         notify.Notifier
 	Owner            string
 	Version          string
+	RemoteAddr       string
+	RemoteName       string
 	NewClient        watcher.ClientFunc
 	Auth             *ghauth.Auth
 	Whoami           ghauth.Whoami
@@ -181,6 +187,7 @@ func Run(ctx context.Context, cfg Config) error {
 		},
 		Log:      log,
 		Version:  cfg.Version,
+		Name:     cfg.name(),
 		Shutdown: func() { srv.RequestShutdown() },
 		Viewer:   viewer,
 		RateLimit: func() httpd.RateLimit {
@@ -205,6 +212,15 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	g, gctx := errgroup.WithContext(ctx)
+
+	if cfg.RemoteAddr != "" {
+		remotePort, remoteHost, err := serveRemote(gctx, g, cfg, handler, log)
+		if err != nil {
+			return err
+		}
+		info.RemotePort = remotePort
+		info.RemoteHost = remoteHost
+	}
 
 	var supLn interface{ Close() error }
 	if ln, addr, err := supervisor.Listen(ctx, cfg.DataDir); err != nil {
@@ -255,4 +271,40 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("a notification is still with the operating system; leaving it there", "grace", bannerGrace)
 	}
 	return err
+}
+
+func (cfg Config) name() string {
+	if cfg.RemoteName != "" {
+		return cfg.RemoteName
+	}
+	return remote.Hostname()
+}
+
+func serveRemote(ctx context.Context, g *errgroup.Group, cfg Config, handler http.Handler, log *slog.Logger) (int, string, error) {
+	if _, err := remote.Token(cfg.DataDir); err != nil {
+		return 0, "", err
+	}
+	currentToken := func() string { return remote.CurrentToken(cfg.DataDir) }
+	srv, err := httpd.ListenAddr(ctx, cfg.RemoteAddr, remote.Guard(currentToken, handler))
+	if err != nil {
+		return 0, "", fmt.Errorf("remote access: %w", err)
+	}
+	host, _, err := net.SplitHostPort(srv.Addr())
+	if err != nil {
+		return 0, "", fmt.Errorf("remote access: %w", err)
+	}
+	log.Info("remote access listening", "addr", srv.Addr(), "name", cfg.name(), "tokenFile", remote.TokenPath(cfg.DataDir))
+	g.Go(func() error { return srv.Serve(ctx) })
+	bound, err := netip.ParseAddr(host)
+	if err != nil {
+		return 0, "", fmt.Errorf("remote access: %w", err)
+	}
+	announcement := remote.Announcement{Instance: cfg.name(), Host: remote.Hostname(), Port: srv.Port(), Version: cfg.Version, Addr: bound}
+	g.Go(func() error {
+		if err := remote.Announce(ctx, announcement, log.With("component", "mdns")); err != nil {
+			log.Warn("remote access: the daemon is not announced on the local network", "err", err)
+		}
+		return nil
+	})
+	return srv.Port(), host, nil
 }

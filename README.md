@@ -276,13 +276,56 @@ comes from, in this order:
 3. the directory of the default database path. `--db` and `BABYSITTER_DB`
    do not move it
 
+### Remote daemon
+
+The app can show the watches of a daemon that runs on another machine,
+for example a server that is always on. That daemon keeps watching while
+the laptop sleeps, and the app shows its progress when it opens again.
+
+On the server, start the daemon with `--remote`:
+
+```sh
+babysitter daemon start --remote :7420 --remote-name studio
+babysitter daemon pair      # prints http://studio.local:7420/#token=…
+```
+
+`--remote` opens a second listener on that address. Each request to it
+must send the token of `<dataDir>/remote-token`, as `Authorization:
+Bearer <token>` or, for the event streams, as `?token=`. Only
+`/healthz` answers without the token. `/control/shutdown`, the hook of
+the agent and `/auth/token`, which gives the token of the GitHub App to
+the agent sessions, stay on the loopback listener. The daemon also announces
+itself on the local network with mDNS as `_babysitter._tcp`. On macOS it
+registers through `dns-sd`, because the system keeps the multicast that
+starts on the Mac for mDNSResponder.
+
+In the app, the switcher at the top of the sidebar lists this computer,
+the paired daemons, and the daemons found on the network. Pick a found
+daemon and paste the token, or use "Connect to a remote daemon" and
+paste a pairing link. Settings > Connections shows the same list. The app
+keeps a found daemon by its address. When that address changes, pair with
+the daemon again: a pairing with the same daemon name replaces the saved
+entry. While
+the app shows a remote daemon, it stops the daemon of this computer, also
+one started from a terminal, so the two do not poll the same
+repositories. When you show this computer again, the app starts its
+daemon. When a daemon runs another
+version than the app, a warning icon shows next to its name, and its
+tooltip gives both versions. The app keeps the paired
+daemons and their tokens in `<dataDir>/connections.json`, readable only
+by the user.
+
+The token is the only lock, and the listener speaks plain HTTP. Use it on
+a network you trust, or put it behind a VPN such as Tailscale.
+
 ### Settings
 
 The Settings dialog of the app has three groups of pages:
 
 - **App**: **Appearance** (the theme, light, dark or system, the rate
   limit card, and the screen reader mode of the agent), **Notifications**,
-  **Updates** and **GitHub**.
+  **Updates**, **GitHub** and **Connections** (see
+  [Remote daemon](#remote-daemon)).
 - **New watches**: **Agent** and **Review and merge**, what a watch
   starts with.
 - **Daemon**: **Polling** and **Logs**.
@@ -462,6 +505,10 @@ babysitter pr https://github.com/owner/name/pull/42 -o json
 babysitter daemon start                           # the daemon in the foreground, until Ctrl-C
 babysitter daemon start --log-level debug         # also log the records a developer needs
 babysitter daemon status                          # pid, port and health
+babysitter daemon start --remote :7420            # also serve the app of other machines, with a token
+babysitter daemon start --remote :7420 --remote-name studio   # the name other machines see
+babysitter daemon pair                            # the pairing links of a daemon that runs with --remote
+babysitter daemon pair --rotate                   # make a new token; each app pairs again
 babysitter daemon stop
 babysitter daemon logs                            # the last 100 records of the daemon
 babysitter daemon logs -f --level warn            # follow the warnings and errors until Ctrl-C

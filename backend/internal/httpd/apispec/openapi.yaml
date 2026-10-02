@@ -2359,6 +2359,8 @@ components:
       type: object
     HttpdHealth:
       properties:
+        name:
+          type: string
         pid:
           type: integer
         startedAt:
@@ -2372,6 +2374,7 @@ components:
       - version
       - pid
       - startedAt
+      - name
       type: object
     HttpdHookResponse:
       properties:

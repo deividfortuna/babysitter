@@ -2,7 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { components } from "../../api/schema";
 import type { LogLevel, LogRecord } from "../../shared/logs";
-import { api, apiErrorMessage, getApiBaseUrl, subscribeApiBaseUrl } from "../lib/api-client";
+import { api, apiErrorMessage, getApiBaseUrl, streamUrl, subscribeApiBaseUrl } from "../lib/api-client";
 import { bridge } from "../lib/bridge";
 import { logLevelQueryKey } from "../lib/query-keys";
 
@@ -29,7 +29,8 @@ export function useDaemonLogs(enabled: boolean): LogStream {
   const [stream, setStream] = useState<LogStream>({ records: [], connected: false });
 
   useEffect(() => {
-    if (!enabled || !base) return;
+    const url = base ? streamUrl("/logs/stream", { after: "0" }) : null;
+    if (!enabled || !url) return;
     let pending: LogRecord[] = [];
     let restart = false;
     const flush = setInterval(() => {
@@ -44,7 +45,7 @@ export function useDaemonLogs(enabled: boolean): LogStream {
       }));
     }, FLUSH_MS);
 
-    const source = new EventSource(`${base}/logs/stream?after=0`);
+    const source = new EventSource(url);
     source.addEventListener("ready", () => {
       pending = [];
       restart = true;

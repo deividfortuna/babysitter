@@ -1,0 +1,67 @@
+import { apiBase } from "../shared/connections";
+
+const CHECK_TIMEOUT_MS = 4_000;
+
+type Identity = { pid?: number; startedAtMs?: number };
+
+export type RemoteCheck = ({ ok: true; name: string; version: string } & Identity) | { ok: false; error: string };
+
+type Fetch = typeof fetch;
+
+type Health = { name?: string; version: string } & Identity;
+
+function text(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function babysitterHealth(body: unknown): Health | null {
+  if (typeof body !== "object" || body === null) return null;
+  const { status, name, version, pid, startedAt } = body as Record<string, unknown>;
+  const answersAsADaemon = status === "ok" && typeof version === "string";
+  if (!answersAsADaemon) return null;
+  return {
+    name: text(name),
+    version,
+    pid: typeof pid === "number" ? pid : undefined,
+    startedAtMs: typeof startedAt === "string" ? Date.parse(startedAt) : undefined,
+  };
+}
+
+async function health(url: string, fetcher: Fetch): Promise<Health | null> {
+  try {
+    const response = await fetcher(`${apiBase(url)}/healthz`, { signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
+    if (!response.ok) return null;
+    return babysitterHealth(await response.json());
+  } catch {
+    return null;
+  }
+}
+
+async function settingsWithToken(url: string, token: string, fetcher: Fetch): Promise<Response | null> {
+  try {
+    return await fetcher(`${apiBase(url)}/settings`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(CHECK_TIMEOUT_MS),
+    });
+  } catch {
+    return null;
+  }
+}
+
+export async function checkRemote(url: string, token: string, fetcher: Fetch = fetch): Promise<RemoteCheck> {
+  const answer = await health(url, fetcher);
+  if (!answer) return { ok: false, error: `No babysitter daemon answers at ${url}.` };
+  const settings = await settingsWithToken(url, token, fetcher);
+  if (!settings) return { ok: false, error: `The daemon at ${url} stopped answering.` };
+  if (settings.status === 401) {
+    return { ok: false, error: "The daemon refused the token. Run babysitter daemon pair on it again." };
+  }
+  if (!settings.ok) return { ok: false, error: `The daemon at ${url} answered with HTTP ${settings.status}.` };
+  return {
+    ok: true,
+    name: answer.name || new URL(url).hostname,
+    version: answer.version,
+    pid: answer.pid,
+    startedAtMs: answer.startedAtMs,
+  };
+}

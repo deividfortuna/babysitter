@@ -56,6 +56,7 @@ type Deps struct {
 	ApplySettings func(store.Settings)
 	Log           *slog.Logger
 	Version       string
+	Name          string
 	Shutdown      func()
 	Viewer        ViewerFunc
 	RateLimit     RateLimitFunc
@@ -74,6 +75,7 @@ type api struct {
 	applySettings func(store.Settings)
 	log           *slog.Logger
 	version       string
+	name          string
 	pid           int
 	startedAt     time.Time
 	polls         *pollFolder
@@ -100,6 +102,7 @@ func NewRouter(d Deps) http.Handler {
 		applySettings: d.ApplySettings,
 		log:           log,
 		version:       d.Version,
+		name:          d.Name,
 		pid:           os.Getpid(),
 		startedAt:     time.Now().UTC(),
 		polls:         newPollFolder(),

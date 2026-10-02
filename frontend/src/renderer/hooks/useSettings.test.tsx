@@ -6,6 +6,8 @@ import { http, HttpResponse } from "msw";
 import { buildSettings } from "@test/fixtures";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { createQueryClientForTests, deferred } from "@test/test-utils";
+import { setApiBaseUrl } from "@/lib/api-client";
+import { forgetDaemon } from "@/lib/forget-daemon";
 import { settingsQueryKey } from "@/lib/query-keys";
 import { useSettings, useWriteSettings, type Settings } from "./useSettings";
 
@@ -21,6 +23,7 @@ async function harness(settings: Settings, savedSettings: Settings[] = []) {
     queryClient,
     write: (patch: Partial<Settings>) => view.result.current.write(patch),
     shown: () => view.result.current.settings.data,
+    rerender: () => view.rerender(),
   };
 }
 
@@ -176,4 +179,38 @@ test("a reload while a write runs keeps the change on screen", async () => {
   turns[0].resolve();
   await act(() => saving);
   expect(shown()?.includeOwn).toBe(true);
+});
+
+test("a save that ends after the app shows another daemon leaves the settings of that daemon alone", async () => {
+  const { queryClient, write } = await harness(buildSettings({ keepWorktree: false }));
+  const { bodies, turns } = heldSaves();
+  const otherDaemon = buildSettings({ includeOwn: true, keepWorktree: false });
+
+  const saving = write({ keepWorktree: true });
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  setApiBaseUrl("http://127.0.0.1:9090/api/v1", "token-of-b");
+  queryClient.setQueryData(settingsQueryKey, otherDaemon);
+  turns[0].resolve();
+
+  await expect(saving).rejects.toThrow("The app shows another daemon now.");
+  expect(queryClient.getQueryData<Settings>(settingsQueryKey)).toEqual(otherDaemon);
+});
+
+test("a save still pending on the daemon before a switch does not show over the settings of the next daemon", async () => {
+  const { queryClient, write, shown, rerender } = await harness(buildSettings({ keepWorktree: false }));
+  const { bodies, turns } = heldSaves();
+  const saving = write({ keepWorktree: true }).catch(() => undefined);
+  await waitFor(() => expect(bodies).toHaveLength(1));
+  await waitFor(() => expect(shown()?.keepWorktree).toBe(true));
+
+  server.use(http.get(apiUrl("/api/v1/settings"), () => HttpResponse.json(buildSettings({ includeOwn: true }))));
+  act(() => {
+    forgetDaemon(queryClient);
+    rerender();
+  });
+
+  await waitFor(() => expect(shown()?.includeOwn).toBe(true));
+  expect(shown()?.keepWorktree).toBe(false);
+  turns[0].resolve();
+  await saving;
 });

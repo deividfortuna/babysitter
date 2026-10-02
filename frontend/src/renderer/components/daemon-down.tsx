@@ -1,8 +1,10 @@
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { CopyIcon, PlayIcon } from "lucide-react";
+import { CopyIcon, LaptopIcon, PlayIcon, RefreshCwIcon } from "lucide-react";
+import { LOCAL_CONNECTION_ID, hostOf } from "../../shared/connections";
 import type { DaemonStatus } from "../../shared/daemon-status";
 import type { Watch } from "@/hooks/useWatches";
+import { useUseConnection } from "@/hooks/useConnections";
 import { useCopy } from "@/hooks/useCopy";
 import { Meta } from "@/components/status-badges";
 import { ViewHeader } from "@/components/view-header";
@@ -13,10 +15,16 @@ import { watchListQueryKey } from "@/lib/query-keys";
 import { relativeTime } from "@/lib/time";
 import { checksWord } from "@/lib/watch-status";
 
-export function DaemonDown({ status }: { status: DaemonStatus }) {
+type Props = {
+  status: DaemonStatus;
+  onManage?: () => void;
+};
+
+export function DaemonDown({ status, onManage }: Props) {
   const queryClient = useQueryClient();
   const [restarting, setRestarting] = useState(false);
   const { copied, copy } = useCopy();
+  const remote = status.connection?.kind === "remote" ? status.connection : null;
 
   if (status.state === "starting") {
     return (
@@ -24,11 +32,13 @@ export function DaemonDown({ status }: { status: DaemonStatus }) {
         <ViewHeader />
         <div className="flex flex-1 items-center justify-center gap-2 p-10 text-sm text-muted-foreground">
           <Spinner />
-          Starting the daemon…
+          {remote ? `Connecting to ${remote.name}…` : "Starting the daemon…"}
         </div>
       </>
     );
   }
+
+  if (remote) return <RemoteDown name={remote.name} url={remote.url} message={status.message} onManage={onManage} />;
 
   const lastKnown =
     queryClient.getQueryData<Watch[]>(watchListQueryKey("active")) ??
@@ -96,6 +106,64 @@ export function DaemonDown({ status }: { status: DaemonStatus }) {
             ))}
           </div>
         ) : null}
+      </div>
+    </>
+  );
+}
+
+type RemoteDownProps = {
+  name: string;
+  url?: string;
+  message?: string;
+  onManage?: () => void;
+};
+
+function RemoteDown({ name, url, message, onManage }: RemoteDownProps) {
+  const use = useUseConnection();
+  const [retrying, setRetrying] = useState(false);
+
+  async function retry() {
+    setRetrying(true);
+    try {
+      await bridge.daemon.restart();
+    } finally {
+      setRetrying(false);
+    }
+  }
+
+  return (
+    <>
+      <ViewHeader />
+      <div className="flex flex-col gap-3.5 p-4">
+        <div className="flex flex-col gap-2.5 rounded-lg border border-attention bg-attention/5 p-3.5">
+          <p className="text-base font-medium">The app cannot reach {name}.</p>
+          <p className="text-sm text-foreground/80">
+            The daemon there keeps watching while the app is away. The app tries again every 15 seconds and shows the
+            watches as soon as it answers.
+          </p>
+          {message ? <p className="text-sm text-foreground/80">{message}</p> : null}
+          <div className="flex flex-wrap items-center gap-2">
+            <Button size="sm" disabled={retrying} onClick={() => void retry()}>
+              {retrying ? <Spinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
+              Try again
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={use.isPending}
+              onClick={() => use.mutate(LOCAL_CONNECTION_ID)}
+            >
+              <LaptopIcon data-icon="inline-start" />
+              Use the daemon of this computer
+            </Button>
+            {onManage ? (
+              <Button size="sm" variant="ghost" onClick={onManage}>
+                Manage connections
+              </Button>
+            ) : null}
+            {url ? <Meta className="ml-auto">{hostOf(url)}</Meta> : null}
+          </div>
+        </div>
       </div>
     </>
   );

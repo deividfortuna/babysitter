@@ -6,6 +6,7 @@ import {
   GitPullRequestIcon,
   PaletteIcon,
   ScrollTextIcon,
+  ServerIcon,
   SparkleIcon,
   type LucideIcon,
 } from "lucide-react";
@@ -13,6 +14,7 @@ import { AppearancePanel } from "@/components/settings-appearance";
 import { GitHubIcon } from "@/components/github-icon";
 import { AgentPanel } from "@/components/settings-agent";
 import { GitHubPanel } from "@/components/settings-github";
+import { ConnectionsPanel } from "@/components/settings-connections";
 import { LogsPanel } from "@/components/settings-logs";
 import { NotificationsPanel } from "@/components/settings-notifications";
 import { SaveElsewhere, SaveFailure, SaveMark, SaveTracker, useSaveState } from "@/components/settings-page";
@@ -28,9 +30,10 @@ export type SettingsCategory =
   | "appearance"
   | "notifications"
   | "updates"
+  | "github"
+  | "connections"
   | "agent"
   | "review"
-  | "github"
   | "polling"
   | "logs";
 
@@ -67,6 +70,14 @@ const GROUPS: Group[] = [
         description: "How babysitter connects to your GitHub account.",
         Icon: GitHubIcon,
         Panel: GitHubPanel,
+      },
+      {
+        id: "connections",
+        label: "Connections",
+        description:
+          "The daemon whose watches the app shows: the one of this computer, or one that runs on another machine.",
+        Icon: ServerIcon,
+        Panel: ConnectionsPanel,
       },
     ],
   },

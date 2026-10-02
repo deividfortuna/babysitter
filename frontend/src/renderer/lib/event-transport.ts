@@ -1,5 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
-import { getApiBaseUrl, subscribeApiBaseUrl } from "./api-client";
+import { streamUrl, subscribeApiBaseUrl } from "./api-client";
 import {
   authQueryKey,
   logLevelQueryKey,
@@ -117,13 +117,13 @@ export function connectEventTransport(
 
   function open() {
     close();
-    const base = getApiBaseUrl();
-    if (!base || disposed) {
+    const url = streamUrl("/events", options.present ? { present: "1" } : {});
+    if (!url || disposed) {
       onConnection("closed");
       return;
     }
     onConnection("connecting");
-    const es = new EventSource(`${base}/events${options.present ? "?present=1" : ""}`);
+    const es = new EventSource(url);
     source = es;
     es.addEventListener("ready", (event: MessageEvent) => {
       attempt = 0;
