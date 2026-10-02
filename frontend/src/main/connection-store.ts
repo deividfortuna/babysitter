@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { NO_CONNECTIONS, type Connections, type RemoteConnection } from "../shared/connections";
 
@@ -38,5 +38,8 @@ export function readConnections(dataDir: string): Connections {
 
 export function writeConnections(dataDir: string, connections: Connections): void {
   mkdirSync(dataDir, { recursive: true, mode: 0o750 });
-  writeFileSync(connectionsPath(dataDir), `${JSON.stringify(connections, null, 2)}\n`, { mode: 0o600 });
+  const file = connectionsPath(dataDir);
+  const temporary = `${file}.tmp`;
+  writeFileSync(temporary, `${JSON.stringify(connections, null, 2)}\n`, { mode: 0o600 });
+  renameSync(temporary, file);
 }
