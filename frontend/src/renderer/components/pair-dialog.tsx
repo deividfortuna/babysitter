@@ -87,7 +87,7 @@ function PairForm({ found, onPaired }: { found: DiscoveredDaemon | null; onPaire
           {pair.error ? (
             <FieldError>{pair.error.message}</FieldError>
           ) : (
-            <FieldDescription>Who has the token can read and drive every watch of that daemon.</FieldDescription>
+            <FieldDescription>Whoever has the token can read and drive every watch of that daemon.</FieldDescription>
           )}
         </Field>
       </FieldGroup>
