@@ -58,7 +58,7 @@ once, and the app of each other machine must pair again.`,
 			return opts.print(cmd.OutOrStdout(), pairOutput{
 				Port:  info.RemotePort,
 				Token: token,
-				Links: remote.PairingLinks(info.RemotePort, token),
+				Links: remote.PairingLinks(info.RemoteHost, info.RemotePort, token),
 			})
 		},
 	}

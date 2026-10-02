@@ -38,6 +38,7 @@ type Info struct {
 	Supervisor string    `json:"supervisor,omitempty"`
 	Version    string    `json:"version,omitempty"`
 	RemotePort int       `json:"remotePort,omitempty"`
+	RemoteHost string    `json:"remoteHost,omitempty"`
 }
 
 func Path(dataDir string) string {

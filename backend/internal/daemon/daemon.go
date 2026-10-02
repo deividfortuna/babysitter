@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -194,11 +195,12 @@ func Run(ctx context.Context, cfg Config) error {
 	g, gctx := errgroup.WithContext(ctx)
 
 	if cfg.RemoteAddr != "" {
-		remotePort, err := serveRemote(gctx, g, cfg, handler, log)
+		remotePort, remoteHost, err := serveRemote(gctx, g, cfg, handler, log)
 		if err != nil {
 			return err
 		}
 		info.RemotePort = remotePort
+		info.RemoteHost = remoteHost
 	}
 
 	var supLn interface{ Close() error }
@@ -259,14 +261,18 @@ func (cfg Config) name() string {
 	return remote.Hostname()
 }
 
-func serveRemote(ctx context.Context, g *errgroup.Group, cfg Config, handler http.Handler, log *slog.Logger) (int, error) {
+func serveRemote(ctx context.Context, g *errgroup.Group, cfg Config, handler http.Handler, log *slog.Logger) (int, string, error) {
 	if _, err := remote.Token(cfg.DataDir); err != nil {
-		return 0, err
+		return 0, "", err
 	}
 	currentToken := func() string { return remote.CurrentToken(cfg.DataDir) }
 	srv, err := httpd.ListenAddr(ctx, cfg.RemoteAddr, remote.Guard(currentToken, handler))
 	if err != nil {
-		return 0, fmt.Errorf("remote access: %w", err)
+		return 0, "", fmt.Errorf("remote access: %w", err)
+	}
+	host, _, err := net.SplitHostPort(srv.Addr())
+	if err != nil {
+		return 0, "", fmt.Errorf("remote access: %w", err)
 	}
 	log.Info("remote access listening", "addr", srv.Addr(), "name", cfg.name(), "tokenFile", remote.TokenPath(cfg.DataDir))
 	g.Go(func() error { return srv.Serve(ctx) })
@@ -277,5 +283,5 @@ func serveRemote(ctx context.Context, g *errgroup.Group, cfg Config, handler htt
 		}
 		return nil
 	})
-	return srv.Port(), nil
+	return srv.Port(), host, nil
 }

@@ -16,7 +16,10 @@ func Hostname() string {
 	return strings.TrimSuffix(strings.TrimSuffix(name, "."), ".local")
 }
 
-func PairingLinks(port int, token string) []string {
+func PairingLinks(listenHost string, port int, token string) []string {
+	if ip := net.ParseIP(listenHost); ip != nil && !ip.IsUnspecified() {
+		return []string{PairingLink(ip.String(), port, token)}
+	}
 	hosts := []string{Hostname() + ".local"}
 	for _, addr := range LANAddrs() {
 		hosts = append(hosts, addr.String())

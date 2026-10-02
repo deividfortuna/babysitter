@@ -71,6 +71,13 @@ func TestTheRemoteListenerTakesARotatedTokenWithoutARestart(t *testing.T) {
 	}()
 
 	port := waitForRemotePort(t, runfile.Path(dir))
+	info, err := runfile.Read(runfile.Path(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.RemoteHost != "127.0.0.1" {
+		t.Fatalf("running.json names the remote host %q, want the bound 127.0.0.1", info.RemoteHost)
+	}
 	old, err := remote.Token(dir)
 	if err != nil {
 		t.Fatal(err)
