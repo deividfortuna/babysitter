@@ -35,7 +35,8 @@ func gitEnv(token string) []string {
 	basic := base64.StdEncoding.EncodeToString([]byte("x-access-token:" + token))
 	clearHeaders := [2]string{extraHeaderKey, ""}
 	header := [2]string{extraHeaderKey, "AUTHORIZATION: basic " + basic}
-	return gitrepo.ConfigEnv(append(slices.Clone(urlRulePairs), clearHeaders, header))
+	clearHelpers := [2]string{"credential." + gitHubHTTPS + ".helper", ""}
+	return gitrepo.ConfigEnv(append(slices.Clone(urlRulePairs), clearHeaders, header, clearHelpers))
 }
 
 func configPairs(rules []urlRule) [][2]string {

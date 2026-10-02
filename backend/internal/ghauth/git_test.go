@@ -273,3 +273,39 @@ func TestTheGitConfigDropsTheGitHubHeadersOfTheUser(t *testing.T) {
 		t.Fatalf("git sent %q, want no header of the user", sent)
 	}
 }
+
+func TestGitEnvLeavesTheHelpersOfTheUserAlone(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake helper is a shell script")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("WWW-Authenticate", `Basic realm="GitHub"`)
+		w.WriteHeader(http.StatusUnauthorized)
+	}))
+	t.Cleanup(srv.Close)
+	dir := t.TempDir()
+	calls := filepath.Join(dir, "calls")
+	helper := filepath.Join(dir, "personal")
+	body := "#!/bin/sh\necho \"$1\" >> '" + calls + "'\n[ \"$1\" = get ] && printf 'username=me\\npassword=ghp_personal\\n'\nexit 0\n"
+	if err := os.WriteFile(helper, []byte(body), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	global := filepath.Join(dir, "gitconfig")
+	if err := os.WriteFile(global, []byte("[credential]\n\thelper = !'"+helper+"'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	toServer := strings.NewReplacer(gitHubHTTPS, srv.URL+"/")
+	cmd := exec.Command("git", "ls-remote", srv.URL+"/octo/hello.git")
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+global, "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0")
+	for _, e := range gitEnv("ghu_revoked") {
+		cmd.Env = append(cmd.Env, toServer.Replace(e))
+	}
+	_ = cmd.Run()
+
+	if got, err := os.ReadFile(calls); err == nil {
+		t.Fatalf("git asked the helper of the user: %q", got)
+	}
+}
