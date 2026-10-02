@@ -182,6 +182,7 @@ function CodeCard({ prompt }: { prompt: SignInPrompt }) {
         <div className="flex min-w-0 flex-1 flex-col gap-1">
           <Title>Enter this code on GitHub</Title>
           <Description>GitHub asks for it to connect babysitter to your account.</Description>
+          {cancel.error ? <FailureLine message={cancel.error.message} /> : null}
         </div>
         <Button variant="ghost" size="sm" disabled={cancel.isPending} onClick={() => cancel.mutate()}>
           Cancel

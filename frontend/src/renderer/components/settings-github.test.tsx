@@ -126,6 +126,25 @@ test("cancel stops the sign in", async () => {
   expect(cancelled).toBe(1);
 });
 
+test("a cancel that fails shows what the daemon answered", async () => {
+  serveApi();
+  serveAuthSequence([buildAuth({ state: "waiting", signIn: prompt })]);
+  server.use(
+    http.delete(apiUrl("/api/v1/auth/signin"), () =>
+      HttpResponse.json(
+        { error: { code: "internal", message: "the daemon could not stop the sign in" } },
+        { status: 500 },
+      ),
+    ),
+  );
+  const user = userEvent.setup();
+  renderWithProviders(<GitHubPanel />);
+
+  await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("the daemon could not stop the sign in");
+});
+
 test("an expired code asks for a new one", async () => {
   serveApi({ auth: buildAuth({ signInFailure: "expired", signInError: "the code expired" }) });
   renderWithProviders(<GitHubPanel />);
