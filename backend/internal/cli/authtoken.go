@@ -73,7 +73,7 @@ func readCredentialRequest(r io.Reader) credentialRequest {
 }
 
 func (r credentialRequest) forGitHub() bool {
-	host := strings.TrimSuffix(r["host"], ".")
+	host := strings.TrimSuffix(strings.TrimSuffix(r["host"], ":443"), ".")
 	return strings.EqualFold(r["protocol"], "https") && strings.EqualFold(host, "github.com")
 }
 

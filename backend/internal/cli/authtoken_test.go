@@ -77,7 +77,7 @@ func TestGitCredentialGivesTheAppTokenForGitHubInAnyCase(t *testing.T) {
 	t.Parallel()
 	dataDir := tokenDaemon(t, "ghu_app")
 
-	for _, host := range []string{"GitHub.com", "github.com."} {
+	for _, host := range []string{"GitHub.com", "github.com.", "github.com:443", "github.com.:443"} {
 		out, err := runGitCredential(t, dataDir, "get", "protocol=HTTPS\nhost="+host+"\n\n")
 		if err != nil {
 			t.Fatal(err)
@@ -98,6 +98,7 @@ func TestGitCredentialGivesNothingSoGitAsksTheNextHelper(t *testing.T) {
 	}{
 		{"another host", tokenDaemon(t, "ghu_app"), "get", "protocol=https\nhost=gitlab.com\n\n"},
 		{"plain http", tokenDaemon(t, "ghu_app"), "get", "protocol=http\nhost=github.com\n\n"},
+		{"another port", tokenDaemon(t, "ghu_app"), "get", "protocol=https\nhost=github.com:8443\n\n"},
 		{"a store", tokenDaemon(t, "ghu_app"), "store", "protocol=https\nhost=github.com\nusername=x\npassword=y\n\n"},
 		{"the app not in use", tokenDaemon(t, ""), "get", "protocol=https\nhost=github.com\n\n"},
 		{"no daemon", t.TempDir(), "get", "protocol=https\nhost=github.com\n\n"},
