@@ -389,6 +389,17 @@ func resolve(ctx context.Context, c *github.Client, t Target, o Options) (Target
 	return Target{}, fmt.Errorf("no pull request for branch %q on %s", branch, t.Repo())
 }
 
+func ResolveRepo(ctx context.Context, t Target, dir string) (Target, error) {
+	if t.Owner != "" && t.Name != "" {
+		return t, nil
+	}
+	if dir == "" {
+		return t, ErrIncompleteTarget
+	}
+	_, err := resolveRepo(ctx, &t, dir)
+	return t, err
+}
+
 func resolveRepo(ctx context.Context, t *Target, dir string) (headOwner string, err error) {
 	origin, err := gitrepo.RemoteURL(ctx, dir, "origin")
 	if err != nil {

@@ -842,3 +842,24 @@ func TestCollectTakesAFailedCompareAsNotBehind(t *testing.T) {
 		t.Fatalf("behind error = %q, want the failure of the compare kept", s.PR.BehindErr)
 	}
 }
+
+func TestResolveRepoReadsTheCheckoutWithoutGitHub(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	ctx := context.Background()
+	dir := t.TempDir()
+	gitInit(t, dir, map[string]string{"origin": "git@github.com:octo/hello.git", "upstream": "https://github.com/up/hello.git"})
+
+	if got, err := ResolveRepo(ctx, Target{Number: 7}, dir); err != nil || got != (Target{Owner: "up", Name: "hello", Number: 7}) {
+		t.Fatalf("ResolveRepo of a number = %+v, %v, want up/hello#7", got, err)
+	}
+	named := Target{Owner: "octo", Name: "other", Number: 7}
+	if got, err := ResolveRepo(ctx, named, dir); err != nil || got != named {
+		t.Fatalf("ResolveRepo of a named target = %+v, %v, want it as given", got, err)
+	}
+	if _, err := ResolveRepo(ctx, Target{Number: 7}, ""); !errors.Is(err, ErrIncompleteTarget) {
+		t.Fatalf("ResolveRepo without a checkout err = %v, want ErrIncompleteTarget", err)
+	}
+}

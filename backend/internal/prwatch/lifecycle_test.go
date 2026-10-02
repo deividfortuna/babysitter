@@ -261,6 +261,28 @@ func TestStartOfAPullRequestGitHubHidesNamesTheMissingApp(t *testing.T) {
 	}
 }
 
+func TestStartFromACheckoutOfAPullRequestGitHubHidesNamesTheMissingApp(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.api.Fail(ghfake.RoutePull, http.StatusNotFound, "Not Found")
+	notInstalled := errors.New("the GitHub App is not installed on the repository")
+	var asked [][]string
+	fx.access = func(_ context.Context, _ *github.Client, repos ...string) error {
+		asked = append(asked, repos)
+		return notInstalled
+	}
+	fx.svc = fx.newService()
+
+	_, err := fx.svc.Start(context.Background(), StartRequest{Target: snapshot.Target{Number: 3}, SourceDir: fx.dir})
+
+	if !errors.Is(err, notInstalled) {
+		t.Fatalf("Start() error = %v, want %v and its install link over a bare not found", err, notInstalled)
+	}
+	if len(asked) != 1 || !slices.Equal(asked[0], []string{"octo/hello"}) {
+		t.Fatalf("access asked for %v, want the repository of the checkout", asked)
+	}
+}
+
 func TestStartOfAClosedPullRequestFromADeletedFork(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
