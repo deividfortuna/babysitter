@@ -48,7 +48,7 @@ export function ConnectionSwitcher({ status, onPair, onManage }: Props) {
       <SidebarMenuItem>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" aria-label={`Daemon: ${name}`} className="data-[state=open]:bg-sidebar-accent">
+            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
               <span className="relative flex size-8 shrink-0 items-center justify-center rounded-md border bg-background">
                 <Icon className="size-4" />
                 <span
