@@ -74,11 +74,11 @@ func (a *Auth) WriteGitConfig(path, helper string) error {
 }
 
 func (a *Auth) usesApp() bool {
+	c, err := a.load()
+	a.rememberFirst(identity{login: c.Login})
 	if _, ok := a.override(); ok {
 		return false
 	}
-	c, err := a.load()
-	a.rememberFirst(identity{login: c.Login})
 	return !errors.Is(err, ErrSignedOut)
 }
 

@@ -30,6 +30,9 @@ func (a *Auth) Status(ctx context.Context) Status {
 	st := Status{Origin: cred.Origin}
 	c, loadErr := a.load()
 	signedIn := loadErr == nil
+	if cred.Origin.comesFirst() && !unreadable(loadErr) {
+		a.observe(identity{login: c.Login})
+	}
 	if signedIn {
 		st.Login, st.AvatarURL, st.ExpiresAt = c.Login, c.AvatarURL, c.ExpiresAt
 	}

@@ -1004,3 +1004,28 @@ func TestAFailedRenewalAfterTheExpiryAndItsRecoveryAreTold(t *testing.T) {
 	}
 	testutil.Eventually(t, func() bool { return changes.Load() == 2 }, "the recovery is told")
 }
+
+func TestStatusTellsASignInOfAnotherProcessWhileATokenComesFirst(t *testing.T) {
+	h := newHarness(t)
+	t.Setenv("GITHUB_TOKEN", "ghp_env")
+	daemon := h.auth()
+	var changes atomic.Int32
+	daemon.OnChange(func() { changes.Add(1) })
+	if err := daemon.WriteGitConfig(filepath.Join(h.dir, "git", "app.gitconfig"), ""); err != nil {
+		t.Fatal(err)
+	}
+
+	h.signIn(t, h.auth())
+	if st := daemon.Status(context.Background()); st.State != StateNotInUse {
+		t.Fatalf("State = %q, want %q", st.State, StateNotInUse)
+	}
+	testutil.Eventually(t, func() bool { return changes.Load() == 1 }, "a change for the sign in of the CLI")
+
+	if err := h.auth().SignOut(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if st := daemon.Status(context.Background()); st.State != StateSignedOut {
+		t.Fatalf("State = %q, want %q", st.State, StateSignedOut)
+	}
+	testutil.Eventually(t, func() bool { return changes.Load() == 2 }, "a change for the sign out of the CLI")
+}
