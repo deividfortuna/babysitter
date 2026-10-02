@@ -9,6 +9,7 @@ const TYPE_PTR = 12;
 const TYPE_TXT = 16;
 const CLASS_IN = 1;
 const QUERY_ID = 0x6273;
+const RECORD_FIXED_BYTES = 10;
 const DEFAULT_WINDOW_MS = 1_500;
 
 export function encodeQuery(name: string, id = QUERY_ID): Buffer {
@@ -65,9 +66,10 @@ export function decodeRecords(packet: Buffer): Record[] {
   const records: Record[] = [];
   for (let i = 0; i < total && offset < packet.length; i++) {
     const { name, next } = readName(packet, offset);
+    const dataOffset = next + RECORD_FIXED_BYTES;
+    if (dataOffset > packet.length) break;
     const type = packet.readUInt16BE(next);
     const length = packet.readUInt16BE(next + 8);
-    const dataOffset = next + 10;
     records.push({ name, type, data: packet.subarray(dataOffset, dataOffset + length) });
     offset = dataOffset + length;
   }
@@ -118,7 +120,10 @@ export function discoverDaemons(options: DiscoverOptions = {}): Promise<Discover
   return new Promise((resolve) => {
     const found = new Map<string, DiscoveredDaemon>();
     const socket = dgram.createSocket({ type: "udp4" });
+    let finished = false;
     const finish = () => {
+      if (finished) return;
+      finished = true;
       socket.close();
       resolve([...found.values()]);
     };

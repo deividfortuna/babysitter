@@ -1,5 +1,6 @@
-import { expect, test } from "vite-plus/test";
-import { daemonsIn, decodeRecords, encodeQuery, SERVICE_TYPE } from "./discovery";
+import dgram from "node:dgram";
+import { expect, test, vi } from "vite-plus/test";
+import { daemonsIn, decodeRecords, discoverDaemons, encodeQuery, SERVICE_TYPE } from "./discovery";
 
 function name(value: string): Buffer {
   const labels = value.split(".").map((label) => Buffer.concat([Buffer.from([label.length]), Buffer.from(label)]));
@@ -69,4 +70,33 @@ test("answers of other services, queries and records without a port give no daem
   expect(daemonsIn(other, "192.168.1.30")).toEqual([]);
   expect(daemonsIn(noPort, "192.168.1.30")).toEqual([]);
   expect(daemonsIn(query, "192.168.1.30")).toEqual([]);
+});
+
+test("a truncated answer gives no daemon instead of an error", () => {
+  const instance = name(`studio.${SERVICE_TYPE}`);
+  const whole = answer(record(instance, 16, txt("port=7420")));
+  const truncated = whole.subarray(0, 12 + instance.length + 4);
+
+  expect(daemonsIn(truncated, "192.168.1.30")).toEqual([]);
+});
+
+test("an error of the socket ends the discovery once", async () => {
+  const createSocket = dgram.createSocket;
+  let socket: dgram.Socket | undefined;
+  const spy = vi.spyOn(dgram, "createSocket").mockImplementation(((options: dgram.SocketOptions) => {
+    socket = createSocket(options);
+    return socket;
+  }) as typeof dgram.createSocket);
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  try {
+    const done = discoverDaemons({ windowMs: 1_000 });
+    await vi.waitFor(() => socket?.address());
+    socket?.emit("error", new Error("network is down"));
+
+    await expect(done).resolves.toEqual([]);
+    expect(() => vi.runAllTimers()).not.toThrow();
+  } finally {
+    vi.useRealTimers();
+    spy.mockRestore();
+  }
 });
