@@ -129,10 +129,7 @@ func (a *Auth) Token(ctx context.Context) (string, error) {
 	return c.Token, err
 }
 
-func (a *Auth) GitEnv(ctx context.Context, network bool) ([]string, error) {
-	if !network {
-		return gitEnvFor(a.storedToken()), nil
-	}
+func (a *Auth) GitEnv(ctx context.Context) ([]string, error) {
 	token, err := a.appToken(ctx)
 	if err != nil {
 		return nil, err
@@ -280,20 +277,6 @@ func (a *Auth) hold(r *renewal) {
 	a.mu.Lock()
 	defer a.mu.Unlock()
 	a.unsaved = r
-}
-
-func (a *Auth) storedToken() string {
-	if _, ok := a.override(); ok {
-		return ""
-	}
-	c, err := a.load()
-	if err != nil {
-		return ""
-	}
-	if !a.usable(c.Token) {
-		return ""
-	}
-	return c.AccessToken
 }
 
 func (a *Auth) settled(t Token) bool {

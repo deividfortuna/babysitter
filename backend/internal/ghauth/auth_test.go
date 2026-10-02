@@ -446,19 +446,19 @@ func TestFailedRenewalKeepsATokenThatStillWorks(t *testing.T) {
 func TestGitEnvOnlyForTheApp(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("GITHUB_TOKEN", "ghp_env")
-	env, err := h.auth().GitEnv(context.Background(), true)
+	env, err := h.auth().GitEnv(context.Background())
 	if err != nil || env != nil {
 		t.Fatalf("GitEnv with GITHUB_TOKEN = %v, %v; want nothing, so git keeps the credentials of the user", env, err)
 	}
 
 	t.Setenv("GITHUB_TOKEN", "")
-	env, err = h.auth().GitEnv(context.Background(), true)
+	env, err = h.auth().GitEnv(context.Background())
 	if err != nil || env != nil {
 		t.Fatalf("GitEnv without a token = %v, %v; want nothing", env, err)
 	}
 
 	c := h.signIn(t, h.auth())
-	env, err = h.auth().GitEnv(context.Background(), true)
+	env, err = h.auth().GitEnv(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -549,7 +549,7 @@ func TestGitEnvAndCheckRepoNeverAskGH(t *testing.T) {
 	}
 	a := h.auth(WithGH(gh))
 
-	if env, err := a.GitEnv(context.Background(), true); err != nil || env != nil {
+	if env, err := a.GitEnv(context.Background()); err != nil || env != nil {
 		t.Fatalf("GitEnv = %v, %v; want nothing for the gh CLI", env, err)
 	}
 	if err := a.CheckRepos(context.Background(), h.srv.Client(t), "acme/api"); err != nil {
@@ -582,24 +582,21 @@ func TestStatusStates(t *testing.T) {
 	check("with GITHUB_TOKEN", h.auth().Status(context.Background()), seen{StateNotInUse, OriginEnv, nil})
 }
 
-func TestLocalGitCommandsNeverRenew(t *testing.T) {
+func TestGitCommandsGetARenewedToken(t *testing.T) {
 	h := newHarness(t)
 	c := h.signIn(t, h.auth())
 	h.clock.Advance(ghfake.TokenLifetime*time.Second - time.Minute)
 
-	env, err := h.auth().GitEnv(context.Background(), false)
+	env, err := h.auth().GitEnv(context.Background())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Equal(env, gitEnv(c.AccessToken)) {
-		t.Fatalf("GitEnv = %v, want the stored token that still works", env)
+
+	if slices.Equal(env, gitEnv(c.AccessToken)) {
+		t.Fatal("GitEnv gave the token that is about to expire: a partial clone fetches objects on any command")
 	}
-	if n := refreshes(h.g); n != 0 {
-		t.Fatalf("%d renewals for a local command, want 0", n)
-	}
-	h.clock.Advance(2 * time.Minute)
-	if env, err := h.auth().GitEnv(context.Background(), false); err != nil || env != nil {
-		t.Fatalf("GitEnv after the expiry = %v, %v; want no token and no error", env, err)
+	if n := refreshes(h.g); n != 1 {
+		t.Fatalf("%d renewals, want 1", n)
 	}
 }
 
@@ -678,7 +675,7 @@ func TestRenewalThatCannotBeSavedIsKeptUntilItIs(t *testing.T) {
 	if err != nil || again != renewed {
 		t.Fatalf("Token = %q, %v; want the renewed %q from memory", again, err, renewed)
 	}
-	if env, _ := daemon.GitEnv(context.Background(), false); !slices.Equal(env, gitEnv(renewed)) {
+	if env, _ := daemon.GitEnv(context.Background()); !slices.Equal(env, gitEnv(renewed)) {
 		t.Fatal("local git commands do not get the renewed token")
 	}
 
