@@ -851,6 +851,32 @@ func TestRenewalThatCannotBeSavedIsKeptUntilItIs(t *testing.T) {
 	}
 }
 
+func TestUnsavedRenewalOutlivesTheRefusalOfTheOldRefreshToken(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+	daemon := h.auth()
+	readOnly(t, h.dir)
+	renewed, err := daemon.Token(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	writable(t, h.dir)
+
+	if _, err := h.auth().Credential(context.Background()); !errors.Is(err, ErrSessionExpired) {
+		t.Fatalf("CLI err = %v, want ErrSessionExpired: GitHub refused the old refresh token", err)
+	}
+
+	again, err := daemon.Token(context.Background())
+	if err != nil || again != renewed {
+		t.Fatalf("Token = %q, %v; want the renewed %q kept", again, err, renewed)
+	}
+	saved, err := newCredentialsFile(h.dir).Load()
+	if err != nil || saved.AccessToken != renewed || saved.RefreshToken == "" {
+		t.Fatalf("saved = %+v, %v; want the renewal of the daemon with its refresh token", saved, err)
+	}
+}
+
 func TestUnsavedRenewalGivesWayToASignOut(t *testing.T) {
 	h := newHarness(t)
 	h.signIn(t, h.auth())

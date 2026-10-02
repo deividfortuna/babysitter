@@ -66,7 +66,8 @@ type renewal struct {
 }
 
 func (r *renewal) follows(stored Credentials) bool {
-	return stored.RefreshToken == r.onFile
+	refusalOfTheOldToken := stored.RefreshToken == "" && stored.Login == r.Login
+	return stored.RefreshToken == r.onFile || refusalOfTheOldToken
 }
 
 type Option func(*Auth)
