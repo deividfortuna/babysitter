@@ -8,12 +8,14 @@ import (
 	"strings"
 )
 
+var osHostname = os.Hostname
+
 func Hostname() string {
-	name, err := os.Hostname()
+	name, err := osHostname()
 	if err != nil || strings.TrimSpace(name) == "" {
 		return "babysitter"
 	}
-	return strings.TrimSuffix(strings.TrimSuffix(name, "."), ".local")
+	return label(strings.TrimSuffix(strings.TrimSuffix(name, "."), ".local"))
 }
 
 func PairingLinks(listenHost string, port int, token string) []string {
