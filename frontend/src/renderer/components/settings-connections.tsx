@@ -71,7 +71,9 @@ export function ConnectionsPanel() {
               label={remote.name}
               description={<span className="font-mono text-2xs">{hostOf(remote.url)}</span>}
             >
-              {list.activeId === remote.id ? <VersionWarning name={remote.name} version={shownVersion} /> : null}
+              {list.activeId === remote.id ? (
+                <VersionWarning name={remote.name} version={shownVersion} focusable />
+              ) : null}
               <ActiveOrUse
                 active={list.activeId === remote.id}
                 busy={use.isPending}
@@ -113,7 +115,7 @@ export function ConnectionsPanel() {
                 </span>
               }
             >
-              <VersionWarning name={daemon.name} version={daemon.version} />
+              <VersionWarning name={daemon.name} version={daemon.version} focusable />
               <Button size="sm" onClick={() => openPair(daemon)}>
                 Pair
               </Button>

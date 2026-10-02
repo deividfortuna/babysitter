@@ -20,6 +20,16 @@ test("a daemon on another version shows a warning that tells both versions", asy
   expect(await screen.findByRole("tooltip")).toHaveTextContent("studio runs babysitter 0.1.0, and this app is 0.2.0.");
 });
 
+test("a focusable warning tells both versions to a keyboard user", async () => {
+  vi.spyOn(bridge.app, "getVersion").mockResolvedValue("0.2.0");
+
+  renderWithProviders(<VersionWarning name="studio" version="0.1.0" focusable />);
+
+  await screen.findByLabelText(versionWarning("studio", "0.1.0", "0.2.0"));
+  await userEvent.tab();
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("studio runs babysitter 0.1.0, and this app is 0.2.0.");
+});
+
 test("a daemon on the version of the app, or of no known version, shows no warning", async () => {
   const getVersion = vi.spyOn(bridge.app, "getVersion").mockResolvedValue("0.2.0");
 
