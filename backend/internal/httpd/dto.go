@@ -18,6 +18,7 @@ type Health struct {
 	Version   string `json:"version"`
 	PID       int    `json:"pid"`
 	StartedAt string `json:"startedAt"`
+	Name      string `json:"name"`
 }
 
 type Repo struct {

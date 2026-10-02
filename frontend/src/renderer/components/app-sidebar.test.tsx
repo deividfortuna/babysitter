@@ -17,6 +17,8 @@ function renderSidebar(props: Partial<ComponentProps<typeof AppSidebar>> = {}) {
       onWatchPR={vi.fn()}
       onAddRepo={vi.fn()}
       onOpenSettings={vi.fn()}
+      status={{ state: "ready", connection: { id: "local", kind: "local", name: "This Mac" } }}
+      onPair={vi.fn()}
       width={256}
       onResize={vi.fn()}
       onResetWidth={vi.fn()}
@@ -179,4 +181,23 @@ test("names the account as missing when the daemon cannot reach GitHub", async (
   renderSidebar();
 
   expect(await screen.findByText("No account")).toBeInTheDocument();
+});
+
+test("names the daemon switcher with its state and the count of daemons found", async () => {
+  serveApi({ watches: [], repos: [], pullRequests: [] });
+  const discover = vi.spyOn(bridge.connections, "discover").mockResolvedValue([
+    {
+      name: "studio",
+      host: "studio",
+      address: "192.168.1.20",
+      port: 7420,
+      version: "",
+      url: "http://192.168.1.20:7420",
+    },
+  ]);
+
+  renderSidebar();
+
+  expect(await screen.findByRole("button", { name: /This Mac.*Local daemon.*1 new/ })).toBeVisible();
+  discover.mockRestore();
 });

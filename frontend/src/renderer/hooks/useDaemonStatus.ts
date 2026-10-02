@@ -6,7 +6,8 @@ import { useBridgeStatus } from "./useBridgeStatus";
 const STARTING: DaemonStatus = { state: "starting" };
 
 function pointApiAt(status: DaemonStatus) {
-  setApiBaseUrl(status.state === "ready" ? (status.baseUrl ?? null) : null);
+  const ready = status.state === "ready";
+  setApiBaseUrl(ready ? (status.baseUrl ?? null) : null, ready ? (status.token ?? null) : null);
 }
 
 export function useDaemonStatus(): DaemonStatus {

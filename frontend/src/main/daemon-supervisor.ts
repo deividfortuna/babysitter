@@ -14,6 +14,7 @@ const RUN_FILE_POLL_MS = 200;
 const LOG_TAIL_LINES = 40;
 const RESTART_KILL_TIMEOUT_MS = 3_000;
 const SHUTDOWN_REQUEST_TIMEOUT_MS = 2_000;
+const STOP_ANY_OWNER_TIMEOUT_MS = 10_000;
 
 export type DaemonSupervisorOptions = {
   launch: DaemonLaunchSpec;
@@ -192,6 +193,24 @@ export class DaemonSupervisor {
     await requestShutdown(current.port, requestTimeoutMs);
   }
 
+  async stopAnyOwner(timeoutMs = STOP_ANY_OWNER_TIMEOUT_MS): Promise<void> {
+    const deadline = Date.now() + timeoutMs;
+    const spawned = this.child;
+    await this.stop(Math.min(SHUTDOWN_REQUEST_TIMEOUT_MS, timeoutMs));
+    const running = await this.runningDaemon();
+    if (!running) return;
+    if (!spawned) {
+      this.log(`daemon: asking pid ${running.pid} on port ${running.port} (owner ${running.owner}) to stop`);
+      await requestShutdown(running.port, timeLeft(deadline));
+    }
+    if (await waitUntilDown(running.port, deadline)) return;
+    if (spawned) {
+      await killAndWait(spawned);
+      return;
+    }
+    this.log(`daemon: pid ${running.pid} on port ${running.port} still runs after the request to stop`);
+  }
+
   async stopAndWait(timeoutMs: number): Promise<void> {
     const deadline = Date.now() + timeoutMs;
     const port = this.ownedPort();
@@ -234,7 +253,14 @@ export class DaemonSupervisor {
 }
 
 function ready(info: RunFileInfo, source: "spawned" | "attached"): DaemonStatus {
-  return { state: "ready", source, pid: info.pid, port: info.port, baseUrl: apiBaseUrl(info.port) };
+  return {
+    state: "ready",
+    source,
+    pid: info.pid,
+    startedAtMs: info.startedAtMs,
+    port: info.port,
+    baseUrl: apiBaseUrl(info.port),
+  };
 }
 
 function timeLeft(deadline: number): number {

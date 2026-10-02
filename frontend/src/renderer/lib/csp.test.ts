@@ -57,6 +57,6 @@ test("the policy keeps its other rules", async () => {
   const policy = policyOf(await builtPage());
 
   expect(directive(policy, "script-src")).not.toContain("'unsafe-inline'");
-  expect(directive(policy, "connect-src")).toBe("connect-src 'self' http://127.0.0.1:*");
+  expect(directive(policy, "connect-src")).toBe("connect-src 'self' http: https:");
   expect(directive(policy, "object-src")).toBe("object-src 'none'");
 });

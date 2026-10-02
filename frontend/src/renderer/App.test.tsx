@@ -94,3 +94,25 @@ test("on macOS goes back with Command and the left bracket", async () => {
 
   expect(activeView()).toBe("Watching");
 });
+
+test("a remote paired again at a new address starts over as a new daemon", async () => {
+  const user = userEvent.setup();
+  const atAddress = (url: string): DaemonStatus => ({
+    state: "error",
+    message: "No babysitter daemon answers.",
+    connection: { id: "r1", kind: "remote", name: "studio", url },
+  });
+  let emit: (status: DaemonStatus) => void = () => undefined;
+  vi.spyOn(bridge.daemon, "getStatus").mockResolvedValue(atAddress("http://192.168.1.20:7420"));
+  vi.spyOn(bridge.daemon, "onStatus").mockImplementation((listener) => {
+    emit = listener;
+    return () => undefined;
+  });
+  renderWithProviders(<App />);
+  await user.click(await screen.findByRole("button", { name: "Stopped" }));
+  expect(activeView()).toBe("Stopped");
+
+  act(() => emit(atAddress("http://192.168.1.30:7420")));
+
+  expect(activeView()).toBe("Watching");
+});

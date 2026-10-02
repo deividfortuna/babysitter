@@ -18,6 +18,9 @@ import { usePulls } from "@/hooks/usePulls";
 import { useRemoveRepo, useRepos, useRequestSync } from "@/hooks/useRepos";
 import { useViewer, type Viewer } from "@/hooks/useViewer";
 import { useWatches } from "@/hooks/useWatches";
+import type { DiscoveredDaemon } from "../../shared/connections";
+import type { DaemonStatus } from "../../shared/daemon-status";
+import { ConnectionSwitcher } from "@/components/connection-switcher";
 import { RateLimitCard } from "@/components/rate-limit-card";
 import { UpdateCard } from "@/components/update-card";
 import type { SettingsCategory } from "@/components/settings-dialog";
@@ -88,6 +91,8 @@ type AppSidebarProps = ComponentProps<typeof Sidebar> & {
   onWatchPR: () => void;
   onAddRepo: () => void;
   onOpenSettings: (category?: SettingsCategory) => void;
+  status: DaemonStatus;
+  onPair: (found?: DiscoveredDaemon) => void;
   width: number;
   onResize: (width: number) => void;
   onResetWidth: () => void;
@@ -101,6 +106,8 @@ export function AppSidebar({
   onWatchPR,
   onAddRepo,
   onOpenSettings,
+  status,
+  onPair,
   width,
   onResize,
   onResetWidth,
@@ -129,6 +136,9 @@ export function AppSidebar({
   return (
     <Sidebar {...props}>
       <SidebarHeader className="h-titlebar app-drag" />
+      <SidebarHeader className="pt-0">
+        <ConnectionSwitcher status={status} onPair={onPair} onManage={() => onOpenSettings("connections")} />
+      </SidebarHeader>
 
       <SidebarContent>
         <SidebarGroup>

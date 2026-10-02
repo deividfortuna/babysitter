@@ -19,7 +19,12 @@ import path from "node:path";
 import { autoUpdater } from "electron-updater";
 import { createUpdateController } from "./main/app-updater";
 import { AppLog } from "./main/app-log";
+import { ConnectionManager, localName } from "./main/connection-manager";
+import { readConnections, writeConnections } from "./main/connection-store";
 import { DaemonSupervisor } from "./main/daemon-supervisor";
+import { discoverDaemons } from "./main/discovery";
+import { checkRemote } from "./main/remote-check";
+import { authorization, parsePairRequest } from "./shared/connections";
 import { readUpdateSettings, writeUpdateSettings } from "./main/update-settings";
 import { killLoginShells, shellRunner } from "./main/login-shell";
 import { openQueue } from "./main/pending-open";
@@ -31,6 +36,12 @@ import { daemonEnvOnce } from "./shared/shell-env";
 import {
   APP_GET_VERSION_CHANNEL,
   APP_MENU_POPUP_CHANNEL,
+  CONNECTIONS_CHANGED_CHANNEL,
+  CONNECTIONS_DISCOVER_CHANNEL,
+  CONNECTIONS_LIST_CHANNEL,
+  CONNECTIONS_PAIR_CHANNEL,
+  CONNECTIONS_REMOVE_CHANNEL,
+  CONNECTIONS_USE_CHANNEL,
   DAEMON_GET_STATUS_CHANNEL,
   DAEMON_RESTART_CHANNEL,
   DAEMON_STATUS_CHANNEL,
@@ -109,10 +120,28 @@ function broadcast(channel: string, payload: unknown) {
   }
 }
 
-daemon.onStatus((status) => {
+const connections = new ConnectionManager({
+  local: daemon,
+  localName: localName(process.platform),
+  read: () => readConnections(dataDir),
+  write: (next) => writeConnections(dataDir, next),
+  check: (url, token) => checkRemote(url, token),
+  discover: () => discoverDaemons({ log: (msg) => appLog.info(msg) }),
+  log: (msg) => appLog.info(msg),
+});
+
+connections.onStatus((status) => {
   if (status.state === "error") appLog.error(`daemon: ${status.message}`);
   broadcast(DAEMON_STATUS_CHANNEL, status);
 });
+
+connections.onList((list) => broadcast(CONNECTIONS_CHANGED_CHANNEL, list));
+
+ipcMain.handle(CONNECTIONS_LIST_CHANNEL, () => connections.list());
+ipcMain.handle(CONNECTIONS_USE_CHANNEL, (_event, id: unknown) => connections.use(String(id)));
+ipcMain.handle(CONNECTIONS_PAIR_CHANNEL, (_event, request: unknown) => connections.pair(parsePairRequest(request)));
+ipcMain.handle(CONNECTIONS_REMOVE_CHANNEL, (_event, id: unknown) => connections.remove(String(id)));
+ipcMain.handle(CONNECTIONS_DISCOVER_CHANNEL, () => connections.discover());
 
 appLog.onRecord((record) => broadcast(LOGS_APP_RECORD_CHANNEL, record));
 
@@ -123,8 +152,8 @@ ipcMain.handle(LOGS_OPEN_FOLDER_CHANNEL, async (): Promise<OpenLogFolderResult> 
   return error ? { ok: false, error } : { ok: true };
 });
 
-ipcMain.handle(DAEMON_GET_STATUS_CHANNEL, () => daemon.getStatus());
-ipcMain.handle(DAEMON_RESTART_CHANNEL, () => daemon.restart());
+ipcMain.handle(DAEMON_GET_STATUS_CHANNEL, () => connections.getStatus());
+ipcMain.handle(DAEMON_RESTART_CHANNEL, () => connections.retry());
 ipcMain.handle(APP_GET_VERSION_CHANNEL, () => app.getVersion());
 
 const DAEMON_STOP_BEFORE_INSTALL_MS = 10_000;
@@ -149,7 +178,7 @@ const updates = createUpdateController({
     killLoginShells();
     return daemon.stopAndWait(DAEMON_STOP_BEFORE_INSTALL_MS);
   },
-  onInstallFailed: () => void daemon.start(),
+  onInstallFailed: () => void connections.start(),
   log: (msg) => appLog.info(msg),
 });
 
@@ -327,12 +356,12 @@ function showWindow(channel?: string) {
 }
 
 async function markAllRead() {
-  const status = daemon.getStatus();
+  const status = connections.getStatus();
   if (status.state !== "ready") return;
   try {
     const response = await fetch(`${status.baseUrl}/notifications/read`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authorization(status.token) },
       body: "{}",
     });
     if (response.ok) setUnread(0);
@@ -405,7 +434,7 @@ function createWindow() {
 
 app.on("ready", () => {
   nativeTheme.themeSource = themePreference;
-  void daemon.start();
+  void connections.start();
   createWindow();
   createTray();
   updates.start();
@@ -429,6 +458,7 @@ app.on("before-quit", (event) => {
   quitting = true;
   event.preventDefault();
   updates.dispose();
+  connections.dispose();
   killLoginShells();
   setTimeout(() => app.exit(0), QUIT_CAP_MS).unref();
   void daemon.stop().finally(() => app.quit());

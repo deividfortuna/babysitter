@@ -788,6 +788,7 @@ export interface components {
             files?: string[];
         };
         HttpdHealth: {
+            name: string;
             pid: number;
             startedAt: string;
             status: string;
