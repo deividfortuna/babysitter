@@ -697,3 +697,16 @@ func TestTheAppRefusesAGitHubRemoteOverSSH(t *testing.T) {
 		t.Errorf("Push() error = %v, want %v", err, gitrepo.ErrNotHTTPS)
 	}
 }
+
+func TestTheAppChecksEveryPushURL(t *testing.T) {
+	t.Parallel()
+	origin, work, _ := repos(t)
+	git(t, work, "remote", "set-url", "--add", "--push", "origin", origin)
+	git(t, work, "remote", "set-url", "--add", "--push", "origin", "git@GitHub.com:octo/hello.git")
+	g := New()
+	g.Auth = appAuthWithoutSSH
+
+	if err := g.Push(context.Background(), work, Push{SHA: "HEAD", Branch: "fix"}); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Fatalf("Push() error = %v, want %v before git pushes to any URL", err, gitrepo.ErrNotHTTPS)
+	}
+}

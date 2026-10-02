@@ -54,13 +54,18 @@ func (a AuthEnv) CheckRemote(ctx context.Context, remote string, push bool, git 
 	}
 	args := []string{"remote", "get-url"}
 	if push {
-		args = append(args, "--push")
+		args = append(args, "--push", "--all")
 	}
-	remoteURL, err := git(ctx, append(args, remote)...)
+	remoteURLs, err := git(ctx, append(args, remote)...)
 	if err != nil {
 		return err
 	}
-	return CheckAppRemote(remoteURL)
+	for remoteURL := range strings.Lines(remoteURLs) {
+		if err := CheckAppRemote(strings.TrimSpace(remoteURL)); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func (a AuthEnv) usesApp(ctx context.Context) bool {
