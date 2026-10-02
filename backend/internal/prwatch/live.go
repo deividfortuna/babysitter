@@ -161,6 +161,7 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 		WorktreeDir: w.WorktreeDir, Model: w.Model, Effort: w.Effort, SessionID: sessionID, Resume: resume,
 		Name: fmt.Sprintf("babysitter %s#%d", w.Repo(), w.Number),
 		Hook: s.hook(w.ID), HooksDir: filepath.Join(s.dataDir, "git-hooks"), ScreenReader: set.ScreenReader,
+		BinDir: filepath.Join(s.dataDir, "agent-bin"), Exe: s.exe, DataDir: s.dataDir,
 		PluginDir: filepath.Join(s.dataDir, "agent-plugins", strconv.FormatInt(w.ID, 10)),
 	})
 	if err != nil {

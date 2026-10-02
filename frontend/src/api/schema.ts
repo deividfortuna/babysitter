@@ -56,6 +56,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** The token of the babysitter GitHub App, for the git credential helper and the gh shim of the agent sessions. It needs the token secret of running.json and is rejected for browser origins; 404 when the daemon does not use the app. */
+        get: operations["getAppToken"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/control/shutdown": {
         parameters: {
             query?: never;
@@ -827,6 +844,10 @@ export interface components {
         };
         HttpdAddRepoRequest: {
             fullName: string;
+        };
+        HttpdAppToken: {
+            /** @description The token of the babysitter GitHub App */
+            token: string;
         };
         HttpdAuth: {
             /** @description This build of babysitter knows the babysitter GitHub App */
@@ -1888,6 +1909,65 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    getAppToken: {
+        parameters: {
+            query?: never;
+            header: {
+                /** @description The tokenSecret of running.json */
+                "X-Babysitter-Token-Secret": string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAppToken"];
+                };
+            };
+            /** @description Forbidden */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
             };
             /** @description Internal Server Error */
             500: {

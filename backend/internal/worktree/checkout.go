@@ -15,13 +15,15 @@ import (
 )
 
 const (
-	gitHubHelperConfig  = "credential.https://github.com.helper=!gh auth git-credential"
+	gitHubHelperKey     = "credential.https://github.com.helper"
+	ghHelper            = "!gh auth git-credential"
 	gitTimeout          = 10 * time.Minute
 	gitConfigKeyMissing = 5
 )
 
 type Checkouts struct {
-	Auth gitrepo.AuthEnv
+	Auth   gitrepo.AuthEnv
+	Helper string
 
 	root  string
 	url   func(repo string) string
@@ -45,7 +47,10 @@ func (c *Checkouts) Ensure(ctx context.Context, repo string) (string, error) {
 	unlock := c.locks.Lock(dir)
 	defer unlock()
 	if isCheckout(dir) {
-		return dir, restoreOrigin(ctx, dir, c.url(owner+"/"+name))
+		if err := restoreOrigin(ctx, dir, c.url(owner+"/"+name)); err != nil {
+			return "", err
+		}
+		return dir, c.restoreHelpers(ctx, dir)
 	}
 	if _, err := os.Stat(dir); !errors.Is(err, os.ErrNotExist) {
 		return "", fmt.Errorf("%s is not a git checkout, left in place", dir)
@@ -67,6 +72,26 @@ func restoreOrigin(ctx context.Context, dir, url string) error {
 	return nil
 }
 
+func (c *Checkouts) helpers() []string {
+	if c.Helper == "" {
+		return []string{ghHelper}
+	}
+	return []string{c.Helper, ghHelper}
+}
+
+func (c *Checkouts) restoreHelpers(ctx context.Context, dir string) error {
+	_, err := execx.RunIn(ctx, dir, "", nil, "git", "config", "--unset-all", gitHubHelperKey)
+	if err != nil && execx.ExitCode(err) != gitConfigKeyMissing {
+		return fmt.Errorf("restore the credential helpers of %s: %w", dir, err)
+	}
+	for _, helper := range c.helpers() {
+		if _, err := execx.RunIn(ctx, dir, "", nil, "git", "config", "--add", gitHubHelperKey, helper); err != nil {
+			return fmt.Errorf("restore the credential helpers of %s: %w", dir, err)
+		}
+	}
+	return nil
+}
+
 func (c *Checkouts) clone(ctx context.Context, repo, dir string) error {
 	parent := filepath.Dir(dir)
 	if err := os.MkdirAll(parent, 0o750); err != nil {
@@ -84,8 +109,12 @@ func (c *Checkouts) clone(ctx context.Context, repo, dir string) error {
 	if err != nil {
 		return fmt.Errorf("clone %s: %w", url, err)
 	}
-	if _, err := execx.RunIn(ctx, "", "", env, "git", "clone", "-q", "--no-checkout", "--filter=blob:none",
-		"--config", gitHubHelperConfig, "--", url, tmp); err != nil {
+	args := []string{"clone", "-q", "--no-checkout", "--filter=blob:none"}
+	for _, helper := range c.helpers() {
+		args = append(args, "--config", gitHubHelperKey+"="+helper)
+	}
+	args = append(args, "--", url, tmp)
+	if _, err := execx.RunIn(ctx, "", "", env, "git", args...); err != nil {
 		return fmt.Errorf("clone %s: %w", url, err)
 	}
 	if err := os.Rename(tmp, dir); err != nil {

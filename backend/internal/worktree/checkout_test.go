@@ -65,6 +65,45 @@ func TestEnsureClonesOnceAndMakesWorktrees(t *testing.T) {
 	}
 }
 
+func TestEnsureAsksBabysitterForCredentialsBeforeGH(t *testing.T) {
+	t.Parallel()
+	origin, _, _ := repos(t)
+	ctx := context.Background()
+	c := checkouts(t, origin)
+	c.Helper = "!babysitter auth git-credential"
+
+	dir, err := c.Ensure(ctx, "octo/hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	want := "!babysitter auth git-credential\n!gh auth git-credential"
+	if got := git(t, dir, "config", "--local", "--get-all", gitHubHelperKey); got != want {
+		t.Fatalf("credential helpers = %q, want %q", got, want)
+	}
+}
+
+func TestEnsureRestoresTheCredentialHelpersOfAnOldCheckout(t *testing.T) {
+	t.Parallel()
+	origin, _, _ := repos(t)
+	ctx := context.Background()
+	c := checkouts(t, origin)
+	dir, err := c.Ensure(ctx, "octo/hello")
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.Helper = "!babysitter auth git-credential"
+
+	if _, err := c.Ensure(ctx, "octo/hello"); err != nil {
+		t.Fatal(err)
+	}
+
+	want := "!babysitter auth git-credential\n!gh auth git-credential"
+	if got := git(t, dir, "config", "--local", "--get-all", gitHubHelperKey); got != want {
+		t.Fatalf("credential helpers = %q, want %q", got, want)
+	}
+}
+
 func TestEnsureRestoresTheOriginThatAWorktreeChanged(t *testing.T) {
 	t.Parallel()
 	origin, _, other := repos(t)

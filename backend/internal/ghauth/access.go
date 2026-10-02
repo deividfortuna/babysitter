@@ -14,7 +14,7 @@ import (
 var ErrNotInstalled = errors.New("the GitHub App is not installed on the repository")
 
 func (a *Auth) CheckRepos(ctx context.Context, client *github.Client, repos ...string) error {
-	token, err := a.appToken(ctx)
+	token, err := a.AppToken(ctx)
 	if err != nil {
 		return err
 	}

@@ -77,7 +77,7 @@ The --token flag and GITHUB_TOKEN come before the app; the gh CLI comes
 after it. 'auth logout' goes back to the next source.`,
 	}
 	cmd.PersistentFlags().StringVar(&opts.authDir, "data-dir", "", "directory of the GitHub App sign in (overrides BABYSITTER_DATA_DIR)")
-	cmd.AddCommand(newAuthLoginCmd(opts), newAuthStatusCmd(opts), newAuthLogoutCmd(opts))
+	cmd.AddCommand(newAuthLoginCmd(opts), newAuthStatusCmd(opts), newAuthLogoutCmd(opts), newAuthTokenCmd(opts), newAuthGitCredentialCmd(opts))
 	return cmd
 }
 

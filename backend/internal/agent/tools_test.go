@@ -54,9 +54,9 @@ func TestThePrePushHookRefusesEveryPush(t *testing.T) {
 		t.Skip("sh is not installed")
 	}
 	dir := filepath.Join(t.TempDir(), "hooks")
-	env, err := GitEnv(Launch{HooksDir: dir})
+	env, err := SessionEnv(Launch{HooksDir: dir})
 	if err != nil {
-		t.Fatalf("GitEnv() error = %v", err)
+		t.Fatalf("SessionEnv() error = %v", err)
 	}
 	for _, e := range env {
 		if strings.HasPrefix(e, "BABYSITTER_PUSH_REF") {
@@ -81,9 +81,9 @@ func TestTheCommitMsgHookMakesBabysitterACoAuthorOnce(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
 	}
-	env, err := GitEnv(Launch{HooksDir: filepath.Join(t.TempDir(), "hooks")})
+	env, err := SessionEnv(Launch{HooksDir: filepath.Join(t.TempDir(), "hooks")})
 	if err != nil {
-		t.Fatalf("GitEnv() error = %v", err)
+		t.Fatalf("SessionEnv() error = %v", err)
 	}
 	repo := t.TempDir()
 	git := func(args ...string) string {

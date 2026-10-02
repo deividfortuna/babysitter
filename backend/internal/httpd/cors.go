@@ -42,7 +42,29 @@ func isLoopbackOrigin(origin string) bool {
 	if err != nil || (u.Scheme != "http" && u.Scheme != "https") {
 		return false
 	}
-	host := strings.ToLower(strings.TrimSuffix(u.Hostname(), "."))
+	return isLoopbackName(u.Hostname())
+}
+
+func loopbackHostOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !isLoopbackHost(r.Host) {
+			writeError(w, http.StatusForbidden, "host_forbidden", "the daemon answers loopback host names only")
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+func isLoopbackHost(hostport string) bool {
+	host, _, err := net.SplitHostPort(hostport)
+	if err != nil {
+		host = strings.Trim(hostport, "[]")
+	}
+	return isLoopbackName(host)
+}
+
+func isLoopbackName(name string) bool {
+	host := strings.ToLower(strings.TrimSuffix(name, "."))
 	if host == "localhost" || strings.HasSuffix(host, ".localhost") {
 		return true
 	}

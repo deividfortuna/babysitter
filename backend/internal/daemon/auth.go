@@ -59,6 +59,10 @@ func (c *authController) Status(ctx context.Context) httpd.Auth {
 	return out
 }
 
+func (c *authController) AppToken(ctx context.Context) (string, error) {
+	return c.auth.AppToken(ctx)
+}
+
 func signInPrompt(p ghauth.Prompt) *httpd.SignInPrompt {
 	return &httpd.SignInPrompt{UserCode: p.UserCode, VerificationURI: p.VerificationURI, ExpiresAt: p.ExpiresAt}
 }

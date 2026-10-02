@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -11,6 +12,7 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/autostart"
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghauth"
@@ -86,6 +88,7 @@ func Run(ctx context.Context, cfg Config) error {
 	bus := events.NewBus()
 	st.SetPublisher(bus)
 	auth := newAuthController(ctx, cfg, bus)
+	tokenSecret := rand.Text()
 
 	stored, err := st.Settings(ctx)
 	if err != nil {
@@ -119,6 +122,7 @@ func Run(ctx context.Context, cfg Config) error {
 	git.Auth = cfg.Auth.GitEnv
 	checkouts := worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts"))
 	checkouts.Auth = cfg.Auth.GitEnv
+	checkouts.Helper = agent.CredentialHelper(exe, cfg.DataDir)
 	release := gitrelease.New()
 	release.Auth = cfg.Auth.GitEnv
 	watches := prwatch.New(prwatch.Deps{
@@ -182,8 +186,9 @@ func Run(ctx context.Context, cfg Config) error {
 		RateLimit: func() httpd.RateLimit {
 			return rateLimit(ghclient.SharedRates().Status(w.Guard().Floor))
 		},
-		Logs: cfg.Logs,
-		Auth: auth,
+		Logs:        cfg.Logs,
+		Auth:        auth,
+		TokenSecret: tokenSecret,
 	})
 	srv, err = httpd.Listen(ctx, cfg.Port, handler)
 	if err != nil {
@@ -191,11 +196,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	info := runfile.Info{
-		PID:       os.Getpid(),
-		Port:      srv.Port(),
-		StartedAt: time.Now().UTC(),
-		Owner:     cfg.Owner,
-		Version:   cfg.Version,
+		PID:         os.Getpid(),
+		Port:        srv.Port(),
+		StartedAt:   time.Now().UTC(),
+		Owner:       cfg.Owner,
+		Version:     cfg.Version,
+		TokenSecret: tokenSecret,
 	}
 
 	g, gctx := errgroup.WithContext(ctx)

@@ -31,12 +31,13 @@ const (
 const startSlack = time.Second
 
 type Info struct {
-	PID        int       `json:"pid"`
-	Port       int       `json:"port"`
-	StartedAt  time.Time `json:"startedAt"`
-	Owner      string    `json:"owner,omitempty"`
-	Supervisor string    `json:"supervisor,omitempty"`
-	Version    string    `json:"version,omitempty"`
+	PID         int       `json:"pid"`
+	Port        int       `json:"port"`
+	StartedAt   time.Time `json:"startedAt"`
+	Owner       string    `json:"owner,omitempty"`
+	Supervisor  string    `json:"supervisor,omitempty"`
+	Version     string    `json:"version,omitempty"`
+	TokenSecret string    `json:"tokenSecret,omitempty"`
 }
 
 func Path(dataDir string) string {

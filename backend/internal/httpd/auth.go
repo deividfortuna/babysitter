@@ -2,6 +2,7 @@ package httpd
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"net/http"
 	"time"
@@ -9,6 +10,8 @@ import (
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghauth"
 )
+
+const TokenSecretHeader = "X-Babysitter-Token-Secret"
 
 const (
 	AuthWaiting = "waiting"
@@ -45,8 +48,13 @@ type SignInPrompt struct {
 	ExpiresAt       time.Time `json:"expiresAt"`
 }
 
+type AppToken struct {
+	Token string `json:"token" description:"The token of the babysitter GitHub App"`
+}
+
 type AuthController interface {
 	Status(ctx context.Context) Auth
+	AppToken(ctx context.Context) (string, error)
 	StartSignIn(ctx context.Context) (SignInPrompt, error)
 	CancelSignIn()
 	SignOut(ctx context.Context) error
@@ -59,7 +67,8 @@ var (
 		unavailable("app_unavailable", ghauth.ErrNoApp, errNoAuth),
 		conflict("signin_cancelled", ghauth.ErrSignInCancelled),
 	)
-	signOutErrors = newErrorMap("signout_failed",
+	appTokenErrors = newErrorMap("token_failed")
+	signOutErrors  = newErrorMap("signout_failed",
 		unavailable("auth_unavailable", errNoAuth),
 	)
 )
@@ -100,6 +109,33 @@ func (a *api) handleSignOut(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (a *api) handleAppToken(w http.ResponseWriter, r *http.Request) {
+	if !a.knowsTheSecret(r) {
+		writeError(w, http.StatusForbidden, "token_forbidden", "only a babysitter process of this user may read the token")
+		return
+	}
+	if a.auth == nil {
+		writeError(w, http.StatusServiceUnavailable, "auth_unavailable", errNoAuth.Error())
+		return
+	}
+	token, err := a.auth.AppToken(r.Context())
+	if appTokenErrors.write(w, err) {
+		return
+	}
+	if token == "" {
+		writeError(w, http.StatusNotFound, "app_not_in_use", "the daemon does not use the babysitter GitHub App")
+		return
+	}
+	writeJSON(w, http.StatusOK, AppToken{Token: token})
+}
+
+func (a *api) knowsTheSecret(r *http.Request) bool {
+	fromBrowser := r.Header.Get("Origin") != ""
+	given := r.Header.Get(TokenSecretHeader)
+	matches := subtle.ConstantTimeCompare([]byte(given), []byte(a.tokenSecret)) == 1
+	return a.tokenSecret != "" && !fromBrowser && matches
 }
 
 func (a *api) forgetViewerOnAuthChange() {

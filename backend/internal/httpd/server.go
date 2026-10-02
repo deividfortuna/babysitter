@@ -26,7 +26,7 @@ func Listen(ctx context.Context, port int, handler http.Handler) (*Server, error
 	}
 	return &Server{
 		http: &http.Server{
-			Handler:           handler,
+			Handler:           loopbackHostOnly(handler),
 			ReadHeaderTimeout: 10 * time.Second,
 		},
 		ln:      ln,

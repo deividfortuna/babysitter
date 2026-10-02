@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strconv"
 	"strings"
 )
 
@@ -61,7 +62,7 @@ var gitHooks = map[string]string{
 	"commit-msg": commitMsgHook,
 }
 
-func GitEnv(l Launch) ([]string, error) {
+func SessionEnv(l Launch) ([]string, error) {
 	if l.HooksDir == "" {
 		return nil, fmt.Errorf("a hooks directory is required")
 	}
@@ -73,9 +74,25 @@ func GitEnv(l Launch) ([]string, error) {
 			return nil, fmt.Errorf("write %s hook: %w", name, err)
 		}
 	}
-	return []string{
-		"GIT_CONFIG_COUNT=1",
-		"GIT_CONFIG_KEY_0=core.hooksPath",
-		"GIT_CONFIG_VALUE_0=" + l.HooksDir,
-	}, nil
+	config := [][2]string{{"core.hooksPath", l.HooksDir}}
+	if helper := CredentialHelper(l.Exe, l.DataDir); helper != "" {
+		config = append(config, [2]string{gitHubHelperKey, helper})
+	}
+	env := gitConfigEnv(config)
+	shimmed, err := writeGHShim(l)
+	if err != nil {
+		return nil, err
+	}
+	if shimmed {
+		env = append(env, "PATH="+l.BinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
+	return env, nil
+}
+
+func gitConfigEnv(pairs [][2]string) []string {
+	env := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(len(pairs))}
+	for i, p := range pairs {
+		env = append(env, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, p[0]), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, p[1]))
+	}
+	return env
 }

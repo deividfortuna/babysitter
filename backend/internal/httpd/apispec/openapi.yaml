@@ -90,6 +90,52 @@ paths:
           description: Service Unavailable
       summary: Sign out of the babysitter GitHub App; the daemon goes back to the
         next source of a token
+  /api/v1/auth/token:
+    get:
+      operationId: getAppToken
+      parameters:
+      - description: The tokenSecret of running.json
+        in: header
+        name: X-Babysitter-Token-Secret
+        required: true
+        schema:
+          description: The tokenSecret of running.json
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAppToken'
+          description: OK
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The token of the babysitter GitHub App, for the git credential helper
+        and the gh shim of the agent sessions. It needs the token secret of running.json
+        and is rejected for browser origins; 404 when the daemon does not use the
+        app.
   /api/v1/control/shutdown:
     post:
       operationId: shutdown
@@ -2186,6 +2232,14 @@ components:
           type: string
       required:
       - fullName
+      type: object
+    HttpdAppToken:
+      properties:
+        token:
+          description: The token of the babysitter GitHub App
+          type: string
+      required:
+      - token
       type: object
     HttpdAuth:
       properties:

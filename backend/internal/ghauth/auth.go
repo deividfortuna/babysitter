@@ -137,7 +137,7 @@ func (a *Auth) Token(ctx context.Context) (string, error) {
 }
 
 func (a *Auth) GitEnv(ctx context.Context) ([]string, error) {
-	token, err := a.appToken(ctx)
+	token, err := a.AppToken(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -175,7 +175,7 @@ func (a *Auth) override() (Credential, bool) {
 	return Credential{}, false
 }
 
-func (a *Auth) appToken(ctx context.Context) (string, error) {
+func (a *Auth) AppToken(ctx context.Context) (string, error) {
 	if _, ok := a.override(); ok {
 		return "", nil
 	}

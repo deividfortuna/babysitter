@@ -105,7 +105,11 @@ can change at any time.
   the repositories it may touch. babysitter still acts as you, but only
   on those repositories and only with the permissions of the app. No
   personal token is used, and `git` fetches and pushes with the token of
-  the app too.
+  the app too. The agent sessions get the same token: their `git` asks
+  the daemon through `babysitter auth git-credential` before `gh`, and
+  their `gh` runs through a small script that sets `GH_TOKEN` to the
+  token of the app. The script needs `gh` to be installed, and there is
+  no script on Windows.
 
 The app is [babysitter-orchestrator](https://github.com/apps/babysitter-orchestrator).
 Install it on the repositories it may touch, then sign in from the
@@ -256,7 +260,9 @@ go run ./cmd/babysitter daemon stop
 The data directory holds `running.json`, the supervisor socket, the
 `worktrees/` of the watches, the `sessions/` logs of the agents, the
 `logs/` of the daemon and the app (see [Logs](#logs)), the
-`git-hooks/` the daemon installs, and the `update-settings.json` and
+`git-hooks/` the daemon installs, the `agent-bin/gh` script that gives
+the `gh` of the agent sessions the token of the GitHub App, and the
+`update-settings.json` and
 `theme.json` of the app. By default it holds `babysitter.db` too. It
 comes from, in this order:
 
@@ -905,7 +911,9 @@ repository with auto start and no `--checkout`), the daemon clones the
 head repository once into `<data dir>/checkouts/<owner>/<name>` and uses
 that clone as the checkout. The clone keeps no files of its own; each
 watch gets its worktree from it. The clone fetches and pushes on
-github.com with `gh auth git-credential`, so `gh` must be logged in.
+github.com with the token of the babysitter GitHub App when the daemon
+uses the app, and with `gh auth git-credential` when it does not. In
+that case, `gh` must be logged in.
 If your git configuration has
 `url.git@github.com:.insteadOf https://github.com/`, the clone uses SSH
 with your keys instead, and `gh` does not need to be logged in. The

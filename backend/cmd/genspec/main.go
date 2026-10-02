@@ -38,6 +38,10 @@ type watchIDParam struct {
 	ID int64 `path:"id" description:"Watch id"`
 }
 
+type appTokenParams struct {
+	Secret string `header:"X-Babysitter-Token-Secret" required:"true" description:"The tokenSecret of running.json"`
+}
+
 type sendParams struct {
 	watchIDParam
 	httpd.SendMessageRequest
@@ -194,6 +198,7 @@ func build() ([]byte, error) {
 		{method: http.MethodPost, path: "/auth/signin", id: "startSignIn", summary: "Start a sign in with the babysitter GitHub App; the daemon waits for the code in the background, and a sign in that waits already is answered again", resp: httpd.SignInPrompt{}, status: http.StatusAccepted, errors: []int{http.StatusServiceUnavailable}},
 		{method: http.MethodDelete, path: "/auth/signin", id: "cancelSignIn", summary: "Stop waiting for the code of the sign in", status: http.StatusNoContent},
 		{method: http.MethodPost, path: "/auth/signout", id: "signOut", summary: "Sign out of the babysitter GitHub App; the daemon goes back to the next source of a token", status: http.StatusNoContent, errors: []int{http.StatusServiceUnavailable}},
+		{method: http.MethodGet, path: "/auth/token", id: "getAppToken", summary: "The token of the babysitter GitHub App, for the git credential helper and the gh shim of the agent sessions. It needs the token secret of running.json and is rejected for browser origins; 404 when the daemon does not use the app.", req: appTokenParams{}, resp: httpd.AppToken{}, status: http.StatusOK, errors: []int{http.StatusForbidden, http.StatusNotFound, http.StatusInternalServerError, http.StatusServiceUnavailable}},
 		{method: http.MethodGet, path: "/ratelimit", id: "getRateLimit", summary: "The GitHub API budget the token of the daemon has left", resp: httpd.RateLimit{}, status: http.StatusOK},
 		{method: http.MethodGet, path: "/logs", id: "listLogs", summary: "The last records the daemon logged in this run, oldest first", req: httpd.LogQuery{}, resp: httpd.LogList{}, status: http.StatusOK, errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable}},
 		{method: http.MethodGet, path: "/logs/stream", id: "streamLogs", summary: "The log of the daemon as server-sent events: a ready frame, the kept records after the seq, then one log frame per new record", req: httpd.LogStreamQuery{}, status: http.StatusOK, stream: true, errors: []int{http.StatusBadRequest, http.StatusServiceUnavailable}},

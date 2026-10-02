@@ -3,8 +3,11 @@ package httpd
 import (
 	"context"
 	"errors"
+	"maps"
 	"net/http"
+	"net/http/httptest"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -15,6 +18,8 @@ import (
 
 type fakeAuth struct {
 	status     Auth
+	token      string
+	tokenErr   error
 	prompt     SignInPrompt
 	startErr   error
 	cancels    int
@@ -28,6 +33,8 @@ func (f *fakeAuth) Status(context.Context) Auth { return f.status }
 func (f *fakeAuth) StartSignIn(context.Context) (SignInPrompt, error) { return f.prompt, f.startErr }
 
 func (f *fakeAuth) CancelSignIn() { f.cancels++ }
+
+func (f *fakeAuth) AppToken(context.Context) (string, error) { return f.token, f.tokenErr }
 
 func (f *fakeAuth) SignOut(context.Context) error {
 	f.signOuts++
@@ -137,5 +144,84 @@ func TestSignOutFailure(t *testing.T) {
 
 	if rec := call(t, h, http.MethodPost, "/auth/signout", "", nil); rec.Code != http.StatusInternalServerError {
 		t.Fatalf("status = %d, want 500", rec.Code)
+	}
+}
+
+func tokenCall(t *testing.T, h http.Handler, header http.Header) *httptest.ResponseRecorder {
+	t.Helper()
+	req := httptest.NewRequest(http.MethodGet, Prefix+"/auth/token", nil)
+	maps.Copy(req.Header, header)
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	return rec
+}
+
+func TestAppTokenNeedsTheSecret(t *testing.T) {
+	h := NewRouter(Deps{Log: testutil.Logger(t), Auth: &fakeAuth{token: "ghu_app"}, TokenSecret: "s3cret"})
+
+	for _, tc := range []struct {
+		name   string
+		header http.Header
+		status int
+	}{
+		{"no secret", http.Header{}, http.StatusForbidden},
+		{"wrong secret", http.Header{TokenSecretHeader: {"guess"}}, http.StatusForbidden},
+		{"secret from a browser", http.Header{TokenSecretHeader: {"s3cret"}, "Origin": {"http://127.0.0.1:5173"}}, http.StatusForbidden},
+		{"secret", http.Header{TokenSecretHeader: {"s3cret"}}, http.StatusOK},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			rec := tokenCall(t, h, tc.header)
+
+			if rec.Code != tc.status {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, tc.status, rec.Body)
+			}
+			if given := strings.Contains(rec.Body.String(), "ghu_app"); given != (tc.status == http.StatusOK) {
+				t.Fatalf("body = %s", rec.Body)
+			}
+		})
+	}
+}
+
+func TestAppTokenWithoutASecretIsNeverGiven(t *testing.T) {
+	h := NewRouter(Deps{Log: testutil.Logger(t), Auth: &fakeAuth{token: "ghu_app"}})
+
+	if rec := tokenCall(t, h, http.Header{TokenSecretHeader: {""}}); rec.Code != http.StatusForbidden {
+		t.Fatalf("status = %d, want 403", rec.Code)
+	}
+}
+
+func TestAppTokenWhenTheAppIsNotInUse(t *testing.T) {
+	h := NewRouter(Deps{Log: testutil.Logger(t), Auth: &fakeAuth{}, TokenSecret: "s3cret"})
+
+	rec := tokenCall(t, h, http.Header{TokenSecretHeader: {"s3cret"}})
+
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "app_not_in_use") {
+		t.Fatalf("body = %s, want the code app_not_in_use", rec.Body)
+	}
+}
+
+func TestTheDaemonAnswersLoopbackHostsOnly(t *testing.T) {
+	ok := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusNoContent) })
+	h := loopbackHostOnly(ok)
+
+	for host, want := range map[string]int{
+		"127.0.0.1:7777":      http.StatusNoContent,
+		"localhost:7777":      http.StatusNoContent,
+		"[::1]:7777":          http.StatusNoContent,
+		"localhost":           http.StatusNoContent,
+		"evil.example:7777":   http.StatusForbidden,
+		"192.168.1.10:7777":   http.StatusForbidden,
+		"127.0.0.1.nip.io:80": http.StatusForbidden,
+	} {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.Host = host
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("Host %s = %d, want %d", host, rec.Code, want)
+		}
 	}
 }

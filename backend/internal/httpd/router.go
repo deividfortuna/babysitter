@@ -61,6 +61,7 @@ type Deps struct {
 	RateLimit     RateLimitFunc
 	Logs          *logbook.Book
 	Auth          AuthController
+	TokenSecret   string
 }
 
 type api struct {
@@ -81,6 +82,7 @@ type api struct {
 	rateLimit     RateLimitFunc
 	logs          *logbook.Book
 	auth          AuthController
+	tokenSecret   string
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -106,6 +108,7 @@ func NewRouter(d Deps) http.Handler {
 		rateLimit:     d.RateLimit,
 		logs:          d.Logs,
 		auth:          d.Auth,
+		tokenSecret:   d.TokenSecret,
 	}
 	if a.ctx == nil {
 		a.ctx = context.Background()
@@ -149,6 +152,7 @@ func NewRouter(d Deps) http.Handler {
 		r.Post("/auth/signin", a.handleStartSignIn)
 		r.Delete("/auth/signin", a.handleCancelSignIn)
 		r.Post("/auth/signout", a.handleSignOut)
+		r.Get("/auth/token", a.handleAppToken)
 		r.Get("/ratelimit", a.handleRateLimit)
 		r.Get("/logs", a.handleListLogs)
 		r.Get("/logs/stream", a.handleStreamLogs)
