@@ -975,3 +975,32 @@ func refreshes(g *ghfake.GitHub) int {
 	}
 	return n
 }
+
+func TestAFailedRenewalAfterTheExpiryAndItsRecoveryAreTold(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	daemon := h.auth()
+	var changes atomic.Int32
+	daemon.OnChange(func() { changes.Add(1) })
+	if _, err := daemon.Credential(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	var failing atomic.Bool
+	failing.Store(true)
+	h.g.React(ghfake.RouteOAuthGrant, func(ghfake.Action) (ghfake.Response, bool) {
+		return ghfake.Response{Status: http.StatusBadGateway, Message: "bad gateway"}, failing.Load()
+	})
+	h.clock.Advance(ghfake.TokenLifetime * time.Second)
+
+	if _, err := daemon.Credential(context.Background()); err == nil {
+		t.Fatal("Credential after the expiry worked with a renewal that failed")
+	}
+	testutil.Eventually(t, func() bool { return changes.Load() == 1 }, "the failed renewal is told")
+
+	failing.Store(false)
+	h.clock.Advance(firstRetry)
+	if _, err := daemon.Credential(context.Background()); err != nil {
+		t.Fatalf("Credential after GitHub came back: %v", err)
+	}
+	testutil.Eventually(t, func() bool { return changes.Load() == 2 }, "the recovery is told")
+}

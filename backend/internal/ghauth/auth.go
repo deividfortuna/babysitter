@@ -201,7 +201,7 @@ func identityAfter(before, after Credentials, err error) identity {
 	case errors.Is(err, ErrSignedOut):
 		return identity{}
 	}
-	return identity{login: before.Login, expired: errors.Is(err, ErrSessionExpired)}
+	return identity{login: before.Login, expired: errors.Is(err, ErrSessionExpired), unreachable: reportable(err)}
 }
 
 func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
@@ -326,8 +326,9 @@ func (a *Auth) renewable(t Token) bool {
 }
 
 type identity struct {
-	login   string
-	expired bool
+	login       string
+	expired     bool
+	unreachable bool
 }
 
 func (a *Auth) observe(id identity) {
