@@ -8,7 +8,7 @@ import (
 
 func guarded(t *testing.T) http.Handler {
 	t.Helper()
-	return Guard("secret", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return Guard(func() string { return "secret" }, http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusTeapot)
 	}))
 }

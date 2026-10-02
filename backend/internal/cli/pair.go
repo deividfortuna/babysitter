@@ -36,8 +36,8 @@ func newDaemonPairCmd(opts *options, dataDirFlag *string) *cobra.Command {
 holds the token that the daemon wants from other machines. Keep it
 secret: who has it can read and drive every watch.
 
---rotate makes a new token. The app of each other machine must pair
-again, and the daemon takes the new token when it starts again.`,
+--rotate makes a new token. The running daemon refuses the old token at
+once, and the app of each other machine must pair again.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			dataDir, err := opts.dataDir(*dataDirFlag)

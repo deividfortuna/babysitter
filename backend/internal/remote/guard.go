@@ -13,13 +13,13 @@ var localOnlySuffixes = []string{"/control/shutdown", "/hook"}
 
 var eventStreamSuffixes = []string{"/events", "/logs/stream"}
 
-func Guard(token string, next http.Handler) http.Handler {
+func Guard(token func() string, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if isPreflight(r) || isHealthCheck(r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
-		if !matches(token, presented(r)) {
+		if !matches(token(), presented(r)) {
 			deny(w, http.StatusUnauthorized, "unauthorized", "the daemon wants the token of its remote access")
 			return
 		}

@@ -40,6 +40,29 @@ func TestTokenFileIsPrivate(t *testing.T) {
 	}
 }
 
+func TestRotateTokenMakesTheTokenFilePrivateAgain(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no permission bits")
+	}
+	dir := t.TempDir()
+	if _, err := Token(dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chmod(TokenPath(dir), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := RotateToken(dir); err != nil {
+		t.Fatal(err)
+	}
+	info, err := os.Stat(TokenPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if mode := info.Mode().Perm(); mode != 0o600 {
+		t.Fatalf("token file mode after the rotation %v, want -rw-------", mode)
+	}
+}
+
 func TestRotateTokenReplacesTheToken(t *testing.T) {
 	dir := t.TempDir()
 	old, err := Token(dir)

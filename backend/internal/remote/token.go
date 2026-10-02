@@ -32,6 +32,14 @@ func Token(dataDir string) (string, error) {
 	return RotateToken(dataDir)
 }
 
+func CurrentToken(dataDir string) string {
+	data, err := os.ReadFile(TokenPath(dataDir))
+	if err != nil {
+		return ""
+	}
+	return strings.TrimSpace(string(data))
+}
+
 func RotateToken(dataDir string) (string, error) {
 	raw := make([]byte, tokenBytes)
 	if _, err := rand.Read(raw); err != nil {
@@ -41,8 +49,24 @@ func RotateToken(dataDir string) (string, error) {
 	if err := os.MkdirAll(dataDir, 0o750); err != nil {
 		return "", fmt.Errorf("create data dir: %w", err)
 	}
-	if err := os.WriteFile(TokenPath(dataDir), []byte(token+"\n"), 0o600); err != nil {
+	if err := replaceFile(TokenPath(dataDir), []byte(token+"\n")); err != nil {
 		return "", fmt.Errorf("write remote token: %w", err)
 	}
 	return token, nil
+}
+
+func replaceFile(path string, data []byte) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	return os.Rename(tmp.Name(), path)
 }

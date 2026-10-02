@@ -260,11 +260,11 @@ func (cfg Config) name() string {
 }
 
 func serveRemote(ctx context.Context, g *errgroup.Group, cfg Config, handler http.Handler, log *slog.Logger) (int, error) {
-	token, err := remote.Token(cfg.DataDir)
-	if err != nil {
+	if _, err := remote.Token(cfg.DataDir); err != nil {
 		return 0, err
 	}
-	srv, err := httpd.ListenAddr(ctx, cfg.RemoteAddr, remote.Guard(token, handler))
+	currentToken := func() string { return remote.CurrentToken(cfg.DataDir) }
+	srv, err := httpd.ListenAddr(ctx, cfg.RemoteAddr, remote.Guard(currentToken, handler))
 	if err != nil {
 		return 0, fmt.Errorf("remote access: %w", err)
 	}
