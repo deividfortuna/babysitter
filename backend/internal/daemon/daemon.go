@@ -95,7 +95,7 @@ func Run(ctx context.Context, cfg Config) error {
 	st.SetPublisher(bus)
 	exe, err := os.Executable()
 	if err != nil {
-		log.Warn("the agent sessions report nothing: the babysitter command is not known", "err", err)
+		log.Warn("the agent sessions report nothing, and their git gets no GitHub credential while the app is in use: the babysitter command is not known", "err", err)
 		exe = ""
 	}
 	credentialHelper := agent.CredentialHelper(exe, cfg.DataDir)

@@ -88,10 +88,10 @@ func appGitConfig(helper string) string {
 		fmt.Fprintf(&b, "[url %s]\n\t%s = %s\n", gitConfigQuote(rule.base), rule.key, rule.prefix)
 	}
 	fmt.Fprintf(&b, "[http %s]\n\textraHeader =\n", gitConfigQuote(gitHubHTTPS))
+	fmt.Fprintf(&b, "[credential %s]\n\thelper =\n", gitConfigQuote("https://github.com"))
 	if helper == "" {
 		return b.String()
 	}
-	fmt.Fprintf(&b, "[credential %s]\n\thelper =\n", gitConfigQuote("https://github.com"))
 	fmt.Fprintf(&b, "\thelper = %s\n", gitConfigQuote(helper))
 	fmt.Fprintf(&b, "\thelper = %s\n", gitConfigQuote(gitrepo.GHHelper))
 	return b.String()

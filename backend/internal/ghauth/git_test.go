@@ -329,3 +329,31 @@ func TestGitEnvLeavesTheHelpersOfTheUserAlone(t *testing.T) {
 		t.Fatalf("git asked the helper of the user: %q", got)
 	}
 }
+
+func TestTheGitConfigWithoutTheBabysitterHelperKeepsTheHelpersOfTheUserOut(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("the fake helper is a shell script")
+	}
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	personal := helperScript(t, filepath.Join(t.TempDir(), "my tools"), "personal", "gho_personal")
+	include := filepath.Join(t.TempDir(), "app.gitconfig")
+	if err := os.WriteFile(include, []byte(appGitConfig("")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, []byte("[credential \"https://github.com\"]\n\thelper = !'"+personal+"'\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := exec.Command("git", "credential", "fill")
+	cmd.Env = append(os.Environ(), "GIT_CONFIG_GLOBAL="+global, "GIT_CONFIG_NOSYSTEM=1", "GIT_TERMINAL_PROMPT=0",
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=include.path", "GIT_CONFIG_VALUE_0="+include)
+	cmd.Stdin = strings.NewReader("protocol=https\nhost=github.com\n\n")
+	out, _ := cmd.Output()
+
+	if strings.Contains(string(out), "gho_personal") {
+		t.Fatalf("git credential fill = %q, want no credential of the user while the app is in use", out)
+	}
+}
