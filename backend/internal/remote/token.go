@@ -9,6 +9,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/deividfortuna/babysitter/internal/runfile"
 )
 
 const TokenFileName = "remote-token"
@@ -33,7 +35,11 @@ func Token(dataDir string) (string, error) {
 }
 
 func CurrentToken(dataDir string) string {
-	data, err := os.ReadFile(TokenPath(dataDir))
+	var data []byte
+	err := runfile.WhileBusy(func() (err error) {
+		data, err = os.ReadFile(TokenPath(dataDir))
+		return err
+	})
 	if err != nil {
 		return ""
 	}
@@ -68,5 +74,5 @@ func replaceFile(path string, data []byte) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmp.Name(), path)
+	return runfile.WhileBusy(func() error { return os.Rename(tmp.Name(), path) })
 }

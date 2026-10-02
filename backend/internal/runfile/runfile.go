@@ -69,7 +69,7 @@ func Write(path string, info Info) error {
 	if err := tmp.Close(); err != nil {
 		return fmt.Errorf("close temp run file: %w", err)
 	}
-	if err := whileBusy(func() error { return os.Rename(tmpName, path) }); err != nil {
+	if err := WhileBusy(func() error { return os.Rename(tmpName, path) }); err != nil {
 		return fmt.Errorf("replace run file: %w", err)
 	}
 	return nil
@@ -77,7 +77,7 @@ func Write(path string, info Info) error {
 
 func Read(path string) (*Info, error) {
 	var data []byte
-	err := whileBusy(func() (err error) {
+	err := WhileBusy(func() (err error) {
 		data, err = os.ReadFile(path)
 		return err
 	})
@@ -94,9 +94,9 @@ func Read(path string) (*Info, error) {
 	return &info, nil
 }
 
-// whileBusy runs op again while it fails because another process has the
+// WhileBusy runs op again while it fails because another process has the
 // file, up to busyTries times, and returns the last error.
-func whileBusy(op func() error) error {
+func WhileBusy(op func() error) error {
 	for try := 1; ; try++ {
 		err := op()
 		if err == nil || !busy(err) || try == busyTries {
