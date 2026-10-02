@@ -77,7 +77,7 @@ export function StoppedView({ enabled, onNavigate }: Props) {
         <Meta>{stopped.length} archived</Meta>
       </ViewHeader>
       <PullsErrorAlert error={pulls.error} />
-      <div className="flex flex-col gap-3 p-3">
+      <div className="flex flex-col gap-3 p-5">
         {groupByDay(stopped, (w) => w.stoppedAt).map(([day, list]) => (
           <InboxGroup key={day} heading={day}>
             {list.map((w) => (

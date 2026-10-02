@@ -95,7 +95,7 @@ export function NotificationsView({ enabled, onNavigate }: Props) {
           <AlertTitle>{read.error.message}</AlertTitle>
         </Alert>
       ) : null}
-      <div className="flex flex-col gap-3 p-3">
+      <div className="flex flex-col gap-3 p-5">
         {groupByDay(rows, (item) => item.createdAt).map(([day, list]) => (
           <InboxGroup key={day} heading={day}>
             {list.map((item) => (

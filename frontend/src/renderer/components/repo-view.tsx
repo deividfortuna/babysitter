@@ -255,7 +255,7 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
           </Alert>
         ) : null}
 
-        <div className="flex flex-col gap-3 p-3">
+        <div className="flex flex-col gap-3 p-5">
           <InboxGroup
             heading={`Watching · ${watched.length}`}
             empty={

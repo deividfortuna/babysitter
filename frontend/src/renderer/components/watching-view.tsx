@@ -181,7 +181,7 @@ export function WatchingView({ enabled, onNavigate, onWatchPR, onAddRepo }: Prop
           </EmptyContent>
         </Empty>
       ) : (
-        <div className="flex flex-col gap-3 p-3">
+        <div className="flex flex-col gap-3 p-5">
           {pinned.length > 0 ? (
             <InboxGroup heading={`Needs you · ${pinned.length}`}>{pinned.map(renderRow)}</InboxGroup>
           ) : null}
