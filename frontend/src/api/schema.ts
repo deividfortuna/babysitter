@@ -839,6 +839,8 @@ export interface components {
             installUrl: string;
             /** @description The accounts the app is installed on, read only while the app gives the token */
             installations: components["schemas"]["HttpdAuthInstallation"][] | null;
+            /** @description Why the accounts the app is installed on cannot be read; the list is then empty and says nothing */
+            installationsError?: string;
             /** @description The account signed in with the app */
             login?: string;
             /**

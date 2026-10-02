@@ -154,6 +154,28 @@ test("connected names the account and the accounts the app is installed on", asy
   expect(screen.getByRole("link", { name: "Manage on GitHub" })).toHaveAttribute("href", installUrl);
 });
 
+test("installations that cannot be read are not called missing", async () => {
+  serveApi({
+    auth: { ...connected, installations: [], installationsError: "list the installations of the GitHub App: 502" },
+  });
+  renderWithProviders(<GitHubPanel />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not read the accounts the app is installed on");
+  expect(screen.getByText("list the installations of the GitHub App: 502")).toBeVisible();
+  expect(screen.getByRole("link", { name: "Manage on GitHub" })).toHaveAttribute("href", installUrl);
+  expect(screen.queryByText("Choose the repositories babysitter may watch")).not.toBeInTheDocument();
+});
+
+test("an expired sign in shows why signing in again failed", async () => {
+  serveApi({
+    auth: { ...connected, state: "expired", origin: "", installations: [], signInFailure: "denied", signInError: "x" },
+  });
+  renderWithProviders(<GitHubPanel />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("The sign in was cancelled on GitHub.");
+  expect(screen.getByRole("button", { name: "Sign in again" })).toBeVisible();
+});
+
 test("connected without an installation asks to choose the repositories", async () => {
   serveApi({ auth: { ...connected, installations: [] } });
   renderWithProviders(<GitHubPanel />);

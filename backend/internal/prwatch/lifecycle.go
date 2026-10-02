@@ -201,24 +201,22 @@ func (s *Service) checkStart(ctx context.Context, client *github.Client, req Sta
 	return acc, approvals, nil
 }
 
-func (s *Service) reachable(ctx context.Context, client *github.Client, repos ...string) error {
-	for _, repo := range repos {
-		owner, name, err := store.ParseFullName(repo)
-		if err != nil {
-			return err
-		}
-		if err := s.checkAccess(ctx, client, owner, name); err != nil {
-			return err
-		}
+func (s *Service) unreachable(ctx context.Context, client *github.Client, t snapshot.Target, err error) error {
+	hidden := ghclient.IsNotFound(err) && t.Complete()
+	if !hidden {
+		return err
 	}
-	return nil
+	if accessErr := s.checkAccess(ctx, client, t.Owner+"/"+t.Name); accessErr != nil {
+		return accessErr
+	}
+	return err
 }
 
-func unchecked(checked []string, repos ...string) []string {
+func distinctRepos(repos ...string) []string {
 	var out []string
 	for _, repo := range repos {
-		seen := slices.ContainsFunc(slices.Concat(checked, out), func(c string) bool { return strings.EqualFold(c, repo) })
-		if !seen {
+		known := slices.ContainsFunc(out, func(r string) bool { return strings.EqualFold(r, repo) })
+		if repo != "" && !known {
 			out = append(out, repo)
 		}
 	}
@@ -282,23 +280,16 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	if err != nil {
 		return store.Watch{}, err
 	}
-	var checked []string
-	if req.Target.Complete() {
-		checked = []string{req.Target.Owner + "/" + req.Target.Name}
-		if err := s.reachable(ctx, client, checked...); err != nil {
-			return store.Watch{}, err
-		}
-	}
 	now := s.now()
 	snap, err := snapshot.Collect(ctx, client, s.store, req.Target, s.snapshotOptions(req.SourceDir))
 	if err != nil {
-		return store.Watch{}, err
-	}
-	if err := s.reachable(ctx, client, unchecked(checked, snap.PR.Repo, snap.PR.HeadRepo)...); err != nil {
-		return store.Watch{}, err
+		return store.Watch{}, s.unreachable(ctx, client, req.Target, err)
 	}
 	if snap.PR.Merged || snap.PR.Closed {
 		return store.Watch{}, fmt.Errorf("%w: %s#%d is %s", ErrNotOpen, snap.PR.Repo, snap.PR.Number, snap.PR.State)
+	}
+	if err := s.checkAccess(ctx, client, distinctRepos(snap.PR.Repo, snap.PR.HeadRepo)...); err != nil {
+		return store.Watch{}, err
 	}
 	owner, name, err := store.ParseFullName(snap.PR.Repo)
 	if err != nil {

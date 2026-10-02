@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -626,6 +628,28 @@ func TestPushStopsWhenTheAuthEnvFails(t *testing.T) {
 	}
 	if ran {
 		t.Fatal("git ran without the token of the app, with the credentials of the user")
+	}
+}
+
+func TestLocalCommandsRunWhenTheAuthEnvFails(t *testing.T) {
+	t.Parallel()
+	expired := errors.New("the GitHub App sign in expired")
+	var env []string
+	g := &Runner{
+		Run: func(_ context.Context, _, _ string, e []string, _ string, _ ...string) (string, error) {
+			env = e
+			return "abc", nil
+		},
+		Auth: func(context.Context) ([]string, error) { return nil, expired },
+	}
+
+	head, err := g.Head(context.Background(), "/wt")
+
+	if err != nil || head != "abc" {
+		t.Fatalf("Head() = %q, %v; want the local command to run without the token", head, err)
+	}
+	if !slices.Equal(env, gitrepo.NoPromptEnv) {
+		t.Fatalf("env = %v, want only %v", env, gitrepo.NoPromptEnv)
 	}
 }
 

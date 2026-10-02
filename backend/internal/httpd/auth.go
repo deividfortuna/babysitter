@@ -26,6 +26,7 @@ type Auth struct {
 	AvatarURL     string             `json:"avatarUrl,omitempty" description:"The avatar of the account signed in with the app"`
 	InstallURL    string             `json:"installUrl" description:"Where the user installs the app on more repositories"`
 	Installations []AuthInstallation `json:"installations" description:"The accounts the app is installed on, read only while the app gives the token"`
+	InstallsError string             `json:"installationsError,omitempty" description:"Why the accounts the app is installed on cannot be read; the list is then empty and says nothing"`
 	SignIn        *SignInPrompt      `json:"signIn,omitempty" description:"The sign in that waits for the user to enter the code on GitHub"`
 	SignInFailure string             `json:"signInFailure,omitempty" enum:",expired,denied,failed" description:"Why the last sign in ended without an account: the code expired, the user refused it, or another failure"`
 	SignInError   string             `json:"signInError,omitempty" description:"The message of the last sign in that failed"`
@@ -48,7 +49,7 @@ type AuthController interface {
 	Status(ctx context.Context) Auth
 	StartSignIn(ctx context.Context) (SignInPrompt, error)
 	CancelSignIn()
-	SignOut() error
+	SignOut(ctx context.Context) error
 }
 
 var (
@@ -94,7 +95,7 @@ func (a *api) handleSignOut(w http.ResponseWriter, r *http.Request) {
 		signOutErrors.write(w, errNoAuth)
 		return
 	}
-	if signOutErrors.write(w, a.auth.SignOut()) {
+	if signOutErrors.write(w, a.auth.SignOut(r.Context())) {
 		return
 	}
 	w.WriteHeader(http.StatusNoContent)

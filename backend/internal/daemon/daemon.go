@@ -135,7 +135,7 @@ func Run(ctx context.Context, cfg Config) error {
 		DataDir:       cfg.DataDir,
 		Guard:         w.Guard(),
 		Bus:           bus,
-		CheckAccess:   cfg.Auth.CheckRepo,
+		CheckAccess:   cfg.Auth.CheckRepos,
 	}, watchOpts...)
 	viewer := func(ctx context.Context) (httpd.Viewer, error) {
 		c, err := cfg.NewClient(ctx)

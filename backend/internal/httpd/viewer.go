@@ -25,16 +25,19 @@ var errNoViewer = errors.New("the daemon cannot ask GitHub who the token belongs
 type viewerCache struct {
 	fn ViewerFunc
 
-	mu    sync.Mutex
-	value Viewer
-	at    time.Time
+	mu         sync.Mutex
+	value      Viewer
+	at         time.Time
+	generation int
 }
 
 func (c *viewerCache) get(ctx context.Context) (Viewer, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if !c.at.IsZero() && time.Since(c.at) < viewerTTL {
-		return c.value, nil
+	fresh := !c.at.IsZero() && time.Since(c.at) < viewerTTL
+	value, generation := c.value, c.generation
+	c.mu.Unlock()
+	if fresh {
+		return value, nil
 	}
 	if c.fn == nil {
 		return Viewer{}, errNoViewer
@@ -43,7 +46,11 @@ func (c *viewerCache) get(ctx context.Context) (Viewer, error) {
 	if err != nil {
 		return Viewer{}, err
 	}
-	c.value, c.at = v, time.Now()
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.generation == generation {
+		c.value, c.at = v, time.Now()
+	}
 	return v, nil
 }
 
@@ -51,6 +58,7 @@ func (c *viewerCache) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.at = time.Time{}
+	c.generation++
 }
 
 func (a *api) handleViewer(w http.ResponseWriter, r *http.Request) {

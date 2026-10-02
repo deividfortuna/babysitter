@@ -80,7 +80,7 @@ func (c *Checkouts) clone(ctx context.Context, repo, dir string) error {
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
 	url := c.url(repo)
-	env, err := c.Auth.Env(ctx)
+	env, err := c.Auth.Env(ctx, "clone")
 	if err != nil {
 		return fmt.Errorf("clone %s: %w", url, err)
 	}

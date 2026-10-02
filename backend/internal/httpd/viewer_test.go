@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/testutil"
@@ -56,5 +57,25 @@ func TestViewerIsUnavailableWhenGitHubRefuses(t *testing.T) {
 	}
 	if body := rec.Body.String(); strings.Contains(body, "ghp_0123456789abcdefghijABCDEFGH") {
 		t.Fatalf("body leaks the token: %s", body)
+	}
+}
+
+func TestViewerAnswersWhenTheLookupTellsAnAuthChange(t *testing.T) {
+	bus := events.NewBus()
+	h := NewRouter(Deps{Log: testutil.Logger(t), Bus: bus, Viewer: func(context.Context) (Viewer, error) {
+		bus.Publish(events.AuthChanged, "", 0)
+		return Viewer{Login: "octocat"}, nil
+	}})
+
+	done := make(chan int, 1)
+	go func() { done <- call(t, h, http.MethodGet, "/viewer", "", nil).Code }()
+
+	select {
+	case code := <-done:
+		if code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", code)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("GET /viewer hangs when the token lookup tells an auth change")
 	}
 }

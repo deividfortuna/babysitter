@@ -15,15 +15,20 @@ var NoPromptEnv = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
 
 type AuthEnv func(ctx context.Context) ([]string, error)
 
-func (a AuthEnv) Env(ctx context.Context) ([]string, error) {
+var networkCommands = []string{"fetch", "push", "clone", "pull", "ls-remote"}
+
+func (a AuthEnv) Env(ctx context.Context, command string) ([]string, error) {
 	if a == nil {
 		return NoPromptEnv, nil
 	}
 	extra, err := a(ctx)
-	if err != nil {
+	if err == nil {
+		return append(slices.Clone(NoPromptEnv), extra...), nil
+	}
+	if slices.Contains(networkCommands, command) {
 		return nil, err
 	}
-	return append(slices.Clone(NoPromptEnv), extra...), nil
+	return NoPromptEnv, nil
 }
 
 func CurrentBranch(ctx context.Context, dir string) (string, error) {

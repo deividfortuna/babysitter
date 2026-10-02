@@ -33,11 +33,26 @@ func UserInstallations(ctx context.Context, c *github.Client) ([]Installation, e
 	return out, nil
 }
 
-func AppInstalled(ctx context.Context, c *github.Client, owner, name string) (bool, error) {
+func MissingInstallations(ctx context.Context, c *github.Client, repos ...string) ([]string, error) {
 	installs, err := UserInstallations(ctx, c)
 	if err != nil {
-		return false, err
+		return nil, err
 	}
+	var missing []string
+	for _, repo := range repos {
+		installed, err := covers(ctx, c, installs, repo)
+		if err != nil {
+			return nil, err
+		}
+		if !installed {
+			missing = append(missing, repo)
+		}
+	}
+	return missing, nil
+}
+
+func covers(ctx context.Context, c *github.Client, installs []Installation, repo string) (bool, error) {
+	owner, name, _ := strings.Cut(repo, "/")
 	for _, inst := range installs {
 		if !strings.EqualFold(inst.Account, owner) {
 			continue

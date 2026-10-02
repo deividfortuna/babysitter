@@ -166,7 +166,7 @@ func newAuthLogoutCmd(opts *options) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := auth.SignOut(); err != nil {
+			if err := auth.SignOut(cmd.Context()); err != nil {
 				return err
 			}
 			_, err = fmt.Fprintln(cmd.OutOrStdout(), "Signed out of the babysitter GitHub App.")

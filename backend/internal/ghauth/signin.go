@@ -2,7 +2,6 @@ package ghauth
 
 import (
 	"context"
-	"errors"
 	"sync"
 	"time"
 )
@@ -42,6 +41,9 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 		return Credentials{}, err
 	}
 	defer unlock()
+	if err := ctx.Err(); err != nil {
+		return Credentials{}, err
+	}
 	if err := a.file.Save(c); err != nil {
 		return Credentials{}, err
 	}
@@ -49,14 +51,20 @@ func (a *Auth) Complete(ctx context.Context, code DeviceCode, whoami Whoami) (Cr
 	return c, nil
 }
 
+type attempt struct {
+	prompt Prompt
+	cancel context.CancelFunc
+}
+
 type SignIns struct {
 	auth   *Auth
 	whoami Whoami
 	base   context.Context
 
+	startMu sync.Mutex
+
 	mu      sync.Mutex
-	prompt  *Prompt
-	cancel  context.CancelFunc
+	active  *attempt
 	lastErr error
 }
 
@@ -65,34 +73,39 @@ func (a *Auth) SignIns(base context.Context, whoami Whoami) *SignIns {
 }
 
 func (s *SignIns) Start(ctx context.Context) (Prompt, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	if s.prompt != nil {
-		return *s.prompt, nil
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+	if prompt, waiting := s.Current(); waiting {
+		return prompt, nil
 	}
 	code, err := s.auth.RequestCode(ctx)
 	if err != nil {
 		return Prompt{}, err
 	}
-	prompt := Prompt{
-		UserCode:        code.UserCode,
-		VerificationURI: code.VerificationURI,
-		ExpiresAt:       s.auth.now().Add(time.Duration(code.ExpiresIn) * time.Second),
-	}
 	run, cancel := context.WithCancel(s.base)
-	s.prompt, s.cancel, s.lastErr = &prompt, cancel, nil
-	go s.complete(run, cancel, code)
+	att := &attempt{
+		prompt: Prompt{
+			UserCode:        code.UserCode,
+			VerificationURI: code.VerificationURI,
+			ExpiresAt:       s.auth.now().Add(time.Duration(code.ExpiresIn) * time.Second),
+		},
+		cancel: cancel,
+	}
+	s.mu.Lock()
+	s.active, s.lastErr = att, nil
+	s.mu.Unlock()
+	go s.complete(run, att, code)
 	s.auth.changed()
-	return prompt, nil
+	return att.prompt, nil
 }
 
 func (s *SignIns) Current() (Prompt, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if s.prompt == nil {
+	if s.active == nil {
 		return Prompt{}, false
 	}
-	return *s.prompt, true
+	return s.active.prompt, true
 }
 
 func (s *SignIns) Err() error {
@@ -103,21 +116,26 @@ func (s *SignIns) Err() error {
 
 func (s *SignIns) Cancel() {
 	s.mu.Lock()
-	cancel := s.cancel
+	att := s.active
+	s.active = nil
 	s.mu.Unlock()
-	if cancel != nil {
-		cancel()
+	if att == nil {
+		return
 	}
+	att.cancel()
+	s.auth.changed()
 }
 
-func (s *SignIns) complete(ctx context.Context, cancel context.CancelFunc, code DeviceCode) {
-	defer cancel()
+func (s *SignIns) complete(ctx context.Context, att *attempt, code DeviceCode) {
+	defer att.cancel()
 	_, err := s.auth.Complete(ctx, code, s.whoami)
-	if errors.Is(err, context.Canceled) {
-		err = nil
-	}
 	s.mu.Lock()
-	s.prompt, s.cancel, s.lastErr = nil, nil, err
+	current := s.active == att
+	if current {
+		s.active, s.lastErr = nil, err
+	}
 	s.mu.Unlock()
-	s.auth.changed()
+	if current {
+		s.auth.changed()
+	}
 }

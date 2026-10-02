@@ -2209,6 +2209,10 @@ components:
             $ref: '#/components/schemas/HttpdAuthInstallation'
           nullable: true
           type: array
+        installationsError:
+          description: Why the accounts the app is installed on cannot be read; the
+            list is then empty and says nothing
+          type: string
         login:
           description: The account signed in with the app
           type: string

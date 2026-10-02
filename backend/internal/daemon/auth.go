@@ -47,12 +47,17 @@ func (c *authController) Status(ctx context.Context) httpd.Auth {
 	if st.Err != nil {
 		out.Error = st.Err.Error()
 	}
+	tokenUnreadable := st.State == ghauth.StateConnected && st.Origin != ghauth.OriginApp
+	if tokenUnreadable {
+		out.InstallsError, out.Error = out.Error, ""
+		return out
+	}
 	if st.Origin != ghauth.OriginApp {
 		return out
 	}
 	installs, err := c.installations(ctx)
 	if err != nil {
-		out.Error = err.Error()
+		out.InstallsError = err.Error()
 		return out
 	}
 	out.Installations = installs
@@ -101,7 +106,7 @@ func (c *authController) CancelSignIn() {
 	c.signIns.Cancel()
 }
 
-func (c *authController) SignOut() error {
+func (c *authController) SignOut(ctx context.Context) error {
 	c.signIns.Cancel()
-	return c.auth.SignOut()
+	return c.auth.SignOut(ctx)
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/go-github/v91/github"
 
@@ -12,7 +13,7 @@ import (
 
 var ErrNotInstalled = errors.New("the GitHub App is not installed on the repository")
 
-func (a *Auth) CheckRepo(ctx context.Context, client *github.Client, owner, name string) error {
+func (a *Auth) CheckRepos(ctx context.Context, client *github.Client, repos ...string) error {
 	token, err := a.appToken(ctx)
 	if err != nil {
 		return err
@@ -20,12 +21,12 @@ func (a *Auth) CheckRepo(ctx context.Context, client *github.Client, owner, name
 	if token == "" {
 		return nil
 	}
-	installed, err := ghclient.AppInstalled(ctx, client, owner, name)
+	missing, err := ghclient.MissingInstallations(ctx, client, repos...)
 	if err != nil {
 		return err
 	}
-	if !installed {
-		return fmt.Errorf("%w: %s/%s, install it at %s", ErrNotInstalled, owner, name, a.app.InstallURL())
+	if len(missing) == 0 {
+		return nil
 	}
-	return nil
+	return fmt.Errorf("%w: %s, install it at %s", ErrNotInstalled, strings.Join(missing, ", "), a.app.InstallURL())
 }

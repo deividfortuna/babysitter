@@ -3,6 +3,7 @@ package ghauth
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -325,15 +326,89 @@ func TestOnChangeFollowsTheSignInOfAnotherProcess(t *testing.T) {
 	if _, err := daemon.Credential(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if got := changes.Load(); got != 1 {
-		t.Fatalf("changes after the sign in = %d, want 1", got)
-	}
+	testutil.Eventually(t, func() bool { return changes.Load() == 1 }, "one change after the sign in")
 
-	if err := daemon.SignOut(); err != nil {
+	if err := daemon.SignOut(context.Background()); err != nil {
 		t.Fatal(err)
 	}
-	if got := changes.Load(); got != 2 {
-		t.Fatalf("changes after the sign out = %d, want 2", got)
+	testutil.Eventually(t, func() bool { return changes.Load() == 2 }, "one more change after the sign out")
+}
+
+func TestChangesAreToldOutsideTheTokenLookup(t *testing.T) {
+	h := newHarness(t)
+	daemon := h.auth()
+	var mu sync.Mutex
+	told := make(chan struct{}, 1)
+	daemon.OnChange(func() {
+		mu.Lock()
+		defer mu.Unlock()
+		told <- struct{}{}
+	})
+	if _, err := daemon.Credential(context.Background()); !errors.Is(err, ErrNoToken) {
+		t.Fatalf("err = %v, want ErrNoToken", err)
+	}
+	h.signIn(t, h.auth())
+
+	mu.Lock()
+	_, err := daemon.Credential(context.Background())
+	mu.Unlock()
+
+	if err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case <-told:
+	case <-time.After(5 * time.Second):
+		t.Fatal("the change was not told")
+	}
+}
+
+func TestSignOutWaitsForARenewalThatHoldsTheLock(t *testing.T) {
+	h := newHarness(t)
+	h.signIn(t, h.auth())
+	file := newCredentialsFile(h.dir)
+	unlock, err := file.Lock(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	done := make(chan error, 1)
+	go func() { done <- h.auth().SignOut(context.Background()) }()
+
+	select {
+	case err := <-done:
+		t.Fatalf("SignOut returned %v while a renewal held the lock", err)
+	case <-time.After(200 * time.Millisecond):
+	}
+	c, _ := file.Load()
+	if err := file.Save(c); err != nil {
+		t.Fatal(err)
+	}
+	unlock()
+
+	if err := <-done; err != nil {
+		t.Fatalf("SignOut: %v", err)
+	}
+	if _, err := file.Load(); !errors.Is(err, ErrSignedOut) {
+		t.Fatalf("Load after the sign out = %v, want ErrSignedOut: the renewal wrote the sign in back", err)
+	}
+}
+
+func TestFailedRenewalKeepsATokenThatStillWorks(t *testing.T) {
+	h := newHarness(t)
+	first := h.signIn(t, h.auth())
+	h.clock.Advance(ghfake.TokenLifetime*time.Second - time.Minute)
+	h.g.React(ghfake.RouteOAuthGrant, func(ghfake.Action) (ghfake.Response, bool) {
+		return ghfake.Response{Status: http.StatusBadGateway, Message: "bad gateway"}, true
+	})
+
+	got, err := h.auth().Token(context.Background())
+
+	if err != nil || got != first.AccessToken {
+		t.Fatalf("Token = %q, %v; want the stored token while it still works", got, err)
+	}
+	h.clock.Advance(2 * time.Minute)
+	if _, err := h.auth().Token(context.Background()); err == nil {
+		t.Fatal("Token after the expiry worked with a renewal that failed")
 	}
 }
 
@@ -395,10 +470,26 @@ func TestCheckRepo(t *testing.T) {
 		{"globex", "api", ErrNotInstalled},
 	}
 	for _, tc := range cases {
-		err := h.auth().CheckRepo(context.Background(), client, tc.owner, tc.name)
+		err := h.auth().CheckRepos(context.Background(), client, tc.owner+"/"+tc.name)
 		if !errors.Is(err, tc.want) {
-			t.Errorf("CheckRepo(%s/%s) = %v, want %v", tc.owner, tc.name, err, tc.want)
+			t.Errorf("CheckRepos(%s/%s) = %v, want %v", tc.owner, tc.name, err, tc.want)
 		}
+	}
+}
+
+func TestCheckReposListsTheInstallationsOnce(t *testing.T) {
+	h := newHarness(t)
+	h.g.Install("acme")
+	h.g.Install("alice", "fork")
+	h.signIn(t, h.auth())
+
+	err := h.auth().CheckRepos(context.Background(), h.srv.Client(t), "acme/api", "alice/fork", "alice/other")
+
+	if !errors.Is(err, ErrNotInstalled) || !strings.Contains(err.Error(), "alice/other") || strings.Contains(err.Error(), "acme/api") {
+		t.Fatalf("CheckRepos = %v, want only alice/other named", err)
+	}
+	if n := h.g.Count(ghfake.RouteInstallations); n != 1 {
+		t.Fatalf("%d listings of the installations, want 1", n)
 	}
 }
 
@@ -406,7 +497,7 @@ func TestCheckRepoSkipsOtherSources(t *testing.T) {
 	h := newHarness(t)
 	t.Setenv("GITHUB_TOKEN", "ghp_env")
 
-	if err := h.auth().CheckRepo(context.Background(), h.srv.Client(t), "acme", "api"); err != nil {
+	if err := h.auth().CheckRepos(context.Background(), h.srv.Client(t), "acme/api"); err != nil {
 		t.Fatalf("CheckRepo = %v, want nil for a personal token", err)
 	}
 	if n := h.g.Count(ghfake.RouteInstallations); n != 0 {
@@ -426,7 +517,7 @@ func TestGitEnvAndCheckRepoNeverAskGH(t *testing.T) {
 	if env, err := a.GitEnv(context.Background()); err != nil || env != nil {
 		t.Fatalf("GitEnv = %v, %v; want nothing for the gh CLI", env, err)
 	}
-	if err := a.CheckRepo(context.Background(), h.srv.Client(t), "acme", "api"); err != nil {
+	if err := a.CheckRepos(context.Background(), h.srv.Client(t), "acme/api"); err != nil {
 		t.Fatalf("CheckRepo = %v, want nil for the gh CLI", err)
 	}
 	if n := asked.Load(); n != 0 {

@@ -60,9 +60,9 @@ type Deps struct {
 	CheckAccess   AccessCheck
 }
 
-type AccessCheck func(ctx context.Context, client *github.Client, owner, name string) error
+type AccessCheck func(ctx context.Context, client *github.Client, repos ...string) error
 
-func allowAccess(context.Context, *github.Client, string, string) error { return nil }
+func allowAccess(context.Context, *github.Client, ...string) error { return nil }
 
 type Option func(*Service)
 

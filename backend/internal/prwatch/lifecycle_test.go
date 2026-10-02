@@ -3,6 +3,7 @@ package prwatch
 import (
 	"context"
 	"errors"
+	"net/http"
 	"slices"
 	"sync/atomic"
 	"testing"
@@ -196,9 +197,9 @@ func TestStartStopsWhenTheTokenCannotReachTheRepository(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
 	notInstalled := errors.New("the GitHub App is not installed on the repository")
-	var asked []string
-	fx.access = func(_ context.Context, _ *github.Client, owner, name string) error {
-		asked = append(asked, owner+"/"+name)
+	var asked [][]string
+	fx.access = func(_ context.Context, _ *github.Client, repos ...string) error {
+		asked = append(asked, repos)
 		return notInstalled
 	}
 	fx.svc = fx.newService()
@@ -208,14 +209,55 @@ func TestStartStopsWhenTheTokenCannotReachTheRepository(t *testing.T) {
 	if !errors.Is(err, notInstalled) {
 		t.Fatalf("Start() error = %v, want %v", err, notInstalled)
 	}
-	if !slices.Equal(asked, []string{"octo/hello"}) {
-		t.Fatalf("access asked for %v, want the repository once", asked)
-	}
-	if n := fx.api.Count(ghfake.RoutePull); n != 0 {
-		t.Fatalf("the start read the pull request %d times before the access check refused it", n)
+	if len(asked) != 1 || !slices.Equal(asked[0], []string{"octo/hello"}) {
+		t.Fatalf("access asked for %v, want the repository in one check", asked)
 	}
 	if created := fx.git.createdDirs(); len(created) != 0 {
 		t.Fatalf("a rejected start made a worktree: %v", created)
+	}
+}
+
+func TestStartOfAPullRequestGitHubHidesNamesTheMissingApp(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.api.Fail(ghfake.RoutePull, http.StatusNotFound, "Not Found")
+	notInstalled := errors.New("the GitHub App is not installed on the repository")
+	fx.access = func(_ context.Context, _ *github.Client, repos ...string) error { return notInstalled }
+	fx.svc = fx.newService()
+
+	_, err := fx.svc.Start(context.Background(), fx.startRequest())
+
+	if !errors.Is(err, notInstalled) {
+		t.Fatalf("Start() error = %v, want %v and its install link over a bare not found", err, notInstalled)
+	}
+}
+
+func TestStartOfAClosedPullRequestFromADeletedFork(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.update(func() { fx.pr.State, fx.pr.HeadRepo = "closed", "" })
+	checked := false
+	fx.access = func(context.Context, *github.Client, ...string) error {
+		checked = true
+		return nil
+	}
+	fx.svc = fx.newService()
+
+	_, err := fx.svc.Start(context.Background(), fx.startRequest())
+
+	if !errors.Is(err, ErrNotOpen) {
+		t.Fatalf("Start() error = %v, want %v", err, ErrNotOpen)
+	}
+	if checked {
+		t.Fatal("the access check ran on a pull request that is not open")
+	}
+}
+
+func TestDistinctReposSkipsEmptyAndRepeatedNames(t *testing.T) {
+	t.Parallel()
+	got := distinctRepos("octo/hello", "", "Octo/Hello", "alice/hello")
+	if want := []string{"octo/hello", "alice/hello"}; !slices.Equal(got, want) {
+		t.Fatalf("distinctRepos = %v, want %v", got, want)
 	}
 }
 

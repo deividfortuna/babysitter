@@ -137,12 +137,7 @@ function ConnectCard({ auth, start }: { auth: Auth; start: StartSignIn }) {
         </ol>
       }
     >
-      {failure ? (
-        <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-body/4.5 text-destructive">
-          <CircleAlertIcon className="mt-px size-4 shrink-0" />
-          <span>{failure}</span>
-        </p>
-      ) : null}
+      {failure ? <FailureLine message={failure} /> : null}
     </IconCard>
   );
 }
@@ -218,10 +213,20 @@ type AccountCardProps = {
   auth: Auth;
   badge: ReactNode;
   description: string;
+  alert?: string;
   children: ReactNode;
 };
 
-function AccountCard({ auth, badge, description, children }: AccountCardProps) {
+function FailureLine({ message }: { message: string }) {
+  return (
+    <p role="alert" className="mt-1.5 flex items-start gap-1.5 text-body/4.5 text-destructive">
+      <CircleAlertIcon className="mt-px size-4 shrink-0" />
+      <span>{message}</span>
+    </p>
+  );
+}
+
+function AccountCard({ auth, badge, description, alert, children }: AccountCardProps) {
   const login = auth.login ?? "";
   return (
     <SettingsCard>
@@ -233,6 +238,7 @@ function AccountCard({ auth, badge, description, children }: AccountCardProps) {
             {badge}
           </div>
           <span className="text-body/4.5 text-muted-foreground">{description}</span>
+          {alert ? <FailureLine message={alert} /> : null}
         </div>
         <div className="flex gap-2">{children}</div>
       </div>
@@ -292,19 +298,48 @@ function InstallationRow({ installation }: { installation: AuthInstallation }) {
   );
 }
 
-function InstalledOn({ auth }: { auth: Auth }) {
+function InstallationsUnknown({ reason }: { reason: string }) {
+  return (
+    <div role="alert" className="flex items-start gap-2.5 px-5 py-3">
+      <CircleAlertIcon className="mt-0.5 size-4 shrink-0 text-destructive" />
+      <div className="flex min-w-0 flex-col gap-0.5">
+        <span className="text-sm font-medium">Could not read the accounts the app is installed on</span>
+        <span className="text-body/4.5 wrap-break-word text-muted-foreground">{reason}</span>
+      </div>
+    </div>
+  );
+}
+
+function Installations({ auth }: { auth: Auth }) {
+  const installations = auth.installations ?? [];
+  if (auth.installationsError) {
+    return (
+      <InstalledOn installUrl={auth.installUrl}>
+        <InstallationsUnknown reason={auth.installationsError} />
+      </InstalledOn>
+    );
+  }
+  if (installations.length === 0) return <ChooseRepositories installUrl={auth.installUrl} />;
+  return (
+    <InstalledOn installUrl={auth.installUrl}>
+      {installations.map((installation) => (
+        <InstallationRow key={installation.login} installation={installation} />
+      ))}
+    </InstalledOn>
+  );
+}
+
+function InstalledOn({ installUrl, children }: { installUrl: string; children: ReactNode }) {
   return (
     <SettingsSection label="Installed on">
       <SettingsCard>
-        {(auth.installations ?? []).map((installation) => (
-          <InstallationRow key={installation.login} installation={installation} />
-        ))}
+        {children}
         <div className="flex items-center gap-3 px-5 py-3">
           <p className="flex-1 text-body/4.5 text-muted-foreground">
             The daemon reaches only the repositories you installed the app on in these accounts.
           </p>
           <Button asChild variant="outline" size="sm">
-            <a href={auth.installUrl} target="_blank" rel="noreferrer">
+            <a href={installUrl} target="_blank" rel="noreferrer">
               Manage on GitHub
               <ExternalLinkIcon data-icon="inline-end" />
             </a>
@@ -316,7 +351,6 @@ function InstalledOn({ auth }: { auth: Auth }) {
 }
 
 function Connected({ auth, signOut }: { auth: Auth; signOut: SignOut }) {
-  const installed = (auth.installations?.length ?? 0) > 0;
   return (
     <>
       <AccountCard
@@ -326,7 +360,7 @@ function Connected({ auth, signOut }: { auth: Auth; signOut: SignOut }) {
       >
         <SignOutButton signOut={signOut} />
       </AccountCard>
-      {installed ? <InstalledOn auth={auth} /> : <ChooseRepositories installUrl={auth.installUrl} />}
+      <Installations auth={auth} />
     </>
   );
 }
@@ -354,6 +388,7 @@ function Expired({ auth, signOut, start }: { auth: Auth; signOut: SignOut; start
           </Badge>
         }
         description="GitHub did not renew the token of the app. Sign in again to keep watching pull requests."
+        alert={failureOf(auth, start)}
       >
         <SignOutButton signOut={signOut} variant="ghost" />
         <Button size="sm" disabled={start.isPending} onClick={() => start.mutate()}>

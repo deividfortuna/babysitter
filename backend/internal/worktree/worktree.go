@@ -30,7 +30,7 @@ func New() *Git {
 }
 
 func (g *Git) git(ctx context.Context, dir string, args ...string) (string, error) {
-	env, err := g.Auth.Env(ctx)
+	env, err := g.Auth.Env(ctx, args[0])
 	if err != nil {
 		return "", err
 	}

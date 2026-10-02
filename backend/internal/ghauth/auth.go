@@ -129,7 +129,12 @@ func (a *Auth) GitEnv(ctx context.Context) ([]string, error) {
 	return gitEnv(token), nil
 }
 
-func (a *Auth) SignOut() error {
+func (a *Auth) SignOut(ctx context.Context) error {
+	unlock, err := a.file.Lock(ctx)
+	if err != nil {
+		return err
+	}
+	defer unlock()
 	if err := a.file.Remove(); err != nil {
 		return err
 	}
@@ -195,6 +200,9 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 	if errors.Is(err, errRefreshRefused) {
 		return Credentials{}, fmt.Errorf("%w: %w", ErrSessionExpired, err)
 	}
+	if err != nil && a.usable(c.Token) {
+		return c, nil
+	}
 	if err != nil {
 		return Credentials{}, err
 	}
@@ -207,6 +215,10 @@ func (a *Auth) refresh(ctx context.Context) (Credentials, error) {
 
 func (a *Auth) fresh(t Token) bool {
 	return t.ExpiresAt.IsZero() || a.now().Add(refreshMargin).Before(t.ExpiresAt)
+}
+
+func (a *Auth) usable(t Token) bool {
+	return a.now().Before(t.ExpiresAt)
 }
 
 func (a *Auth) renewable(t Token) bool {
@@ -242,7 +254,7 @@ func (a *Auth) changed() {
 
 func (a *Auth) notify(fn func()) {
 	if fn != nil {
-		fn()
+		go fn()
 	}
 }
 

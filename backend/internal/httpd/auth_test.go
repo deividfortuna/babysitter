@@ -28,7 +28,7 @@ func (f *fakeAuth) StartSignIn(context.Context) (SignInPrompt, error) { return f
 
 func (f *fakeAuth) CancelSignIn() { f.cancels++ }
 
-func (f *fakeAuth) SignOut() error {
+func (f *fakeAuth) SignOut(context.Context) error {
 	f.signOuts++
 	if f.bus != nil {
 		f.bus.Publish(events.AuthChanged, "", 0)
