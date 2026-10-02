@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os/exec"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,6 +42,60 @@ func (a AuthEnv) Env(ctx context.Context, command string) ([]string, error) {
 		return nil, err
 	}
 	return append(slices.Clone(NoPromptEnv), "GIT_NO_LAZY_FETCH=1"), nil
+}
+
+var ErrNotHTTPS = errors.New("the GitHub App reaches GitHub only over HTTPS")
+
+var scpRemote = regexp.MustCompile(`^(?:[^@/]+@)?([^:/]+):`)
+
+func (a AuthEnv) CheckRemote(ctx context.Context, remote string, push bool, git func(ctx context.Context, args ...string) (string, error)) error {
+	if !a.usesApp(ctx) {
+		return nil
+	}
+	args := []string{"remote", "get-url"}
+	if push {
+		args = append(args, "--push")
+	}
+	remoteURL, err := git(ctx, append(args, remote)...)
+	if err != nil {
+		return err
+	}
+	return CheckAppRemote(remoteURL)
+}
+
+func (a AuthEnv) usesApp(ctx context.Context) bool {
+	if a == nil {
+		return false
+	}
+	extra, err := a(ctx)
+	return err == nil && len(extra) > 0
+}
+
+func CheckAppRemote(remoteURL string) error {
+	scheme, host := remoteHost(remoteURL)
+	if scheme == "https" || !isGitHubHost(host) {
+		return nil
+	}
+	return fmt.Errorf("%w: give the remote %s an https://github.com/ URL", ErrNotHTTPS, remoteURL)
+}
+
+func remoteHost(remoteURL string) (scheme, host string) {
+	if strings.Contains(remoteURL, "://") {
+		u, err := url.Parse(remoteURL)
+		if err != nil {
+			return "", ""
+		}
+		return strings.ToLower(u.Scheme), u.Hostname()
+	}
+	if m := scpRemote.FindStringSubmatch(remoteURL); m != nil {
+		return "ssh", m[1]
+	}
+	return "", ""
+}
+
+func isGitHubHost(host string) bool {
+	host = strings.ToLower(host)
+	return host == "github.com" || strings.HasSuffix(host, ".github.com")
 }
 
 func CurrentBranch(ctx context.Context, dir string) (string, error) {

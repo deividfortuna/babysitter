@@ -119,3 +119,26 @@ func TestALocalCommandDoesNotFetchWithoutTheAppToken(t *testing.T) {
 		t.Fatalf("git cat-file fetched the missing blob without the token: %q", out)
 	}
 }
+
+func TestCheckAppRemote(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		url  string
+		want error
+	}{
+		{"https://github.com/octo/hello.git", nil},
+		{"https://GitHub.com/octo/hello.git", nil},
+		{"git@GitHub.com:octo/hello.git", ErrNotHTTPS},
+		{"github.com:octo/hello.git", ErrNotHTTPS},
+		{"ssh://git@GITHUB.COM/octo/hello.git", ErrNotHTTPS},
+		{"ssh://git@ssh.github.com:443/octo/hello.git", ErrNotHTTPS},
+		{"http://github.com/octo/hello.git", ErrNotHTTPS},
+		{"git@gitlab.com:octo/hello.git", nil},
+		{"github-work:octo/hello.git", nil},
+		{"/tmp/origin.git", nil},
+	} {
+		if err := CheckAppRemote(tc.url); !errors.Is(err, tc.want) {
+			t.Errorf("CheckAppRemote(%q) = %v, want %v", tc.url, err, tc.want)
+		}
+	}
+}

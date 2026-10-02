@@ -152,7 +152,10 @@ A watch does not start on a repository where the app is not installed;
 the error names the install page. With the app, `git` reaches GitHub over
 HTTPS: a remote `git@github.com:owner/name` is read as
 `https://github.com/owner/name` for the fetch and the push of the daemon.
-A remote that uses another SSH host name keeps your own credentials.
+A remote that uses another SSH host name keeps your own credentials. A
+github.com remote that git cannot read as HTTPS, such as
+`git@GitHub.com:owner/name`, stops the fetch and the push of the daemon:
+give the remote an `https://github.com/` URL.
 
 To build with your own GitHub App, set `appClientID` and `appSlug` in
 `backend/internal/ghauth/app.go`, or set `BABYSITTER_GITHUB_APP_CLIENT_ID`

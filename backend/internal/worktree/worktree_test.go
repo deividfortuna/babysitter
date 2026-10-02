@@ -2,6 +2,7 @@ package worktree
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -11,6 +12,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -125,6 +128,23 @@ func TestFetchFailsInsteadOfAskingForCredentials(t *testing.T) {
 	err := New().Fetch(ctx, author, "origin/fix")
 	if err == nil || !strings.Contains(err.Error(), "terminal prompts disabled") {
 		t.Fatalf("Fetch() error = %v, want git to refuse the credential prompt", err)
+	}
+}
+
+func TestFetchWithTheAppRefusesAGitHubRemoteOverSSH(t *testing.T) {
+	t.Parallel()
+	_, author, _ := repos(t)
+	git(t, author, "remote", "set-url", "origin", "git@GitHub.com:octo/hello.git")
+	g := New()
+	g.Auth = func(context.Context) ([]string, error) {
+		return gitrepo.ConfigEnv([][2]string{
+			{"http.https://github.com/.extraheader", "AUTHORIZATION: basic eDp5"},
+			{"core.sshCommand", "false"},
+		}), nil
+	}
+
+	if err := g.Fetch(context.Background(), author, "origin/fix"); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Fatalf("Fetch() error = %v, want %v", err, gitrepo.ErrNotHTTPS)
 	}
 }
 

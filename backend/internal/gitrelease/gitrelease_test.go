@@ -674,3 +674,26 @@ func TestTheParentOfAMergeIsItsFirstParent(t *testing.T) {
 		t.Fatalf("Parent(side) = %q, %v", got, err)
 	}
 }
+
+func appAuthWithoutSSH(context.Context) ([]string, error) {
+	return gitrepo.ConfigEnv([][2]string{
+		{"http.https://github.com/.extraheader", "AUTHORIZATION: basic eDp5"},
+		{"core.sshCommand", "false"},
+	}), nil
+}
+
+func TestTheAppRefusesAGitHubRemoteOverSSH(t *testing.T) {
+	t.Parallel()
+	_, work, _ := repos(t)
+	git(t, work, "remote", "set-url", "origin", "git@GitHub.com:octo/hello.git")
+	g := New()
+	g.Auth = appAuthWithoutSSH
+	ctx := context.Background()
+
+	if _, err := g.Fetch(ctx, work, "fix"); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Errorf("Fetch() error = %v, want %v", err, gitrepo.ErrNotHTTPS)
+	}
+	if err := g.Push(ctx, work, Push{SHA: "HEAD", Branch: "fix"}); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Errorf("Push() error = %v, want %v", err, gitrepo.ErrNotHTTPS)
+	}
+}
