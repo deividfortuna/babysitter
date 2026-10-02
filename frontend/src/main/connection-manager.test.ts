@@ -269,3 +269,34 @@ test("a retry of the remote that is shown waits for the local daemon to stop", a
   await Promise.all([starting, retrying]);
   expect(manager.getStatus()).toMatchObject({ state: "ready", connection: { id: "r1" } });
 });
+
+test("a remote shown at launch shows as starting while the local daemon stops", async () => {
+  const { manager, local, starting, stopLocal } = remoteShownAtLaunchWithASlowLocalStop();
+  await vi.waitFor(() => expect(local.stopAnyOwner).toHaveBeenCalledOnce());
+
+  expect(manager.getStatus()).toMatchObject({ state: "starting", connection: { id: "r1", kind: "remote" } });
+  stopLocal();
+  await starting;
+});
+
+test("a switch to a remote shows that remote as starting before the local daemon stops", async () => {
+  const stored: Connections = {
+    activeId: "local",
+    remotes: [{ id: "r1", name: "studio", url: "http://studio.local:7420", token: TOKEN }],
+  };
+  const { manager, local } = setup(stored);
+  managers.push(manager);
+  await manager.start();
+  const shown: DaemonStatus[] = [];
+  manager.onStatus((status) => shown.push(status));
+  let stopped: () => void = () => undefined;
+  local.stopAnyOwner.mockImplementationOnce(() => new Promise<void>((resolve) => (stopped = resolve)));
+
+  const switching = manager.use("r1");
+  await vi.waitFor(() => expect(local.stopAnyOwner).toHaveBeenCalledOnce());
+
+  expect(shown.at(-1)).toMatchObject({ state: "starting", connection: { id: "r1", kind: "remote" } });
+  expect(shown.at(-1)).not.toHaveProperty("baseUrl");
+  stopped();
+  await switching;
+});

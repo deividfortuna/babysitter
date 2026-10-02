@@ -71,6 +71,7 @@ export class ConnectionManager {
   start(): Promise<void> {
     return this.inTurn(async () => {
       if (this.localActive) return this.opts.local.start();
+      this.showRemoteStarting();
       await this.opts.local.stopAnyOwner();
       return this.connectRemote();
     });
@@ -132,6 +133,7 @@ export class ConnectionManager {
       this.emitStatus();
       return this.opts.local.start();
     }
+    this.showRemoteStarting();
     await this.opts.local.stopAnyOwner();
     return this.connectRemote();
   }
@@ -168,12 +170,20 @@ export class ConnectionManager {
     this.generation++;
   }
 
-  private async connectRemote(): Promise<void> {
+  private showRemoteStarting(): RemoteConnection | undefined {
     const remote = this.activeRemote;
-    if (!remote) return;
-    const generation = ++this.generation;
+    if (!remote) return undefined;
     this.stopProbe();
-    this.setRemoteStatus({ state: "starting", connection: this.remoteConnection(remote) });
+    this.generation++;
+    this.remoteStatus = { state: "starting", connection: this.remoteConnection(remote) };
+    this.emitStatus();
+    return remote;
+  }
+
+  private async connectRemote(): Promise<void> {
+    const remote = this.showRemoteStarting();
+    if (!remote) return;
+    const generation = this.generation;
     await this.checkRemote(remote, generation);
     if (generation !== this.generation) return;
     this.probe = setInterval(() => void this.checkRemote(remote, generation), this.opts.probeMs ?? PROBE_MS);
