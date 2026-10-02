@@ -105,10 +105,10 @@ func authorRules() []toolRule {
 	out := make([]toolRule, 0, len(authorDecisions))
 	for _, decision := range authorDecisions {
 		out = append(out, commandRule{
-			name:    "author-" + decision,
+			name:    "author-" + decision[len(decision)-1],
 			program: "babysitter",
 			names:   namesDaemon,
-			path:    []string{"watch", decision},
+			path:    decision,
 			reason:  authorOnly,
 		})
 	}

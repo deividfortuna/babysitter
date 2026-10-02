@@ -47,6 +47,12 @@ func (c *viewerCache) get(ctx context.Context) (Viewer, error) {
 	return v, nil
 }
 
+func (c *viewerCache) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.at = time.Time{}
+}
+
 func (a *api) handleViewer(w http.ResponseWriter, r *http.Request) {
 	v, err := a.viewer.get(r.Context())
 	if err != nil {

@@ -50,6 +50,8 @@ export const notificationsQueryKey = ["notifications"] as const;
 
 export const viewerQueryKey = ["viewer"] as const;
 
+export const authQueryKey = ["auth"] as const;
+
 export const rateLimitQueryKey = ["ratelimit"] as const;
 
 export const logLevelQueryKey = ["logs", "level"] as const;

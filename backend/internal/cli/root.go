@@ -3,11 +3,13 @@ package cli
 import (
 	"context"
 	"os"
+	"sync"
 	"time"
 
 	"github.com/google/go-github/v91/github"
 	"github.com/spf13/cobra"
 
+	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/notify"
 	"github.com/deividfortuna/babysitter/internal/service"
@@ -24,6 +26,11 @@ type releaseClientFactory func() (*github.Client, error)
 
 type options struct {
 	token            string
+	authDir          string
+	authOpts         []ghauth.Option
+	authOnce         sync.Once
+	auth             *ghauth.Auth
+	authErr          error
 	timeout          time.Duration
 	output           string
 	db               string
@@ -58,6 +65,10 @@ func WithVersion(v string) Option {
 	return func(o *options) { o.version = v }
 }
 
+func WithAuthOptions(opts ...ghauth.Option) Option {
+	return func(o *options) { o.authOpts = append(o.authOpts, opts...) }
+}
+
 func WithReleaseClientFactory(f releaseClientFactory) Option {
 	return func(o *options) { o.newReleaseClient = f }
 }
@@ -70,16 +81,40 @@ func WithExec(f func(dir string, argv []string) error) Option {
 	return func(o *options) { o.exec = f }
 }
 
-func (o *options) client(ctx context.Context) (*github.Client, error) {
-	token := o.token
-	if token == "" {
-		var err error
-		token, err = ghclient.Token(ctx)
+func (o *options) githubAuth() (*ghauth.Auth, error) {
+	o.authOnce.Do(func() {
+		dir, err := o.dataDir(o.authDir)
 		if err != nil {
-			return nil, err
+			o.authErr = err
+			return
 		}
+		o.auth = ghauth.New(dir, append([]ghauth.Option{ghauth.WithFlag(o.token)}, o.authOpts...)...)
+	})
+	return o.auth, o.authErr
+}
+
+func (o *options) client(ctx context.Context) (*github.Client, error) {
+	auth, err := o.githubAuth()
+	if err != nil {
+		return nil, err
+	}
+	token, err := auth.Token(ctx)
+	if err != nil {
+		return nil, err
 	}
 	return o.newClient(token, o.timeout)
+}
+
+func (o *options) whoami(ctx context.Context, token string) (string, error) {
+	client, err := o.newClient(token, o.timeout)
+	if err != nil {
+		return "", err
+	}
+	user, err := ghclient.CurrentUser(ctx, client)
+	if err != nil {
+		return "", err
+	}
+	return user.GetLogin(), nil
 }
 
 func (o *options) dbPath() (string, error) {
@@ -135,7 +170,8 @@ notification to the user with 'notify'.
 The token comes from, in this order:
   1. the --token flag
   2. the GITHUB_TOKEN environment variable
-  3. the gh CLI, after 'gh auth login'
+  3. the babysitter GitHub App, after 'babysitter auth login'
+  4. the gh CLI, after 'gh auth login'
 
 The database path comes from, in this order:
   1. the --db flag
@@ -155,6 +191,7 @@ The database path comes from, in this order:
 	root.PersistentFlags().StringVar(&opts.db, "db", "", "SQLite database path (overrides BABYSITTER_DB)")
 
 	root.AddCommand(newWhoamiCmd(opts))
+	root.AddCommand(newAuthCmd(opts))
 	root.AddCommand(newReposCmd(opts))
 	root.AddCommand(newRepoCmd(opts))
 	root.AddCommand(newPRsCmd(opts))

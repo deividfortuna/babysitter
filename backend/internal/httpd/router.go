@@ -60,6 +60,7 @@ type Deps struct {
 	Viewer        ViewerFunc
 	RateLimit     RateLimitFunc
 	Logs          *logbook.Book
+	Auth          AuthController
 }
 
 type api struct {
@@ -79,6 +80,7 @@ type api struct {
 	viewer        *viewerCache
 	rateLimit     RateLimitFunc
 	logs          *logbook.Book
+	auth          AuthController
 }
 
 func NewRouter(d Deps) http.Handler {
@@ -103,6 +105,7 @@ func NewRouter(d Deps) http.Handler {
 		viewer:        &viewerCache{fn: d.Viewer},
 		rateLimit:     d.RateLimit,
 		logs:          d.Logs,
+		auth:          d.Auth,
 	}
 	if a.ctx == nil {
 		a.ctx = context.Background()
@@ -116,6 +119,7 @@ func NewRouter(d Deps) http.Handler {
 	if a.shutdown == nil {
 		a.shutdown = func() {}
 	}
+	a.forgetViewerOnAuthChange()
 
 	r := chi.NewRouter()
 	r.Use(requestLogger(log))
@@ -141,6 +145,10 @@ func NewRouter(d Deps) http.Handler {
 		r.Get("/prs", a.handleListPulls)
 		r.Get("/providers", a.handleListProviders)
 		r.Get("/viewer", a.handleViewer)
+		r.Get("/auth", a.handleGetAuth)
+		r.Post("/auth/signin", a.handleStartSignIn)
+		r.Delete("/auth/signin", a.handleCancelSignIn)
+		r.Post("/auth/signout", a.handleSignOut)
 		r.Get("/ratelimit", a.handleRateLimit)
 		r.Get("/logs", a.handleListLogs)
 		r.Get("/logs/stream", a.handleStreamLogs)

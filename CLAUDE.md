@@ -118,7 +118,10 @@ supervisor socket is a Unix socket there and a named pipe on Windows.
 (`toolcall.go` parses the call, `toolpolicy.go` holds the rules), and
 one subpackage per provider (`claude`, `copilot`) that builds the
 command line and the hooks. `internal/worktree` makes and removes
-the worktree the agent works in. `internal/ghclient` wraps go-github with
+the worktree the agent works in. `internal/ghauth` decides where the
+GitHub token comes from (`--token`, `GITHUB_TOKEN`, the babysitter GitHub
+App, `gh`), signs in to the app with the device flow, renews its token,
+and gives git the env that pushes with it. `internal/ghclient` wraps go-github with
 one shared conditional-request cache and `RateGuard`. `internal/logbook` is
 the slog handler of the daemon: it keeps the last records in memory, writes
 `<dataDir>/logs/daemon.log` with rotation, and holds the level that

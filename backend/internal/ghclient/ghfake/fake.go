@@ -113,6 +113,7 @@ type GitHub struct {
 	reactors []reactor
 	routes   []route
 	rate     *Rate
+	apps     apps
 	nextID   int64
 	base     string
 }
@@ -160,6 +161,10 @@ func New() *GitHub {
 		g.route(RouteGraphQL, (*call).graphql),
 		g.route(RouteRepo, (*call).repo),
 		g.route(RouteCompare, (*call).compare),
+		g.route(RouteDeviceCode, (*call).deviceCode),
+		g.route(RouteOAuthGrant, (*call).accessToken),
+		g.route(RouteInstallations, (*call).installations),
+		g.route(RouteInstallationRepos, (*call).installationRepos),
 	}
 	return g
 }

@@ -264,7 +264,7 @@ export function AppSidebar({
         </Button>
         <RateLimitCard enabled={enabled} onPollLessOften={() => onOpenSettings("polling")} />
         <UpdateCard />
-        <AccountRow viewer={viewer.data} onOpenSettings={() => onOpenSettings()} />
+        <AccountRow viewer={viewer.data} onOpenSettings={() => onOpenSettings(viewer.data ? undefined : "github")} />
       </SidebarFooter>
       <SidebarResizeHandle
         width={width}

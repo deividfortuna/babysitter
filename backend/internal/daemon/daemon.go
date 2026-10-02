@@ -13,6 +13,7 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/autostart"
 	"github.com/deividfortuna/babysitter/internal/events"
+	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/gitrelease"
 	"github.com/deividfortuna/babysitter/internal/httpd"
@@ -47,6 +48,8 @@ type Config struct {
 	Owner            string
 	Version          string
 	NewClient        watcher.ClientFunc
+	Auth             *ghauth.Auth
+	Whoami           ghauth.Whoami
 	Log              *slog.Logger
 	Logs             *logbook.Book
 }
@@ -82,6 +85,7 @@ func Run(ctx context.Context, cfg Config) error {
 
 	bus := events.NewBus()
 	st.SetPublisher(bus)
+	auth := newAuthController(ctx, cfg, bus)
 
 	stored, err := st.Settings(ctx)
 	if err != nil {
@@ -111,12 +115,18 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("the agent sessions report nothing: the babysitter command is not known", "err", err)
 		exe = ""
 	}
+	git := worktree.New()
+	git.Auth = auth.gitEnv()
+	checkouts := worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts"))
+	checkouts.Auth = auth.gitEnv()
+	release := gitrelease.New()
+	release.Auth = auth.gitEnv()
 	watches := prwatch.New(prwatch.Deps{
 		Store:         st,
 		NewClient:     cfg.NewClient,
-		Git:           worktree.New(),
-		Checkouts:     worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts")),
-		Release:       gitrelease.New(),
+		Git:           git,
+		Checkouts:     checkouts,
+		Release:       release,
 		Agents:        buildAgents(ctx, cfg, log),
 		Host:          session.New(),
 		Exe:           exe,
@@ -125,6 +135,7 @@ func Run(ctx context.Context, cfg Config) error {
 		DataDir:       cfg.DataDir,
 		Guard:         w.Guard(),
 		Bus:           bus,
+		CheckAccess:   auth.checkAccess(),
 	}, watchOpts...)
 	viewer := func(ctx context.Context) (httpd.Viewer, error) {
 		c, err := cfg.NewClient(ctx)
@@ -172,6 +183,7 @@ func Run(ctx context.Context, cfg Config) error {
 			return rateLimit(ghclient.SharedRates().Status(w.Guard().Floor))
 		},
 		Logs: cfg.Logs,
+		Auth: auth.controller(),
 	})
 	srv, err = httpd.Listen(ctx, cfg.Port, handler)
 	if err != nil {

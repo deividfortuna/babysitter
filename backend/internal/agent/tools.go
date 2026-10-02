@@ -5,9 +5,21 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 )
 
-var authorDecisions = []string{"mode", "approve", "reject", "retry", "merge", "stop", "takeover", "handback"}
+var authorDecisions = [][]string{
+	{"watch", "mode"},
+	{"watch", "approve"},
+	{"watch", "reject"},
+	{"watch", "retry"},
+	{"watch", "merge"},
+	{"watch", "stop"},
+	{"watch", "takeover"},
+	{"watch", "handback"},
+	{"auth", "login"},
+	{"auth", "logout"},
+}
 
 func AuthorCommands(l Launch) []string {
 	names := []string{"babysitter"}
@@ -19,7 +31,7 @@ func AuthorCommands(l Launch) []string {
 	out := make([]string, 0, len(names)*len(authorDecisions))
 	for _, name := range names {
 		for _, decision := range authorDecisions {
-			out = append(out, name+" watch "+decision)
+			out = append(out, name+" "+strings.Join(decision, " "))
 		}
 	}
 	return out
@@ -28,7 +40,7 @@ func AuthorCommands(l Launch) []string {
 func AuthorPatterns() []string {
 	out := make([]string, 0, len(authorDecisions))
 	for _, decision := range authorDecisions {
-		out = append(out, "*babysitter* watch "+decision)
+		out = append(out, "*babysitter* "+strings.Join(decision, " "))
 	}
 	return out
 }

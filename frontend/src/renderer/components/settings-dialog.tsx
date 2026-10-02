@@ -4,6 +4,7 @@ import {
   BellIcon,
   DownloadIcon,
   GitPullRequestIcon,
+  KeyRoundIcon,
   PaletteIcon,
   ScrollTextIcon,
   SparkleIcon,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import { AppearancePanel } from "@/components/settings-appearance";
 import { AgentPanel } from "@/components/settings-agent";
+import { GitHubPanel } from "@/components/settings-github";
 import { LogsPanel } from "@/components/settings-logs";
 import { NotificationsPanel } from "@/components/settings-notifications";
 import { SaveElsewhere, SaveFailure, SaveMark, SaveTracker, useSaveState } from "@/components/settings-page";
@@ -22,7 +24,15 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/compone
 import { useAppUpdate } from "@/hooks/useAppUpdate";
 import { cn } from "@/lib/utils";
 
-export type SettingsCategory = "appearance" | "notifications" | "updates" | "agent" | "review" | "polling" | "logs";
+export type SettingsCategory =
+  | "appearance"
+  | "notifications"
+  | "updates"
+  | "agent"
+  | "review"
+  | "github"
+  | "polling"
+  | "logs";
 
 type Page = {
   id: SettingsCategory;
@@ -69,6 +79,13 @@ const GROUPS: Group[] = [
   {
     label: "Daemon",
     pages: [
+      {
+        id: "github",
+        label: "GitHub access",
+        description: "How the daemon reaches GitHub.",
+        Icon: KeyRoundIcon,
+        Panel: GitHubPanel,
+      },
       {
         id: "polling",
         label: "Polling",

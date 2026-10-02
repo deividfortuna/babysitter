@@ -4,6 +4,58 @@
  */
 
 export interface paths {
+    "/api/v1/auth": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Where the GitHub token of the daemon comes from, and the sign in with the babysitter GitHub App */
+        get: operations["getAuth"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/signin": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Start a sign in with the babysitter GitHub App; the daemon waits for the code in the background, and a sign in that waits already is answered again */
+        post: operations["startSignIn"];
+        /** Stop waiting for the code of the sign in */
+        delete: operations["cancelSignIn"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/signout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Sign out of the babysitter GitHub App; the daemon goes back to the next source of a token */
+        post: operations["signOut"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/control/shutdown": {
         parameters: {
             query?: never;
@@ -776,6 +828,31 @@ export interface components {
         HttpdAddRepoRequest: {
             fullName: string;
         };
+        HttpdAuth: {
+            /** @description This build of babysitter knows the babysitter GitHub App */
+            appAvailable: boolean;
+            /** @description Why the last sign in failed, or why the sign in of the app no longer works */
+            error?: string;
+            /**
+             * Format: date-time
+             * @description When the token of the app expires; the daemon renews it before
+             */
+            expiresAt?: string | null;
+            /** @description Where the user installs the app on more repositories */
+            installUrl: string;
+            /** @description The accounts the app is installed on, read only while the app gives the token */
+            installations: string[] | null;
+            /** @description The account signed in with the app */
+            login?: string;
+            /**
+             * @description Where the token of the daemon comes from: the --token flag, GITHUB_TOKEN, the babysitter GitHub App or the gh CLI; empty when there is no token
+             * @enum {string}
+             */
+            origin: "" | "flag" | "env" | "app" | "gh";
+            signIn?: components["schemas"]["HttpdSignInPrompt"];
+            /** @description A GitHub account signed in with the babysitter GitHub App */
+            signedIn: boolean;
+        };
         HttpdErrorBody: {
             code: string;
             message: string;
@@ -1352,6 +1429,12 @@ export interface components {
             /** @description Longest time between polls of a watched pull request where nothing happens. After each quiet poll the time doubles up to this value; activity, running checks or a working agent bring it back to watchIntervalSeconds. The same value as watchIntervalSeconds keeps one fixed interval */
             watchMaxIntervalSeconds: number;
         };
+        HttpdSignInPrompt: {
+            /** Format: date-time */
+            expiresAt: string;
+            userCode: string;
+            verificationUri: string;
+        };
         HttpdStartWatchRequest: {
             /**
              * @description Who releases the work of a turn of the agent; absent takes the repository, then the daemon, and a self watch runs in auto
@@ -1672,6 +1755,145 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    getAuth: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description OK */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAuth"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    startSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Accepted */
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdSignInPrompt"];
+                };
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    cancelSignIn: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
+    signOut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description No Content */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Internal Server Error */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HttpdAPIError"];
+                };
+            };
+        };
+    };
     shutdown: {
         parameters: {
             query?: never;

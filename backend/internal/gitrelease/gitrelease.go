@@ -74,6 +74,7 @@ const defaultTimeout = 2 * time.Minute
 type Runner struct {
 	Run     execx.DirRunner
 	Timeout time.Duration
+	Auth    gitrepo.AuthEnv
 }
 
 func New() *Runner {
@@ -86,13 +87,26 @@ func (g *Runner) git(ctx context.Context, dir string, args ...string) (string, e
 }
 
 func (g *Runner) raw(ctx context.Context, dir string, args ...string) (string, error) {
+	return g.rawEnv(ctx, dir, gitrepo.NoPromptEnv, args...)
+}
+
+func (g *Runner) remote(ctx context.Context, dir string, args ...string) (string, error) {
+	env, err := g.Auth.Env(ctx)
+	if err != nil {
+		return "", err
+	}
+	out, err := g.rawEnv(ctx, dir, env, args...)
+	return strings.TrimSpace(out), err
+}
+
+func (g *Runner) rawEnv(ctx context.Context, dir string, env []string, args ...string) (string, error) {
 	run := g.Run
 	if run == nil {
 		run = execx.RunIn
 	}
 	ctx, cancel := context.WithTimeout(ctx, cmp.Or(g.Timeout, defaultTimeout))
 	defer cancel()
-	out, err := run(ctx, dir, "", gitrepo.NoPromptEnv, "git", args...)
+	out, err := run(ctx, dir, "", env, "git", args...)
 	if err != nil {
 		return out, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
@@ -101,7 +115,7 @@ func (g *Runner) raw(ctx context.Context, dir string, args ...string) (string, e
 
 func (g *Runner) Fetch(ctx context.Context, dir, branch string) (string, error) {
 	tracking := "refs/remotes/origin/" + branch
-	if _, err := g.git(ctx, dir, "fetch", "-q", "--no-tags", "origin", "+refs/heads/"+branch+":"+tracking); err != nil {
+	if _, err := g.remote(ctx, dir, "fetch", "-q", "--no-tags", "origin", "+refs/heads/"+branch+":"+tracking); err != nil {
 		return "", err
 	}
 	return g.git(ctx, dir, "rev-parse", "--verify", "-q", tracking+"^{commit}")
@@ -169,7 +183,7 @@ func (g *Runner) Push(ctx context.Context, dir string, p Push) error {
 		args = append(args, "--force-with-lease=refs/heads/"+p.Branch+":"+p.Lease)
 	}
 	args = append(args, "origin", p.SHA+":refs/heads/"+p.Branch)
-	out, err := g.git(ctx, dir, args...)
+	out, err := g.remote(ctx, dir, args...)
 	if err != nil && strings.Contains(out+err.Error(), "stale info") {
 		return fmt.Errorf("%w: %w", ErrLeaseRefused, err)
 	}

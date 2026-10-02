@@ -1,6 +1,7 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { getApiBaseUrl, subscribeApiBaseUrl } from "./api-client";
 import {
+  authQueryKey,
   logLevelQueryKey,
   notificationsQueryKey,
   providersQueryKey,
@@ -131,11 +132,16 @@ export function connectEventTransport(
       void queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
       void queryClient.invalidateQueries({ queryKey: providersQueryKey });
       void queryClient.invalidateQueries({ queryKey: viewerQueryKey });
+      void queryClient.invalidateQueries({ queryKey: authQueryKey });
     });
     for (const type of EVENT_TYPES) {
       es.addEventListener(type, scheduleRefetch);
     }
     es.addEventListener("settings_changed", settings.request);
+    es.addEventListener("auth_changed", () => {
+      void queryClient.invalidateQueries({ queryKey: authQueryKey });
+      void queryClient.invalidateQueries({ queryKey: viewerQueryKey });
+    });
     es.addEventListener("log_level_changed", () => {
       void queryClient.invalidateQueries({ queryKey: logLevelQueryKey });
     });

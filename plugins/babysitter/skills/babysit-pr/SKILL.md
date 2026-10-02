@@ -21,6 +21,13 @@ session stops with the session, so start one only if the user asks.
 Work in the checkout of the user, on the head branch of the pull
 request.
 
+The daemon reaches GitHub with `--token`, `GITHUB_TOKEN`, the babysitter
+GitHub App or the `gh` CLI, in this order. `babysitter auth status` says
+which one it uses. When a command says that there is no token, or that the
+sign in of the app expired, tell the user to run `babysitter auth login`
+or `gh auth login`. Do not run `auth login` or `auth logout` yourself: the
+user enters the code on GitHub, and the access is theirs to choose.
+
 ## 1. Start the watch
 
 ```bash
@@ -61,8 +68,9 @@ babysitter watch merge-rules <watch> --branch-update merge      # rebase or merg
 ```
 
 The start refuses when the pull request is not open, when the token
-cannot push to the head branch, when the checkout is not on the head
-branch, or when the git identity is not set. The reason tells the user
+cannot push to the head branch, when the babysitter GitHub App gives the
+token and is not installed on the repository, when the checkout is not on
+the head branch, or when the git identity is not set. The reason tells the user
 what to correct, so report it and stop. Do not work around it.
 
 ## 2. Read the pull request one time

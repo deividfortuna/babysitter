@@ -21,6 +21,8 @@ const (
 )
 
 type Checkouts struct {
+	Auth gitrepo.AuthEnv
+
 	root  string
 	url   func(repo string) string
 	locks keyedlock.Locks[string]
@@ -78,7 +80,11 @@ func (c *Checkouts) clone(ctx context.Context, repo, dir string) error {
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
 	url := c.url(repo)
-	if _, err := execx.RunIn(ctx, "", "", gitrepo.NoPromptEnv, "git", "clone", "-q", "--no-checkout", "--filter=blob:none",
+	env, err := c.Auth.Env(ctx)
+	if err != nil {
+		return fmt.Errorf("clone %s: %w", url, err)
+	}
+	if _, err := execx.RunIn(ctx, "", "", env, "git", "clone", "-q", "--no-checkout", "--filter=blob:none",
 		"--config", gitHubHelperConfig, "--", url, tmp); err != nil {
 		return fmt.Errorf("clone %s: %w", url, err)
 	}

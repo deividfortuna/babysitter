@@ -22,7 +22,12 @@ func TestAuthorCommandsNameEveryWayTheAgentCallsBabysitter(t *testing.T) {
 	if slices.ContainsFunc(got, func(c string) bool { return strings.Contains(c, "reply") }) {
 		t.Fatalf("the reply of the agent is refused: %q", got)
 	}
-	if bare := AuthorCommands(Launch{}); len(bare) != 8 {
+	for _, want := range []string{"babysitter auth login", "babysitter auth logout"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("AuthorCommands() lacks %q: %q", want, got)
+		}
+	}
+	if bare := AuthorCommands(Launch{}); len(bare) != len(authorDecisions) {
 		t.Fatalf("AuthorCommands() without a hook = %q, want the bare word only", bare)
 	}
 }
@@ -34,6 +39,9 @@ func TestAuthorPatternsTakeEverySpellingOfADecision(t *testing.T) {
 		if want := "*babysitter* watch " + sub; !slices.Contains(got, want) {
 			t.Errorf("AuthorPatterns() lacks %q: %q", want, got)
 		}
+	}
+	if !slices.Contains(got, "*babysitter* auth logout") {
+		t.Errorf("AuthorPatterns() lacks the sign out of the app: %q", got)
 	}
 	if slices.ContainsFunc(got, func(c string) bool { return strings.Contains(c, "reply") }) {
 		t.Fatalf("the reply of the agent is refused: %q", got)

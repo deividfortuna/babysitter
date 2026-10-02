@@ -122,6 +122,11 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			opts.authDir = dataDir
+			auth, err := opts.githubAuth()
+			if err != nil {
+				return err
+			}
 			level, err := logbook.ParseLevel(logLevel)
 			if err != nil {
 				return err
@@ -150,6 +155,8 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				Owner:            owner,
 				Version:          opts.version,
 				NewClient:        opts.client,
+				Auth:             auth,
+				Whoami:           opts.whoami,
 				Notifier:         opts.newNotifier(),
 				Log:              logger,
 				Logs:             book,

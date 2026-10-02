@@ -21,7 +21,8 @@ type Manager interface {
 }
 
 type Git struct {
-	Run execx.DirRunner
+	Run  execx.DirRunner
+	Auth gitrepo.AuthEnv
 }
 
 func New() *Git {
@@ -29,6 +30,18 @@ func New() *Git {
 }
 
 func (g *Git) git(ctx context.Context, dir string, args ...string) (string, error) {
+	return g.gitEnv(ctx, dir, gitrepo.NoPromptEnv, args...)
+}
+
+func (g *Git) remote(ctx context.Context, dir string, args ...string) (string, error) {
+	env, err := g.Auth.Env(ctx)
+	if err != nil {
+		return "", err
+	}
+	return g.gitEnv(ctx, dir, env, args...)
+}
+
+func (g *Git) gitEnv(ctx context.Context, dir string, env []string, args ...string) (string, error) {
 	run := g.Run
 	if run == nil {
 		run = execx.RunIn
@@ -36,7 +49,7 @@ func (g *Git) git(ctx context.Context, dir string, args ...string) (string, erro
 	ctx, cancel := context.WithTimeout(ctx, gitTimeout)
 	defer cancel()
 	full := append([]string{"-C", dir}, args...)
-	out, err := run(ctx, "", "", gitrepo.NoPromptEnv, "git", full...)
+	out, err := run(ctx, "", "", env, "git", full...)
 	if err != nil {
 		return strings.TrimSpace(out), fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
@@ -56,7 +69,7 @@ func (g *Git) Fetch(ctx context.Context, source, upstream string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := g.git(ctx, source, "fetch", "-q", remote, ref); err != nil {
+	if _, err := g.remote(ctx, source, "fetch", "-q", remote, ref); err != nil {
 		return fmt.Errorf("fetch %s: %w (was the branch pushed?)", upstream, err)
 	}
 	return nil

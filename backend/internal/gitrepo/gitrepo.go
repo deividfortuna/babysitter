@@ -5,12 +5,26 @@ import (
 	"errors"
 	"fmt"
 	"os/exec"
+	"slices"
 	"strings"
 )
 
 var ErrDetachedHead = errors.New("HEAD is detached, check out a branch or name the pull request")
 
 var NoPromptEnv = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
+
+type AuthEnv func(ctx context.Context) ([]string, error)
+
+func (a AuthEnv) Env(ctx context.Context) ([]string, error) {
+	if a == nil {
+		return NoPromptEnv, nil
+	}
+	extra, err := a(ctx)
+	if err != nil {
+		return nil, err
+	}
+	return append(slices.Clone(NoPromptEnv), extra...), nil
+}
 
 func CurrentBranch(ctx context.Context, dir string) (string, error) {
 	out, err := run(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")

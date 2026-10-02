@@ -183,8 +183,9 @@ func (s *Service) checkStart(ctx context.Context, client *github.Client, req Sta
 		approvals int
 		wg        sync.WaitGroup
 	)
-	errs := make([]error, 4)
+	errs := make([]error, 5)
 	wg.Go(func() { errs[0] = checkPush(ctx, client, c) })
+	wg.Go(func() { errs[4] = s.checkAccess(ctx, client, c.headOwner, c.headName) })
 	wg.Go(func() { acc.botLogin, errs[1] = currentLogin(ctx, client) })
 	wg.Go(func() { acc.userName, acc.userEmail, errs[2] = gitIdentity(ctx, c.dir) })
 	wg.Go(func() { approvals, errs[3] = s.approvalsRequired(ctx, client, req, key, pr.BaseBranch) })

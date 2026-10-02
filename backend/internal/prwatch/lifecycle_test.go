@@ -7,6 +7,8 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/google/go-github/v91/github"
+
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
@@ -184,6 +186,30 @@ func TestStartNamesTheMissingPushRightOverAFailedFetch(t *testing.T) {
 
 	if !errors.Is(err, ErrNoPushAccess) {
 		t.Fatalf("Start() error = %v, want %v", err, ErrNoPushAccess)
+	}
+	if created := fx.git.createdDirs(); len(created) != 0 {
+		t.Fatalf("a rejected start made a worktree: %v", created)
+	}
+}
+
+func TestStartStopsWhenTheTokenCannotReachTheRepository(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	notInstalled := errors.New("the GitHub App is not installed on the repository")
+	var asked []string
+	fx.access = func(_ context.Context, _ *github.Client, owner, name string) error {
+		asked = append(asked, owner+"/"+name)
+		return notInstalled
+	}
+	fx.svc = fx.newService()
+
+	_, err := fx.svc.Start(context.Background(), fx.startRequest())
+
+	if !errors.Is(err, notInstalled) {
+		t.Fatalf("Start() error = %v, want %v", err, notInstalled)
+	}
+	if !slices.Equal(asked, []string{"octo/hello"}) {
+		t.Fatalf("access asked for %v, want the head repository", asked)
 	}
 	if created := fx.git.createdDirs(); len(created) != 0 {
 		t.Fatalf("a rejected start made a worktree: %v", created)

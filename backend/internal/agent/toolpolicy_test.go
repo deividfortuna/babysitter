@@ -64,6 +64,9 @@ func TestDecideRefusesEverySpellingOfAnAuthorDecision(t *testing.T) {
 		"ls # a comment\nbabysitter watch merge 1",
 		"babysitter watch merge 1#2",
 		"sh <<EOF\nbabysitter watch merge 1\nEOF",
+		"babysitter auth logout",
+		"babysitter --data-dir /tmp/x auth login",
+		"sh -c 'babysitter auth logout'",
 	} {
 		if v := decide(command); !refusedAsAuthorOnly(v) {
 			t.Errorf("DecideTool(%q) = %+v", command, v)

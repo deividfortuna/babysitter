@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/deividfortuna/babysitter/internal/ghclient"
+	"github.com/deividfortuna/babysitter/internal/ghauth"
 )
 
 func TestRootHasSubcommands(t *testing.T) {
@@ -40,6 +40,7 @@ func TestRootHasSubcommands(t *testing.T) {
 func TestWhoamiWithoutToken(t *testing.T) {
 	t.Setenv("GITHUB_TOKEN", "")
 	t.Setenv("PATH", "")
+	t.Setenv("BABYSITTER_DATA_DIR", t.TempDir())
 
 	root := NewRootCmd()
 	root.SetOut(&bytes.Buffer{})
@@ -47,7 +48,7 @@ func TestWhoamiWithoutToken(t *testing.T) {
 	root.SetArgs([]string{"whoami"})
 
 	err := root.ExecuteContext(context.Background())
-	if !errors.Is(err, ghclient.ErrNoToken) {
+	if !errors.Is(err, ghauth.ErrNoToken) {
 		t.Fatalf("err = %v, want ErrNoToken", err)
 	}
 }
