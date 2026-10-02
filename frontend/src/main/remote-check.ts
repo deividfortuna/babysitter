@@ -6,20 +6,24 @@ export type RemoteCheck = { ok: true; name: string; version: string } | { ok: fa
 
 type Fetch = typeof fetch;
 
-type Health = { name?: string; version?: string };
+type Health = { name?: string; version: string };
 
 function text(value: unknown): string | undefined {
   return typeof value === "string" ? value : undefined;
+}
+
+function babysitterHealth(body: unknown): Health | null {
+  if (typeof body !== "object" || body === null) return null;
+  const { status, name, version } = body as Record<string, unknown>;
+  const answersAsADaemon = status === "ok" && typeof version === "string";
+  return answersAsADaemon ? { name: text(name), version } : null;
 }
 
 async function health(url: string, fetcher: Fetch): Promise<Health | null> {
   try {
     const response = await fetcher(`${apiBase(url)}/healthz`, { signal: AbortSignal.timeout(CHECK_TIMEOUT_MS) });
     if (!response.ok) return null;
-    const body: unknown = await response.json();
-    if (typeof body !== "object" || body === null) return {};
-    const { name, version } = body as Record<string, unknown>;
-    return { name: text(name), version: text(version) };
+    return babysitterHealth(await response.json());
   } catch {
     return null;
   }
@@ -45,5 +49,5 @@ export async function checkRemote(url: string, token: string, fetcher: Fetch = f
     return { ok: false, error: "The daemon refused the token. Run babysitter daemon pair on it again." };
   }
   if (!settings.ok) return { ok: false, error: `The daemon at ${url} answered with HTTP ${settings.status}.` };
-  return { ok: true, name: answer.name || new URL(url).hostname, version: answer.version ?? "" };
+  return { ok: true, name: answer.name || new URL(url).hostname, version: answer.version };
 }

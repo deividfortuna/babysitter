@@ -10,7 +10,7 @@ function daemonAnswering(health: unknown): typeof fetch {
 }
 
 test("a daemon that names itself and its version is accepted with both", async () => {
-  const fetcher = daemonAnswering({ ok: true, name: "studio", version: "1.2.3" });
+  const fetcher = daemonAnswering({ status: "ok", name: "studio", version: "1.2.3" });
 
   expect(await checkRemote("http://studio.local:7420", "secret", fetcher)).toEqual({
     ok: true,
@@ -19,20 +19,36 @@ test("a daemon that names itself and its version is accepted with both", async (
   });
 });
 
-test("a name or a version that is not text is left out", async () => {
-  const fetcher = daemonAnswering({ ok: true, name: 42, version: { major: 1 } });
+test("a name that is not text gives way to the host name", async () => {
+  const fetcher = daemonAnswering({ status: "ok", name: 42, version: "1.2.3" });
 
   expect(await checkRemote("http://studio.local:7420", "secret", fetcher)).toEqual({
     ok: true,
     name: "studio.local",
-    version: "",
+    version: "1.2.3",
   });
+});
+
+test("a server that does not answer as a babysitter daemon is refused", async () => {
+  const notADaemon = [
+    {},
+    { status: "ok" },
+    { status: "ok", version: { major: 1 } },
+    { status: "down", version: "1.2.3" },
+  ];
+
+  for (const health of notADaemon) {
+    expect(await checkRemote("http://studio.local:7420", "secret", daemonAnswering(health))).toEqual({
+      ok: false,
+      error: "No babysitter daemon answers at http://studio.local:7420.",
+    });
+  }
 });
 
 function daemonWithSettings(status: number): typeof fetch {
   return (async (input: string) => {
     const path = new URL(input).pathname;
-    if (path.endsWith("/healthz")) return Response.json({ ok: true, name: "studio", version: "1.2.3" });
+    if (path.endsWith("/healthz")) return Response.json({ status: "ok", name: "studio", version: "1.2.3" });
     return Response.json({ error: { code: "x", message: "x" } }, { status });
   }) as typeof fetch;
 }
