@@ -57,8 +57,12 @@ func newServeCmd(opts *options) *cobra.Command {
 				return err
 			}
 			defer st.Close()
+			settings, err := st.Settings(cmd.Context())
+			if err != nil {
+				return err
+			}
 			typed := cmd.Flags().Changed("interval")
-			every, err := serveInterval(cmd.Context(), st, typed, interval)
+			every, err := serveInterval(settings, typed, interval)
 			if err != nil {
 				return err
 			}
@@ -66,11 +70,7 @@ func newServeCmd(opts *options) *cobra.Command {
 				fmt.Fprintf(cmd.ErrOrStderr(), "the interval %s is outside %s..%s; polling every %s\n",
 					interval, store.MinInterval, store.MaxInterval, every)
 			}
-			watcherOpts, err := serveWatcherOptions(cmd.Context(), st, every)
-			if err != nil {
-				return err
-			}
-			w := opts.watcherOn(cmd, st, watcherOpts...)
+			w := opts.watcherOn(cmd, st, serveWatcherOptions(settings, every)...)
 			ctx, stop := context.WithCancel(cmd.Context())
 			defer stop()
 			if !typed {
@@ -87,12 +87,8 @@ func newServeCmd(opts *options) *cobra.Command {
 	return cmd
 }
 
-func serveWatcherOptions(ctx context.Context, st *store.Store, every time.Duration) ([]watcher.Option, error) {
-	settings, err := st.Settings(ctx)
-	if err != nil {
-		return nil, err
-	}
-	return []watcher.Option{watcher.WithInterval(every), watcher.WithLongestCheckWait(settings.CheckMaxInterval)}, nil
+func serveWatcherOptions(settings store.Settings, every time.Duration) []watcher.Option {
+	return []watcher.Option{watcher.WithInterval(every), watcher.WithLongestCheckWait(settings.CheckMaxInterval)}
 }
 
 func endedByContext(err error) bool {
@@ -138,11 +134,7 @@ func followInterval(ctx context.Context, st *store.Store, w *watcher.Watcher, ev
 	}
 }
 
-func serveInterval(ctx context.Context, st *store.Store, typed bool, flag time.Duration) (time.Duration, error) {
-	settings, err := st.Settings(ctx)
-	if err != nil {
-		return 0, err
-	}
+func serveInterval(settings store.Settings, typed bool, flag time.Duration) (time.Duration, error) {
 	if !typed {
 		return settings.PollInterval, nil
 	}
