@@ -1384,8 +1384,10 @@ watch at once, on the same conversation.
 When Claude Code stops a turn because the usage limit is reached, the
 daemon reads the reset time from the message of the limit and keeps it
 on the watch. The activity records `agent_failed` with the time. Until
-then, no message goes to the agent and the watch is not ready to merge.
-The first poll after the reset tells the agent to continue its work,
+then, no message of a poll goes to the agent and the watch is not ready
+to merge. A message that you send, your decision on a proposal and a
+conflict the daemon cannot rebase still go at once: they have no retry,
+and they stay in the conversation for the agent after the reset. The first poll after the reset tells the agent to continue its work,
 and the messages that waited go at the next poll. When the message
 gives no reset time, the daemon tries again after 30 minutes. A turn
 that ends without a failure clears the limit. Copilot CLI does not
