@@ -208,7 +208,7 @@ func loggedCommand(command string) string {
 
 func (s *Service) reportState(ctx context.Context, id int64, l *live, event string, payload []byte) {
 	s.noteLimit(ctx, id, event, payload)
-	state, ok := agent.StateOf(event, payload)
+	state, ok := l.State().Next(event, payload)
 	if !ok {
 		return
 	}

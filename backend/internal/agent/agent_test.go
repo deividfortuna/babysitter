@@ -56,6 +56,30 @@ func TestStateOf(t *testing.T) {
 	}
 }
 
+func TestNextKeepsWaitingOnAnIdleNotice(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		from    State
+		event   string
+		payload string
+		want    State
+		known   bool
+	}{
+		{StateWaiting, EventNotification, `{"notification_type":"idle_prompt"}`, "", false},
+		{StateWaiting, EventNotification, `{"notification_type":"agent_completed"}`, "", false},
+		{StateWaiting, EventNotification, `{"notification_type":"agent_needs_input"}`, StateWaitingInput, true},
+		{StateWaiting, EventUserPromptSubmit, `{}`, StateActive, true},
+		{StateWaiting, EventStop, `{}`, StateIdle, true},
+		{StateActive, EventNotification, `{"notification_type":"idle_prompt"}`, StateIdle, true},
+	}
+	for _, tc := range cases {
+		got, known := tc.from.Next(tc.event, json.RawMessage(tc.payload))
+		if got != tc.want || known != tc.known {
+			t.Errorf("%s.Next(%s, %s) = %q, %v, want %q, %v", tc.from, tc.event, tc.payload, got, known, tc.want, tc.known)
+		}
+	}
+}
+
 var pr = PullRequest{Repo: "octo/hello", Number: 3, Title: "Fix the thing", URL: "https://github.com/octo/hello/pull/3", Author: "alice", HeadRef: "fix", BaseRef: "main"}
 
 func TestOpenMessage(t *testing.T) {

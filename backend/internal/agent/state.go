@@ -87,6 +87,15 @@ func StateOf(event string, payload json.RawMessage) (State, bool) {
 	return "", false
 }
 
+func (s State) Next(event string, payload json.RawMessage) (State, bool) {
+	next, ok := StateOf(event, payload)
+	idleNotice := event == EventNotification && next == StateIdle
+	if s == StateWaiting && idleNotice {
+		return "", false
+	}
+	return next, ok
+}
+
 func payloadField(payload json.RawMessage, name string) string {
 	var fields map[string]json.RawMessage
 	if json.Unmarshal(payload, &fields) != nil {
