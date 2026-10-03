@@ -244,7 +244,7 @@ type Watch struct {
 }
 
 type Session struct {
-	State     agent.State `json:"state" enum:"none,starting,idle,active,waiting_input,blocked,exited" description:"What the agent does now. none: no session; starting: the process runs and said nothing yet; idle: waits for a message; active: works; waiting_input: asked you a question; blocked: waits on a permission decision; exited: the process ended"`
+	State     agent.State `json:"state" enum:"none,starting,idle,active,waiting,waiting_input,blocked,exited" description:"What the agent does now. none: no session; starting: the process runs and said nothing yet; idle: waits for a message; active: works; waiting: ended its turn, but its background work still runs and can wake it; waiting_input: asked you a question; blocked: waits on a permission decision; exited: the process ended"`
 	PID       int         `json:"pid"`
 	StartedAt *time.Time  `json:"startedAt,omitempty"`
 	SignalAt  *time.Time  `json:"signalAt,omitempty" description:"When the agent last reported what it does"`
@@ -601,7 +601,7 @@ type OutputQuery struct {
 }
 
 type HookRequest struct {
-	Event   string         `json:"event" enum:"session-start,user-prompt-submit,pre-tool-use,post-tool-use,post-tool-use-failure,permission-request,stop,notification,session-end"`
+	Event   string         `json:"event" enum:"session-start,user-prompt-submit,pre-tool-use,post-tool-use,post-tool-use-failure,permission-request,stop,stop-failure,notification,session-end"`
 	Payload map[string]any `json:"payload"`
 }
 

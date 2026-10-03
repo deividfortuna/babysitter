@@ -188,6 +188,7 @@ type fakeGit struct {
 	created   []string
 	sources   []string
 	removed   []string
+	restored  []string
 	removeErr error
 	fetchErr  error
 	onFetch   func()
@@ -220,7 +221,20 @@ func (g *fakeGit) Create(_ context.Context, source, dir, branch, upstream string
 	if hook != nil {
 		hook()
 	}
-	return nil
+	return os.MkdirAll(dir, 0o750)
+}
+
+func (g *fakeGit) Restore(_ context.Context, source, dir, branch, upstream string) error {
+	g.mu.Lock()
+	g.restored = append(g.restored, source+" "+dir+" "+branch+" "+upstream)
+	g.mu.Unlock()
+	return os.MkdirAll(dir, 0o750)
+}
+
+func (g *fakeGit) restores() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]string(nil), g.restored...)
 }
 
 func (g *fakeGit) Remove(_ context.Context, _, dir, _ string) error {
@@ -230,7 +244,7 @@ func (g *fakeGit) Remove(_ context.Context, _, dir, _ string) error {
 		return g.removeErr
 	}
 	g.removed = append(g.removed, dir)
-	return nil
+	return os.RemoveAll(dir)
 }
 
 func (g *fakeGit) createdDirs() []string {
@@ -1345,6 +1359,9 @@ func TestHooksGateTheMessages(t *testing.T) {
 	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil || state() != agent.StateActive {
 		t.Fatalf("state after submit = %q, %v", state(), err)
 	}
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventSessionStart, []byte(`{"source":"compact"}`)); err != nil || state() != agent.StateActive {
+		t.Fatalf("state after a compaction in the turn = %q, %v", state(), err)
+	}
 	if _, err := fx.svc.Hook(ctx, w.ID, "bogus", nil); err == nil {
 		t.Fatal("an unknown event was accepted")
 	}
@@ -1463,6 +1480,34 @@ func TestSessionExitStartsAgainOnTheNextMessage(t *testing.T) {
 	}
 	if got, _ := fx.st.GetWatch(ctx, w.ID); got.AgentSession == "" || got.AgentSession == stored.AgentSession {
 		t.Fatalf("agent session of the new conversation = %q", got.AgentSession)
+	}
+}
+
+func TestAWorktreeThatIsGoneIsMadeAgainBeforeTheAgentStarts(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	stored, _ := fx.st.GetWatch(ctx, w.ID)
+	if got := fx.git.restores(); len(got) != 0 {
+		t.Fatalf("restores of a worktree that is there = %v", got)
+	}
+
+	fx.advance(time.Hour)
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+	if err := os.RemoveAll(stored.WorktreeDir); err != nil {
+		t.Fatal(err)
+	}
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+
+	want := stored.SourceDir + " " + stored.WorktreeDir + " " + stored.WorkBranch + " origin/" + stored.HeadRef
+	equal(t, fx.git.restores(), []string{want})
+	if fx.host.count() != 2 || fx.host.last().spec.Dir != stored.WorktreeDir {
+		t.Fatalf("sessions = %d, last dir = %s", fx.host.count(), fx.host.last().spec.Dir)
 	}
 }
 

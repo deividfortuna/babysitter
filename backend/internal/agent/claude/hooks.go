@@ -16,6 +16,7 @@ var hooks = []struct {
 	{"PostToolUseFailure", agent.EventPostToolUseFailed, ""},
 	{"PermissionRequest", agent.EventPermissionRequest, ""},
 	{"Stop", agent.EventStop, ""},
+	{"StopFailure", agent.EventStopFailure, ""},
 	{"Notification", agent.EventNotification, ""},
 	{"SessionEnd", agent.EventSessionEnd, ""},
 }

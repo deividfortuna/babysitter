@@ -57,8 +57,11 @@ them, or show it in a terminal.
 
 ## Agent states
 
-`none`, `starting`, `idle`, `active`, `waiting_input`, `blocked`,
-`exited`. They are in `watch list` and in `watch status`.
+`none`, `starting`, `idle`, `active`, `waiting`, `waiting_input`,
+`blocked`, `exited`. They are in `watch list` and in `watch status`.
+
+`waiting` means that the agent ended its turn, but its background work
+still runs and can wake it. The watch does not merge in that state.
 
 `waiting_input` means that the agent asked the user a question.
 `blocked` means that it waits for a permission decision. The two need

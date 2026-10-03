@@ -187,6 +187,8 @@ export function sessionWord(state: SessionState): { label: string; tone: Tone; n
       return { label: "agent idle", tone: "neutral", needsYou: false };
     case "active":
       return { label: "agent working", tone: "good", needsYou: false };
+    case "waiting":
+      return { label: "agent waits on background work", tone: "wait", needsYou: false };
     case "waiting_input":
       return { label: "agent asks you", tone: "bad", needsYou: true };
     case "blocked":

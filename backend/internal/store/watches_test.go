@@ -292,6 +292,19 @@ func TestNudgeTracking(t *testing.T) {
 	if got, _ := s.GetWatch(ctx, w.ID); got.AgentSession != "sess-1" {
 		t.Fatalf("agent session = %q", got.AgentSession)
 	}
+	reset := now.Add(3 * time.Hour)
+	if err := s.SetWatchAgentLimit(ctx, w.ID, &reset); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetWatch(ctx, w.ID); got.AgentLimitedUntil == nil || !got.AgentLimitedUntil.Equal(reset) {
+		t.Fatalf("agent limited until = %v", got.AgentLimitedUntil)
+	}
+	if err := s.SetWatchAgentLimit(ctx, w.ID, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := s.GetWatch(ctx, w.ID); got.AgentLimitedUntil != nil {
+		t.Fatalf("agent limited until after the clear = %v", got.AgentLimitedUntil)
+	}
 }
 
 func TestMigration12DropsTheProposals(t *testing.T) {

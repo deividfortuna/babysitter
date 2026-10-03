@@ -17,12 +17,17 @@ func TestStateOf(t *testing.T) {
 		known   bool
 	}{
 		{EventSessionStart, `{}`, StateIdle, true},
+		{EventSessionStart, `{"source":"resume"}`, StateIdle, true},
+		{EventSessionStart, `{"source":"compact"}`, "", false},
 		{EventUserPromptSubmit, `{}`, StateActive, true},
 		{EventPreToolUse, `{}`, StateActive, true},
 		{EventPostToolUse, `{}`, StateActive, true},
 		{EventPostToolUseFailed, `{}`, StateActive, true},
 		{EventPermissionRequest, `{"tool_name":"Bash"}`, StateBlocked, true},
 		{EventStop, `{}`, StateIdle, true},
+		{EventStop, `{"background_tasks":[]}`, StateIdle, true},
+		{EventStop, `{"background_tasks":[{"id":"b1","type":"shell","status":"running","description":"npm test"}]}`, StateWaiting, true},
+		{EventStopFailure, `{"error":"rate_limit"}`, StateIdle, true},
 		{EventNotification, `{"notification_type":"idle_prompt"}`, StateIdle, true},
 		{EventNotification, `{"notification_type":"permission_prompt"}`, StateBlocked, true},
 		{EventNotification, `{"notification_type":"agent_needs_input"}`, StateWaitingInput, true},

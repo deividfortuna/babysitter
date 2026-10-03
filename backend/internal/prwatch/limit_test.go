@@ -1,0 +1,122 @@
+package prwatch
+
+import (
+	"context"
+	"encoding/json"
+	"fmt"
+	"slices"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/deividfortuna/babysitter/internal/agent"
+	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
+	"github.com/deividfortuna/babysitter/internal/store"
+)
+
+func (fx *fixture) hitLimit(w store.Watch, reset time.Time) {
+	fx.t.Helper()
+	payload, err := json.Marshal(map[string]string{
+		"error":                  "rate_limit",
+		"last_assistant_message": fmt.Sprintf("You've hit your session limit · resets %s (UTC)", reset.UTC().Format("3:04pm")),
+	})
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.hook(w, agent.EventStopFailure, string(payload))
+}
+
+func TestALimitedAgentGetsNoMessageUntilTheReset(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	ctx := context.Background()
+	reset := fx.clock().UTC().Add(2 * time.Hour).Truncate(time.Minute)
+
+	fx.hitLimit(w, reset)
+	got := fx.watch(w)
+	if got.AgentLimitedUntil == nil || !got.AgentLimitedUntil.Equal(reset) {
+		t.Fatalf("limited until = %v, want %v", got.AgentLimitedUntil, reset)
+	}
+	if info, _ := fx.svc.Session(ctx, w); info.State != agent.StateIdle {
+		t.Fatalf("state after the limit = %q", info.State)
+	}
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "agent_failed"})
+	if row := fx.activity(w)[3]; !strings.Contains(row.Summary, "usage limit") || row.Ref != "limit@"+reset.Format(time.RFC3339) {
+		t.Fatalf("limit row = %+v", row)
+	}
+
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "rename it", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("a limited agent was told: %q", msgs)
+	}
+	if blockers := fx.watch(w).ReadyBlockers; !slices.ContainsFunc(blockers, func(b string) bool { return strings.Contains(b, "usage limit") }) {
+		t.Fatalf("blockers = %q", blockers)
+	}
+
+	fx.advance(2 * time.Hour)
+	fx.poll(w)
+	msgs := h.messages()
+	if len(msgs) != 2 || msgs[1] != limitContinueMessage {
+		t.Fatalf("messages after the reset = %q", msgs)
+	}
+	if got := fx.watch(w); got.AgentLimitedUntil != nil {
+		t.Fatalf("limited until after the resume = %v", got.AgentLimitedUntil)
+	}
+
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.agentIdle(w)
+	fx.poll(w)
+	if msgs := h.messages(); len(msgs) != 3 || !strings.Contains(msgs[2], "rename it") {
+		t.Fatalf("messages after the continued turn = %q", msgs)
+	}
+}
+
+func TestAStopClearsTheLimit(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	fx.hitLimit(w, fx.clock().Add(time.Hour))
+	if fx.watch(w).AgentLimitedUntil == nil {
+		t.Fatal("the limit was not stored")
+	}
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.agentIdle(w)
+	if got := fx.watch(w).AgentLimitedUntil; got != nil {
+		t.Fatalf("limited until after a turn that ended well = %v", got)
+	}
+}
+
+func TestOtherFailuresSetNoLimit(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.hook(w, agent.EventStopFailure, `{"error":"overloaded","last_assistant_message":"resets 3pm"}`)
+	if got := fx.watch(w).AgentLimitedUntil; got != nil {
+		t.Fatalf("limited until after an overload = %v", got)
+	}
+	if info, _ := fx.svc.Session(context.Background(), w); info.State != agent.StateIdle {
+		t.Fatalf("state after a failed turn = %q", info.State)
+	}
+}
+
+func TestBackgroundWorkKeepsTheWatchFromMerging(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.hook(w, agent.EventStop, `{"background_tasks":[{"id":"b1","type":"shell","status":"running","description":"go test ./..."}]}`)
+	info, _ := fx.svc.Session(context.Background(), w)
+	if info.State != agent.StateWaiting {
+		t.Fatalf("state = %q", info.State)
+	}
+	if _, blockers := fx.svc.Readiness(fx.watch(w), info.State); !slices.Contains(blockers, "the background work of the agent still runs") {
+		t.Fatalf("blockers = %q", blockers)
+	}
+}
