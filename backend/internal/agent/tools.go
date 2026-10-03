@@ -52,7 +52,7 @@ echo "babysitter: the daemon pushes this branch. Commit your work and let the tu
 exit 1
 `
 
-const CoAuthorTrailer = "Co-authored-by: babysitter <335241182+babysitter-orchestrator@users.noreply.github.com>"
+const CoAuthorTrailer = "Co-authored-by: babysitter-orchestrator[bot] <336804633+babysitter-orchestrator[bot]@users.noreply.github.com>"
 
 const commitMsgHook = `#!/bin/sh
 exec git interpret-trailers --in-place --if-exists addIfDifferent --trailer "` + CoAuthorTrailer + `" "$1"

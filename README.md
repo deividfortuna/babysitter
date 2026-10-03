@@ -1230,7 +1230,7 @@ agent.
 A second git hook adds this trailer to each commit of the session:
 
 ```
-Co-authored-by: babysitter <335241182+babysitter-orchestrator@users.noreply.github.com>
+Co-authored-by: babysitter-orchestrator[bot] <336804633+babysitter-orchestrator[bot]@users.noreply.github.com>
 ```
 
 The hook adds the trailer one time only, also when the agent amends a
