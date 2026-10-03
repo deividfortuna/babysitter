@@ -48,8 +48,8 @@ test("reports a system theme change and stops on unsubscribe", () => {
 
 test("paints the root canvas in the colour of the theme", () => {
   applyTheme("dark");
-  expect(document.documentElement.style.backgroundColor).toBe("rgb(13, 17, 23)");
+  expect(document.documentElement.style.backgroundColor).toBe("rgb(10, 10, 10)");
 
   applyTheme("light");
-  expect(document.documentElement.style.backgroundColor).toBe("rgb(255, 255, 255)");
+  expect(document.documentElement.style.backgroundColor).toBe("rgb(252, 252, 252)");
 });
