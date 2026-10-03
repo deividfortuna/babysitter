@@ -316,24 +316,26 @@ function AccountRow({ viewer, onOpenSettings }: AccountRowProps) {
       >
         {name}
       </span>
-      <Tip label="Report an issue">
-        <Button asChild variant="ghost" size="icon-xs" className="text-muted-foreground">
-          <a href={issuesURL} target="_blank" rel="noreferrer" aria-label="Report an issue">
-            <MessageCircleIcon />
-          </a>
-        </Button>
-      </Tip>
-      <Tip label="Settings">
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          className="text-muted-foreground"
-          aria-label="Settings"
-          onClick={onOpenSettings}
-        >
-          <SettingsIcon />
-        </Button>
-      </Tip>
+      <div>
+        <Tip label="Report an issue">
+          <Button asChild variant="ghost" size="icon-xs" className="text-muted-foreground">
+            <a href={issuesURL} target="_blank" rel="noreferrer" aria-label="Report an issue">
+              <MessageCircleIcon />
+            </a>
+          </Button>
+        </Tip>
+        <Tip label="Settings">
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            className="text-muted-foreground"
+            aria-label="Settings"
+            onClick={onOpenSettings}
+          >
+            <SettingsIcon />
+          </Button>
+        </Tip>
+      </div>
     </div>
   );
 }

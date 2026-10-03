@@ -17,7 +17,7 @@
           var dark =
             chosen === "dark" || (chosen === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
           document.documentElement.classList.toggle("dark", dark);
-          document.documentElement.style.backgroundColor = dark ? "#0d1117" : "#ffffff";
+          document.documentElement.style.backgroundColor = dark ? "#0a0a0a" : "#fcfcfc";
         } catch (err) {
           // Storage the window cannot read only costs the first paint.
         }

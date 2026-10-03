@@ -49,6 +49,14 @@ test("follows the character p, not the position of the key", () => {
   expect(onOpen).toHaveBeenCalledOnce();
 });
 
+test("falls back to the position of the key when the layout types no Latin letter", () => {
+  const onOpen = listen();
+
+  fireEvent.keyDown(window, { ctrlKey: true, key: "з", code: "KeyP" });
+
+  expect(onOpen).toHaveBeenCalledOnce();
+});
+
 test("opens while the user types text", () => {
   platform.isMac = true;
   const { getByRole } = render(<textarea aria-label="Message" />);

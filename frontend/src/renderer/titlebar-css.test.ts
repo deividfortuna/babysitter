@@ -41,3 +41,11 @@ test("a header under a collapsed sidebar clears window buttons the system draws 
 
   expect(rule(css, ".pl-titlebar-nav-clearance")).toContain("env(titlebar-area-x");
 }, 60_000);
+
+test("horizontal scrollbars are as thin as vertical ones", async () => {
+  const css = await builtStyles();
+  const scrollbar = rule(css, "::-webkit-scrollbar");
+
+  expect(scrollbar).toContain("width:var(--scrollbar-width)");
+  expect(scrollbar).toContain("height:var(--scrollbar-width)");
+}, 60_000);

@@ -1,8 +1,9 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { renderWithProviders } from "@test/test-utils";
+import { useSidebar } from "@/components/ui/sidebar";
 import { PanelToggle, PanelToggleSpace } from "./panel-toggle";
 
 const platform = vi.hoisted(() => ({ isMac: false }));
@@ -35,6 +36,83 @@ test("the same button opens and closes the panel", async () => {
 
   await user.click(toggle);
   expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
+test.each([
+  { mac: true, keys: { metaKey: true, altKey: true, key: "∫", code: "KeyB" }, toggles: true },
+  { mac: true, keys: { metaKey: true, key: "b", code: "KeyB" }, toggles: false },
+  { mac: true, keys: { metaKey: true, shiftKey: true, key: "b", code: "KeyB" }, toggles: false },
+  { mac: true, keys: { ctrlKey: true, altKey: true, key: "∫", code: "KeyB" }, toggles: false },
+  { mac: true, keys: { metaKey: true, altKey: true, shiftKey: true, key: "ı", code: "KeyB" }, toggles: false },
+  { mac: true, keys: { metaKey: true, altKey: true, key: "≈", code: "KeyX" }, toggles: false },
+  { mac: false, keys: { ctrlKey: true, altKey: true, key: "b", code: "KeyB" }, toggles: true },
+  { mac: false, keys: { ctrlKey: true, altKey: true, key: "{", code: "KeyB", modifierAltGraph: true }, toggles: false },
+  { mac: false, keys: { ctrlKey: true, key: "b", code: "KeyB" }, toggles: false },
+  { mac: false, keys: { metaKey: true, altKey: true, key: "b", code: "KeyB" }, toggles: false },
+])("on macOS $mac, $keys toggles the panel: $toggles", ({ mac, keys, toggles }) => {
+  platform.isMac = mac;
+  renderWithProviders(<Toggle />);
+
+  fireEvent.keyDown(window, keys);
+
+  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveAttribute("aria-expanded", String(toggles));
+});
+
+test("the shortcut opens and closes the panel", () => {
+  renderWithProviders(<Toggle />);
+  const toggle = screen.getByRole("button", { name: "Watch settings" });
+
+  fireEvent.keyDown(window, { ctrlKey: true, altKey: true, key: "b", code: "KeyB" });
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+  fireEvent.keyDown(window, { ctrlKey: true, altKey: true, key: "b", code: "KeyB" });
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
+function SidebarState() {
+  const { state } = useSidebar();
+  return <output aria-label="Sidebar">{state}</output>;
+}
+
+test("the shortcut leaves the left sidebar alone", () => {
+  platform.isMac = true;
+  renderWithProviders(
+    <>
+      <Toggle />
+      <SidebarState />
+    </>,
+    { withSidebar: true },
+  );
+
+  fireEvent.keyDown(document.body, { metaKey: true, altKey: true, key: "∫", code: "KeyB" });
+
+  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveAttribute("aria-expanded", "true");
+  expect(screen.getByRole("status", { name: "Sidebar" })).toHaveTextContent("expanded");
+});
+
+test("the left sidebar keeps its own shortcut", () => {
+  platform.isMac = true;
+  renderWithProviders(
+    <>
+      <Toggle />
+      <SidebarState />
+    </>,
+    { withSidebar: true },
+  );
+
+  fireEvent.keyDown(document.body, { metaKey: true, key: "b" });
+
+  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("status", { name: "Sidebar" })).toHaveTextContent("collapsed");
+});
+
+test("the shortcut does not toggle the panel over a dialog", () => {
+  render(<div role="dialog" aria-label="Settings" />);
+  renderWithProviders(<Toggle />);
+
+  fireEvent.keyDown(window, { ctrlKey: true, altKey: true, key: "b", code: "KeyB" });
+
+  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveAttribute("aria-expanded", "false");
 });
 
 test("off macOS stays clear of the window buttons", () => {

@@ -4,9 +4,9 @@ export function isThemePreference(value: unknown): value is ThemePreference {
   return value === "system" || value === "light" || value === "dark";
 }
 
-export const CANVAS = { light: "#ffffff", dark: "#0d1117" };
+export const CANVAS = { light: "#fcfcfc", dark: "#0a0a0a" };
 
-export const INK = { light: "#1f2328", dark: "#f0f6fc" };
+export const INK = { light: "#232323", dark: "#f5f5f5" };
 
 function isDark(preference: ThemePreference, systemDark: boolean): boolean {
   return preference === "dark" || (preference === "system" && systemDark);

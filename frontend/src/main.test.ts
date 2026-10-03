@@ -351,7 +351,7 @@ test("the window paints in the theme the user chose, not the one of the system",
   await loadMain();
   electron.appEvents.get("ready")?.();
 
-  expect(electron.windowOptions[0].backgroundColor).toBe("#0d1117");
+  expect(electron.windowOptions[0].backgroundColor).toBe("#0a0a0a");
 });
 
 test("on macOS the window buttons sit in the middle of the title bar", async () => {

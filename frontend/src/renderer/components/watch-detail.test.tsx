@@ -145,6 +145,32 @@ test("opens the terminal in a panel at the bottom and closes it", async () => {
   expect(screen.getByRole("button", { name: "show the terminal" })).toBeVisible();
 });
 
+test("Ctrl+` shows and hides the terminal", async () => {
+  const watch = buildWatch({ id: 42 });
+  serveApi({ watches: [watch], watchById: { 42: watch }, watchOutput: { 42: "hello from the agent\n" } });
+  const user = userEvent.setup();
+
+  renderWatchDetail();
+  await screen.findByRole("button", { name: "show the terminal" });
+  await user.keyboard("{Control>}[Backquote]{/Control}");
+  expect(await screen.findByRole("region", { name: "Terminal" })).toBeInTheDocument();
+
+  await user.keyboard("{Control>}[Backquote]{/Control}");
+  expect(screen.queryByRole("region", { name: "Terminal" })).not.toBeInTheDocument();
+});
+
+test("Ctrl+` does nothing on a self watch", async () => {
+  const watch = buildWatch({ id: 42, provider: "self", sourceDir: "/home/alice/hello" });
+  serveApi({ watches: [watch], watchById: { 42: watch } });
+  const user = userEvent.setup();
+
+  renderWatchDetail();
+  await screen.findByText("your own session");
+  await user.keyboard("{Control>}[Backquote]{/Control}");
+
+  expect(screen.queryByRole("region", { name: "Terminal" })).not.toBeInTheDocument();
+});
+
 test("a self watch has no terminal and no message box", async () => {
   const watch = buildWatch({ id: 42, provider: "self", sourceDir: "/home/alice/hello" });
   serveApi({ watches: [watch], watchById: { 42: watch } });
