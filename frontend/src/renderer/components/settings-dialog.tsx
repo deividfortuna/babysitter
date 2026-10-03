@@ -116,10 +116,10 @@ const GROUPS: Group[] = [
   },
 ];
 
-const PAGES = GROUPS.flatMap((group) => group.pages);
+export const SETTINGS_PAGES = GROUPS.flatMap((group) => group.pages);
 
 function pageOf(id: SettingsCategory): Page {
-  return PAGES.find((page) => page.id === id) ?? PAGES[0];
+  return SETTINGS_PAGES.find((page) => page.id === id) ?? SETTINGS_PAGES[0];
 }
 
 type Props = {

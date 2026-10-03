@@ -35,6 +35,7 @@ import { bridge } from "@/lib/bridge";
 import { fromSelectValue, toSelectValue } from "@/lib/select-value";
 import { settingsSummary } from "@/lib/start-watch-summary";
 import { BRANCH_UPDATES, DEPENDABOT_OWNS_BRANCH } from "@/lib/branch-update";
+import { watchedLabels, watchLabel } from "@/lib/watch-status";
 import {
   agentLabel,
   branchUpdateDefaultLabel,
@@ -222,7 +223,7 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
   const approvalsValue = approvals ?? approvalsField(defaults?.approvalsRequired);
   const badApprovals = approvalsInvalid(approvalsValue);
 
-  const watched = useMemo(() => new Set((watches.data ?? []).map((w) => `${w.repo}#${w.number}`)), [watches.data]);
+  const watched = useMemo(() => watchedLabels(watches.data ?? []), [watches.data]);
   const openPulls = useMemo(
     () => (pulls.data ?? []).filter((pr) => pr.state === "open").sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     [pulls.data],
@@ -333,10 +334,10 @@ function StartWatchForm({ enabled, initial, onStarted }: FormProps) {
                 </CommandEmpty>
                 <CommandGroup>
                   {openPulls.map((pr) => {
-                    const already = watched.has(`${pr.repo}#${pr.number}`);
+                    const already = watched.has(watchLabel(pr));
                     return (
                       <CommandItem
-                        key={`${pr.repo}#${pr.number}`}
+                        key={watchLabel(pr)}
                         value={`${pr.repo}#${pr.number} ${pr.title} ${pr.author}`}
                         disabled={already}
                         onSelect={() => pick(pr)}

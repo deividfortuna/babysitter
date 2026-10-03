@@ -95,6 +95,63 @@ test("on macOS goes back with Command and the left bracket", async () => {
   expect(activeView()).toBe("Watching");
 });
 
+test("on macOS Command and P opens the palette, which goes to a view", async () => {
+  platform.isMac = true;
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.keyboard("{Meta>}p{/Meta}");
+  await user.click(await screen.findByRole("option", { name: "Stopped" }));
+
+  expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  expect(activeView()).toBe("Stopped");
+});
+
+test("the palette opens with an empty query each time", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.keyboard("{Control>}p{/Control}");
+  await user.type(await screen.findByRole("combobox"), ">sync");
+  await user.keyboard("{Escape}");
+  await user.keyboard("{Control>}p{/Control}");
+
+  expect(await screen.findByRole("combobox")).toHaveValue("");
+});
+
+test("Control and P on the loading screen does not open the palette once the daemon is up", async () => {
+  let emit: (status: DaemonStatus) => void = () => undefined;
+  vi.spyOn(bridge.daemon, "getStatus").mockResolvedValue({ state: "starting", step: "environment" });
+  vi.spyOn(bridge.daemon, "onStatus").mockImplementation((listener) => {
+    emit = listener;
+    return () => undefined;
+  });
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("status");
+
+  await user.keyboard("{Control>}p{/Control}");
+  act(() => emit({ state: "error", message: "The daemon stopped (exit code 1)." }));
+
+  expect(await screen.findByRole("button", { name: "Start the daemon" })).toBeInTheDocument();
+  expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+});
+
+test("Control and P does nothing while another dialog is open", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.click(screen.getByRole("button", { name: "Settings" }));
+  await screen.findByRole("dialog");
+  await user.keyboard("{Control>}p{/Control}");
+
+  expect(screen.getAllByRole("dialog")).toHaveLength(1);
+  expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
+});
+
 test("a remote paired again at a new address starts over as a new daemon", async () => {
   const user = userEvent.setup();
   const atAddress = (url: string): DaemonStatus => ({
