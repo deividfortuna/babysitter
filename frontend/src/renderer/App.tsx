@@ -115,14 +115,7 @@ export function App() {
         return <WatchingView enabled={ready} onNavigate={navigate} onWatchPR={openStart} onAddRepo={openAddRepo} />;
       case "repo":
         return (
-          <RepoView
-            key={view.name}
-            enabled={ready}
-            name={view.name}
-            onNavigate={navigate}
-            onWatchPR={openStart}
-            onWatchPull={watchPull}
-          />
+          <RepoView key={view.name} enabled={ready} name={view.name} onNavigate={navigate} onWatchPull={watchPull} />
         );
       case "stopped":
         return <StoppedView enabled={ready} onNavigate={navigate} />;

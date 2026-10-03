@@ -192,6 +192,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
               {active ? (
                 <ViewHeaderActions className={settingsOpen ? undefined : clearsPanelToggle}>
                   <ViewHeaderButton variant="outline" onClick={() => setStopping(true)}>
+                    <SquareIcon data-icon="inline-start" />
                     Stop watching
                   </ViewHeaderButton>
                   <ViewHeaderButton

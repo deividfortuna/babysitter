@@ -8,9 +8,7 @@ import { apiUrl, server, serveApi } from "@test/msw";
 import { RepoView } from "./repo-view";
 
 function renderView() {
-  return renderWithProviders(
-    <RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPR={vi.fn()} onWatchPull={vi.fn()} />,
-  );
+  return renderWithProviders(<RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPull={vi.fn()} />);
 }
 
 test("announces that repository details are loading", async () => {
@@ -57,9 +55,7 @@ test("shows an open pull request and selects it to start watching", async () => 
   serveApi({ repos: [buildRepo()], watches: [], pullRequests: [pullRequest] });
   const user = userEvent.setup();
 
-  renderWithProviders(
-    <RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPR={vi.fn()} onWatchPull={onWatchPull} />,
-  );
+  renderWithProviders(<RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPull={onWatchPull} />);
 
   expect(await screen.findByText("Add notifications")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Watch" }));
@@ -129,6 +125,26 @@ test("keeps the title in the view header while the repository loads, fails or is
 
   expect(await screen.findByText("GitHub token expired")).toBeVisible();
   expectViewTitle("octo/babysitter");
+});
+
+test("the sync icon in the header asks the daemon to sync", async () => {
+  serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
+  let synced = false;
+  server.use(
+    http.post(apiUrl("/api/v1/sync"), () => {
+      synced = true;
+      return HttpResponse.json({ accepted: true }, { status: 202 });
+    }),
+  );
+  const user = userEvent.setup();
+
+  renderView();
+  const sync = await screen.findByRole("button", { name: "Sync now" });
+  expect(sync).toHaveTextContent("");
+  expect(sync).toHaveClass("size-7");
+  await user.click(sync);
+
+  await vi.waitFor(() => expect(synced).toBe(true));
 });
 
 test("a queued Dependabot update shows its place and its update type", async () => {

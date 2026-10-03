@@ -53,8 +53,8 @@ test("sizes every button of the header the same", () => {
     <ViewHeader>
       Stopped
       <ViewHeaderActions>
-        <ViewHeaderButton>Sync</ViewHeaderButton>
-        <ViewHeaderButton variant="outline">Watch by URL</ViewHeaderButton>
+        <ViewHeaderButton>Mark all as read</ViewHeaderButton>
+        <ViewHeaderButton variant="outline">Stop watching</ViewHeaderButton>
       </ViewHeaderActions>
     </ViewHeader>,
   );

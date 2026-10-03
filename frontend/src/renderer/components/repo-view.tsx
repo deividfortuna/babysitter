@@ -15,7 +15,7 @@ import { PanelToggle, clearsPanelToggle } from "@/components/panel-toggle";
 import { RepoSettingsPanel } from "@/components/repo-settings-panel";
 import { AuthorName, DiffStat, InboxGroup, InboxItem, LabelBadges } from "@/components/inbox-row";
 import { CheckIcon, Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
-import { ViewHeader, ViewHeaderActions, ViewHeaderButton } from "@/components/view-header";
+import { ViewHeader, ViewHeaderActions } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
 import { Tip } from "@/components/tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -125,11 +125,10 @@ type Props = {
   enabled: boolean;
   name: string;
   onNavigate: Navigate;
-  onWatchPR: () => void;
   onWatchPull: (pr: PullRequest) => void;
 };
 
-export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: Props) {
+export function RepoView({ enabled, name, onNavigate, onWatchPull }: Props) {
   const repos = useRepos(enabled);
   const watches = useWatches(enabled);
   const pulls = usePulls(enabled);
@@ -216,20 +215,19 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
             {watched.length} watched · {open.length} open · {synced}
           </Meta>
           <ViewHeaderActions className={settingsOpen ? undefined : clearsPanelToggle}>
-            <ViewHeaderButton
-              type="button"
-              variant="ghost"
-              title="Sync now"
-              disabled={requestSync.isPending}
-              onClick={() => requestSync.mutate()}
-            >
-              <RefreshCwIcon data-icon="inline-start" />
-              Sync
-            </ViewHeaderButton>
-            <ViewHeaderButton type="button" variant="outline" onClick={onWatchPR}>
-              <GitPullRequestIcon data-icon="inline-start" />
-              Watch by URL
-            </ViewHeaderButton>
+            <Tip side="bottom" label="Sync now">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label="Sync now"
+                disabled={requestSync.isPending}
+                onClick={() => requestSync.mutate()}
+              >
+                <RefreshCwIcon />
+              </Button>
+            </Tip>
           </ViewHeaderActions>
         </ViewHeader>
 
