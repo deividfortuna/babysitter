@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { useState } from "react";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import { renderWithProviders } from "@test/test-utils";
-import { PanelToggle } from "./panel-toggle";
+import { PanelToggle, PanelToggleSpace } from "./panel-toggle";
 
 const platform = vi.hoisted(() => ({ isMac: false }));
 
@@ -40,7 +40,7 @@ test("the same button opens and closes the panel", async () => {
 test("off macOS stays clear of the window buttons", () => {
   renderWithProviders(<Toggle />);
 
-  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveClass("absolute", "right-window-controls");
+  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveClass("fixed", "right-window-controls");
 });
 
 test("on macOS keeps the inset of the header", () => {
@@ -48,5 +48,21 @@ test("on macOS keeps the inset of the header", () => {
 
   renderWithProviders(<Toggle />);
 
-  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveClass("absolute", "right-5");
+  expect(screen.getByRole("button", { name: "Watch settings" })).toHaveClass("fixed", "right-5");
+});
+
+test("the space under the toggle takes its place, lets clicks through and stops the window drag", () => {
+  const { container } = renderWithProviders(
+    <>
+      <Toggle />
+      <PanelToggleSpace />
+    </>,
+  );
+
+  const toggle = screen.getByRole("button", { name: "Watch settings" });
+  const space = container.querySelector('[data-slot="panel-toggle-space"]');
+  expect(space).toHaveAttribute("aria-hidden", "true");
+  expect(space).toHaveClass("fixed", "top-titlebar-button-top", "size-7", "right-window-controls");
+  expect(space).toHaveClass("pointer-events-none", "app-no-drag");
+  expect(toggle).toHaveClass("fixed", "top-titlebar-button-top", "size-7", "right-window-controls");
 });

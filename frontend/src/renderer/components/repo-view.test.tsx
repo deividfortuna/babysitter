@@ -229,6 +229,16 @@ test("the panel icon comes before the pull requests and the repository settings 
   expect(order.indexOf(toggle)).toBeLessThan(firstAfter);
 });
 
+test("the header ends with a no-drag space under the panel icon, so a click on the icon does not drag the window", async () => {
+  serveApi({ repos: [buildRepo()], watches: [], pullRequests: [buildPullRequest()] });
+
+  renderView();
+  await screen.findByRole("button", { name: "Repository settings" });
+
+  const space = screen.getByRole("banner").lastElementChild;
+  expect(space).toHaveAttribute("data-slot", "panel-toggle-space");
+});
+
 function rowOf(title: HTMLElement): HTMLElement {
   const row = title.closest<HTMLElement>('[role="listitem"]');
   if (!row) throw new Error("the pull request has no row");

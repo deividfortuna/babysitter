@@ -49,6 +49,15 @@ test("the panel icon comes before the activity and the watch settings in the foc
   expect(order.indexOf(toggle)).toBeLessThan(firstAfter);
 });
 
+test("the header ends with a no-drag space under the panel icon, so a click on the icon does not drag the window", async () => {
+  renderDetail();
+
+  await screen.findByRole("button", { name: "Watch settings" });
+
+  const space = screen.getByRole("banner").lastElementChild;
+  expect(space).toHaveAttribute("data-slot", "panel-toggle-space");
+});
+
 test("the header no longer holds the approval mode", async () => {
   renderDetail({ approvalMode: "manual" });
 

@@ -230,6 +230,10 @@
   body {
     @apply bg-background text-foreground;
   }
+  .app-drag > * {
+    -webkit-app-region: initial;
+    app-region: initial;
+  }
   :is(button, a, input, select, textarea, [role="separator"]) {
     @apply app-no-drag;
   }

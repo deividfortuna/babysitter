@@ -33,7 +33,7 @@ import { useSendMessage } from "@/hooks/useSession";
 import { ProposalPanel } from "@/components/proposal-panel";
 import { ProposalDecisionProvider, useCurrentProposal, useProposalDecision } from "@/components/proposal-decision";
 import { WatchSettingsPanel } from "@/components/watch-settings-panel";
-import { PanelToggle, clearsPanelToggle } from "@/components/panel-toggle";
+import { PanelToggle, PanelToggleSpace, clearsPanelToggle } from "@/components/panel-toggle";
 import { useWatchActivity, type Activity } from "@/hooks/useWatchActivity";
 import { useWatch, useWatches, type Watch } from "@/hooks/useWatches";
 import {
@@ -177,7 +177,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
 
   return (
     <ProposalDecisionProvider key={watch.id} watch={watch}>
-      <div className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto]">
+      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto]">
         {active ? <PanelToggle label="Watch settings" open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
         <div className="flex min-w-0 flex-col overflow-y-auto">
           <ViewHeader className="flex-col items-stretch gap-2 bg-muted-subtle pb-3.5">
@@ -229,6 +229,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
                 </Badge>
               ) : null}
             </div>
+            {active ? <PanelToggleSpace /> : null}
           </ViewHeader>
 
           {ready ? (
