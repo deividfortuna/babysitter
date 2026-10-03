@@ -24,7 +24,8 @@ import { UpdateCard } from "@/components/update-card";
 import type { SettingsCategory } from "@/components/settings-dialog";
 import { SidebarResizeHandle } from "@/components/sidebar-resize-handle";
 import { initials } from "@/lib/initials";
-import { Tip } from "@/components/tip";
+import { settingsShortcut } from "@/lib/shortcuts";
+import { Tip, TipLabel } from "@/components/tip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -287,7 +288,7 @@ function AccountRow({ viewer, onOpenSettings }: AccountRowProps) {
             </a>
           </Button>
         </Tip>
-        <Tip label="Settings">
+        <Tip label={<TipLabel label="Settings" shortcut={settingsShortcut()} />}>
           <Button
             variant="ghost"
             size="icon-xs"

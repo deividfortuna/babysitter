@@ -152,6 +152,49 @@ test("Control and P does nothing while another dialog is open", async () => {
   expect(screen.queryByRole("combobox")).not.toBeInTheDocument();
 });
 
+test("on macOS Command and the period opens the settings", async () => {
+  platform.isMac = true;
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.keyboard("{Meta>}.{/Meta}");
+
+  expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+});
+
+test("Control and the period opens the settings", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.keyboard("{Control>}.{/Control}");
+
+  expect(await screen.findByRole("dialog", { name: "Settings" })).toBeInTheDocument();
+});
+
+test("Control and the period does nothing over the palette", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.keyboard("{Control>}p{/Control}");
+  await screen.findByRole("combobox");
+  await user.keyboard("{Control>}.{/Control}");
+
+  expect(screen.queryByRole("dialog", { name: "Settings" })).not.toBeInTheDocument();
+});
+
+test("the tooltip of the settings button shows its shortcut", async () => {
+  const user = userEvent.setup();
+  renderWithProviders(<App />);
+  await screen.findByRole("button", { name: "Start the daemon" });
+
+  await user.hover(screen.getByRole("button", { name: "Settings" }));
+
+  expect(await screen.findByRole("tooltip")).toHaveTextContent("Settings Ctrl+.");
+});
+
 test("a remote paired again at a new address starts over as a new daemon", async () => {
   const user = userEvent.setup();
   const atAddress = (url: string): DaemonStatus => ({
