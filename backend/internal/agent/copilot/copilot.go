@@ -70,7 +70,7 @@ func (c *Runner) Command(l agent.Launch) ([]string, []string, error) {
 		args = append(args, "--model", model)
 	}
 	args = append(args, agent.EffortArgs(effortFlag, l)...)
-	env, err := agent.GitEnv(l)
+	env, err := agent.SessionEnv(l)
 	if err != nil {
 		return nil, nil, err
 	}

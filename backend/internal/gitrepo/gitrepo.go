@@ -4,13 +4,131 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"os/exec"
+	"regexp"
+	"slices"
+	"strconv"
 	"strings"
 )
 
 var ErrDetachedHead = errors.New("HEAD is detached, check out a branch or name the pull request")
 
 var NoPromptEnv = []string{"GIT_TERMINAL_PROMPT=0", "GCM_INTERACTIVE=never"}
+
+const GHHelper = "!gh auth git-credential"
+
+func ConfigEnv(pairs [][2]string) []string {
+	env := []string{"GIT_CONFIG_COUNT=" + strconv.Itoa(len(pairs))}
+	for i, p := range pairs {
+		env = append(env, fmt.Sprintf("GIT_CONFIG_KEY_%d=%s", i, p[0]), fmt.Sprintf("GIT_CONFIG_VALUE_%d=%s", i, p[1]))
+	}
+	return env
+}
+
+type AuthEnv func(ctx context.Context) ([]string, error)
+
+var networkCommands = []string{"fetch", "push", "clone", "pull", "ls-remote"}
+
+func (a AuthEnv) Env(ctx context.Context, command string) ([]string, error) {
+	if a == nil {
+		return NoPromptEnv, nil
+	}
+	extra, err := a(ctx)
+	if err == nil {
+		return append(slices.Clone(NoPromptEnv), extra...), nil
+	}
+	if slices.Contains(networkCommands, command) {
+		return nil, err
+	}
+	return append(slices.Clone(NoPromptEnv), "GIT_NO_LAZY_FETCH=1"), nil
+}
+
+var (
+	ErrNotHTTPS   = errors.New("the GitHub App reaches GitHub only at https://github.com/")
+	ErrTokenInURL = errors.New("the URL of the remote holds a password or token, which git would use in place of the GitHub App")
+)
+
+var scpRemote = regexp.MustCompile(`^(?:[^@/]+@)?([^:/]+):`)
+
+func (a AuthEnv) CheckRemote(ctx context.Context, remote string, push bool, git func(ctx context.Context, args ...string) (string, error)) error {
+	if !a.usesApp(ctx) {
+		return nil
+	}
+	args := []string{"remote", "get-url"}
+	if push {
+		args = append(args, "--push", "--all")
+	}
+	remoteURLs, err := git(ctx, append(args, remote)...)
+	if err != nil {
+		return err
+	}
+	for remoteURL := range strings.Lines(remoteURLs) {
+		if err := CheckAppRemote(strings.TrimSpace(remoteURL)); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (a AuthEnv) CheckURL(ctx context.Context, remoteURL string, git func(ctx context.Context, args ...string) (string, error)) error {
+	if !a.usesApp(ctx) {
+		return nil
+	}
+	resolved, err := git(ctx, "ls-remote", "--get-url", remoteURL)
+	if err != nil {
+		return err
+	}
+	return CheckAppRemote(strings.TrimSpace(resolved))
+}
+
+func (a AuthEnv) usesApp(ctx context.Context) bool {
+	if a == nil {
+		return false
+	}
+	extra, err := a(ctx)
+	return err == nil && len(extra) > 0
+}
+
+type remote struct {
+	scheme, host, port, shown string
+	password                  bool
+}
+
+func CheckAppRemote(remoteURL string) error {
+	r := parseRemote(remoteURL)
+	defaultPort := r.port == "" || r.port == "443"
+	usesTheAppRules := r.scheme == "https" && isGitHubDotCom(r.host) && defaultPort
+	switch {
+	case !isGitHubHost(r.host):
+		return nil
+	case !usesTheAppRules:
+		return fmt.Errorf("%w: give the remote %s an https://github.com/ URL", ErrNotHTTPS, r.shown)
+	case r.password:
+		return fmt.Errorf("%w: remove it from the remote %s", ErrTokenInURL, r.shown)
+	}
+	return nil
+}
+
+func parseRemote(remoteURL string) remote {
+	if strings.Contains(remoteURL, "://") {
+		u, err := url.Parse(remoteURL)
+		if err != nil {
+			return remote{shown: "with a URL that cannot be read"}
+		}
+		_, password := u.User.Password()
+		return remote{scheme: strings.ToLower(u.Scheme), host: u.Hostname(), port: u.Port(), shown: u.Redacted(), password: password}
+	}
+	if m := scpRemote.FindStringSubmatch(remoteURL); m != nil {
+		return remote{scheme: "ssh", host: m[1], shown: remoteURL}
+	}
+	return remote{shown: remoteURL}
+}
+
+func isGitHubHost(host string) bool {
+	host = strings.TrimSuffix(strings.ToLower(host), ".")
+	return host == "github.com" || strings.HasSuffix(host, ".github.com")
+}
 
 func CurrentBranch(ctx context.Context, dir string) (string, error) {
 	out, err := run(ctx, dir, "rev-parse", "--abbrev-ref", "HEAD")
@@ -56,4 +174,8 @@ func ConfigValue(ctx context.Context, dir, key string) (string, error) {
 		return "", fmt.Errorf("git config --get %s: %w", key, err)
 	}
 	return strings.TrimSpace(string(out)), nil
+}
+
+func isGitHubDotCom(host string) bool {
+	return strings.TrimSuffix(strings.ToLower(host), ".") == "github.com"
 }

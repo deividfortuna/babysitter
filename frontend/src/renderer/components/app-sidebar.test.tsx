@@ -82,9 +82,22 @@ test("opens the settings from the account row", async () => {
   const user = userEvent.setup();
 
   renderSidebar({ onOpenSettings });
+  await screen.findByText("Deivid Fortuna");
   await user.click(screen.getByRole("button", { name: "Settings" }));
 
-  expect(onOpenSettings).toHaveBeenCalledWith();
+  expect(onOpenSettings).toHaveBeenCalledWith(undefined);
+});
+
+test("opens the GitHub access from the account row when there is no account", async () => {
+  serveApi({ watches: [], repos: [], pullRequests: [], viewer: null });
+  const onOpenSettings = vi.fn();
+  const user = userEvent.setup();
+
+  renderSidebar({ onOpenSettings });
+  await screen.findByText("No account");
+  await user.click(screen.getByRole("button", { name: "Settings" }));
+
+  expect(onOpenSettings).toHaveBeenCalledWith("github");
 });
 
 test("keeps the actions of a repository shown while its menu is open", async () => {

@@ -9,6 +9,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
 func git(t *testing.T, dir string, args ...string) string {
@@ -583,6 +585,75 @@ func TestGitNeverPromptsAndPushesWithoutTheHooks(t *testing.T) {
 	}
 }
 
+func TestEveryGitCommandCarriesTheAuthEnv(t *testing.T) {
+	t.Parallel()
+	envs := map[string][]string{}
+	g := &Runner{
+		Run: func(_ context.Context, _, _ string, env []string, _ string, args ...string) (string, error) {
+			envs[args[0]] = env
+			return "", nil
+		},
+		Auth: func(context.Context) ([]string, error) { return []string{"GIT_CONFIG_COUNT=1"}, nil },
+	}
+	ctx := context.Background()
+	if _, err := g.Fetch(ctx, "/wt", "fix"); err != nil {
+		t.Fatal(err)
+	}
+	if err := g.Push(ctx, "/wt", Push{SHA: "abc", Branch: "fix"}); err != nil {
+		t.Fatal(err)
+	}
+	for _, cmd := range []string{"fetch", "push", "rev-parse"} {
+		if !slices.Contains(envs[cmd], "GIT_CONFIG_COUNT=1") || !slices.Contains(envs[cmd], "GIT_TERMINAL_PROMPT=0") {
+			t.Errorf("env of %s = %v, want the auth env and no prompt: a partial clone fetches objects on any command", cmd, envs[cmd])
+		}
+	}
+}
+
+func TestPushStopsWhenTheAuthEnvFails(t *testing.T) {
+	t.Parallel()
+	expired := errors.New("the GitHub App sign in expired")
+	ran := false
+	g := &Runner{
+		Run: func(context.Context, string, string, []string, string, ...string) (string, error) {
+			ran = true
+			return "", nil
+		},
+		Auth: func(context.Context) ([]string, error) { return nil, expired },
+	}
+
+	err := g.Push(context.Background(), "/wt", Push{SHA: "abc", Branch: "fix"})
+
+	if !errors.Is(err, expired) {
+		t.Fatalf("Push() error = %v, want %v", err, expired)
+	}
+	if ran {
+		t.Fatal("git ran without the token of the app, with the credentials of the user")
+	}
+}
+
+func TestLocalCommandsRunWhenTheAuthEnvFails(t *testing.T) {
+	t.Parallel()
+	expired := errors.New("the GitHub App sign in expired")
+	var env []string
+	g := &Runner{
+		Run: func(_ context.Context, _, _ string, e []string, _ string, _ ...string) (string, error) {
+			env = e
+			return "abc", nil
+		},
+		Auth: func(context.Context) ([]string, error) { return nil, expired },
+	}
+
+	head, err := g.Head(context.Background(), "/wt")
+
+	if err != nil || head != "abc" {
+		t.Fatalf("Head() = %q, %v; want the local command to run without the token", head, err)
+	}
+	want := append(slices.Clone(gitrepo.NoPromptEnv), "GIT_NO_LAZY_FETCH=1")
+	if !slices.Equal(env, want) {
+		t.Fatalf("env = %v, want %v, so git fetches no missing object without the token", env, want)
+	}
+}
+
 func TestTheParentOfAMergeIsItsFirstParent(t *testing.T) {
 	t.Parallel()
 	_, work, _ := repos(t)
@@ -601,5 +672,41 @@ func TestTheParentOfAMergeIsItsFirstParent(t *testing.T) {
 	}
 	if got, err := g.Parent(ctx, work, side); err != nil || got == side || got == "" {
 		t.Fatalf("Parent(side) = %q, %v", got, err)
+	}
+}
+
+func appAuthWithoutSSH(context.Context) ([]string, error) {
+	return gitrepo.ConfigEnv([][2]string{
+		{"http.https://github.com/.extraheader", "AUTHORIZATION: basic eDp5"},
+		{"core.sshCommand", "false"},
+	}), nil
+}
+
+func TestTheAppRefusesAGitHubRemoteOverSSH(t *testing.T) {
+	t.Parallel()
+	_, work, _ := repos(t)
+	git(t, work, "remote", "set-url", "origin", "git@GitHub.com:octo/hello.git")
+	g := New()
+	g.Auth = appAuthWithoutSSH
+	ctx := context.Background()
+
+	if _, err := g.Fetch(ctx, work, "fix"); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Errorf("Fetch() error = %v, want %v", err, gitrepo.ErrNotHTTPS)
+	}
+	if err := g.Push(ctx, work, Push{SHA: "HEAD", Branch: "fix"}); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Errorf("Push() error = %v, want %v", err, gitrepo.ErrNotHTTPS)
+	}
+}
+
+func TestTheAppChecksEveryPushURL(t *testing.T) {
+	t.Parallel()
+	origin, work, _ := repos(t)
+	git(t, work, "remote", "set-url", "--add", "--push", "origin", origin)
+	git(t, work, "remote", "set-url", "--add", "--push", "origin", "git@GitHub.com:octo/hello.git")
+	g := New()
+	g.Auth = appAuthWithoutSSH
+
+	if err := g.Push(context.Background(), work, Push{SHA: "HEAD", Branch: "fix"}); !errors.Is(err, gitrepo.ErrNotHTTPS) {
+		t.Fatalf("Push() error = %v, want %v before git pushes to any URL", err, gitrepo.ErrNotHTTPS)
 	}
 }

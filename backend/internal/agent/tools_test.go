@@ -22,7 +22,12 @@ func TestAuthorCommandsNameEveryWayTheAgentCallsBabysitter(t *testing.T) {
 	if slices.ContainsFunc(got, func(c string) bool { return strings.Contains(c, "reply") }) {
 		t.Fatalf("the reply of the agent is refused: %q", got)
 	}
-	if bare := AuthorCommands(Launch{}); len(bare) != 8 {
+	for _, want := range []string{"babysitter auth login", "babysitter auth logout"} {
+		if !slices.Contains(got, want) {
+			t.Errorf("AuthorCommands() lacks %q: %q", want, got)
+		}
+	}
+	if bare := AuthorCommands(Launch{}); len(bare) != len(authorDecisions) {
 		t.Fatalf("AuthorCommands() without a hook = %q, want the bare word only", bare)
 	}
 }
@@ -35,6 +40,9 @@ func TestAuthorPatternsTakeEverySpellingOfADecision(t *testing.T) {
 			t.Errorf("AuthorPatterns() lacks %q: %q", want, got)
 		}
 	}
+	if !slices.Contains(got, "*babysitter* auth logout") {
+		t.Errorf("AuthorPatterns() lacks the sign out of the app: %q", got)
+	}
 	if slices.ContainsFunc(got, func(c string) bool { return strings.Contains(c, "reply") }) {
 		t.Fatalf("the reply of the agent is refused: %q", got)
 	}
@@ -46,9 +54,9 @@ func TestThePrePushHookRefusesEveryPush(t *testing.T) {
 		t.Skip("sh is not installed")
 	}
 	dir := filepath.Join(t.TempDir(), "hooks")
-	env, err := GitEnv(Launch{HooksDir: dir})
+	env, err := SessionEnv(Launch{HooksDir: dir})
 	if err != nil {
-		t.Fatalf("GitEnv() error = %v", err)
+		t.Fatalf("SessionEnv() error = %v", err)
 	}
 	for _, e := range env {
 		if strings.HasPrefix(e, "BABYSITTER_PUSH_REF") {
@@ -73,9 +81,9 @@ func TestTheCommitMsgHookMakesBabysitterACoAuthorOnce(t *testing.T) {
 	if _, err := exec.LookPath("git"); err != nil {
 		t.Skip("git is not installed")
 	}
-	env, err := GitEnv(Launch{HooksDir: filepath.Join(t.TempDir(), "hooks")})
+	env, err := SessionEnv(Launch{HooksDir: filepath.Join(t.TempDir(), "hooks")})
 	if err != nil {
-		t.Fatalf("GitEnv() error = %v", err)
+		t.Fatalf("SessionEnv() error = %v", err)
 	}
 	repo := t.TempDir()
 	git := func(args ...string) string {

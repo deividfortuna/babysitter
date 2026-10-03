@@ -74,7 +74,7 @@ func TestGuardLetsThePreflightAndTheHealthCheckThrough(t *testing.T) {
 func TestGuardKeepsTheLocalOnlyRoutesLocal(t *testing.T) {
 	h := guarded(t)
 
-	for _, path := range []string{"/api/v1/control/shutdown", "/api/v1/watches/3/hook"} {
+	for _, path := range []string{"/api/v1/control/shutdown", "/api/v1/watches/3/hook", "/api/v1/auth/token"} {
 		r := httptest.NewRequest(http.MethodPost, path, nil)
 		r.Header.Set("Authorization", "Bearer secret")
 		if got := serve(h, r); got != http.StatusForbidden {

@@ -787,6 +787,7 @@ type fixture struct {
 	dir    string
 	data   string
 	client *github.Client
+	access AccessCheck
 
 	goneMu      sync.Mutex
 	goneMessage string
@@ -845,6 +846,7 @@ func (fx *fixture) newService() *Service {
 		Host:          fx.host,
 		Exe:           "/opt/babysitter",
 		DataDir:       fx.data,
+		CheckAccess:   fx.access,
 	}, WithClock(func() time.Time { return fx.clock() }), WithInterval(time.Minute),
 		WithProcessAlive(func(int) bool { return fx.authorAlive.Load() }))
 }

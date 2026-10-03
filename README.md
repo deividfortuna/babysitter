@@ -89,7 +89,86 @@ To run:
 - A GitHub token, from one of these sources, in this order:
   1. the `--token` flag
   2. the `GITHUB_TOKEN` environment variable
-  3. the `gh` CLI, after `gh auth login`
+  3. the babysitter GitHub App, after `babysitter auth login` or a sign
+     in from the app. See [GitHub access](#github-access).
+  4. the `gh` CLI, after `gh auth login`
+
+## GitHub access
+
+babysitter reaches GitHub in one of two ways. Use the one you prefer; you
+can change at any time.
+
+- **Your token.** `GITHUB_TOKEN`, `--token` or the `gh` CLI. babysitter
+  acts as you on every repository the token reaches, and `git` pushes
+  with your own git credentials.
+- **The babysitter GitHub App.** You sign in once and install the app on
+  the repositories it may touch. babysitter still acts as you, but only
+  on those repositories and only with the permissions of the app. No
+  personal token is used, and `git` fetches and pushes with the token of
+  the app too. The agent sessions get the same token: their `git` asks
+  the daemon through `babysitter auth git-credential` before your own
+  credential helpers and `gh`, and their `gh` runs through a small
+  script that sets `GH_TOKEN` to the token of the app. The script needs
+  `gh` to be installed, and there is no script on Windows. While the app
+  is in use, git reaches github.com over HTTPS, even when your git
+  configuration sends `https://github.com/` to SSH; a rule of yours for
+  one owner, such as `https://github.com/my-org/`, still comes first.
+
+The app is [babysitter-orchestrator](https://github.com/apps/babysitter-orchestrator).
+Install it on the repositories it may touch, then sign in from the
+terminal:
+
+```sh
+babysitter auth login        # prints a code; enter it at https://github.com/login/device
+babysitter auth status       # where the token comes from, the account and the installations
+babysitter auth logout       # back to the gh CLI, when --token and GITHUB_TOKEN are not set
+```
+
+Or from the desktop app: **Settings > GitHub > Sign in with GitHub**. The
+page shows the code and the time it has left. **Copy code and open GitHub**
+copies the code and opens the page where you enter it, and the page moves
+on by itself when you approve. Signed in, the page names the account and
+the accounts the app is installed on. **Choose repositories** or
+**Manage on GitHub** opens the install page of the app, where you add or
+remove repositories.
+
+The sign in uses the device flow of GitHub. It needs no server and no
+secret: the daemon asks GitHub from your machine. The token of the app
+lasts 8 hours, and the daemon and the CLI renew it on their own with a
+refresh token. Each renewal gives a new refresh token that lasts 6
+months, so you sign in again only when a refresh token expires before
+it is used, or when GitHub revokes it. The sign in lives in
+`<data dir>/github-app.json` with mode `0600`. The CLI and the daemon
+share it, and a lock next to it makes sure only one of them renews the
+token at a time.
+
+The `--token` flag and `GITHUB_TOKEN` come before the app, so a token in
+the environment of the daemon wins over a sign in. `auth status` and the
+settings page say which source is in use. When the sign in of the app
+expires, babysitter does not go back to your `gh` token on its own: it
+stops and asks you to sign in again.
+
+A watch does not start on a repository where the app is not installed;
+the error names the install page. With the app, `git` reaches GitHub over
+HTTPS: a remote `git@github.com:owner/name` is read as
+`https://github.com/owner/name` for the fetch and the push of the daemon.
+A remote that uses another SSH host name keeps your own credentials. A
+github.com remote that git cannot read as HTTPS, such as
+`git@GitHub.com:owner/name`, stops the fetch and the push of the daemon:
+give the remote an `https://github.com/` URL. A github.com URL with a
+password or token in it stops them too, because git would use it in
+place of the app.
+
+To build with your own GitHub App, set `appClientID` and `appSlug` in
+`backend/internal/ghauth/app.go`, or set `BABYSITTER_GITHUB_APP_CLIENT_ID`
+and `BABYSITTER_GITHUB_APP_SLUG` when you run babysitter. The app needs:
+
+- **Enable Device Flow** on, no callback URL, and the webhook off.
+- Repository permissions: Contents read and write, Pull requests read and
+  write, Workflows read and write (for a push that changes a workflow),
+  Actions read (job logs), Checks read, Commit statuses read,
+  Administration read (branch protection), Metadata read.
+- Expiration of user tokens on, the GitHub default.
 
 
 ## Desktop app
@@ -191,7 +270,11 @@ go run ./cmd/babysitter daemon stop
 The data directory holds `running.json`, the supervisor socket, the
 `worktrees/` of the watches, the `sessions/` logs of the agents, the
 `logs/` of the daemon and the app (see [Logs](#logs)), the
-`git-hooks/` the daemon installs, and the `update-settings.json` and
+`git-hooks/` the daemon installs, the `agent-bin/gh` script that gives
+the `gh` of the agent sessions the token of the GitHub App, the
+`git/app.gitconfig` that the git of the agent sessions includes while
+the app is in use, and the
+`update-settings.json` and
 `theme.json` of the app. By default it holds `babysitter.db` too. It
 comes from, in this order:
 
@@ -216,8 +299,9 @@ babysitter daemon pair      # prints http://studio.local:7420/#token=…
 `--remote` opens a second listener on that address. Each request to it
 must send the token of `<dataDir>/remote-token`, as `Authorization:
 Bearer <token>` or, for the event streams, as `?token=`. Only
-`/healthz` answers without the token. `/control/shutdown` and the hook
-of the agent stay on the loopback listener. The daemon also announces
+`/healthz` answers without the token. `/control/shutdown`, the hook of
+the agent and `/auth/token`, which gives the token of the GitHub App to
+the agent sessions, stay on the loopback listener. The daemon also announces
 itself on the local network with mDNS as `_babysitter._tcp`. On macOS it
 registers through `dns-sd`, because the system keeps the multicast that
 starts on the Mac for mDNSResponder.
@@ -247,10 +331,14 @@ The Settings dialog of the app has three groups of pages:
 
 - **App**: **Appearance** (the theme, light, dark or system, the rate
   limit card, and the screen reader mode of the agent), **Notifications**,
-  **Updates** and **Connections** (see [Remote daemon](#remote-daemon)).
+  **Updates**, **GitHub** and **Connections** (see
+  [Remote daemon](#remote-daemon)).
 - **New watches**: **Agent** and **Review and merge**, what a watch
   starts with.
 - **Daemon**: **Polling** and **Logs**.
+
+**GitHub** signs in and out of the babysitter GitHub App, and says which
+token the daemon uses until then. See [GitHub access](#github-access).
 
 Each page saves a change at once and shows "saved" in its header. A
 number field saves when you stop typing. When you go to another page
@@ -395,6 +483,9 @@ The examples use the installed binary. From `backend/`,
 babysitter version                                # print the version, and how to upgrade when a newer release is out
 babysitter --version                              # print the version only
 babysitter whoami                                 # print the authenticated user
+babysitter auth login                             # sign in with the babysitter GitHub App, see GitHub access
+babysitter auth status                            # where the GitHub token comes from
+babysitter auth logout                            # sign out of the app
 babysitter repos                                  # list the 20 most recently updated repositories
 babysitter repos --limit 0                        # list all of them
 
@@ -879,8 +970,10 @@ repository with auto start and no `--checkout`), the daemon clones the
 head repository once into `<data dir>/checkouts/<owner>/<name>` and uses
 that clone as the checkout. The clone keeps no files of its own; each
 watch gets its worktree from it. The clone fetches and pushes on
-github.com with `gh auth git-credential`, so `gh` must be logged in.
-If your git configuration has
+github.com with the token of the babysitter GitHub App when the daemon
+uses the app, and with `gh auth git-credential` when it does not. In
+that case, `gh` must be logged in.
+When the daemon does not use the app and your git configuration has
 `url.git@github.com:.insteadOf https://github.com/`, the clone uses SSH
 with your keys instead, and `gh` does not need to be logged in. The
 agent commits with the `user.name` and `user.email` of your global git
@@ -1417,7 +1510,9 @@ What the agent may never do, whatever a comment or a log says:
 - push. The daemon pushes the work branch when the turn ends
 - post on GitHub beside the daemon, for example with `gh api -f`
 - run `babysitter watch mode`, `approve`, `reject`, `retry`, `merge`,
-  `stop`, `takeover` or `handback`, so it cannot approve its own work.
+  `stop`, `takeover` or `handback`, so it cannot approve its own work,
+  or `babysitter auth login` or `auth logout`, so it cannot change the
+  GitHub access of the daemon.
   Before each tool call, the hook sends the call to the daemon and
   applies its answer. The daemon refuses these commands also with a
   flag before `watch` such as `-o json`, a full path, `sh -c` or shell
@@ -1492,8 +1587,8 @@ babysitter service uninstall
 ```
 
 `service install` passes the `--db` and `--token` flags to the service when
-you give them. Without a token, the service uses `GITHUB_TOKEN` or the `gh`
-CLI. Without `--interval`, the service follows the poll interval and the
+you give them. Without a token, the service uses `GITHUB_TOKEN`, the sign in
+of the babysitter GitHub App or the `gh` CLI. Without `--interval`, the service follows the poll interval and the
 longest check read interval of the settings, so the Polling page of the
 app and `babysitter settings set --poll-interval` and
 `--check-max-interval` reach it; with `--interval` it polls at that rate
@@ -1626,7 +1721,8 @@ project for the desktop app. Paths below are relative to `backend/`.
 - `internal/runfile`: `running.json`, the handshake the desktop app reads
 - `internal/supervisor`: the socket that stops the daemon when the app quits
 - `internal/processalive`: checks whether a pid still runs
-- `internal/ghclient`: token lookup, the go-github client with its shared conditional-request cache, and `RateGuard` and `RateMeter` for the rate limit
+- `internal/ghauth`: where the GitHub token comes from: the flag, `GITHUB_TOKEN`, the babysitter GitHub App or `gh`; the device flow sign in of the app, the renewal of its token, the git env that pushes with it, and the check that the app is installed on a repository
+- `internal/ghclient`: the go-github client with its shared conditional-request cache, `RateGuard` and `RateMeter` for the rate limit, and the installations of the app
 - `internal/ghclient/ghfake`: the fake GitHub of the tests
 - `internal/store`: the SQLite schema and queries
 - `internal/watcher`: the poll loop and the rules for review and CI state
@@ -1637,7 +1733,7 @@ project for the desktop app. Paths below are relative to `backend/`.
 - `internal/agent`: the contract of an agent session, its state, the git hooks, the messages the daemon types, and the rules that decide if the agent may run a tool: the parse of a tool call into the programs it runs, rules on the state of the watch, and rules on a command, each with the reason the agent reads; the prompts live in `prompts/`. `agent/claude` and `agent/copilot` build the command line of each CLI as an interactive session, with its hooks and its tool rules
 - `internal/worktree`: the git write operations of a watch, in its own worktree
 - `internal/gitrepo`: reads the current branch, the remotes and git configuration values with git
-- `internal/gitrelease`: the git the daemon runs to release the work of the agent: reads the pull request branch, compares it with the work branch, and pushes with the credential helper of the author
+- `internal/gitrelease`: the git the daemon runs to release the work of the agent: reads the pull request branch, compares it with the work branch, and pushes with the credential helper of the author, or with the token of the GitHub App when the app gives the token
 - `internal/service`: launchd and systemd integration
 - `internal/execx`: runs external commands, such as the operating system tools of `service` and `notify`, git and the agent CLIs, and reports their exit code
 - `internal/notify`: the notification history and where each one is shown, and desktop notifications with terminal-notifier, osascript or notify-send

@@ -11,7 +11,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { AppearancePanel } from "@/components/settings-appearance";
+import { GitHubIcon } from "@/components/github-icon";
 import { AgentPanel } from "@/components/settings-agent";
+import { GitHubPanel } from "@/components/settings-github";
 import { ConnectionsPanel } from "@/components/settings-connections";
 import { LogsPanel } from "@/components/settings-logs";
 import { NotificationsPanel } from "@/components/settings-notifications";
@@ -28,6 +30,7 @@ export type SettingsCategory =
   | "appearance"
   | "notifications"
   | "updates"
+  | "github"
   | "connections"
   | "agent"
   | "review"
@@ -61,6 +64,13 @@ const GROUPS: Group[] = [
       },
       { id: "notifications", label: "Notifications", Icon: BellIcon, Panel: NotificationsPanel },
       { id: "updates", label: "Updates", Icon: DownloadIcon, Panel: UpdatesPanel },
+      {
+        id: "github",
+        label: "GitHub",
+        description: "How babysitter connects to your GitHub account.",
+        Icon: GitHubIcon,
+        Panel: GitHubPanel,
+      },
       {
         id: "connections",
         label: "Connections",

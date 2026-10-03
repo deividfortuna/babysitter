@@ -79,7 +79,7 @@ linters:
         linters:
           - gosec
         text: G306|G703
-      - path: internal/agent/tools\.go
+      - path: internal/agent/(tools|credentials)\.go
         linters:
           - gosec
         text: G306

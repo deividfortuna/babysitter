@@ -125,6 +125,7 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 			if err != nil {
 				return err
 			}
+			auth := opts.authIn(dataDir)
 			level, err := logbook.ParseLevel(logLevel)
 			if err != nil {
 				return err
@@ -154,7 +155,9 @@ func newDaemonStartCmd(opts *options, dataDirFlag *string) *cobra.Command {
 				Version:          opts.version,
 				RemoteAddr:       remoteAddr,
 				RemoteName:       remoteName,
-				NewClient:        opts.client,
+				NewClient:        opts.clientWith(auth),
+				Auth:             auth,
+				Whoami:           opts.whoami,
 				Notifier:         opts.newNotifier(),
 				Log:              logger,
 				Logs:             book,

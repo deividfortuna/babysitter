@@ -32,8 +32,9 @@ func errorCode(err error) string {
 }
 
 type daemonClient struct {
-	base string
-	http *http.Client
+	base   string
+	secret string
+	http   *http.Client
 }
 
 func (o *options) daemonClient(dataDirFlag string) (*daemonClient, error) {
@@ -49,8 +50,9 @@ func (o *options) daemonClient(dataDirFlag string) (*daemonClient, error) {
 		return nil, errNoDaemon
 	}
 	return &daemonClient{
-		base: fmt.Sprintf("http://127.0.0.1:%d%s", info.Port, httpd.Prefix),
-		http: &http.Client{Timeout: o.timeout},
+		base:   fmt.Sprintf("http://127.0.0.1:%d%s", info.Port, httpd.Prefix),
+		secret: info.TokenSecret,
+		http:   &http.Client{Timeout: o.timeout},
 	}, nil
 }
 
@@ -85,6 +87,9 @@ func (c *daemonClient) do(ctx context.Context, method, path string, in, out any)
 	}
 	if in != nil {
 		req.Header.Set("Content-Type", "application/json")
+	}
+	if c.secret != "" {
+		req.Header.Set(httpd.TokenSecretHeader, c.secret)
 	}
 	resp, err := c.http.Do(req)
 	if err != nil {

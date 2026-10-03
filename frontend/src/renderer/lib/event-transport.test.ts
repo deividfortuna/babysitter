@@ -4,6 +4,7 @@ import { FakeEventSource } from "@test/fake-event-source";
 import { setApiBaseUrl } from "./api-client";
 import { connectEventTransport } from "./event-transport";
 import {
+  authQueryKey,
   logLevelQueryKey,
   notificationsQueryKey,
   providersQueryKey,
@@ -46,6 +47,21 @@ describe("connectEventTransport", () => {
     FakeEventSource.instances.at(-1)!.dispatch("log_level_changed");
 
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: logLevelQueryKey });
+
+    dispose();
+  });
+
+  it("reads the GitHub access and the account again when the sign in changes", () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    setApiBaseUrl("http://localhost:1234");
+    const queryClient = new QueryClient();
+    const invalidateQueries = vi.spyOn(queryClient, "invalidateQueries");
+
+    const dispose = connectEventTransport(queryClient);
+    FakeEventSource.instances.at(-1)!.dispatch("auth_changed");
+
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: authQueryKey });
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: viewerQueryKey });
 
     dispose();
   });

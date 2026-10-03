@@ -28,6 +28,8 @@ const (
 	SettingsChanged Type = "settings_changed"
 
 	LogLevelChanged Type = "log_level_changed"
+
+	AuthChanged Type = "auth_changed"
 )
 
 type Event struct {

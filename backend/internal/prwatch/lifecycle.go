@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -200,6 +201,31 @@ func (s *Service) checkStart(ctx context.Context, client *github.Client, req Sta
 	return acc, approvals, nil
 }
 
+func (s *Service) unreachable(ctx context.Context, client *github.Client, req StartRequest, err error) error {
+	if !ghclient.IsNotFound(err) {
+		return err
+	}
+	t, resolveErr := snapshot.ResolveRepo(ctx, req.Target, req.SourceDir)
+	if resolveErr != nil || t.Owner == "" || t.Name == "" {
+		return err
+	}
+	if accessErr := s.checkAccess(ctx, client, t.Repo()); accessErr != nil {
+		return accessErr
+	}
+	return err
+}
+
+func distinctRepos(repos ...string) []string {
+	var out []string
+	for _, repo := range repos {
+		known := slices.ContainsFunc(out, func(r string) bool { return strings.EqualFold(r, repo) })
+		if repo != "" && !known {
+			out = append(out, repo)
+		}
+	}
+	return out
+}
+
 func (s *Service) readyHead(ctx context.Context, c checkout, headRef string) error {
 	if !hostedProvider(c.provider) {
 		return checkHeadBranch(ctx, c.dir, headRef)
@@ -260,7 +286,7 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	now := s.now()
 	snap, err := snapshot.Collect(ctx, client, s.store, req.Target, s.snapshotOptions(req.SourceDir))
 	if err != nil {
-		return store.Watch{}, err
+		return store.Watch{}, s.unreachable(ctx, client, req, err)
 	}
 	if snap.PR.Merged || snap.PR.Closed {
 		return store.Watch{}, fmt.Errorf("%w: %s#%d is %s", ErrNotOpen, snap.PR.Repo, snap.PR.Number, snap.PR.State)
@@ -273,6 +299,9 @@ func (s *Service) Start(ctx context.Context, req StartRequest) (store.Watch, err
 	if existing, err := s.store.FindActiveWatch(ctx, key); err == nil {
 		return existing, store.ErrWatchExists
 	} else if !errors.Is(err, store.ErrWatchNotFound) {
+		return store.Watch{}, err
+	}
+	if err := s.checkAccess(ctx, client, distinctRepos(snap.PR.Repo, snap.PR.HeadRepo)...); err != nil {
 		return store.Watch{}, err
 	}
 	if co.source, err = s.orManagedSource(ctx, co.source, snap.PR.HeadRepo); err != nil {

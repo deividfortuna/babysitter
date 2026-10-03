@@ -9,17 +9,6 @@ import (
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 )
 
-func TestTokenFromEnv(t *testing.T) {
-	t.Setenv("GITHUB_TOKEN", "  abc123  ")
-	got, err := Token(context.Background())
-	if err != nil {
-		t.Fatalf("Token() error = %v", err)
-	}
-	if got != "abc123" {
-		t.Fatalf("Token() = %q, want %q", got, "abc123")
-	}
-}
-
 func TestCurrentUser(t *testing.T) {
 	t.Parallel()
 	mux := http.NewServeMux()

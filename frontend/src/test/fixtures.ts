@@ -7,6 +7,7 @@ import type { RateLimit } from "@/hooks/useRateLimit";
 import type { QueuedPullRequest, Repo, RepoConfig } from "@/hooks/useRepos";
 import type { Settings } from "@/hooks/useSettings";
 import type { Viewer } from "@/hooks/useViewer";
+import type { Auth } from "@/hooks/useAuth";
 import type { Watch } from "@/hooks/useWatches";
 
 export function buildSettings(overrides: Partial<Settings> = {}): Settings {
@@ -331,6 +332,17 @@ export function buildRateLimit(overrides: Partial<RateLimit> = {}): RateLimit {
     limit: 5000,
     remaining: 4212,
     resetAt: "2026-09-24T12:38:00Z",
+    ...overrides,
+  };
+}
+
+export function buildAuth(overrides: Partial<Auth> = {}): Auth {
+  return {
+    state: "signed_out",
+    origin: "gh",
+    appAvailable: true,
+    installUrl: "https://github.com/apps/babysitter-orchestrator/installations/new",
+    installations: [],
     ...overrides,
   };
 }

@@ -19,6 +19,9 @@ type Launch struct {
 	Name         string
 	Hook         []string
 	HooksDir     string
+	BinDir       string
+	Exe          string
+	DataDir      string
 	PluginDir    string
 	ScreenReader bool
 }

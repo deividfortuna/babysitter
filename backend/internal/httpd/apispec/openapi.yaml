@@ -10,6 +10,138 @@ servers:
     port:
       default: "0"
 paths:
+  /api/v1/auth:
+    get:
+      operationId: getAuth
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAuth'
+          description: OK
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Where the GitHub token of the daemon comes from, and the sign in with
+        the babysitter GitHub App
+  /api/v1/auth/signin:
+    delete:
+      operationId: cancelSignIn
+      responses:
+        "204":
+          description: No Content
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+      summary: Stop waiting for the code of the sign in
+    post:
+      operationId: startSignIn
+      responses:
+        "202":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdSignInPrompt'
+          description: Accepted
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Conflict
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Start a sign in with the babysitter GitHub App; the daemon waits for
+        the code in the background, and a sign in that waits already is answered again
+  /api/v1/auth/signout:
+    post:
+      operationId: signOut
+      responses:
+        "204":
+          description: No Content
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: Sign out of the babysitter GitHub App; the daemon goes back to the
+        next source of a token
+  /api/v1/auth/token:
+    get:
+      operationId: getAppToken
+      parameters:
+      - description: The tokenSecret of running.json
+        in: header
+        name: X-Babysitter-Token-Secret
+        required: true
+        schema:
+          description: The tokenSecret of running.json
+          type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAppToken'
+          description: OK
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Not Found
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Internal Server Error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HttpdAPIError'
+          description: Service Unavailable
+      summary: The token of the babysitter GitHub App, for the git credential helper
+        and the gh shim of the agent sessions. It needs the token secret of running.json
+        and is rejected for browser origins; 404 when the daemon does not use the
+        app.
   /api/v1/control/shutdown:
     post:
       operationId: shutdown
@@ -2107,6 +2239,101 @@ components:
       required:
       - fullName
       type: object
+    HttpdAppToken:
+      properties:
+        token:
+          description: The token of the babysitter GitHub App
+          type: string
+      required:
+      - token
+      type: object
+    HttpdAuth:
+      properties:
+        appAvailable:
+          description: This build of babysitter knows the babysitter GitHub App
+          type: boolean
+        avatarUrl:
+          description: The avatar of the account signed in with the app
+          type: string
+        error:
+          description: Why the token of the daemon or the installations cannot be
+            read
+          type: string
+        installUrl:
+          description: Where the user installs the app on more repositories
+          type: string
+        installations:
+          description: The accounts the app is installed on, read only while the app
+            gives the token
+          items:
+            $ref: '#/components/schemas/HttpdAuthInstallation'
+          nullable: true
+          type: array
+        installationsError:
+          description: Why the accounts the app is installed on cannot be read; the
+            list is then empty and says nothing
+          type: string
+        login:
+          description: The account signed in with the app
+          type: string
+        origin:
+          description: 'Where the token of the daemon comes from: the --token flag,
+            GITHUB_TOKEN, the babysitter GitHub App or the gh CLI; empty when there
+            is no token'
+          enum:
+          - ""
+          - flag
+          - env
+          - app
+          - gh
+          type: string
+        signIn:
+          $ref: '#/components/schemas/HttpdSignInPrompt'
+        signInError:
+          description: The message of the last sign in that failed
+          type: string
+        signInFailure:
+          description: 'Why the last sign in ended without an account: the code expired,
+            the user refused it, or another failure'
+          enum:
+          - ""
+          - expired
+          - denied
+          - failed
+          type: string
+        state:
+          description: 'The sign in with the babysitter GitHub App: none, a code that
+            waits on GitHub, in use, signed in while a token that comes first is in
+            use, expired, or signed in while the daemon cannot get its token now'
+          enum:
+          - signed_out
+          - waiting
+          - connected
+          - not_in_use
+          - expired
+          - unreachable
+          type: string
+      required:
+      - state
+      - origin
+      - appAvailable
+      - installUrl
+      - installations
+      type: object
+    HttpdAuthInstallation:
+      properties:
+        avatarUrl:
+          type: string
+        login:
+          type: string
+        organization:
+          description: The account is an organization, not a personal account
+          type: boolean
+      required:
+      - login
+      - avatarUrl
+      - organization
+      type: object
     HttpdErrorBody:
       properties:
         code:
@@ -3448,6 +3675,20 @@ components:
       - branchUpdate
       - updateOnGitHub
       - screenReader
+      type: object
+    HttpdSignInPrompt:
+      properties:
+        expiresAt:
+          format: date-time
+          type: string
+        userCode:
+          type: string
+        verificationUri:
+          type: string
+      required:
+      - userCode
+      - verificationUri
+      - expiresAt
       type: object
     HttpdStartWatchRequest:
       properties:

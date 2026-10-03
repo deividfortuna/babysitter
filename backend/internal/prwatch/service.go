@@ -57,7 +57,12 @@ type Deps struct {
 	DataDir       string
 	Guard         *ghclient.RateGuard
 	Bus           *events.Bus
+	CheckAccess   AccessCheck
 }
+
+type AccessCheck func(ctx context.Context, client *github.Client, repos ...string) error
+
+func allowAccess(context.Context, *github.Client, ...string) error { return nil }
 
 type Option func(*Service)
 
@@ -98,6 +103,7 @@ type Service struct {
 	interval      *timex.Interval
 	maxInterval   *timex.Interval
 	schedule      *schedule
+	checkAccess   AccessCheck
 	heartbeat     time.Duration
 	now           func() time.Time
 	alive         func(pid int) bool
@@ -132,6 +138,7 @@ func New(d Deps, opts ...Option) *Service {
 		dataDir:       d.DataDir,
 		exe:           d.Exe,
 		bus:           d.Bus,
+		checkAccess:   d.CheckAccess,
 		agents:        map[string]agent.Runner{},
 		host:          d.Host,
 		interval:      timex.NewInterval(defaults.WatchInterval),
@@ -152,6 +159,9 @@ func New(d Deps, opts ...Option) *Service {
 	}
 	if s.rel == nil {
 		s.rel = gitrelease.New()
+	}
+	if s.checkAccess == nil {
+		s.checkAccess = allowAccess
 	}
 	for provider, runner := range d.Agents {
 		if p, ok := normalizeProvider(provider); ok {

@@ -1,6 +1,7 @@
 package apispec
 
 import (
+	"maps"
 	"net/http"
 	"net/http/httptest"
 	"slices"
@@ -63,5 +64,23 @@ func TestResizeParamsCarriesTheLimitsTheHandlerChecks(t *testing.T) {
 		if got := params.Properties[field]; got != limits {
 			t.Errorf("%s has %+v, want %+v", field, got, limits)
 		}
+	}
+}
+
+func TestStartSignInDeclaresTheCancelledSignIn(t *testing.T) {
+	t.Parallel()
+	var doc struct {
+		Paths map[string]map[string]struct {
+			Responses map[string]any `yaml:"responses"`
+		} `yaml:"paths"`
+	}
+	rec := httptest.NewRecorder()
+	ServeYAML(rec, httptest.NewRequest(http.MethodGet, "/openapi.yaml", nil))
+	if err := yaml.Unmarshal(rec.Body.Bytes(), &doc); err != nil {
+		t.Fatal(err)
+	}
+	responses := doc.Paths["/api/v1/auth/signin"]["post"].Responses
+	if _, ok := responses["409"]; !ok {
+		t.Fatalf("POST /auth/signin declares %v, want 409 for signin_cancelled", slices.Sorted(maps.Keys(responses)))
 	}
 }

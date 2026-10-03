@@ -3,6 +3,7 @@ import { setupServer } from "msw/node";
 import { setApiBaseUrl } from "@/lib/api-client";
 import {
   buildActivity,
+  buildAuth,
   buildProviders,
   buildRepo,
   buildRepoConfig,
@@ -11,6 +12,7 @@ import {
   buildWatch,
 } from "./fixtures";
 import type { Activity } from "@/hooks/useWatchActivity";
+import type { Auth } from "@/hooks/useAuth";
 import type { Notification } from "@/hooks/useNotifications";
 import type { Proposal, ProposalDetail } from "@/hooks/useProposals";
 import type { PullRequest } from "@/hooks/usePulls";
@@ -49,6 +51,7 @@ type ApiFixtures = {
   startBodies?: Record<string, unknown>[];
   settingsFail?: boolean;
   viewer?: Viewer | null;
+  auth?: Auth;
   rateLimit?: RateLimit;
   proposals?: Record<number, Proposal[]>;
   proposalDetail?: Record<string, ProposalDetail>;
@@ -111,6 +114,7 @@ export function serveApi(fixtures: ApiFixtures = {}) {
       }
       return HttpResponse.json(viewer);
     }),
+    http.get(apiUrl("/api/v1/auth"), () => HttpResponse.json(fixtures.auth ?? buildAuth())),
     http.get(apiUrl("/api/v1/ratelimit"), () =>
       HttpResponse.json(fixtures.rateLimit ?? { state: "unknown", limit: 0, remaining: 0 }),
     ),

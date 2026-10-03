@@ -5,9 +5,23 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
+
+	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
-var authorDecisions = []string{"mode", "approve", "reject", "retry", "merge", "stop", "takeover", "handback"}
+var authorDecisions = [][]string{
+	{"watch", "mode"},
+	{"watch", "approve"},
+	{"watch", "reject"},
+	{"watch", "retry"},
+	{"watch", "merge"},
+	{"watch", "stop"},
+	{"watch", "takeover"},
+	{"watch", "handback"},
+	{"auth", "login"},
+	{"auth", "logout"},
+}
 
 func AuthorCommands(l Launch) []string {
 	names := []string{"babysitter"}
@@ -19,7 +33,7 @@ func AuthorCommands(l Launch) []string {
 	out := make([]string, 0, len(names)*len(authorDecisions))
 	for _, name := range names {
 		for _, decision := range authorDecisions {
-			out = append(out, name+" watch "+decision)
+			out = append(out, name+" "+strings.Join(decision, " "))
 		}
 	}
 	return out
@@ -28,7 +42,7 @@ func AuthorCommands(l Launch) []string {
 func AuthorPatterns() []string {
 	out := make([]string, 0, len(authorDecisions))
 	for _, decision := range authorDecisions {
-		out = append(out, "*babysitter* watch "+decision)
+		out = append(out, "*babysitter* "+strings.Join(decision, " "))
 	}
 	return out
 }
@@ -49,7 +63,7 @@ var gitHooks = map[string]string{
 	"commit-msg": commitMsgHook,
 }
 
-func GitEnv(l Launch) ([]string, error) {
+func SessionEnv(l Launch) ([]string, error) {
 	if l.HooksDir == "" {
 		return nil, fmt.Errorf("a hooks directory is required")
 	}
@@ -61,9 +75,17 @@ func GitEnv(l Launch) ([]string, error) {
 			return nil, fmt.Errorf("write %s hook: %w", name, err)
 		}
 	}
-	return []string{
-		"GIT_CONFIG_COUNT=1",
-		"GIT_CONFIG_KEY_0=core.hooksPath",
-		"GIT_CONFIG_VALUE_0=" + l.HooksDir,
-	}, nil
+	config := [][2]string{{"core.hooksPath", l.HooksDir}}
+	if l.DataDir != "" {
+		config = append(config, [2]string{"include.path", AppGitConfigPath(l.DataDir)})
+	}
+	env := gitrepo.ConfigEnv(config)
+	shimmed, err := writeGHShim(l)
+	if err != nil {
+		return nil, err
+	}
+	if shimmed {
+		env = append(env, "PATH="+l.BinDir+string(os.PathListSeparator)+os.Getenv("PATH"))
+	}
+	return env, nil
 }

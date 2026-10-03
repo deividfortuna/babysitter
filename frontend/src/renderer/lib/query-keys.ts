@@ -1,3 +1,5 @@
+import type { QueryClient } from "@tanstack/react-query";
+
 export const reposQueryKey = ["repos"] as const;
 
 export function repoConfigQueryKey(id: number) {
@@ -49,6 +51,13 @@ export const settingsMutationKey = ["settings"] as const;
 export const notificationsQueryKey = ["notifications"] as const;
 
 export const viewerQueryKey = ["viewer"] as const;
+
+export const authQueryKey = ["auth"] as const;
+
+export function invalidateAuth(queryClient: QueryClient) {
+  void queryClient.invalidateQueries({ queryKey: authQueryKey });
+  void queryClient.invalidateQueries({ queryKey: viewerQueryKey });
+}
 
 export const rateLimitQueryKey = ["ratelimit"] as const;
 

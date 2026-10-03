@@ -23,7 +23,7 @@ test("the pages sit in three groups: App, New watches and Daemon", () => {
     within(within(navigation()).getByRole("group", { name: group }))
       .getAllByRole("button")
       .map((button) => button.textContent);
-  expect(pagesOf("App")).toEqual(["Appearance", "Notifications", "Updates", "Connections"]);
+  expect(pagesOf("App")).toEqual(["Appearance", "Notifications", "Updates", "GitHub", "Connections"]);
   expect(pagesOf("New watches")).toEqual(["Agent", "Review and merge"]);
   expect(pagesOf("Daemon")).toEqual(["Polling", "Logs"]);
 });

@@ -3,7 +3,9 @@ package gitrepo
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -79,5 +81,84 @@ func TestConfigValue(t *testing.T) {
 	}
 	if v, err := ConfigValue(ctx, dir, "babysitter.nothing"); err != nil || v != "" {
 		t.Fatalf("ConfigValue(missing) = %q, %v", v, err)
+	}
+}
+
+func TestALocalCommandDoesNotFetchWithoutTheAppToken(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	ctx := context.Background()
+	source, remote, clone := t.TempDir(), t.TempDir(), t.TempDir()
+	git(t, source, "init", "-q", "-b", "main")
+	git(t, source, "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init")
+	if err := os.WriteFile(filepath.Join(source, "file"), []byte("hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	git(t, source, "add", "file")
+	git(t, source, "-c", "user.email=t@example.com", "-c", "user.name=t", "-c", "commit.gpgsign=false", "commit", "-q", "-m", "file")
+	git(t, remote, "clone", "-q", "--bare", source, ".")
+	git(t, remote, "config", "uploadpack.allowFilter", "true")
+	git(t, clone, "clone", "-q", "--filter=blob:none", "--no-checkout", "file://"+remote, ".")
+
+	noToken := AuthEnv(func(context.Context) ([]string, error) { return nil, errors.New("the GitHub App sign in expired") })
+	env, err := noToken.Env(ctx, "cat-file")
+	if err != nil {
+		t.Fatalf("Env of a local command: %v", err)
+	}
+
+	local := exec.Command("git", "rev-parse", "HEAD")
+	local.Dir, local.Env = clone, append(os.Environ(), env...)
+	if out, err := local.CombinedOutput(); err != nil {
+		t.Fatalf("git rev-parse without the token: %v\n%s", err, out)
+	}
+	lazy := exec.Command("git", "cat-file", "-p", "HEAD:file")
+	lazy.Dir, lazy.Env = clone, append(os.Environ(), env...)
+	if out, err := lazy.CombinedOutput(); err == nil {
+		t.Fatalf("git cat-file fetched the missing blob without the token: %q", out)
+	}
+}
+
+func TestCheckAppRemote(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		url  string
+		want error
+	}{
+		{"https://github.com/octo/hello.git", nil},
+		{"https://GitHub.com/octo/hello.git", nil},
+		{"https://github.com./octo/hello.git", nil},
+		{"https://github.com:443/octo/hello.git", nil},
+		{"https://github.com:8443/octo/hello.git", ErrNotHTTPS},
+		{"https://www.github.com/octo/hello.git", ErrNotHTTPS},
+		{"https://ssh.github.com/octo/hello.git", ErrNotHTTPS},
+		{"git@GitHub.com:octo/hello.git", ErrNotHTTPS},
+		{"github.com:octo/hello.git", ErrNotHTTPS},
+		{"ssh://git@GITHUB.COM/octo/hello.git", ErrNotHTTPS},
+		{"ssh://git@ssh.github.com:443/octo/hello.git", ErrNotHTTPS},
+		{"http://github.com/octo/hello.git", ErrNotHTTPS},
+		{"git@github.com.:octo/hello.git", ErrNotHTTPS},
+		{"ssh://git@GitHub.com./octo/hello.git", ErrNotHTTPS},
+		{"https://me:ghp_personal@github.com/octo/hello.git", ErrTokenInURL},
+		{"https://me@github.com/octo/hello.git", nil},
+		{"https://me:secret@gitlab.com/octo/hello.git", nil},
+		{"git@gitlab.com:octo/hello.git", nil},
+		{"github-work:octo/hello.git", nil},
+		{"/tmp/origin.git", nil},
+	} {
+		if err := CheckAppRemote(tc.url); !errors.Is(err, tc.want) {
+			t.Errorf("CheckAppRemote(%q) = %v, want %v", tc.url, err, tc.want)
+		}
+	}
+}
+
+func TestCheckAppRemoteKeepsTheTokenOutOfTheError(t *testing.T) {
+	t.Parallel()
+	for _, url := range []string{"https://me:ghp_personal@github.com/octo/hello.git", "http://me:ghp_personal@github.com/octo/hello.git"} {
+		err := CheckAppRemote(url)
+		if err == nil || strings.Contains(err.Error(), "ghp_personal") {
+			t.Errorf("CheckAppRemote(%q) = %v, want an error without the token", url, err)
+		}
 	}
 }

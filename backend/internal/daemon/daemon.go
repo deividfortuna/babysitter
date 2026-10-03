@@ -2,6 +2,7 @@ package daemon
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -14,8 +15,10 @@ import (
 
 	"golang.org/x/sync/errgroup"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/autostart"
 	"github.com/deividfortuna/babysitter/internal/events"
+	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/gitrelease"
 	"github.com/deividfortuna/babysitter/internal/httpd"
@@ -53,6 +56,8 @@ type Config struct {
 	RemoteAddr       string
 	RemoteName       string
 	NewClient        watcher.ClientFunc
+	Auth             *ghauth.Auth
+	Whoami           ghauth.Whoami
 	Log              *slog.Logger
 	Logs             *logbook.Book
 }
@@ -88,6 +93,19 @@ func Run(ctx context.Context, cfg Config) error {
 
 	bus := events.NewBus()
 	st.SetPublisher(bus)
+	exe, err := os.Executable()
+	if err != nil {
+		log.Warn("the agent sessions report nothing, and their git gets no GitHub credential while the app is in use: the babysitter command is not known", "err", err)
+		exe = ""
+	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	credentialHelper := agent.CredentialHelper(exe, cfg.DataDir)
+	auth, err := newAuthController(ctx, cfg, bus, log, credentialHelper)
+	if err != nil {
+		return err
+	}
+	tokenSecret := rand.Text()
 
 	stored, err := st.Settings(ctx)
 	if err != nil {
@@ -112,17 +130,19 @@ func Run(ctx context.Context, cfg Config) error {
 		watcher.WithLongestCheckWait(settings.CheckMaxInterval), watcher.WithLogger(log),
 		watcher.WithAfterPass(func(ctx context.Context) { autoStart(ctx) }))
 	watchOpts := []prwatch.Option{prwatch.WithInterval(settings.WatchInterval), prwatch.WithMaxInterval(settings.WatchMaxInterval)}
-	exe, err := os.Executable()
-	if err != nil {
-		log.Warn("the agent sessions report nothing: the babysitter command is not known", "err", err)
-		exe = ""
-	}
+	git := worktree.New()
+	git.Auth = cfg.Auth.GitEnv
+	checkouts := worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts"))
+	checkouts.Auth = cfg.Auth.GitEnv
+	checkouts.Helper = credentialHelper
+	release := gitrelease.New()
+	release.Auth = cfg.Auth.GitEnv
 	watches := prwatch.New(prwatch.Deps{
 		Store:         st,
 		NewClient:     cfg.NewClient,
-		Git:           worktree.New(),
-		Checkouts:     worktree.NewCheckouts(filepath.Join(cfg.DataDir, "checkouts")),
-		Release:       gitrelease.New(),
+		Git:           git,
+		Checkouts:     checkouts,
+		Release:       release,
 		Agents:        buildAgents(ctx, cfg, log),
 		Host:          session.New(),
 		Exe:           exe,
@@ -131,6 +151,7 @@ func Run(ctx context.Context, cfg Config) error {
 		DataDir:       cfg.DataDir,
 		Guard:         w.Guard(),
 		Bus:           bus,
+		CheckAccess:   cfg.Auth.CheckRepos,
 	}, watchOpts...)
 	viewer := func(ctx context.Context) (httpd.Viewer, error) {
 		c, err := cfg.NewClient(ctx)
@@ -152,9 +173,6 @@ func Run(ctx context.Context, cfg Config) error {
 		},
 		Log: log.With("component", "autostart"),
 	}).Run
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	var srv *httpd.Server
 	handler := httpd.NewRouter(httpd.Deps{
@@ -178,7 +196,9 @@ func Run(ctx context.Context, cfg Config) error {
 		RateLimit: func() httpd.RateLimit {
 			return rateLimit(ghclient.SharedRates().Status(w.Guard().Floor))
 		},
-		Logs: cfg.Logs,
+		Logs:        cfg.Logs,
+		Auth:        auth,
+		TokenSecret: tokenSecret,
 	})
 	srv, err = httpd.Listen(ctx, cfg.Port, handler)
 	if err != nil {
@@ -186,11 +206,12 @@ func Run(ctx context.Context, cfg Config) error {
 	}
 
 	info := runfile.Info{
-		PID:       os.Getpid(),
-		Port:      srv.Port(),
-		StartedAt: time.Now().UTC(),
-		Owner:     cfg.Owner,
-		Version:   cfg.Version,
+		PID:         os.Getpid(),
+		Port:        srv.Port(),
+		StartedAt:   time.Now().UTC(),
+		Owner:       cfg.Owner,
+		Version:     cfg.Version,
+		TokenSecret: tokenSecret,
 	}
 
 	g, gctx := errgroup.WithContext(ctx)

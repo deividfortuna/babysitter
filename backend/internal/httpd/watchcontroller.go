@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/deividfortuna/babysitter/internal/agent"
+	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient"
 	"github.com/deividfortuna/babysitter/internal/prwatch"
 	"github.com/deividfortuna/babysitter/internal/snapshot"
@@ -137,7 +138,7 @@ var (
 	startWatchErrors = newErrorMap("watch_failed",
 		unavailable("watch_unavailable", errWatchUnavailable),
 		badRequest("watch_rejected",
-			prwatch.ErrNotOpen, prwatch.ErrNoPushAccess, prwatch.ErrNoIdentity, prwatch.ErrWrongRepo, prwatch.ErrWrongBranch, prwatch.ErrNoCheckout, snapshot.ErrIncompleteTarget,
+			prwatch.ErrNotOpen, prwatch.ErrNoPushAccess, prwatch.ErrNoIdentity, prwatch.ErrWrongRepo, prwatch.ErrWrongBranch, prwatch.ErrNoCheckout, snapshot.ErrIncompleteTarget, ghauth.ErrNotInstalled,
 			prwatch.ErrBadProvider, prwatch.ErrBadModel, prwatch.ErrBadEffort, prwatch.ErrNoAgent, prwatch.ErrBadMergeMethod, prwatch.ErrBadApprovalMode, prwatch.ErrBadBranchUpdate),
 	)
 	nextWatchErrors = newErrorMap("next_failed",

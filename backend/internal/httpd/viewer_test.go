@@ -5,7 +5,10 @@ import (
 	"errors"
 	"net/http"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/testutil"
@@ -56,5 +59,48 @@ func TestViewerIsUnavailableWhenGitHubRefuses(t *testing.T) {
 	}
 	if body := rec.Body.String(); strings.Contains(body, "ghp_0123456789abcdefghijABCDEFGH") {
 		t.Fatalf("body leaks the token: %s", body)
+	}
+}
+
+func TestViewerAnswersWhenTheLookupTellsAnAuthChange(t *testing.T) {
+	bus := events.NewBus()
+	h := NewRouter(Deps{Log: testutil.Logger(t), Bus: bus, Viewer: func(context.Context) (Viewer, error) {
+		bus.Publish(events.AuthChanged, "", 0)
+		return Viewer{Login: "octocat"}, nil
+	}})
+
+	done := make(chan int, 1)
+	go func() { done <- call(t, h, http.MethodGet, "/viewer", "", nil).Code }()
+
+	select {
+	case code := <-done:
+		if code != http.StatusOK {
+			t.Fatalf("status = %d, want 200", code)
+		}
+	case <-time.After(5 * time.Second):
+		t.Fatal("GET /viewer hangs when the token lookup tells an auth change")
+	}
+}
+
+func TestViewerRequestsShareOneLookup(t *testing.T) {
+	var calls atomic.Int32
+	release := make(chan struct{})
+	h := NewRouter(Deps{Log: testutil.Logger(t), Bus: events.NewBus(), Viewer: func(context.Context) (Viewer, error) {
+		calls.Add(1)
+		<-release
+		return Viewer{Login: "octocat"}, nil
+	}})
+
+	var wg sync.WaitGroup
+	for range 5 {
+		wg.Go(func() { call(t, h, http.MethodGet, "/viewer", "", nil) })
+	}
+	testutil.Eventually(t, func() bool { return calls.Load() >= 1 }, "the first lookup starts")
+	time.Sleep(50 * time.Millisecond)
+	close(release)
+	wg.Wait()
+
+	if n := calls.Load(); n != 1 {
+		t.Fatalf("GitHub asked %d times for 5 requests at once, want 1", n)
 	}
 }

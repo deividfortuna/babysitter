@@ -9,7 +9,7 @@ import (
 
 const TokenQueryParam = "token"
 
-var localOnlySuffixes = []string{"/control/shutdown", "/hook"}
+var localOnlySuffixes = []string{"/control/shutdown", "/hook", "/auth/token"}
 
 var eventStreamSuffixes = []string{"/events", "/logs/stream"}
 

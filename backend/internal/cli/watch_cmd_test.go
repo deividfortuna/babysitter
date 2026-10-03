@@ -268,16 +268,23 @@ type terminalRun struct {
 	err    error
 }
 
-func runInTerminal(t *testing.T, d *fakeDaemon, opts []Option, stdin, group string, args ...string) terminalRun {
+func serveDaemon(t *testing.T, handler http.Handler, tokenSecret string) string {
 	t.Helper()
-	srv := httptest.NewServer(d.mux)
+	srv := httptest.NewServer(handler)
 	t.Cleanup(srv.Close)
 	var port int
 	fmt.Sscanf(strings.TrimPrefix(srv.URL, "http://127.0.0.1:"), "%d", &port)
 	dataDir := t.TempDir()
-	if err := runfile.Write(runfile.Path(dataDir), runfile.Info{PID: os.Getpid(), Port: port, Owner: runfile.OwnerCLI}); err != nil {
+	info := runfile.Info{PID: os.Getpid(), Port: port, Owner: runfile.OwnerCLI, TokenSecret: tokenSecret}
+	if err := runfile.Write(runfile.Path(dataDir), info); err != nil {
 		t.Fatal(err)
 	}
+	return dataDir
+}
+
+func runInTerminal(t *testing.T, d *fakeDaemon, opts []Option, stdin, group string, args ...string) terminalRun {
+	t.Helper()
+	dataDir := serveDaemon(t, d.mux, "")
 	var out, errOut bytes.Buffer
 	root := NewRootCmd(opts...)
 	root.SetIn(strings.NewReader(stdin))
@@ -547,14 +554,7 @@ func (r hookRun) refusal(t *testing.T) string {
 func TestHookCommand(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
-	srv := httptest.NewServer(d.mux)
-	t.Cleanup(srv.Close)
-	var port int
-	fmt.Sscanf(strings.TrimPrefix(srv.URL, "http://127.0.0.1:"), "%d", &port)
-	dataDir := t.TempDir()
-	if err := runfile.Write(runfile.Path(dataDir), runfile.Info{PID: os.Getpid(), Port: port, Owner: runfile.OwnerCLI}); err != nil {
-		t.Fatal(err)
-	}
+	dataDir := serveDaemon(t, d.mux, "")
 	if r := runHook(dataDir, `{"notification_type":"idle_prompt"}`, "notification", "--watch", "1"); !r.quiet() {
 		t.Fatalf("hook = %+v", r)
 	}
@@ -581,14 +581,7 @@ func TestHookCommand(t *testing.T) {
 func TestHookCommandAppliesTheVerdictOfTheDaemon(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
-	srv := httptest.NewServer(d.mux)
-	t.Cleanup(srv.Close)
-	var port int
-	fmt.Sscanf(strings.TrimPrefix(srv.URL, "http://127.0.0.1:"), "%d", &port)
-	dataDir := t.TempDir()
-	if err := runfile.Write(runfile.Path(dataDir), runfile.Info{PID: os.Getpid(), Port: port, Owner: runfile.OwnerCLI}); err != nil {
-		t.Fatal(err)
-	}
+	dataDir := serveDaemon(t, d.mux, "")
 	for agentName, payload := range map[string]string{
 		"copilot": `{"toolName":"bash","toolArgs":{"command":"echo daemon-check"}}`,
 		"claude":  `{"tool_name":"Bash","tool_input":{"command":"echo daemon-check"}}`,

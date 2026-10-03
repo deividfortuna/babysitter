@@ -74,6 +74,7 @@ const defaultTimeout = 2 * time.Minute
 type Runner struct {
 	Run     execx.DirRunner
 	Timeout time.Duration
+	Auth    gitrepo.AuthEnv
 }
 
 func New() *Runner {
@@ -85,14 +86,24 @@ func (g *Runner) git(ctx context.Context, dir string, args ...string) (string, e
 	return strings.TrimSpace(out), err
 }
 
+func (g *Runner) gitIn(dir string) func(ctx context.Context, args ...string) (string, error) {
+	return func(ctx context.Context, args ...string) (string, error) {
+		return g.git(ctx, dir, args...)
+	}
+}
+
 func (g *Runner) raw(ctx context.Context, dir string, args ...string) (string, error) {
+	env, err := g.Auth.Env(ctx, args[0])
+	if err != nil {
+		return "", err
+	}
 	run := g.Run
 	if run == nil {
 		run = execx.RunIn
 	}
 	ctx, cancel := context.WithTimeout(ctx, cmp.Or(g.Timeout, defaultTimeout))
 	defer cancel()
-	out, err := run(ctx, dir, "", gitrepo.NoPromptEnv, "git", args...)
+	out, err := run(ctx, dir, "", env, "git", args...)
 	if err != nil {
 		return out, fmt.Errorf("git %s: %w", strings.Join(args, " "), err)
 	}
@@ -101,6 +112,9 @@ func (g *Runner) raw(ctx context.Context, dir string, args ...string) (string, e
 
 func (g *Runner) Fetch(ctx context.Context, dir, branch string) (string, error) {
 	tracking := "refs/remotes/origin/" + branch
+	if err := g.Auth.CheckRemote(ctx, "origin", false, g.gitIn(dir)); err != nil {
+		return "", err
+	}
 	if _, err := g.git(ctx, dir, "fetch", "-q", "--no-tags", "origin", "+refs/heads/"+branch+":"+tracking); err != nil {
 		return "", err
 	}
@@ -164,6 +178,9 @@ func (g *Runner) Missing(ctx context.Context, dir, work, head, since string) ([]
 }
 
 func (g *Runner) Push(ctx context.Context, dir string, p Push) error {
+	if err := g.Auth.CheckRemote(ctx, "origin", true, g.gitIn(dir)); err != nil {
+		return err
+	}
 	args := []string{"push", "--no-verify"}
 	if p.Lease != "" {
 		args = append(args, "--force-with-lease=refs/heads/"+p.Branch+":"+p.Lease)

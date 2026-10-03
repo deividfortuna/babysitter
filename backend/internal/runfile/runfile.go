@@ -31,14 +31,15 @@ const (
 const startSlack = time.Second
 
 type Info struct {
-	PID        int       `json:"pid"`
-	Port       int       `json:"port"`
-	StartedAt  time.Time `json:"startedAt"`
-	Owner      string    `json:"owner,omitempty"`
-	Supervisor string    `json:"supervisor,omitempty"`
-	Version    string    `json:"version,omitempty"`
-	RemotePort int       `json:"remotePort,omitempty"`
-	RemoteHost string    `json:"remoteHost,omitempty"`
+	PID         int       `json:"pid"`
+	Port        int       `json:"port"`
+	StartedAt   time.Time `json:"startedAt"`
+	Owner       string    `json:"owner,omitempty"`
+	Supervisor  string    `json:"supervisor,omitempty"`
+	Version     string    `json:"version,omitempty"`
+	RemotePort  int       `json:"remotePort,omitempty"`
+	RemoteHost  string    `json:"remoteHost,omitempty"`
+	TokenSecret string    `json:"tokenSecret,omitempty"`
 }
 
 func Path(dataDir string) string {
@@ -104,6 +105,25 @@ func WhileBusy(op func() error) error {
 		}
 		time.Sleep(busyPause)
 	}
+}
+
+func ReplaceFile(path string, data []byte, perm os.FileMode) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+"-*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	if _, err := tmp.Write(data); err != nil {
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	if err := os.Chmod(tmp.Name(), perm); err != nil {
+		return err
+	}
+	return WhileBusy(func() error { return os.Rename(tmp.Name(), path) })
 }
 
 func Remove(path string) error {
