@@ -36,6 +36,10 @@ export function panelShortcut(): string {
   return commandAltShortcut("B");
 }
 
+export function terminalShortcut(): string {
+  return isMac ? "⌃`" : "Ctrl+`";
+}
+
 export function openInShortcut(): string {
   return commandShortcut("O");
 }

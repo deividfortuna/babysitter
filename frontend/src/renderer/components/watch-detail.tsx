@@ -1,4 +1,4 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import {
   BotIcon,
   CheckCircle2Icon,
@@ -37,6 +37,7 @@ import { PanelToggle, PanelToggleSpace, clearsPanelToggle } from "@/components/p
 import { useWatchActivity, type Activity } from "@/hooks/useWatchActivity";
 import { useWatch, useWatches, type Watch } from "@/hooks/useWatches";
 import { useOpenFolder } from "@/hooks/use-open-in";
+import { useCommandShortcut } from "@/hooks/use-command-shortcut";
 import {
   AutoBadges,
   ChecksBadge,
@@ -54,6 +55,7 @@ import { OpenInButton } from "@/components/open-in-button";
 import { TakenOverPanel } from "@/components/taken-over-panel";
 import { TakeoverDialog } from "@/components/takeover-dialog";
 import { TerminalPanel } from "@/components/terminal-panel";
+import { Tip, TipLabel } from "@/components/tip";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -62,6 +64,7 @@ import { Empty, EmptyDescription, EmptyHeader, EmptyTitle } from "@/components/u
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
 import type { Navigate } from "@/lib/navigation";
+import { terminalShortcut } from "@/lib/shortcuts";
 import { duration, relativeTime, shortSha } from "@/lib/time";
 import {
   activityUrl,
@@ -142,6 +145,9 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR, onThisMachine =
   const [merging, setMerging] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [terminalOpen, setTerminalOpen] = useState(false);
+  const toggleTerminal = useCallback(() => setTerminalOpen((open) => !open), []);
+  const hasTerminal = watch !== undefined && !isSelfWatch(watch);
+  useCommandShortcut("`", toggleTerminal, hasTerminal, { ctrl: true });
 
   const rows = useMemo(() => (activity.data ? [...activity.data].reverse() : []), [activity.data]);
   const checks = useMemo(() => (watch ? checkRows(watch) : []), [watch]);
@@ -276,11 +282,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR, onThisMachine =
           {isSelfWatch(watch) ? (
             <SelfSessionPanel watch={watch} />
           ) : (
-            <SessionPanel
-              watch={watch}
-              terminalOpen={terminalShown}
-              onTerminalToggle={() => setTerminalOpen((v) => !v)}
-            />
+            <SessionPanel watch={watch} terminalOpen={terminalShown} onTerminalToggle={toggleTerminal} />
           )}
 
           {checks.length > 0 ? (
@@ -519,19 +521,21 @@ function SessionPanel({ watch, terminalOpen, onTerminalToggle }: SessionPanelPro
               Continue in terminal
             </Button>
           ) : null}
-          <Button
-            variant="ghost"
-            size="xs"
-            className="font-mono text-2xs text-muted-foreground"
-            onClick={onTerminalToggle}
-          >
-            {terminalOpen ? (
-              <PanelBottomDashedIcon data-icon="inline-start" />
-            ) : (
-              <PanelBottomIcon data-icon="inline-start" />
-            )}
-            {terminalOpen ? `hide ${terminalWord}` : `show ${terminalWord}`}
-          </Button>
+          <Tip label={<TipLabel label="Toggle the terminal" shortcut={terminalShortcut()} />}>
+            <Button
+              variant="ghost"
+              size="xs"
+              className="font-mono text-2xs text-muted-foreground"
+              onClick={onTerminalToggle}
+            >
+              {terminalOpen ? (
+                <PanelBottomDashedIcon data-icon="inline-start" />
+              ) : (
+                <PanelBottomIcon data-icon="inline-start" />
+              )}
+              {terminalOpen ? `hide ${terminalWord}` : `show ${terminalWord}`}
+            </Button>
+          </Tip>
         </div>
       </AgentHeader>
       <TakeoverDialog open={takingOver} onOpenChange={setTakingOver} watch={watch} />
