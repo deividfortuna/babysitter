@@ -393,7 +393,61 @@ func TestRestoreCreatesTheBranchWhenGitSaysItIsMissing(t *testing.T) {
 	if err := g.Restore(context.Background(), source, dir, "babysitter/fix", "origin/fix"); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
-	if want := "worktree add -q -B babysitter/fix " + dir + " origin/fix"; calls[len(calls)-1] != want {
-		t.Fatalf("last git call = %q, want %q", calls[len(calls)-1], want)
+	want := []string{"fetch -q origin fix", "worktree add -q -B babysitter/fix " + dir + " origin/fix"}
+	if got := calls[len(calls)-2:]; got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("last git calls = %q, want %q", got, want)
+	}
+}
+
+func TestRestoreStopsWhenTheUpstreamOfALostBranchCannotBeFetched(t *testing.T) {
+	t.Parallel()
+	var calls []string
+	g := &Git{Run: func(ctx context.Context, _, _ string, _ []string, _ string, args ...string) (string, error) {
+		calls = append(calls, strings.Join(args[2:], " "))
+		switch args[2] {
+		case "rev-parse":
+			return "", &execx.ExitError{Name: "git", Args: args, Code: 1}
+		case "fetch":
+			return "", errors.New("network down")
+		}
+		return "", nil
+	}}
+	source := t.TempDir()
+	if err := g.Restore(context.Background(), source, filepath.Join(source, "wt"), "babysitter/fix", "origin/fix"); err == nil {
+		t.Fatal("Restore() made the branch again from an upstream it could not fetch")
+	}
+	for _, c := range calls {
+		if strings.HasPrefix(c, "worktree add") {
+			t.Fatalf("Restore() ran %q after the fetch failed", c)
+		}
+	}
+}
+
+func TestRestoreRightAfterTheWorktreeWasDeleted(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	git(t, root, "init", "-q", "-b", "main", source)
+	git(t, source, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init")
+	ctx := context.Background()
+	g := New()
+	dir := filepath.Join(root, "wt", "octo-hello-3")
+	if err := g.Create(ctx, source, dir, "babysitter/fix", "main"); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "unpushed")
+	unpushed := git(t, dir, "rev-parse", "HEAD")
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := g.Restore(ctx, source, dir, "babysitter/fix", "main"); err != nil {
+		t.Fatalf("Restore() a worktree deleted a moment ago error = %v", err)
+	}
+	if h := git(t, dir, "rev-parse", "HEAD"); h != unpushed {
+		t.Fatalf("restored head = %s, want the unpushed commit %s", h, unpushed)
 	}
 }

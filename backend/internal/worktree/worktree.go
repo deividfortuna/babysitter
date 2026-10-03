@@ -91,6 +91,9 @@ func (g *Git) Restore(ctx context.Context, source, dir, branch, upstream string)
 		return fmt.Errorf("look for the branch %s: %w", branch, err)
 	}
 	if !exists {
+		if err := g.Fetch(ctx, source, upstream); err != nil {
+			return err
+		}
 		return g.Create(ctx, source, dir, branch, upstream)
 	}
 	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
