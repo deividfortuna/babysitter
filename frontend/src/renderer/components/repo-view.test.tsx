@@ -137,12 +137,9 @@ test("sizes the header buttons like the other views", async () => {
   renderView();
   await screen.findByRole("button", { name: "Watch by URL" });
 
-  const settings = screen.getByRole("button", { name: "Repository settings" });
   for (const button of within(screen.getByRole("banner")).getAllByRole("button")) {
-    if (button === settings) continue;
     expect(button).toHaveAttribute("data-size", "sm");
   }
-  expect(settings).toHaveClass("size-7");
 });
 
 test("a queued Dependabot update shows its place and its update type", async () => {
@@ -174,12 +171,13 @@ test("a queued Dependabot update shows its place and its update type", async () 
   expect(within(first).getByRole("button", { name: "Watch" })).toBeEnabled();
 });
 
-test("the panel icon in the header opens the repository settings, and the panel closes them", async () => {
+test("the panel icon opens the repository settings, and the same icon in the same place closes them", async () => {
   serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
   const user = userEvent.setup();
 
   renderView();
-  await user.click(await screen.findByRole("button", { name: "Repository settings" }));
+  const toggle = await screen.findByRole("button", { name: "Repository settings" });
+  await user.click(toggle);
 
   const panel = screen.getByRole("complementary", { name: "Repository settings" });
   expect(
@@ -187,9 +185,9 @@ test("the panel icon in the header opens the repository settings, and the panel 
       "What babysitter does with new pull requests of octo/babysitter. Nothing starts until you turn it on.",
     ),
   ).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Repository settings" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Repository settings" })).toBe(toggle);
 
-  await user.click(within(panel).getByRole("button", { name: "Close repository settings" }));
+  await user.click(toggle);
   expect(screen.queryByRole("complementary", { name: "Repository settings" })).toBeNull();
 });
 

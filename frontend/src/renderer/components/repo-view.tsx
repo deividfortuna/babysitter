@@ -6,12 +6,12 @@ import {
   FolderGitIcon,
   GitPullRequestDraftIcon,
   GitPullRequestIcon,
-  PanelRightIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { usePulls, type PullRequest } from "@/hooks/usePulls";
 import { useRepoQueue, useRepos, useRequestSync, type QueuedPullRequest } from "@/hooks/useRepos";
 import { useWatches, type Watch } from "@/hooks/useWatches";
+import { PanelToggle, clearsPanelToggle } from "@/components/panel-toggle";
 import { RepoSettingsPanel } from "@/components/repo-settings-panel";
 import { AuthorName, DiffStat, InboxGroup, InboxItem, LabelBadges } from "@/components/inbox-row";
 import { CheckIcon, Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
@@ -24,6 +24,7 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Navigate } from "@/lib/navigation";
 import { relativeTime } from "@/lib/time";
+import { cn } from "@/lib/utils";
 import { needsYouFirst, queuePlace, type Tone } from "@/lib/watch-status";
 
 function ciWord(status: PullRequest["ciStatus"]): { label: string; tone: Tone } | null {
@@ -208,14 +209,14 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
   const synced = repo.lastSyncedAt ? `synced ${relativeTime(repo.lastSyncedAt)}` : "not synced yet";
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="relative flex min-h-0 flex-1">
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <ViewHeader>
           {title}
           <Meta className="shrink-0">
             {watched.length} watched · {open.length} open · {synced}
           </Meta>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
+          <div className={cn("ml-auto flex shrink-0 items-center gap-1.5", !settingsOpen && clearsPanelToggle)}>
             <Button
               type="button"
               variant="ghost"
@@ -231,19 +232,6 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
               <GitPullRequestIcon data-icon="inline-start" />
               Watch by URL
             </Button>
-            {settingsOpen ? null : (
-              <Tip label="Repository settings">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Repository settings"
-                  className="size-7"
-                  onClick={() => setSettingsOpen(true)}
-                >
-                  <PanelRightIcon />
-                </Button>
-              </Tip>
-            )}
           </div>
         </ViewHeader>
 
@@ -284,7 +272,8 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
           </InboxGroup>
         </div>
       </div>
-      {settingsOpen ? <RepoSettingsPanel repo={repo} onClose={() => setSettingsOpen(false)} /> : null}
+      {settingsOpen ? <RepoSettingsPanel repo={repo} /> : null}
+      <PanelToggle label="Repository settings" open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }

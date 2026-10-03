@@ -20,7 +20,7 @@ async function openSettings(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByRole("complementary", { name: "Watch settings" });
 }
 
-test("an icon button after Merge opens the panel, and the panel closes it", async () => {
+test("an icon button after Merge opens the panel, and the same button in the same place closes it", async () => {
   const { user } = renderDetail();
 
   const merge = await screen.findByRole("button", { name: "Merge" });
@@ -30,12 +30,11 @@ test("an icon button after Merge opens the panel, and the panel closes it", asyn
 
   const panel = await openSettings(user);
   expect(within(panel).getByText("For octo/babysitter#12 only. They start as your defaults.")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Watch settings" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Watch settings" })).toBe(open);
   expect(screen.getByRole("heading", { level: 1 })).toBeVisible();
 
-  await user.click(within(panel).getByRole("button", { name: "Close watch settings" }));
+  await user.click(open);
   expect(screen.queryByRole("complementary", { name: "Watch settings" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Watch settings" })).toBeVisible();
 });
 
 test("the header no longer holds the approval mode", async () => {

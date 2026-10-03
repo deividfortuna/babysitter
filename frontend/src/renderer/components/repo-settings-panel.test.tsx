@@ -33,9 +33,8 @@ function renderPanel(
     providers: more.providers,
     settings: buildSettings({ approvalMode: "manual" }),
   });
-  const onClose = vi.fn();
-  renderWithProviders(<RepoSettingsPanel repo={buildRepo()} onClose={onClose} />);
-  return { repoConfigBodies, onClose, user: userEvent.setup() };
+  renderWithProviders(<RepoSettingsPanel repo={buildRepo()} />);
+  return { repoConfigBodies, user: userEvent.setup() };
 }
 
 function panel() {
@@ -284,7 +283,7 @@ test("each field shows the value a watch takes", async () => {
       keepWorktree: false,
     }),
   });
-  renderWithProviders(<RepoSettingsPanel repo={buildRepo()} onClose={vi.fn()} />);
+  renderWithProviders(<RepoSettingsPanel repo={buildRepo()} />);
   const user = userEvent.setup();
 
   await user.click(await screen.findByRole("button", { name: /Watch defaults/ }));
@@ -374,12 +373,4 @@ test("the agent of the watches does not offer a provider whose command the daemo
   const copilot = await screen.findByRole("option", { name: /Copilot/ });
   expect(copilot).toHaveAttribute("aria-disabled", "true");
   expect(copilot).toHaveTextContent("command not found");
-});
-
-test("the close button hands the panel back", async () => {
-  const { onClose, user } = renderPanel();
-
-  await user.click(await screen.findByRole("button", { name: "Close repository settings" }));
-
-  expect(onClose).toHaveBeenCalled();
 });

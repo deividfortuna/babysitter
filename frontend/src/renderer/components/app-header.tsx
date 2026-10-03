@@ -83,7 +83,7 @@ export function TitlebarNav(history: HistoryControls) {
   return (
     <div
       data-slot="titlebar-nav"
-      className="fixed top-[calc((var(--titlebar-height)-(--spacing(7)))/2)] left-titlebar-nav-left z-20 flex w-titlebar-nav-width items-center justify-between"
+      className="fixed top-titlebar-button-top left-titlebar-nav-left z-20 flex w-titlebar-nav-width items-center justify-between"
     >
       <NavigationButtons {...history} />
     </div>

@@ -9,6 +9,7 @@
   --font-sans: "Mona Sans Variable", -apple-system, system-ui, "Segoe UI", Helvetica, Arial, sans-serif;
   --font-mono: ui-monospace, Menlo, "SF Mono", Consolas, monospace;
   --spacing-titlebar: var(--titlebar-height);
+  --spacing-titlebar-button-top: calc((var(--titlebar-height) - var(--spacing) * 7) / 2);
   /* The system draws the window buttons at the left in some layouts,
      such as a right-to-left locale: start past them. */
   --spacing-titlebar-nav-left: calc(env(titlebar-area-x, 0px) + var(--titlebar-nav-left));
@@ -274,11 +275,20 @@
 }
 
 /* Off macOS the window draws its buttons over the top right of the app.
-   The title bar area the system reports leaves them out, so this pads
-   the header past them, and keeps the usual inset when there are none. */
-@utility pr-window-controls {
-  padding-right: max(
+   The title bar area the system reports leaves them out, so this keeps
+   the header and the panel toggle clear of them, and keeps the usual
+   inset when there are none. */
+:root {
+  --window-controls-inset: max(
     --spacing(5),
     calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw) + --spacing(3))
   );
+}
+
+@utility pr-window-controls {
+  padding-right: var(--window-controls-inset);
+}
+
+@utility right-window-controls {
+  right: var(--window-controls-inset);
 }

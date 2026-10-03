@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { CircleAlertIcon, PanelRightDashedIcon } from "lucide-react";
+import { CircleAlertIcon } from "lucide-react";
 import { useSetApproval, type ApprovalMode } from "@/hooks/useProposals";
 import { useUpdateWatch, type Watch } from "@/hooks/useWatches";
 import { useProposalDecision } from "@/components/proposal-decision";
@@ -9,18 +9,16 @@ import { OptionSelect } from "@/components/option-select";
 import { MergeMethodSelect } from "@/components/merge-method-select";
 import { SettingRow } from "@/components/setting-row";
 import { ToneBadge } from "@/components/status-badges";
-import { Tip } from "@/components/tip";
 import { Alert, AlertTitle } from "@/components/ui/alert";
-import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { approvalsField, approvalsInvalid, approvalsRequired } from "@/lib/approvals";
 import { BRANCH_UPDATES, branchOwnerText } from "@/lib/branch-update";
 import { isSelfWatch, watchLabel } from "@/lib/watch-status";
 
-type Props = { watch: Watch; onClose: () => void };
+type Props = { watch: Watch };
 
-export function WatchSettingsPanel({ watch, onClose }: Props) {
+export function WatchSettingsPanel({ watch }: Props) {
   const setApproval = useSetApproval();
   const approvalsRules = useUpdateWatch();
   const methodRules = useUpdateWatch();
@@ -34,19 +32,8 @@ export function WatchSettingsPanel({ watch, onClose }: Props) {
   return (
     <aside
       aria-labelledby="watch-settings-title"
-      className="relative col-start-2 row-span-2 row-start-1 flex w-90 shrink-0 flex-col gap-5 overflow-y-auto border-l bg-background p-5"
+      className="col-start-2 row-span-2 row-start-1 flex w-90 shrink-0 flex-col gap-5 overflow-y-auto border-l bg-background p-5"
     >
-      <Tip label="Close watch settings" side="left">
-        <Button
-          variant="ghost"
-          size="icon"
-          className="absolute top-2.5 right-5 size-7"
-          aria-label="Close watch settings"
-          onClick={onClose}
-        >
-          <PanelRightDashedIcon />
-        </Button>
-      </Tip>
       <div className="flex flex-col gap-1.5 pr-6">
         <h2 id="watch-settings-title" className="text-base font-semibold">
           Watch settings
