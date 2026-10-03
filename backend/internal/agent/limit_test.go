@@ -93,3 +93,23 @@ func TestResetTimeKeepsTheClockOnADaylightSavingDay(t *testing.T) {
 		}
 	}
 }
+
+func TestAResetInTheCurrentMinuteIsNotRolledForward(t *testing.T) {
+	t.Parallel()
+	now := time.Date(2026, 10, 3, 15, 0, 10, 0, time.UTC)
+	cases := []struct {
+		text string
+		want time.Time
+	}{
+		{"resets 3pm (UTC)", time.Date(2026, 10, 3, 15, 0, 0, 0, time.UTC)},
+		{"resets Oct 3, 3pm (UTC)", time.Date(2026, 10, 3, 15, 0, 0, 0, time.UTC)},
+		{"resets 2:59pm (UTC)", time.Date(2026, 10, 4, 14, 59, 0, 0, time.UTC)},
+		{"resets Oct 3, 2:59pm (UTC)", time.Date(2027, 10, 3, 14, 59, 0, 0, time.UTC)},
+	}
+	for _, tc := range cases {
+		got, ok := resetTime(tc.text, now)
+		if !ok || !got.Equal(tc.want) {
+			t.Errorf("resetTime(%q) at %v = %v, %v, want %v", tc.text, now, got, ok, tc.want)
+		}
+	}
+}

@@ -84,9 +84,13 @@ func zoneOf(name string, fallback *time.Location) *time.Location {
 	return loc
 }
 
+func passed(reset, local time.Time) bool {
+	return reset.Before(local.Truncate(time.Minute))
+}
+
 func nextClock(local time.Time, h, m int) time.Time {
 	reset := time.Date(local.Year(), local.Month(), local.Day(), h, m, 0, 0, local.Location())
-	if !reset.After(local) {
+	if passed(reset, local) {
 		reset = time.Date(local.Year(), local.Month(), local.Day()+1, h, m, 0, 0, local.Location())
 	}
 	return reset
@@ -104,7 +108,7 @@ func dateClock(local time.Time, month, monthDay, year string, h, m int) (time.Ti
 		}
 	}
 	reset := time.Date(y, parsed.Month(), parsed.Day(), h, m, 0, 0, local.Location())
-	if year == "" && !reset.After(local) {
+	if year == "" && passed(reset, local) {
 		reset = reset.AddDate(1, 0, 0)
 	}
 	return reset, true
