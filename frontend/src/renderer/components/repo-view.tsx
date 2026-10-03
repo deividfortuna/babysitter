@@ -11,7 +11,7 @@ import {
 import { usePulls, type PullRequest } from "@/hooks/usePulls";
 import { useRepoQueue, useRepos, useRequestSync, type QueuedPullRequest } from "@/hooks/useRepos";
 import { useWatches, type Watch } from "@/hooks/useWatches";
-import { PanelToggle, clearsPanelToggle } from "@/components/panel-toggle";
+import { PanelToggle, PanelToggleSpace, clearsPanelToggle } from "@/components/panel-toggle";
 import { RepoSettingsPanel } from "@/components/repo-settings-panel";
 import { AuthorName, DiffStat, InboxGroup, InboxItem, LabelBadges } from "@/components/inbox-row";
 import { CheckIcon, Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
@@ -207,7 +207,7 @@ export function RepoView({ enabled, name, onNavigate, onWatchPull }: Props) {
   const synced = repo.lastSyncedAt ? `synced ${relativeTime(repo.lastSyncedAt)}` : "not synced yet";
 
   return (
-    <div className="relative flex min-h-0 flex-1">
+    <div className="flex min-h-0 flex-1">
       <PanelToggle label="Repository settings" open={settingsOpen} onOpenChange={setSettingsOpen} />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <ViewHeader>
@@ -230,6 +230,7 @@ export function RepoView({ enabled, name, onNavigate, onWatchPull }: Props) {
               </Button>
             </Tip>
           </ViewHeaderActions>
+          <PanelToggleSpace />
         </ViewHeader>
 
         {requestSync.error ? (
