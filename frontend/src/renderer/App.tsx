@@ -135,6 +135,7 @@ export function App() {
             onNavigate={navigate}
             onStopped={setStopped}
             onWatchPR={openStart}
+            onThisMachine={status.connection?.kind === "local"}
           />
         );
     }

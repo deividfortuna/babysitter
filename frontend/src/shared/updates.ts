@@ -1,3 +1,5 @@
+import { isRecord } from "./values";
+
 export type UpdateState =
   | "unsupported"
   | "idle"
@@ -52,10 +54,6 @@ export function resolveSettings(saved: Partial<UpdateSettings>, currentVersion: 
     autoDownload: saved.autoDownload ?? true,
     channel: saved.channel ?? defaultChannel(currentVersion),
   };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 export function parseSettingsPatch(raw: unknown): Partial<UpdateSettings> {

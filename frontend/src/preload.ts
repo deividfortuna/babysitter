@@ -2,8 +2,9 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron";
 import type { MenuAnchor } from "./shared/app-menu";
 import type { ConnectionList, DiscoveredDaemon, PairRequest, PairResult } from "./shared/connections";
 import type { DaemonStatus } from "./shared/daemon-status";
-import type { LogRecord, OpenLogFolderResult } from "./shared/logs";
+import type { LogRecord } from "./shared/logs";
 import type { DesktopNotification, NotificationClick } from "./shared/notifications";
+import type { OpenFolderResult, OpenTarget } from "./shared/open-in";
 import { isQuitShortcutHint, type QuitShortcutHint } from "./shared/quit";
 import type { ThemePreference } from "./shared/theme";
 import {
@@ -28,6 +29,8 @@ import {
   NOTIFICATIONS_OPEN_READY_CHANNEL,
   NOTIFICATIONS_SHOW_CHANNEL,
   NOTIFICATIONS_SUPPORTED_CHANNEL,
+  OPEN_IN_LAUNCH_CHANNEL,
+  OPEN_IN_TARGETS_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
   THEME_FOLLOW_CHANNEL,
   UPDATES_CHECK_CHANNEL,
@@ -84,7 +87,11 @@ export type BabysitterBridge = {
     desktop: boolean;
     appRecords(): Promise<LogRecord[]>;
     onAppRecord(listener: (record: LogRecord) => void): () => void;
-    openFolder(): Promise<OpenLogFolderResult>;
+    openFolder(): Promise<OpenFolderResult>;
+  };
+  openIn: {
+    targets(): Promise<OpenTarget[]>;
+    launch(watchId: number, target: OpenTarget): Promise<OpenFolderResult>;
   };
   quit: {
     onShortcut(listener: (hint: QuitShortcutHint) => void): () => void;
@@ -161,6 +168,10 @@ const bridge: BabysitterBridge = {
       return () => ipcRenderer.off(LOGS_APP_RECORD_CHANNEL, handler);
     },
     openFolder: () => ipcRenderer.invoke(LOGS_OPEN_FOLDER_CHANNEL),
+  },
+  openIn: {
+    targets: () => ipcRenderer.invoke(OPEN_IN_TARGETS_CHANNEL),
+    launch: (watchId, target) => ipcRenderer.invoke(OPEN_IN_LAUNCH_CHANNEL, watchId, target),
   },
   quit: {
     onShortcut: (listener) => {

@@ -132,6 +132,13 @@ through `src/main/daemon-supervisor.ts`: it attaches to a live daemon found
 in `running.json` or spawns `babysitter daemon start --owner app`.
 `src/preload.ts` exposes `window.babysitter`, the only IPC bridge, and it
 carries little more than daemon status and the app log.
+`src/main/open-in.ts` finds the installed editors (the table is in
+`src/shared/open-in.ts`) and opens the worktree of a watch in one of them
+or in the file manager, with the env of the login shell. The "Open" split
+button in the watch title calls it through `window.babysitter.openIn`,
+only for the local daemon, and Cmd+O (Ctrl+O) presses its main button. The renderer sends a watch id, not a path:
+`src/main/watch-folders.ts` reads that watch from the local daemon and
+gives its folder, so the renderer cannot open any other path.
 `src/main/app-log.ts` is the log of the main process, in
 `<dataDir>/logs/app.log`; log there, not with `console.log`. The renderer talks to the daemon
 directly over HTTP with openapi-fetch (`src/renderer/lib/api-client.ts`) and

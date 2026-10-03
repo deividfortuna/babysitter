@@ -28,3 +28,5 @@ export const LOGS_APP_RECORDS_CHANNEL = "logs:app-records";
 export const LOGS_APP_RECORD_CHANNEL = "logs:app-record";
 export const LOGS_OPEN_FOLDER_CHANNEL = "logs:open-folder";
 export const QUIT_SHORTCUT_CHANNEL = "quit:shortcut";
+export const OPEN_IN_TARGETS_CHANNEL = "open-in:targets";
+export const OPEN_IN_LAUNCH_CHANNEL = "open-in:launch";

@@ -1,5 +1,14 @@
 import type { ComponentProps, ReactNode } from "react";
+import { Kbd } from "@/components/ui/kbd";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+
+export function TipLabel({ label, shortcut }: { label: string; shortcut: string }) {
+  return (
+    <>
+      {label} <Kbd>{shortcut}</Kbd>
+    </>
+  );
+}
 
 type Side = ComponentProps<typeof TooltipContent>["side"];
 

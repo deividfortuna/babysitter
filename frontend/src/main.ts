@@ -22,6 +22,8 @@ import { AppLog } from "./main/app-log";
 import { ConnectionManager, localName } from "./main/connection-manager";
 import { readConnections, writeConnections } from "./main/connection-store";
 import { DaemonSupervisor } from "./main/daemon-supervisor";
+import { EditorLauncher } from "./main/open-in";
+import { localWatchFolder } from "./main/watch-folders";
 import { discoverDaemons } from "./main/discovery";
 import { checkRemote } from "./main/remote-check";
 import { authorization, parsePairRequest } from "./shared/connections";
@@ -55,6 +57,8 @@ import {
   NOTIFICATIONS_OPEN_READY_CHANNEL,
   NOTIFICATIONS_SHOW_CHANNEL,
   NOTIFICATIONS_SUPPORTED_CHANNEL,
+  OPEN_IN_LAUNCH_CHANNEL,
+  OPEN_IN_TARGETS_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
   THEME_FOLLOW_CHANNEL,
   UPDATES_CHECK_CHANNEL,
@@ -65,7 +69,8 @@ import {
   UPDATES_SET_SETTINGS_CHANNEL,
   UPDATES_STATUS_CHANNEL,
 } from "./shared/ipc";
-import { isDaemonLogRecord, type OpenLogFolderResult } from "./shared/logs";
+import { isDaemonLogRecord } from "./shared/logs";
+import { openPathResult, type OpenFolderResult } from "./shared/open-in";
 import { parseSettingsPatch } from "./shared/updates";
 import {
   badgeText,
@@ -100,16 +105,18 @@ function routeDaemonOutput(line: string) {
 
 const LOGIN_SHELL_TIMEOUT_MS = 10_000;
 
+const loginEnv = daemonEnvOnce({
+  platform: process.platform,
+  env: process.env,
+  home: os.homedir(),
+  run: shellRunner(LOGIN_SHELL_TIMEOUT_MS),
+  log: (msg) => appLog.info(msg),
+});
+
 const daemon = new DaemonSupervisor({
   launch: resolveDaemonLaunch(process.env, app.isPackaged, process.resourcesPath, app.getAppPath(), process.platform),
   dataDir,
-  env: daemonEnvOnce({
-    platform: process.platform,
-    env: process.env,
-    home: os.homedir(),
-    run: shellRunner(LOGIN_SHELL_TIMEOUT_MS),
-    log: (msg) => appLog.info(msg),
-  }),
+  env: loginEnv,
   log: (msg) => appLog.info(msg),
   output: routeDaemonOutput,
 });
@@ -146,10 +153,23 @@ ipcMain.handle(CONNECTIONS_DISCOVER_CHANNEL, () => connections.discover());
 appLog.onRecord((record) => broadcast(LOGS_APP_RECORD_CHANNEL, record));
 
 ipcMain.handle(LOGS_APP_RECORDS_CHANNEL, () => appLog.records());
-ipcMain.handle(LOGS_OPEN_FOLDER_CHANNEL, async (): Promise<OpenLogFolderResult> => {
+ipcMain.handle(LOGS_OPEN_FOLDER_CHANNEL, async (): Promise<OpenFolderResult> => {
   mkdirSync(appLog.folder, { recursive: true, mode: 0o750 });
-  const error = await shell.openPath(appLog.folder);
-  return error ? { ok: false, error } : { ok: true };
+  return openPathResult(await shell.openPath(appLog.folder));
+});
+
+const openIn = new EditorLauncher({
+  platform: process.platform,
+  env: loginEnv,
+  openPath: (dir) => shell.openPath(dir),
+  watchFolder: (watchId) => localWatchFolder(connections.getStatus(), watchId),
+});
+
+ipcMain.handle(OPEN_IN_TARGETS_CHANNEL, () => openIn.targets());
+ipcMain.handle(OPEN_IN_LAUNCH_CHANNEL, async (_event, watchId: unknown, target: unknown): Promise<OpenFolderResult> => {
+  const result = await openIn.launch(watchId, target);
+  if (!result.ok) appLog.warn(`open in ${String(target)}: ${result.error}`);
+  return result;
 });
 
 ipcMain.handle(DAEMON_GET_STATUS_CHANNEL, () => connections.getStatus());
