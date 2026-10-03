@@ -173,7 +173,7 @@ function Places({ enabled, onNavigate, onWatchPull, run }: PlacesProps) {
             return (
               <CommandItem
                 key={watch.id}
-                value={watchSearchText(watch)}
+                value={`${watch.title} ${watchLabel(watch)}`}
                 onSelect={() => run(() => onNavigate({ kind: "watch", id: watch.id }))}
               >
                 {state.icon}

@@ -77,6 +77,16 @@ test("a search does not match the id of a watch", async () => {
   expect(screen.queryByRole("option", { name: /Alpha/ })).not.toBeInTheDocument();
 });
 
+test("a search does not match the author of a watch, which its row does not show", async () => {
+  serveApi({ watches: [buildWatch({ title: "Alpha", author: "hubot" })] });
+  const { user } = renderPalette();
+  await screen.findByRole("option", { name: /Alpha/ });
+
+  await user.keyboard("hubot");
+
+  expect(screen.queryByRole("option", { name: /Alpha/ })).not.toBeInTheDocument();
+});
+
 test("goes to a repository", async () => {
   serveApi({ repos: [buildRepo({ id: 3, fullName: "octo/dashboard" })] });
   const { user, onNavigate } = renderPalette();
