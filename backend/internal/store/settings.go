@@ -80,7 +80,7 @@ func DefaultSettings() Settings {
 		Provider:                    "claude",
 		BranchUpdate:                BranchRebase,
 		UpdateOnGitHub:              true,
-		ScreenReader:                true,
+		ScreenReader:                false,
 	}
 }
 

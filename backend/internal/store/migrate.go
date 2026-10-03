@@ -722,6 +722,9 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	`
 	ALTER TABLE settings ADD COLUMN screen_reader INTEGER NOT NULL DEFAULT 1;
 	`,
+	`
+	UPDATE settings SET screen_reader = 0;
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

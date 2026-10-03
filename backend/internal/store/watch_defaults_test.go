@@ -11,6 +11,7 @@ const (
 	schemaBeforeKeepWorktree     = 28
 	schemaBeforeWatchMaxInterval = 30
 	schemaBeforeBranchUpdate     = 32
+	schemaBeforeScreenReaderOff  = 36
 )
 
 func TestAnUpgradedWatchKeepsTheWorktreeRuleOfTheDaemon(t *testing.T) {

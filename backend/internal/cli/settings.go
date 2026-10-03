@@ -220,7 +220,7 @@ func newSettingsSetCmd(opts *options, dataDirFlag *string) *cobra.Command {
 	cmd.Flags().StringVar(&effort, "effort", "", "effort level of that model, empty for its default, for example low, medium or high")
 	cmd.Flags().StringVar(&branchUpdate, branchUpdateFlag, "", "how a new watch updates a branch that fell behind its base: rebase or merge. The agent solves a conflict the same way")
 	cmd.Flags().BoolVar(&updateOnGitHub, updateOnGitHubFlag, true, "a new watch asks GitHub to update a branch that fell behind its base, and the agent does it only when GitHub refuses")
-	cmd.Flags().BoolVar(&screenReader, "screen-reader", true, "the agent runs in the screen reader mode of its command line, which draws plain text in place of the full terminal interface. A change takes effect the next time an agent session starts")
+	cmd.Flags().BoolVar(&screenReader, "screen-reader", false, "the agent runs in the screen reader mode of its command line, which draws plain text in place of the full terminal interface. A change takes effect the next time an agent session starts")
 	cmd.Flags().StringVar(&mutedKinds, "mute-notifications", "", "notification kinds that reach nobody, separated by commas: "+store.JoinKinds()+". An empty list shows them all again")
 	cmd.Flags().StringVar(&silentKinds, "silent-notifications", "", "notification kinds that arrive without a sound, separated by commas: "+store.JoinKinds()+". An empty list lets them all make a sound again")
 	cmd.MarkFlagsMutuallyExclusive("notification-sound", "silent-notifications")
