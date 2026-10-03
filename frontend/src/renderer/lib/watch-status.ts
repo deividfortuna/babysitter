@@ -142,6 +142,10 @@ export function watchLabel(w: Pick<Watch, "repo" | "number">): string {
   return `${w.repo}#${w.number}`;
 }
 
+export function watchedLabels(watches: Pick<Watch, "repo" | "number">[]): Set<string> {
+  return new Set(watches.map(watchLabel));
+}
+
 export function isTakenOver(w: Pick<Watch, "status" | "takenOverAt">): boolean {
   return w.status === "active" && Boolean(w.takenOverAt);
 }

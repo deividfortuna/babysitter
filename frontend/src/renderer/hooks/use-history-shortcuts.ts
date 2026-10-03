@@ -1,11 +1,10 @@
 import { useEffect } from "react";
 import { isMac } from "@/lib/platform";
+import { onlyModifier, type Modifier, type ShortcutKey } from "@/lib/shortcuts";
 
-type Modifier = "metaKey" | "altKey";
 type Shortcut = { code: string; label: string };
 type HistoryShortcuts = { modifier: Modifier; back: Shortcut; forward: Shortcut };
 type HistoryMoves = { back: () => void; forward: () => void };
-type HistoryKey = Pick<KeyboardEvent, "code" | "metaKey" | "ctrlKey" | "altKey" | "shiftKey">;
 
 const MAC_SHORTCUTS: HistoryShortcuts = {
   modifier: "metaKey",
@@ -26,12 +25,7 @@ export function historyShortcuts(): HistoryShortcuts {
   return isMac ? MAC_SHORTCUTS : OTHER_SHORTCUTS;
 }
 
-function onlyModifier(event: HistoryKey, modifier: Modifier): boolean {
-  const pressed = [event.metaKey, event.ctrlKey, event.altKey, event.shiftKey].filter(Boolean).length;
-  return event[modifier] && pressed === 1;
-}
-
-function keyMove(event: HistoryKey, moves: HistoryMoves): (() => void) | undefined {
+function keyMove(event: ShortcutKey, moves: HistoryMoves): (() => void) | undefined {
   const shortcuts = historyShortcuts();
   if (!onlyModifier(event, shortcuts.modifier)) return undefined;
   if (event.code === shortcuts.back.code) return moves.back;

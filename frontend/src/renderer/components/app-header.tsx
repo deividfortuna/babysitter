@@ -7,11 +7,8 @@ import { SidebarTrigger } from "@/components/ui/sidebar";
 import { historyShortcuts } from "@/hooks/use-history-shortcuts";
 import type { HistoryControls } from "@/hooks/use-view-history";
 import { bridge } from "@/lib/bridge";
-import { isMac, isWindows } from "@/lib/platform";
-
-function sidebarShortcut(): string {
-  return isMac ? "⌘B" : "Ctrl+B";
-}
+import { isWindows } from "@/lib/platform";
+import { sidebarShortcut } from "@/lib/shortcuts";
 
 function TipLabel({ label, shortcut }: { label: string; shortcut: string }) {
   return (

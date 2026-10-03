@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AddRepoDialog } from "@/components/add-repo-dialog";
 import { TitlebarNav } from "@/components/app-header";
 import { AppSidebar } from "@/components/app-sidebar";
+import { CommandPalette } from "@/components/command-palette";
 import { DaemonDown } from "@/components/daemon-down";
 import { LoadingScreen } from "@/components/loading-screen";
 import { NotificationsView } from "@/components/notifications-view";
@@ -21,6 +22,7 @@ import { useDaemonStatus } from "@/hooks/useDaemonStatus";
 import { useNativeNotifications } from "@/hooks/useNativeNotifications";
 import { useNotificationsPresent } from "@/hooks/useNotificationsPresent";
 import { useSettings } from "@/hooks/useSettings";
+import { useCommandPaletteShortcut } from "@/hooks/use-command-palette-shortcut";
 import { useHistoryShortcuts } from "@/hooks/use-history-shortcuts";
 import { useSidebarWidth } from "@/hooks/use-sidebar-width";
 import { useViewHistory } from "@/hooks/use-view-history";
@@ -69,6 +71,7 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsCategory, setSettingsCategory] = useState<SettingsCategory>("appearance");
   const [stopped, setStopped] = useState<Watch | null>(null);
+  const [paletteOpen, setPaletteOpen] = useState(false);
   const [pairing, setPairing] = useState<{ open: boolean; found: DiscoveredDaemon | null }>({
     open: false,
     found: null,
@@ -108,6 +111,9 @@ export function App() {
     setSettingsCategory(category);
     setSettingsOpen(true);
   }, []);
+  const firstStart = !daemonAnswered && status.state === "starting";
+  const openPalette = useCallback(() => setPaletteOpen(true), []);
+  useCommandPaletteShortcut(openPalette, !firstStart);
 
   function screen() {
     switch (view.kind) {
@@ -142,7 +148,6 @@ export function App() {
   }
 
   if (!daemonAnswered && status.state !== "starting") setDaemonAnswered(true);
-  const firstStart = !daemonAnswered && status.state === "starting";
   if (firstStart) return <LoadingScreen status={status} />;
 
   return (
@@ -194,6 +199,18 @@ export function App() {
         open={pairing.open}
         found={pairing.found}
         onOpenChange={(open) => setPairing((current) => ({ ...current, open }))}
+      />
+      <CommandPalette
+        open={paletteOpen}
+        onOpenChange={setPaletteOpen}
+        enabled={ready}
+        onNavigate={navigate}
+        onWatchPR={openStart}
+        onWatchPull={watchPull}
+        onAddRepo={openAddRepo}
+        onPair={openPair}
+        onOpenSettings={openSettings}
+        history={history}
       />
       <SettingsDialog category={settingsCategory} open={settingsOpen} onOpenChange={setSettingsOpen} />
       <StopSummaryDialog

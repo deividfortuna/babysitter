@@ -82,6 +82,7 @@
   --radius: 0.5rem;
 
   --size-dialog: 575px;
+  --size-dialog-medium: 720px;
   --size-dialog-wide: 920px;
   --size-dialog-gutter: 2rem;
   --size-dialog-max: calc(100% - var(--size-dialog-gutter));
