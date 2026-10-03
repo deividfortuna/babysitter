@@ -725,6 +725,9 @@ ALTER TABLE watches ADD COLUMN include_own INTEGER NOT NULL DEFAULT 0;
 	`
 	UPDATE settings SET screen_reader = 0;
 	`,
+	`
+	ALTER TABLE watches ADD COLUMN agent_limited_until TEXT;
+	`,
 }
 
 const freshSeed = `UPDATE settings SET approval_mode = 'manual' WHERE id = 1;`

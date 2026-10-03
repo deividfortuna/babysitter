@@ -19,7 +19,7 @@ func (s *Service) blockers(w store.Watch, snap *snapshot.Snapshot, state agentSt
 	for i := range out {
 		out[i] = redact.Text(out[i])
 	}
-	for _, own := range []string{state.untold, state.proposal, state.author} {
+	for _, own := range []string{state.untold, state.proposal, state.author, state.limit} {
 		if own != "" {
 			out = append(out, own)
 		}
@@ -59,6 +59,8 @@ func agentBusyWord(state agent.State) (string, bool) {
 		return "the agent is starting", true
 	case agent.StateActive:
 		return "the agent is still working", true
+	case agent.StateWaiting:
+		return "the background work of the agent still runs", true
 	case agent.StateWaitingInput:
 		return "the agent asks you a question", true
 	case agent.StateBlocked:

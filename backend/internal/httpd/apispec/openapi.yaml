@@ -2125,6 +2125,7 @@ components:
           - post-tool-use-failure
           - permission-request
           - stop
+          - stop-failure
           - notification
           - session-end
           type: string
@@ -3499,7 +3500,8 @@ components:
           type: string
         state:
           description: 'What the agent does now. none: no session; starting: the process
-            runs and said nothing yet; idle: waits for a message; active: works; waiting_input:
+            runs and said nothing yet; idle: waits for a message; active: works; waiting:
+            ended its turn, but its background work still runs and can wake it; waiting_input:
             asked you a question; blocked: waits on a permission decision; exited:
             the process ended'
           enum:
@@ -3507,6 +3509,7 @@ components:
           - starting
           - idle
           - active
+          - waiting
           - waiting_input
           - blocked
           - exited

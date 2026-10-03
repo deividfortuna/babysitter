@@ -110,10 +110,10 @@ func TestTheCommitMsgHookMakesBabysitterACoAuthorOnce(t *testing.T) {
 	}
 }
 
-func TestATurnEndsWhenTheAgentIsIdleOrGone(t *testing.T) {
+func TestATurnEndsWhenTheAgentStopsOrIsGone(t *testing.T) {
 	t.Parallel()
 	for _, s := range States {
-		want := s == StateIdle || s == StateExited
+		want := s == StateIdle || s == StateWaiting || s == StateExited
 		if s.EndsTurn() != want {
 			t.Errorf("%s.EndsTurn() = %v, want %v", s, !want, want)
 		}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -19,6 +20,7 @@ const (
 	readyPoll    = 100 * time.Millisecond
 	startupGrace = 15 * time.Second
 	stopTimeout  = 10 * time.Second
+	silentTurn   = 10 * time.Minute
 )
 
 type live struct {
@@ -52,6 +54,19 @@ func (l *live) State() agent.State {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.state
+}
+
+func (l *live) holdsMessages(now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.state.Working() {
+		return false
+	}
+	lastSignal := l.signalAt
+	if lastSignal.IsZero() {
+		lastSignal = l.startedAt
+	}
+	return now.Sub(lastSignal) < silentTurn
 }
 
 func (l *live) report(state agent.State, at time.Time) bool {
@@ -153,6 +168,9 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	if err != nil {
 		return nil, err
 	}
+	if err := s.ensureWorktree(ctx, w); err != nil {
+		return nil, err
+	}
 	sessionID, resume := w.AgentSession, w.AgentSession != ""
 	if !resume {
 		sessionID = runner.NewSessionID()
@@ -207,6 +225,21 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 		return l, err
 	}
 	return l, nil
+}
+
+func (s *Service) ensureWorktree(ctx context.Context, w store.Watch) error {
+	if !s.managesWorktree(w) {
+		return nil
+	}
+	_, err := os.Stat(w.WorktreeDir)
+	if !os.IsNotExist(err) {
+		return nil
+	}
+	s.log.Warn("the worktree of the watch is gone, make it again", "watch", w.ID, "dir", w.WorktreeDir)
+	if err := s.git.Restore(ctx, w.SourceDir, w.WorktreeDir, w.WorkBranch, "origin/"+w.HeadRef); err != nil {
+		return fmt.Errorf("make the worktree %s again: %w", w.WorktreeDir, err)
+	}
+	return nil
 }
 
 func (s *Service) catchUpSize(watchID int64, l *live, startSize TerminalSize) {

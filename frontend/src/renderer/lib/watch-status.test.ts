@@ -16,6 +16,7 @@ import {
 
 test("names what the agent does and whether it waits on the author", () => {
   expect(sessionWord("active")).toEqual({ label: "agent working", tone: "good", needsYou: false });
+  expect(sessionWord("waiting")).toEqual({ label: "agent waits on background work", tone: "wait", needsYou: false });
   expect(sessionWord("waiting_input").needsYou).toBe(true);
   expect(sessionWord("blocked").needsYou).toBe(true);
   expect(sessionWord("exited").needsYou).toBe(true);

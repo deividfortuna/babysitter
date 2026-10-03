@@ -97,6 +97,57 @@ func TestCreateAndRemove(t *testing.T) {
 	}
 }
 
+func TestRestoreKeepsTheCommitsOfTheBranch(t *testing.T) {
+	t.Parallel()
+	_, author, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	dir := filepath.Join(t.TempDir(), "wt", "octo-hello-3")
+	if err := g.Create(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "c.txt", "three\n")
+	git(t, dir, "add", "c.txt")
+	git(t, dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "add c")
+	unpushed := git(t, dir, "rev-parse", "HEAD")
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := g.Restore(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if h := git(t, dir, "rev-parse", "HEAD"); h != unpushed {
+		t.Fatalf("restored head = %s, want the unpushed commit %s", h, unpushed)
+	}
+	if b := git(t, dir, "rev-parse", "--abbrev-ref", "HEAD"); b != "babysitter/fix" {
+		t.Fatalf("restored branch = %q", b)
+	}
+}
+
+func TestRestoreCreatesTheBranchItLost(t *testing.T) {
+	t.Parallel()
+	_, author, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	dir := filepath.Join(t.TempDir(), "wt", "octo-hello-3")
+	if err := g.Create(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	git(t, author, "worktree", "prune")
+	git(t, author, "branch", "-q", "-D", "babysitter/fix")
+
+	if err := g.Restore(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if h := git(t, dir, "rev-parse", "HEAD"); h != git(t, author, "rev-parse", "origin/fix") {
+		t.Fatalf("restored head = %s, want the head of origin/fix", h)
+	}
+}
+
 func TestFetchNeedsPushedBranch(t *testing.T) {
 	t.Parallel()
 	_, author, _ := repos(t)

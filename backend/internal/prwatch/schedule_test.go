@@ -240,7 +240,7 @@ func TestAWatchThatIsNotQuietStaysAtTheShortestInterval(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			t.Parallel()
 			fx := newFixture(t)
-			w := fx.start()
+			w := fx.startWorking()
 			arrange(fx, w)
 			fx.poll(w)
 			fx.poll(w)

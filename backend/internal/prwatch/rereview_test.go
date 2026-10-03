@@ -240,7 +240,7 @@ func TestRereviewAsksNobody(t *testing.T) {
 			t.Parallel()
 			fx := newFixture(t)
 			c.setup(fx)
-			w := fx.start()
+			w := fx.startWorking()
 			if !c.busy {
 				fx.agentIdle(w)
 			}

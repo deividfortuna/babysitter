@@ -17,6 +17,7 @@ var ErrBranchLeft = errors.New("the private branch of the worktree was not delet
 type Manager interface {
 	Fetch(ctx context.Context, source, upstream string) error
 	Create(ctx context.Context, source, dir, branch, upstream string) error
+	Restore(ctx context.Context, source, dir, branch, upstream string) error
 	Remove(ctx context.Context, source, dir, branch string) error
 }
 
@@ -78,6 +79,20 @@ func (g *Git) Create(ctx context.Context, source, dir, branch, upstream string) 
 		return fmt.Errorf("create worktree dir: %w", err)
 	}
 	if _, err := g.git(ctx, source, "worktree", "add", "-q", "-B", branch, dir, upstream); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *Git) Restore(ctx context.Context, source, dir, branch, upstream string) error {
+	_, _ = g.git(ctx, source, "worktree", "prune")
+	if !g.branchExists(ctx, source, branch) {
+		return g.Create(ctx, source, dir, branch, upstream)
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
+		return fmt.Errorf("create worktree dir: %w", err)
+	}
+	if _, err := g.git(ctx, source, "worktree", "add", "-q", dir, branch); err != nil {
 		return err
 	}
 	return nil
