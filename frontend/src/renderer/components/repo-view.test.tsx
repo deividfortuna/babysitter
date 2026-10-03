@@ -147,6 +147,21 @@ test("the sync icon in the header asks the daemon to sync", async () => {
   await vi.waitFor(() => expect(synced).toBe(true));
 });
 
+test("shows the daemon error when Sync fails", async () => {
+  serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
+  server.use(
+    http.post(apiUrl("/api/v1/sync"), () =>
+      HttpResponse.json({ error: { message: "the daemon is shutting down" } }, { status: 503 }),
+    ),
+  );
+  const user = userEvent.setup();
+
+  renderView();
+  await user.click(await screen.findByRole("button", { name: "Sync now" }));
+
+  expect(await screen.findByText("the daemon is shutting down")).toBeVisible();
+});
+
 test("a queued Dependabot update shows its place and its update type", async () => {
   serveApi({
     repos: [buildRepo()],

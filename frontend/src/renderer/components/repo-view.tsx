@@ -231,6 +231,13 @@ export function RepoView({ enabled, name, onNavigate, onWatchPull }: Props) {
           </ViewHeaderActions>
         </ViewHeader>
 
+        {requestSync.error ? (
+          <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
+            <CircleAlertIcon />
+            <AlertTitle>{requestSync.error.message}</AlertTitle>
+          </Alert>
+        ) : null}
+
         {repo.lastError ? (
           <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
             <CircleAlertIcon />
