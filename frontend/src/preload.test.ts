@@ -2,6 +2,8 @@ import { beforeEach, expect, test, vi } from "vite-plus/test";
 import type { BabysitterBridge } from "./preload";
 import {
   APP_MENU_POPUP_CHANNEL,
+  OPEN_IN_LAUNCH_CHANNEL,
+  OPEN_IN_TARGETS_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
   UPDATES_CHECK_CHANNEL,
   UPDATES_DOWNLOAD_CHANNEL,
@@ -70,6 +72,13 @@ test("each update call goes to its channel", async () => {
     [UPDATES_GET_SETTINGS_CHANNEL],
     [UPDATES_SET_SETTINGS_CHANNEL, { channel: "stable" }],
   ]);
+});
+
+test("the editor calls go to their channels with the watch and the editor", async () => {
+  await bridge.openIn.targets();
+  await bridge.openIn.launch(42, "vscode");
+
+  expect(electron.invoked).toEqual([[OPEN_IN_TARGETS_CHANNEL], [OPEN_IN_LAUNCH_CHANNEL, 42, "vscode"]]);
 });
 
 test("the update status reaches the listener until it lets go", () => {

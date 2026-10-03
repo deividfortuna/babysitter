@@ -1,7 +1,6 @@
 import { useMemo, useState, type ComponentProps } from "react";
 import {
   CheckIcon,
-  ChevronDownIcon,
   CircleXIcon,
   FileDiffIcon,
   MessageSquareReplyIcon,
@@ -20,17 +19,11 @@ import {
 } from "@/hooks/useProposals";
 import type { Watch } from "@/hooks/useWatches";
 import { AttentionBadge, Meta, ToneBadge } from "@/components/status-badges";
-import { Tip } from "@/components/tip";
+import { SplitButton } from "@/components/split-button";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ButtonGroup, ButtonGroupSeparator } from "@/components/ui/button-group";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import { Spinner } from "@/components/ui/spinner";
 import { Textarea } from "@/components/ui/textarea";
 import {
@@ -363,39 +356,6 @@ function useShownCode(
     loads,
     load,
   };
-}
-
-function SplitButton({
-  variant,
-  label,
-  more,
-  children,
-}: {
-  variant: "default" | "outline";
-  label: string;
-  more: React.ReactNode;
-  children: React.ReactNode;
-}) {
-  return (
-    <ButtonGroup>
-      {children}
-      {more ? (
-        <>
-          {variant === "default" ? <ButtonGroupSeparator className="bg-primary-foreground/30" /> : null}
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Tip label={label}>
-                <Button size="icon-sm" variant={variant} className="w-7" aria-label={label}>
-                  <ChevronDownIcon />
-                </Button>
-              </Tip>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">{more}</DropdownMenuContent>
-          </DropdownMenu>
-        </>
-      ) : null}
-    </ButtonGroup>
-  );
 }
 
 function DecisionButtons({

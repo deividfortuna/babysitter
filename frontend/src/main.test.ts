@@ -4,6 +4,8 @@ import {
   NOTIFICATIONS_CLICK_CHANNEL,
   NOTIFICATIONS_OPEN_READY_CHANNEL,
   NOTIFICATIONS_SHOW_CHANNEL,
+  OPEN_IN_LAUNCH_CHANNEL,
+  OPEN_IN_TARGETS_CHANNEL,
   QUIT_SHORTCUT_CHANNEL,
   THEME_FOLLOW_CHANNEL,
   UPDATES_GET_STATUS_CHANNEL,
@@ -13,6 +15,11 @@ import { CANVAS, INK } from "./shared/theme";
 import { MAC_WINDOW_BUTTON_HEIGHT, TITLEBAR_HEIGHT } from "./shared/titlebar";
 
 type Handler = (...args: never[]) => unknown;
+
+type Launcher = {
+  openPath: (dir: string) => Promise<string>;
+  watchFolder: (watchId: number) => Promise<string | null>;
+};
 
 const appDir = vi.hoisted(() => process.cwd());
 
@@ -38,6 +45,24 @@ const electron = vi.hoisted(() => ({
   popups: [] as Record<string, unknown>[],
   systemDark: false,
   themeUpdated: null as (() => void) | null,
+  launches: [] as unknown[][],
+  openedPaths: [] as string[],
+  launcher: null as Launcher | null,
+}));
+
+vi.mock("./main/open-in", () => ({
+  EditorLauncher: class {
+    constructor(options: Launcher) {
+      electron.launcher = options;
+    }
+    async targets() {
+      return ["vscode", "file-manager"];
+    }
+    async launch(watchId: unknown, target: unknown) {
+      electron.launches.push([watchId, target]);
+      return target === "vscode" ? { ok: true } : { ok: false, error: "Zed is not installed." };
+    }
+  },
 }));
 
 vi.mock("./main/update-settings", () => ({
@@ -187,7 +212,13 @@ vi.mock("electron", () => {
       },
     },
     Notification: FakeNotification,
-    shell: { openExternal: (url: string) => electron.opened.push(url) },
+    shell: {
+      openExternal: (url: string) => electron.opened.push(url),
+      openPath: async (dir: string) => {
+        electron.openedPaths.push(dir);
+        return "";
+      },
+    },
     Tray: class {
       constructor() {
         electron.trays++;
@@ -221,6 +252,9 @@ async function loadMain() {
   electron.popups.length = 0;
   electron.systemDark = false;
   electron.themeUpdated = null;
+  electron.launches.length = 0;
+  electron.openedPaths.length = 0;
+  electron.launcher = null;
   vi.resetModules();
   await import("./main");
 }
@@ -402,6 +436,29 @@ function invoke(channel: string, ...args: unknown[]): unknown {
   if (!handler) throw new Error(`the main process has no handler for ${channel}`);
   return (handler as (event: unknown, ...args: unknown[]) => unknown)(null, ...args);
 }
+
+test("the renderer lists the editors and opens the folder of a watch through the launcher", async () => {
+  expect(await invoke(OPEN_IN_TARGETS_CHANNEL)).toEqual(["vscode", "file-manager"]);
+  expect(await invoke(OPEN_IN_LAUNCH_CHANNEL, 42, "vscode")).toEqual({ ok: true });
+  expect(await invoke(OPEN_IN_LAUNCH_CHANNEL, 42, "zed")).toEqual({
+    ok: false,
+    error: "Zed is not installed.",
+  });
+
+  expect(electron.launches).toEqual([
+    [42, "vscode"],
+    [42, "zed"],
+  ]);
+});
+
+test("the file manager opens a folder through the shell of Electron", async () => {
+  expect(await electron.launcher?.openPath("/work/pr-12")).toBe("");
+  expect(electron.openedPaths).toEqual(["/work/pr-12"]);
+});
+
+test("a watch has no folder to open while no local daemon is ready", async () => {
+  expect(await electron.launcher?.watchFolder(42)).toBeNull();
+});
 
 test("a build that is not packaged says it does not update itself", () => {
   expect(invoke(UPDATES_GET_STATUS_CHANNEL)).toEqual({ state: "unsupported", currentVersion: "0.0.0-test" });

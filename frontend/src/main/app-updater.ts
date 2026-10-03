@@ -1,3 +1,4 @@
+import { errorMessage } from "../shared/values";
 import { isBusy, resolveSettings, type UpdateSettings, type UpdateStatus } from "../shared/updates";
 
 const FIRST_CHECK_DELAY_MS = 10_000;
@@ -73,17 +74,13 @@ const DESCRIPTIONS: [RegExp, string][] = [
   [/read-only volume/, "Move Babysitter to the Applications folder, then try again."],
 ];
 
-function messageOf(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
 function codeOf(error: unknown): string {
   const code = (error as { code?: unknown } | null)?.code;
   return typeof code === "string" ? code : "";
 }
 
 export function describeUpdateError(error: unknown): string {
-  const message = messageOf(error);
+  const message = errorMessage(error);
   const text = `${codeOf(error)} ${message}`;
   return DESCRIPTIONS.find(([pattern]) => pattern.test(text))?.[1] ?? message;
 }
@@ -168,7 +165,7 @@ export function createUpdateController(deps: UpdateControllerDeps): UpdateContro
     try {
       return found(await ask(updater));
     } catch (error) {
-      log(`update: the check failed: ${messageOf(error)}`);
+      log(`update: the check failed: ${errorMessage(error)}`);
       return mode === "manual" ? publish({ state: "error", message: describeUpdateError(error) }) : status;
     }
   }
@@ -198,14 +195,14 @@ export function createUpdateController(deps: UpdateControllerDeps): UpdateContro
 
   function failDownload(mode: Mode, error: unknown) {
     if (status.state !== "downloading") return;
-    log(`update: the download failed: ${messageOf(error)}`);
+    log(`update: the download failed: ${errorMessage(error)}`);
     const offer = { state: "available" as const, version: status.version };
     publish(mode === "manual" ? { ...offer, message: describeUpdateError(error) } : offer);
   }
 
   function failInstall(error: unknown) {
     clearTimeout(installDeadline);
-    log(`update: the install failed: ${messageOf(error)}`);
+    log(`update: the install failed: ${errorMessage(error)}`);
     publish({ state: "downloaded", version: status.version, message: describeUpdateError(error) });
     deps.onInstallFailed();
   }

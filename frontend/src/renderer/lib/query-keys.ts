@@ -66,3 +66,4 @@ export const logLevelQueryKey = ["logs", "level"] as const;
 export const discoveryQueryKey = ["connections", "discovered"] as const;
 
 export const appVersionQueryKey = ["app", "version"] as const;
+export const openInTargetsQueryKey = ["app", "open-in-targets"] as const;

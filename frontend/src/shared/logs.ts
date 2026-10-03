@@ -12,8 +12,6 @@ export type LogRecord = {
   attrs: LogAttr[];
 };
 
-export type OpenLogFolderResult = { ok: true } | { ok: false; error: string };
-
 export function isDaemonLogRecord(line: string): boolean {
   return line.startsWith("time=");
 }

@@ -73,6 +73,10 @@ export const bridge: BabysitterBridge = window.babysitter ?? {
     onAppRecord: () => () => undefined,
     openFolder: async () => ({ ok: false, error: "Only the desktop app can open the log folder." }),
   },
+  openIn: {
+    targets: async () => [],
+    launch: async () => ({ ok: false, error: "Only the desktop app can open folders." }),
+  },
   quit: {
     onShortcut: () => () => undefined,
   },

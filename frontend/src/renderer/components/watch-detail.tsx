@@ -36,6 +36,7 @@ import { WatchSettingsPanel } from "@/components/watch-settings-panel";
 import { PanelToggle, PanelToggleSpace, clearsPanelToggle } from "@/components/panel-toggle";
 import { useWatchActivity, type Activity } from "@/hooks/useWatchActivity";
 import { useWatch, useWatches, type Watch } from "@/hooks/useWatches";
+import { useOpenFolder } from "@/hooks/use-open-in";
 import {
   AutoBadges,
   ChecksBadge,
@@ -49,6 +50,7 @@ import {
 import { ViewHeader, ViewHeaderActions, ViewHeaderButton } from "@/components/view-header";
 import { MergeWatchDialog } from "@/components/merge-watch-dialog";
 import { StopWatchDialog } from "@/components/stop-watch-dialog";
+import { OpenInButton } from "@/components/open-in-button";
 import { TakenOverPanel } from "@/components/taken-over-panel";
 import { TakeoverDialog } from "@/components/takeover-dialog";
 import { TerminalPanel } from "@/components/terminal-panel";
@@ -126,13 +128,15 @@ type Props = {
   onNavigate: Navigate;
   onStopped: (watch: Watch) => void;
   onWatchPR: () => void;
+  onThisMachine?: boolean;
 };
 
-export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
+export function WatchDetail({ id, enabled, onStopped, onWatchPR, onThisMachine = false }: Props) {
   const listed = useWatches(enabled, "all");
   const one = useWatch(enabled ? id : null);
   const watch = listed.data?.find((w) => w.id === id) ?? one.data;
   const activity = useWatchActivity(enabled ? id : null);
+  const openFolder = useOpenFolder();
   const current = useCurrentProposal(watch);
   const [stopping, setStopping] = useState(false);
   const [merging, setMerging] = useState(false);
@@ -174,6 +178,8 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
   const ready = active && Boolean(watch.readySince);
   const blockers = active ? (watch.readyBlockers ?? []) : [];
   const terminalShown = terminalOpen && !isSelfWatch(watch);
+  const actionsClearPanelToggle = active && !settingsOpen;
+  const openError = openFolder.variables?.watchId === watch.id ? openFolder.error : null;
 
   return (
     <ProposalDecisionProvider key={watch.id} watch={watch}>
@@ -190,22 +196,29 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
                   {watchLabel(watch)}
                 </a>
               </Meta>
-              {active ? (
-                <ViewHeaderActions className={settingsOpen ? undefined : clearsPanelToggle}>
-                  <ViewHeaderButton variant="outline" onClick={() => setStopping(true)}>
-                    <SquareIcon data-icon="inline-start" />
-                    Stop watching
-                  </ViewHeaderButton>
-                  <ViewHeaderButton
-                    disabled={!ready}
-                    title={ready ? undefined : "The pull request is not ready to merge yet"}
-                    onClick={() => setMerging(true)}
-                  >
-                    <GitMergeIcon data-icon="inline-start" />
-                    Merge
-                  </ViewHeaderButton>
-                </ViewHeaderActions>
-              ) : null}
+              <ViewHeaderActions className={actionsClearPanelToggle ? clearsPanelToggle : undefined}>
+                <OpenInButton
+                  watch={watch}
+                  onThisMachine={onThisMachine}
+                  onOpen={(request) => openFolder.mutate(request)}
+                />
+                {active ? (
+                  <>
+                    <ViewHeaderButton variant="outline" onClick={() => setStopping(true)}>
+                      <SquareIcon data-icon="inline-start" />
+                      Stop watching
+                    </ViewHeaderButton>
+                    <ViewHeaderButton
+                      disabled={!ready}
+                      title={ready ? undefined : "The pull request is not ready to merge yet"}
+                      onClick={() => setMerging(true)}
+                    >
+                      <GitMergeIcon data-icon="inline-start" />
+                      Merge
+                    </ViewHeaderButton>
+                  </>
+                ) : null}
+              </ViewHeaderActions>
             </div>
             <div className="flex flex-wrap items-center gap-2">
               {!active ? <StopBadge watch={watch} className="shrink-0" /> : null}
@@ -229,6 +242,12 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
                 </Badge>
               ) : null}
             </div>
+            {openError ? (
+              <Alert variant="destructive">
+                <CircleAlertIcon />
+                <AlertTitle>{openError.message}</AlertTitle>
+              </Alert>
+            ) : null}
             {active ? <PanelToggleSpace /> : null}
           </ViewHeader>
 
