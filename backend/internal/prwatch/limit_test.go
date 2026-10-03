@@ -197,3 +197,40 @@ func TestALimitTakesTheReadinessAwayAtOnce(t *testing.T) {
 		t.Fatalf("blockers after the limit was cleared = %q", blockers)
 	}
 }
+
+func TestALimitThatComesDuringThePollKeepsTheMessage(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	ctx := context.Background()
+	reset := fx.clock().UTC().Add(time.Hour).Truncate(time.Minute)
+	payload, err := json.Marshal(map[string]string{
+		"error":                  "rate_limit",
+		"last_assistant_message": fmt.Sprintf("You've hit your session limit · resets %s (UTC)", reset.Format("3:04pm")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.rel.duringFetch = func() {
+		for _, e := range []struct {
+			event   string
+			payload []byte
+		}{{agent.EventUserPromptSubmit, []byte(`{}`)}, {agent.EventStopFailure, payload}} {
+			if _, err := fx.svc.Hook(ctx, w.ID, e.event, e.payload); err != nil {
+				t.Errorf("Hook(%s) error = %v", e.event, err)
+			}
+		}
+	}
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "rename it", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+	fx.svc.wg.Wait()
+	if fx.watch(w).AgentLimitedUntil == nil {
+		t.Fatal("the limit that came during the poll was not stored")
+	}
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("an agent that hit its limit during the poll was told: %q", msgs)
+	}
+}

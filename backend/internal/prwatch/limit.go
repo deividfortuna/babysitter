@@ -71,6 +71,11 @@ func (s *Service) clearLimit(ctx context.Context, id int64) {
 	s.store.PublishSession(w.Key())
 }
 
+func (s *Service) limitedNow(ctx context.Context, id int64) bool {
+	w, err := s.store.GetWatch(ctx, id)
+	return err == nil && limited(w)
+}
+
 func (s *Service) limitIsOver(w store.Watch) bool {
 	return limited(w) && !s.now().Before(*w.AgentLimitedUntil)
 }
