@@ -15,7 +15,7 @@ import { PanelToggle, clearsPanelToggle } from "@/components/panel-toggle";
 import { RepoSettingsPanel } from "@/components/repo-settings-panel";
 import { AuthorName, DiffStat, InboxGroup, InboxItem, LabelBadges } from "@/components/inbox-row";
 import { CheckIcon, Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
-import { ViewHeader } from "@/components/view-header";
+import { ViewHeader, ViewHeaderActions, ViewHeaderButton } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
 import { Tip } from "@/components/tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -24,7 +24,6 @@ import { Empty, EmptyContent, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTi
 import { Skeleton } from "@/components/ui/skeleton";
 import type { Navigate } from "@/lib/navigation";
 import { relativeTime } from "@/lib/time";
-import { cn } from "@/lib/utils";
 import { needsYouFirst, queuePlace, type Tone } from "@/lib/watch-status";
 
 function ciWord(status: PullRequest["ciStatus"]): { label: string; tone: Tone } | null {
@@ -216,23 +215,22 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
           <Meta className="shrink-0">
             {watched.length} watched · {open.length} open · {synced}
           </Meta>
-          <div className={cn("ml-auto flex shrink-0 items-center gap-1.5", !settingsOpen && clearsPanelToggle)}>
-            <Button
+          <ViewHeaderActions className={settingsOpen ? undefined : clearsPanelToggle}>
+            <ViewHeaderButton
               type="button"
               variant="ghost"
-              size="sm"
               title="Sync now"
               disabled={requestSync.isPending}
               onClick={() => requestSync.mutate()}
             >
               <RefreshCwIcon data-icon="inline-start" />
               Sync
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={onWatchPR}>
+            </ViewHeaderButton>
+            <ViewHeaderButton type="button" variant="outline" onClick={onWatchPR}>
               <GitPullRequestIcon data-icon="inline-start" />
               Watch by URL
-            </Button>
-          </div>
+            </ViewHeaderButton>
+          </ViewHeaderActions>
         </ViewHeader>
 
         {repo.lastError ? (

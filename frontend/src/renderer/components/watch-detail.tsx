@@ -46,7 +46,7 @@ import {
   StopBadge,
   ToneBadge,
 } from "@/components/status-badges";
-import { ViewHeader } from "@/components/view-header";
+import { ViewHeader, ViewHeaderActions, ViewHeaderButton } from "@/components/view-header";
 import { MergeWatchDialog } from "@/components/merge-watch-dialog";
 import { StopWatchDialog } from "@/components/stop-watch-dialog";
 import { TakenOverPanel } from "@/components/taken-over-panel";
@@ -190,20 +190,19 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
                 </a>
               </Meta>
               {active ? (
-                <div className={cn("ml-auto flex shrink-0 items-center gap-1.5", !settingsOpen && clearsPanelToggle)}>
-                  <Button variant="outline" size="sm" onClick={() => setStopping(true)}>
+                <ViewHeaderActions className={settingsOpen ? undefined : clearsPanelToggle}>
+                  <ViewHeaderButton variant="outline" onClick={() => setStopping(true)}>
                     Stop watching
-                  </Button>
-                  <Button
-                    size="sm"
+                  </ViewHeaderButton>
+                  <ViewHeaderButton
                     disabled={!ready}
                     title={ready ? undefined : "The pull request is not ready to merge yet"}
                     onClick={() => setMerging(true)}
                   >
                     <GitMergeIcon data-icon="inline-start" />
                     Merge
-                  </Button>
-                </div>
+                  </ViewHeaderButton>
+                </ViewHeaderActions>
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">

@@ -131,17 +131,6 @@ test("keeps the title in the view header while the repository loads, fails or is
   expectViewTitle("octo/babysitter");
 });
 
-test("sizes the header buttons like the other views", async () => {
-  serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
-
-  renderView();
-  await screen.findByRole("button", { name: "Watch by URL" });
-
-  for (const button of within(screen.getByRole("banner")).getAllByRole("button")) {
-    expect(button).toHaveAttribute("data-size", "sm");
-  }
-});
-
 test("a queued Dependabot update shows its place and its update type", async () => {
   serveApi({
     repos: [buildRepo()],

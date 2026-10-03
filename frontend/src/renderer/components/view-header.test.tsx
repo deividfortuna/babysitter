@@ -1,6 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { afterEach, expect, test, vi } from "vite-plus/test";
-import { ViewHeader, clearsWindowButtonsWhenSidebarCollapses } from "./view-header";
+import {
+  ViewHeader,
+  ViewHeaderActions,
+  ViewHeaderButton,
+  clearsWindowButtonsWhenSidebarCollapses,
+} from "./view-header";
 
 const platform = vi.hoisted(() => ({ isMac: false }));
 
@@ -41,4 +46,20 @@ test("on macOS keeps the usual inset, since the window buttons sit at the left",
 
   expect(screen.getByRole("banner")).toHaveClass("pr-5");
   expect(screen.getByRole("banner")).not.toHaveClass("pr-window-controls");
+});
+
+test("sizes every button of the header the same", () => {
+  render(
+    <ViewHeader>
+      Stopped
+      <ViewHeaderActions>
+        <ViewHeaderButton>Sync</ViewHeaderButton>
+        <ViewHeaderButton variant="outline">Watch by URL</ViewHeaderButton>
+      </ViewHeaderActions>
+    </ViewHeader>,
+  );
+
+  for (const button of screen.getAllByRole("button")) {
+    expect(button).toHaveAttribute("data-size", "xs");
+  }
 });
