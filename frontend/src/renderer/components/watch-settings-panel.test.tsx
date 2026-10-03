@@ -2,7 +2,7 @@ import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { buildWatch } from "@test/fixtures";
-import { chooseOption, renderWithProviders } from "@test/test-utils";
+import { chooseOption, focusOrder, renderWithProviders } from "@test/test-utils";
 import { branchRuleApprovals, serveApi, type Decision } from "@test/msw";
 import type { Watch } from "@/hooks/useWatches";
 import { WatchDetail } from "./watch-detail";
@@ -20,22 +20,33 @@ async function openSettings(user: ReturnType<typeof userEvent.setup>) {
   return screen.getByRole("complementary", { name: "Watch settings" });
 }
 
-test("an icon button after Merge opens the panel, and the panel closes it", async () => {
+test("an icon button after Merge opens the panel, and the same button in the same place closes it", async () => {
   const { user } = renderDetail();
 
-  const merge = await screen.findByRole("button", { name: "Merge" });
-  const open = screen.getByRole("button", { name: "Watch settings" });
-  expect(merge.compareDocumentPosition(open) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  const open = await screen.findByRole("button", { name: "Watch settings" });
   expect(screen.queryByRole("complementary", { name: "Watch settings" })).toBeNull();
 
   const panel = await openSettings(user);
   expect(within(panel).getByText("For octo/babysitter#12 only. They start as your defaults.")).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Watch settings" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Watch settings" })).toBe(open);
   expect(screen.getByRole("heading", { level: 1 })).toBeVisible();
 
-  await user.click(within(panel).getByRole("button", { name: "Close watch settings" }));
+  await user.click(open);
   expect(screen.queryByRole("complementary", { name: "Watch settings" })).toBeNull();
-  expect(screen.getByRole("button", { name: "Watch settings" })).toBeVisible();
+});
+
+test("the panel icon comes before the activity and the watch settings in the focus order", async () => {
+  const { user } = renderDetail();
+
+  const panel = await openSettings(user);
+  const toggle = screen.getByRole("button", { name: "Watch settings" });
+  const header = screen.getByRole("banner");
+
+  const order = await focusOrder(user);
+  const firstAfter = order.findIndex((element) => element !== toggle && !header.contains(element));
+  expect(order.some((element) => panel.contains(element))).toBe(true);
+  expect(order.indexOf(toggle)).toBeGreaterThanOrEqual(0);
+  expect(order.indexOf(toggle)).toBeLessThan(firstAfter);
 });
 
 test("the header no longer holds the approval mode", async () => {

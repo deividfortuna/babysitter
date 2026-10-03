@@ -5,7 +5,7 @@ import { useMergeWatch, useWatches } from "@/hooks/useWatches";
 import { KIND_ICON } from "@/lib/notification-icons";
 import { InboxGroup, InboxRow } from "@/components/inbox-row";
 import { Meta, ToneBadge } from "@/components/status-badges";
-import { ViewHeader } from "@/components/view-header";
+import { ViewHeader, ViewHeaderActions, ViewHeaderButton } from "@/components/view-header";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { Empty, EmptyDescription, EmptyHeader, EmptyMedia, EmptyTitle } from "@/components/ui/empty";
@@ -79,15 +79,15 @@ export function NotificationsView({ enabled, onNavigate }: Props) {
       <ViewHeader>
         {title}
         <Meta>{unread} unread</Meta>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="ml-auto"
-          disabled={unread === 0 || read.isPending}
-          onClick={() => read.mutate(undefined)}
-        >
-          Mark all as read
-        </Button>
+        <ViewHeaderActions>
+          <ViewHeaderButton
+            variant="ghost"
+            disabled={unread === 0 || read.isPending}
+            onClick={() => read.mutate(undefined)}
+          >
+            Mark all as read
+          </ViewHeaderButton>
+        </ViewHeaderActions>
       </ViewHeader>
       {read.error ? (
         <Alert variant="destructive" className="m-5 w-auto">

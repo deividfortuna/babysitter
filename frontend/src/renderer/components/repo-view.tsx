@@ -6,16 +6,16 @@ import {
   FolderGitIcon,
   GitPullRequestDraftIcon,
   GitPullRequestIcon,
-  PanelRightIcon,
   RefreshCwIcon,
 } from "lucide-react";
 import { usePulls, type PullRequest } from "@/hooks/usePulls";
 import { useRepoQueue, useRepos, useRequestSync, type QueuedPullRequest } from "@/hooks/useRepos";
 import { useWatches, type Watch } from "@/hooks/useWatches";
+import { PanelToggle, clearsPanelToggle } from "@/components/panel-toggle";
 import { RepoSettingsPanel } from "@/components/repo-settings-panel";
 import { AuthorName, DiffStat, InboxGroup, InboxItem, LabelBadges } from "@/components/inbox-row";
 import { CheckIcon, Meta, QueuedBadge, ToneBadge } from "@/components/status-badges";
-import { ViewHeader } from "@/components/view-header";
+import { ViewHeader, ViewHeaderActions } from "@/components/view-header";
 import { WatchRow } from "@/components/watch-row";
 import { Tip } from "@/components/tip";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -125,11 +125,10 @@ type Props = {
   enabled: boolean;
   name: string;
   onNavigate: Navigate;
-  onWatchPR: () => void;
   onWatchPull: (pr: PullRequest) => void;
 };
 
-export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: Props) {
+export function RepoView({ enabled, name, onNavigate, onWatchPull }: Props) {
   const repos = useRepos(enabled);
   const watches = useWatches(enabled);
   const pulls = usePulls(enabled);
@@ -208,44 +207,37 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
   const synced = repo.lastSyncedAt ? `synced ${relativeTime(repo.lastSyncedAt)}` : "not synced yet";
 
   return (
-    <div className="flex min-h-0 flex-1">
+    <div className="relative flex min-h-0 flex-1">
+      <PanelToggle label="Repository settings" open={settingsOpen} onOpenChange={setSettingsOpen} />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <ViewHeader>
           {title}
           <Meta className="shrink-0">
             {watched.length} watched · {open.length} open · {synced}
           </Meta>
-          <div className="ml-auto flex shrink-0 items-center gap-1.5">
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              title="Sync now"
-              disabled={requestSync.isPending}
-              onClick={() => requestSync.mutate()}
-            >
-              <RefreshCwIcon data-icon="inline-start" />
-              Sync
-            </Button>
-            <Button type="button" variant="outline" size="sm" onClick={onWatchPR}>
-              <GitPullRequestIcon data-icon="inline-start" />
-              Watch by URL
-            </Button>
-            {settingsOpen ? null : (
-              <Tip label="Repository settings">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  aria-label="Repository settings"
-                  className="size-7"
-                  onClick={() => setSettingsOpen(true)}
-                >
-                  <PanelRightIcon />
-                </Button>
-              </Tip>
-            )}
-          </div>
+          <ViewHeaderActions className={settingsOpen ? undefined : clearsPanelToggle}>
+            <Tip side="bottom" label="Sync now">
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-7"
+                aria-label="Sync now"
+                disabled={requestSync.isPending}
+                onClick={() => requestSync.mutate()}
+              >
+                <RefreshCwIcon />
+              </Button>
+            </Tip>
+          </ViewHeaderActions>
         </ViewHeader>
+
+        {requestSync.error ? (
+          <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
+            <CircleAlertIcon />
+            <AlertTitle>{requestSync.error.message}</AlertTitle>
+          </Alert>
+        ) : null}
 
         {repo.lastError ? (
           <Alert variant="destructive" className="rounded-none border-x-0 border-t-0">
@@ -284,7 +276,7 @@ export function RepoView({ enabled, name, onNavigate, onWatchPR, onWatchPull }: 
           </InboxGroup>
         </div>
       </div>
-      {settingsOpen ? <RepoSettingsPanel repo={repo} onClose={() => setSettingsOpen(false)} /> : null}
+      {settingsOpen ? <RepoSettingsPanel repo={repo} /> : null}
     </div>
   );
 }

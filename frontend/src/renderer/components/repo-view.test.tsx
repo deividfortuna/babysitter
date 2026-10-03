@@ -3,14 +3,12 @@ import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { http, HttpResponse } from "msw";
 import { buildPullRequest, buildQueuedPullRequest, buildRepo, buildWatch } from "@test/fixtures";
-import { expectViewTitle, renderWithProviders } from "@test/test-utils";
+import { expectViewTitle, focusOrder, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { RepoView } from "./repo-view";
 
 function renderView() {
-  return renderWithProviders(
-    <RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPR={vi.fn()} onWatchPull={vi.fn()} />,
-  );
+  return renderWithProviders(<RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPull={vi.fn()} />);
 }
 
 test("announces that repository details are loading", async () => {
@@ -57,9 +55,7 @@ test("shows an open pull request and selects it to start watching", async () => 
   serveApi({ repos: [buildRepo()], watches: [], pullRequests: [pullRequest] });
   const user = userEvent.setup();
 
-  renderWithProviders(
-    <RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPR={vi.fn()} onWatchPull={onWatchPull} />,
-  );
+  renderWithProviders(<RepoView enabled name="octo/babysitter" onNavigate={vi.fn()} onWatchPull={onWatchPull} />);
 
   expect(await screen.findByText("Add notifications")).toBeVisible();
   await user.click(screen.getByRole("button", { name: "Watch" }));
@@ -131,18 +127,39 @@ test("keeps the title in the view header while the repository loads, fails or is
   expectViewTitle("octo/babysitter");
 });
 
-test("sizes the header buttons like the other views", async () => {
+test("the sync icon in the header asks the daemon to sync", async () => {
   serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
+  let synced = false;
+  server.use(
+    http.post(apiUrl("/api/v1/sync"), () => {
+      synced = true;
+      return HttpResponse.json({ accepted: true }, { status: 202 });
+    }),
+  );
+  const user = userEvent.setup();
 
   renderView();
-  await screen.findByRole("button", { name: "Watch by URL" });
+  const sync = await screen.findByRole("button", { name: "Sync now" });
+  expect(sync).toHaveTextContent("");
+  expect(sync).toHaveClass("size-7");
+  await user.click(sync);
 
-  const settings = screen.getByRole("button", { name: "Repository settings" });
-  for (const button of within(screen.getByRole("banner")).getAllByRole("button")) {
-    if (button === settings) continue;
-    expect(button).toHaveAttribute("data-size", "sm");
-  }
-  expect(settings).toHaveClass("size-7");
+  await vi.waitFor(() => expect(synced).toBe(true));
+});
+
+test("shows the daemon error when Sync fails", async () => {
+  serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
+  server.use(
+    http.post(apiUrl("/api/v1/sync"), () =>
+      HttpResponse.json({ error: { message: "the daemon is shutting down" } }, { status: 503 }),
+    ),
+  );
+  const user = userEvent.setup();
+
+  renderView();
+  await user.click(await screen.findByRole("button", { name: "Sync now" }));
+
+  expect(await screen.findByText("the daemon is shutting down")).toBeVisible();
 });
 
 test("a queued Dependabot update shows its place and its update type", async () => {
@@ -174,12 +191,13 @@ test("a queued Dependabot update shows its place and its update type", async () 
   expect(within(first).getByRole("button", { name: "Watch" })).toBeEnabled();
 });
 
-test("the panel icon in the header opens the repository settings, and the panel closes them", async () => {
+test("the panel icon opens the repository settings, and the same icon in the same place closes them", async () => {
   serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
   const user = userEvent.setup();
 
   renderView();
-  await user.click(await screen.findByRole("button", { name: "Repository settings" }));
+  const toggle = await screen.findByRole("button", { name: "Repository settings" });
+  await user.click(toggle);
 
   const panel = screen.getByRole("complementary", { name: "Repository settings" });
   expect(
@@ -187,10 +205,28 @@ test("the panel icon in the header opens the repository settings, and the panel 
       "What babysitter does with new pull requests of octo/babysitter. Nothing starts until you turn it on.",
     ),
   ).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Repository settings" })).toBeNull();
+  expect(screen.getByRole("button", { name: "Repository settings" })).toBe(toggle);
 
-  await user.click(within(panel).getByRole("button", { name: "Close repository settings" }));
+  await user.click(toggle);
   expect(screen.queryByRole("complementary", { name: "Repository settings" })).toBeNull();
+});
+
+test("the panel icon comes before the pull requests and the repository settings in the focus order", async () => {
+  serveApi({ repos: [buildRepo()], watches: [], pullRequests: [buildPullRequest()] });
+  const user = userEvent.setup();
+
+  renderView();
+  const toggle = await screen.findByRole("button", { name: "Repository settings" });
+  await user.click(toggle);
+  const panel = screen.getByRole("complementary", { name: "Repository settings" });
+  await within(panel).findByRole("button", { name: /Watch defaults/ });
+
+  const watch = screen.getByRole("button", { name: "Watch" });
+  const order = await focusOrder(user);
+  const firstAfter = order.findIndex((element) => element === watch || panel.contains(element));
+  expect(firstAfter).toBeGreaterThanOrEqual(0);
+  expect(order.indexOf(toggle)).toBeGreaterThanOrEqual(0);
+  expect(order.indexOf(toggle)).toBeLessThan(firstAfter);
 });
 
 function rowOf(title: HTMLElement): HTMLElement {

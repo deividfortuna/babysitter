@@ -1142,7 +1142,7 @@ babysitter repo list                                            # the AUTO START
 ```
 
 The app has the same settings in the **Repository settings** panel of a
-repository, which the panel icon in its header opens.
+repository, which the panel icon in its header opens and closes.
 
 The rules:
 
@@ -1346,7 +1346,7 @@ proposal** and **Reject push** are under it; a drop, a rejected push, a
 rejection, **Approve and stop asking** and a switch to auto each ask
 first. The
 **Watch settings** button at the far right of the header, after
-**Merge**, opens a panel docked on the right with the copy of the
+**Merge**, opens and closes a panel docked on the right with the copy of the
 defaults of that watch: the approval mode, **Approve a clean rebase or merge on
 its own**, the approvals before ready to merge and the merge method.
 Each one saves when you change it, and an empty approvals field reads

@@ -69,15 +69,6 @@ export function useMergeWatch() {
   });
 }
 
-export function usePollWatch() {
-  return useMutation({
-    mutationFn: async (id: number) => {
-      const { error } = await api().POST("/api/v1/watches/{id}/poll", { params: { path: { id } } });
-      if (error) throw new Error(apiErrorMessage(error, "Could not poll the watch."));
-    },
-  });
-}
-
 export function useWatch(id: number | null) {
   return useQuery({
     queryKey: ["watches", "one", id ?? 0] as const,

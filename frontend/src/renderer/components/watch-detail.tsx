@@ -14,7 +14,6 @@ import {
   MessageSquareReplyIcon,
   PanelBottomDashedIcon,
   PanelBottomIcon,
-  PanelRightIcon,
   PlayIcon,
   PowerOffIcon,
   RefreshCwIcon,
@@ -34,8 +33,9 @@ import { useSendMessage } from "@/hooks/useSession";
 import { ProposalPanel } from "@/components/proposal-panel";
 import { ProposalDecisionProvider, useCurrentProposal, useProposalDecision } from "@/components/proposal-decision";
 import { WatchSettingsPanel } from "@/components/watch-settings-panel";
+import { PanelToggle, clearsPanelToggle } from "@/components/panel-toggle";
 import { useWatchActivity, type Activity } from "@/hooks/useWatchActivity";
-import { usePollWatch, useWatch, useWatches, type Watch } from "@/hooks/useWatches";
+import { useWatch, useWatches, type Watch } from "@/hooks/useWatches";
 import {
   AutoBadges,
   ChecksBadge,
@@ -46,13 +46,12 @@ import {
   StopBadge,
   ToneBadge,
 } from "@/components/status-badges";
-import { ViewHeader } from "@/components/view-header";
+import { ViewHeader, ViewHeaderActions, ViewHeaderButton } from "@/components/view-header";
 import { MergeWatchDialog } from "@/components/merge-watch-dialog";
 import { StopWatchDialog } from "@/components/stop-watch-dialog";
 import { TakenOverPanel } from "@/components/taken-over-panel";
 import { TakeoverDialog } from "@/components/takeover-dialog";
 import { TerminalPanel } from "@/components/terminal-panel";
-import { Tip } from "@/components/tip";
 import { Alert, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -134,7 +133,6 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
   const one = useWatch(enabled ? id : null);
   const watch = listed.data?.find((w) => w.id === id) ?? one.data;
   const activity = useWatchActivity(enabled ? id : null);
-  const poll = usePollWatch();
   const current = useCurrentProposal(watch);
   const [stopping, setStopping] = useState(false);
   const [merging, setMerging] = useState(false);
@@ -179,7 +177,8 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
 
   return (
     <ProposalDecisionProvider key={watch.id} watch={watch}>
-      <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto]">
+      <div className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto]">
+        {active ? <PanelToggle label="Watch settings" open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
         <div className="flex min-w-0 flex-col overflow-y-auto">
           <ViewHeader className="flex-col items-stretch gap-2 bg-muted-subtle pb-3.5">
             <div className="flex h-titlebar items-center gap-2">
@@ -192,37 +191,20 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
                 </a>
               </Meta>
               {active ? (
-                <div className="ml-auto flex shrink-0 items-center gap-1.5">
-                  <Button variant="ghost" size="sm" disabled={poll.isPending} onClick={() => poll.mutate(id)}>
-                    {poll.isPending ? <Spinner data-icon="inline-start" /> : <RefreshCwIcon data-icon="inline-start" />}
-                    Check now
-                  </Button>
-                  <Button variant="outline" size="sm" onClick={() => setStopping(true)}>
+                <ViewHeaderActions className={settingsOpen ? undefined : clearsPanelToggle}>
+                  <ViewHeaderButton variant="outline" onClick={() => setStopping(true)}>
+                    <SquareIcon data-icon="inline-start" />
                     Stop watching
-                  </Button>
-                  <Button
-                    size="sm"
+                  </ViewHeaderButton>
+                  <ViewHeaderButton
                     disabled={!ready}
                     title={ready ? undefined : "The pull request is not ready to merge yet"}
                     onClick={() => setMerging(true)}
                   >
                     <GitMergeIcon data-icon="inline-start" />
                     Merge
-                  </Button>
-                  {settingsOpen ? null : (
-                    <Tip label="Watch settings">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        aria-label="Watch settings"
-                        className="size-7"
-                        onClick={() => setSettingsOpen(true)}
-                      >
-                        <PanelRightIcon />
-                      </Button>
-                    </Tip>
-                  )}
-                </div>
+                  </ViewHeaderButton>
+                </ViewHeaderActions>
               ) : null}
             </div>
             <div className="flex flex-wrap items-center gap-2">
@@ -247,12 +229,6 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
                 </Badge>
               ) : null}
             </div>
-            {poll.error ? (
-              <Alert variant="destructive">
-                <CircleAlertIcon />
-                <AlertTitle>{poll.error.message}</AlertTitle>
-              </Alert>
-            ) : null}
           </ViewHeader>
 
           {ready ? (
@@ -416,7 +392,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
         {terminalShown ? (
           <TerminalPanel watch={watch} enabled={enabled} onClose={() => setTerminalOpen(false)} />
         ) : null}
-        {active && settingsOpen ? <WatchSettingsPanel watch={watch} onClose={() => setSettingsOpen(false)} /> : null}
+        {active && settingsOpen ? <WatchSettingsPanel watch={watch} /> : null}
       </div>
     </ProposalDecisionProvider>
   );

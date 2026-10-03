@@ -12,24 +12,6 @@ function renderWatchDetail(onStopped = vi.fn()) {
   return { onStopped };
 }
 
-test("asks the daemon to poll an active watch when checking now", async () => {
-  const watch = buildWatch({ id: 42 });
-  serveApi({ watches: [watch], watchById: { 42: watch } });
-  let pollCalled = false;
-  server.use(
-    http.post(apiUrl("/api/v1/watches/:id/poll"), () => {
-      pollCalled = true;
-      return HttpResponse.json({});
-    }),
-  );
-  const user = userEvent.setup();
-
-  renderWatchDetail();
-  await user.click(await screen.findByRole("button", { name: "Check now" }));
-
-  await waitFor(() => expect(pollCalled).toBe(true));
-});
-
 test("stops an active watch and continues with the daemon's stop summary", async () => {
   const watch = buildWatch({ id: 42 });
   const stoppedWatch = buildStoppedWatch({ id: 42, summary: { messages: 1 } });

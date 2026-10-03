@@ -173,7 +173,6 @@ export function serveApi(fixtures: ApiFixtures = {}) {
       fixtures.stopBodies?.push((await request.json()) as StopBody);
       return HttpResponse.json(fixtures.stoppedWatch?.[id] ?? buildWatch({ id, status: "stopped" }));
     }),
-    http.post(apiUrl("/api/v1/watches/:id/poll"), () => HttpResponse.json({})),
     http.get(apiUrl("/api/v1/watches/:id/proposals"), ({ params }) =>
       HttpResponse.json({ proposals: fixtures.proposals?.[Number(params.id)] ?? [] }),
     ),
