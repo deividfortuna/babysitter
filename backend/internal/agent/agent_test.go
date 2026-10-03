@@ -80,6 +80,16 @@ func TestNextKeepsWaitingOnAnIdleNotice(t *testing.T) {
 	}
 }
 
+func TestNextKeepsTheStateOnACompaction(t *testing.T) {
+	t.Parallel()
+	for _, from := range []State{StateStarting, StateActive, StateIdle, StateWaiting} {
+		got, known := from.Next(EventSessionStart, json.RawMessage(`{"source":"compact"}`))
+		if got != from || !known {
+			t.Errorf("%s.Next(session-start, compact) = %q, %v, want %q, true", from, got, known, from)
+		}
+	}
+}
+
 var pr = PullRequest{Repo: "octo/hello", Number: 3, Title: "Fix the thing", URL: "https://github.com/octo/hello/pull/3", Author: "alice", HeadRef: "fix", BaseRef: "main"}
 
 func TestOpenMessage(t *testing.T) {

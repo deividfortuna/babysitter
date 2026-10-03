@@ -88,6 +88,10 @@ func StateOf(event string, payload json.RawMessage) (State, bool) {
 }
 
 func (s State) Next(event string, payload json.RawMessage) (State, bool) {
+	compaction := event == EventSessionStart && payloadField(payload, "source") == "compact"
+	if compaction {
+		return s, true
+	}
 	next, ok := StateOf(event, payload)
 	idleNotice := event == EventNotification && next == StateIdle
 	if s == StateWaiting && idleNotice {

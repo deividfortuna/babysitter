@@ -4,6 +4,7 @@ import (
 	"context"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
@@ -70,5 +71,23 @@ func TestTheAuthorTypesIntoAWorkingAgent(t *testing.T) {
 	}
 	if msgs := fx.host.last().messages(); msgs[len(msgs)-1] != "also update the docs" {
 		t.Fatalf("messages = %q", msgs)
+	}
+}
+
+func TestACompactionInTheTurnKeepsTheMessageWaiting(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.advance(silentTurn - time.Minute)
+	fx.hook(w, agent.EventSessionStart, `{"source":"compact"}`)
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "rename it", URL: "https://c/11"}}
+	})
+	fx.advance(time.Minute)
+	fx.poll(w)
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("an agent that compacted its context in the turn was told: %q", msgs)
 	}
 }
