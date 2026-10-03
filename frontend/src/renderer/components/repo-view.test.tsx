@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
 import { http, HttpResponse } from "msw";
 import { buildPullRequest, buildQueuedPullRequest, buildRepo, buildWatch } from "@test/fixtures";
-import { expectViewTitle, renderWithProviders } from "@test/test-utils";
+import { expectViewTitle, focusOrder, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { RepoView } from "./repo-view";
 
@@ -209,6 +209,24 @@ test("the panel icon opens the repository settings, and the same icon in the sam
 
   await user.click(toggle);
   expect(screen.queryByRole("complementary", { name: "Repository settings" })).toBeNull();
+});
+
+test("the panel icon comes before the pull requests and the repository settings in the focus order", async () => {
+  serveApi({ repos: [buildRepo()], watches: [], pullRequests: [buildPullRequest()] });
+  const user = userEvent.setup();
+
+  renderView();
+  const toggle = await screen.findByRole("button", { name: "Repository settings" });
+  await user.click(toggle);
+  const panel = screen.getByRole("complementary", { name: "Repository settings" });
+  await within(panel).findByRole("button", { name: /Watch defaults/ });
+
+  const watch = screen.getByRole("button", { name: "Watch" });
+  const order = await focusOrder(user);
+  const firstAfter = order.findIndex((element) => element === watch || panel.contains(element));
+  expect(firstAfter).toBeGreaterThanOrEqual(0);
+  expect(order.indexOf(toggle)).toBeGreaterThanOrEqual(0);
+  expect(order.indexOf(toggle)).toBeLessThan(firstAfter);
 });
 
 function rowOf(title: HTMLElement): HTMLElement {

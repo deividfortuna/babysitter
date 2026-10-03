@@ -105,6 +105,17 @@ export async function optionLabels(user: User, select: HTMLElement) {
   return labels;
 }
 
+export async function focusOrder(user: { tab: () => Promise<void> }): Promise<Element[]> {
+  act(() => (document.activeElement as HTMLElement | null)?.blur());
+  const order: Element[] = [];
+  for (;;) {
+    await user.tab();
+    const focused = document.activeElement;
+    if (!focused || focused === document.body || order.includes(focused)) return order;
+    order.push(focused);
+  }
+}
+
 export type Deferred = { resolve: () => void; promise: Promise<void> };
 
 export function deferred(): Deferred {

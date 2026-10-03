@@ -178,6 +178,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
   return (
     <ProposalDecisionProvider key={watch.id} watch={watch}>
       <div className="relative grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_auto] grid-rows-[minmax(0,1fr)_auto]">
+        {active ? <PanelToggle label="Watch settings" open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
         <div className="flex min-w-0 flex-col overflow-y-auto">
           <ViewHeader className="flex-col items-stretch gap-2 bg-muted-subtle pb-3.5">
             <div className="flex h-titlebar items-center gap-2">
@@ -392,7 +393,6 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR }: Props) {
           <TerminalPanel watch={watch} enabled={enabled} onClose={() => setTerminalOpen(false)} />
         ) : null}
         {active && settingsOpen ? <WatchSettingsPanel watch={watch} /> : null}
-        {active ? <PanelToggle label="Watch settings" open={settingsOpen} onOpenChange={setSettingsOpen} /> : null}
       </div>
     </ProposalDecisionProvider>
   );

@@ -208,6 +208,7 @@ export function RepoView({ enabled, name, onNavigate, onWatchPull }: Props) {
 
   return (
     <div className="relative flex min-h-0 flex-1">
+      <PanelToggle label="Repository settings" open={settingsOpen} onOpenChange={setSettingsOpen} />
       <div className="flex min-w-0 flex-1 flex-col overflow-y-auto">
         <ViewHeader>
           {title}
@@ -276,7 +277,6 @@ export function RepoView({ enabled, name, onNavigate, onWatchPull }: Props) {
         </div>
       </div>
       {settingsOpen ? <RepoSettingsPanel repo={repo} /> : null}
-      <PanelToggle label="Repository settings" open={settingsOpen} onOpenChange={setSettingsOpen} />
     </div>
   );
 }
