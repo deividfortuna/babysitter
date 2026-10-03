@@ -132,6 +132,9 @@
   --label-6: #bf3989;
   --label-7: #9a6700;
   --label-8: #bc4c00;
+  --scrollbar-width: 6px;
+  --scrollbar-thumb: rgb(217 217 217);
+  --scrollbar-thumb-hover: rgb(191 191 191);
   --terminal-selection: #54aeff66;
   --diff-add-bar: #1a7f37;
   --diff-del-bar: #cf222e;
@@ -201,6 +204,8 @@
   --label-6: #db61a2;
   --label-7: #d29922;
   --label-8: #db6d28;
+  --scrollbar-thumb: rgb(255 255 255 / 8%);
+  --scrollbar-thumb-hover: rgb(255 255 255 / 12%);
   --terminal-selection: #2f5f9950;
   --diff-add-bar: #3fb950;
   --diff-del-bar: #f85149;
@@ -239,6 +244,19 @@
   [data-slot="dialog-content"] {
     max-height: var(--size-dialog-height);
     overflow-y: auto;
+  }
+  ::-webkit-scrollbar {
+    width: var(--scrollbar-width);
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: var(--scrollbar-thumb);
+    border-radius: 3px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: var(--scrollbar-thumb-hover);
   }
 }
 
