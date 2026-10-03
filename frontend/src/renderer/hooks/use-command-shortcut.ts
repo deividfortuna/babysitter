@@ -12,7 +12,7 @@ type Options = { alt?: boolean; ctrl?: boolean };
 
 type Chord = Required<Options> & { key: string };
 
-function anyDialogOpen(): boolean {
+export function anyDialogOpen(): boolean {
   return document.querySelector(DIALOG_SELECTOR) !== null;
 }
 
@@ -25,7 +25,7 @@ function keyAtPosition(code: string): string | undefined {
   return code.match(LETTER_CODE)?.[1]?.toLowerCase() ?? SYMBOL_CODES[code];
 }
 
-function pressedKey(event: KeyboardEvent): string {
+export function pressedKey(event: KeyboardEvent): string {
   const layoutKey = event.key.toLowerCase();
   if (LATIN_LETTER.test(layoutKey)) return layoutKey;
   return keyAtPosition(event.code) ?? layoutKey;
