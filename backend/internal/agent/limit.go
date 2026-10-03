@@ -108,7 +108,9 @@ func dateClock(local time.Time, month, monthDay, year string, h, m int) (time.Ti
 		}
 	}
 	reset := time.Date(y, parsed.Month(), parsed.Day(), h, m, 0, 0, local.Location())
-	if year == "" && passed(reset, local) {
+	today := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
+	dayPassed := time.Date(y, parsed.Month(), parsed.Day(), 0, 0, 0, 0, local.Location()).Before(today)
+	if year == "" && dayPassed {
 		reset = reset.AddDate(1, 0, 0)
 	}
 	return reset, true

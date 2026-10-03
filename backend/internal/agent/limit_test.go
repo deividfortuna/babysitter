@@ -104,7 +104,8 @@ func TestAResetInTheCurrentMinuteIsNotRolledForward(t *testing.T) {
 		{"resets 3pm (UTC)", time.Date(2026, 10, 3, 15, 0, 0, 0, time.UTC)},
 		{"resets Oct 3, 3pm (UTC)", time.Date(2026, 10, 3, 15, 0, 0, 0, time.UTC)},
 		{"resets 2:59pm (UTC)", time.Date(2026, 10, 4, 14, 59, 0, 0, time.UTC)},
-		{"resets Oct 3, 2:59pm (UTC)", time.Date(2027, 10, 3, 14, 59, 0, 0, time.UTC)},
+		{"resets Oct 3, 2:59pm (UTC)", time.Date(2026, 10, 3, 14, 59, 0, 0, time.UTC)},
+		{"resets Oct 2, 3pm (UTC)", time.Date(2027, 10, 2, 15, 0, 0, 0, time.UTC)},
 	}
 	for _, tc := range cases {
 		got, ok := resetTime(tc.text, now)
