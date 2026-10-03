@@ -17,30 +17,20 @@ import (
 
 func TestServeTakesTheIntervalOfTheSettings(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
-	path := filepath.Join(t.TempDir(), "x.db")
-	st, err := store.Open(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer st.Close()
-	next := store.DefaultSettings()
-	next.PollInterval = 45 * time.Second
-	if _, err := st.SaveSettings(ctx, next); err != nil {
-		t.Fatal(err)
-	}
+	settings := store.DefaultSettings()
+	settings.PollInterval = 45 * time.Second
 
-	got, err := serveInterval(ctx, st, false, defaultInterval)
+	got, err := serveInterval(settings, false, defaultInterval)
 	if err != nil || got != 45*time.Second {
 		t.Fatalf("serveInterval(untyped) = %s, %v, want the stored 45s", got, err)
 	}
-	if got, err := serveInterval(ctx, st, true, 2*time.Minute); err != nil || got != 2*time.Minute {
+	if got, err := serveInterval(settings, true, 2*time.Minute); err != nil || got != 2*time.Minute {
 		t.Fatalf("serveInterval(typed) = %s, %v, want the flag", got, err)
 	}
-	if got, err := serveInterval(ctx, st, true, time.Second); err != nil || got != store.MinInterval {
+	if got, err := serveInterval(settings, true, time.Second); err != nil || got != store.MinInterval {
 		t.Fatalf("serveInterval(1s) = %s, %v, want the floor %s", got, err, store.MinInterval)
 	}
-	if got, err := serveInterval(ctx, st, true, 48*time.Hour); err != nil || got != store.MaxInterval {
+	if got, err := serveInterval(settings, true, 48*time.Hour); err != nil || got != store.MaxInterval {
 		t.Fatalf("serveInterval(48h) = %s, %v, want the roof %s", got, err, store.MaxInterval)
 	}
 }
@@ -149,23 +139,15 @@ func TestFollowIntervalTakesANewLongestCheckReadInterval(t *testing.T) {
 
 func TestServeStartsWithTheStoredLongestCheckReadInterval(t *testing.T) {
 	t.Parallel()
-	ctx := context.Background()
 	st, err := store.Open(filepath.Join(t.TempDir(), "x.db"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer st.Close()
-	next := store.DefaultSettings()
-	next.CheckMaxInterval = 5 * time.Minute
-	if _, err := st.SaveSettings(ctx, next); err != nil {
-		t.Fatal(err)
-	}
+	settings := store.DefaultSettings()
+	settings.CheckMaxInterval = 5 * time.Minute
 
-	opts, err := serveWatcherOptions(ctx, st, 2*time.Minute)
-	if err != nil {
-		t.Fatal(err)
-	}
-	w := watcher.New(st, nil, opts...)
+	w := watcher.New(st, nil, serveWatcherOptions(settings, 2*time.Minute)...)
 
 	if w.Interval() != 2*time.Minute || w.LongestCheckWait() != 5*time.Minute {
 		t.Fatalf("interval %s and longest check wait %s, want the flag 2m0s and the stored 5m0s", w.Interval(), w.LongestCheckWait())
