@@ -432,7 +432,7 @@ babysitter settings set --provider copilot --model auto   # the agent of a new w
 babysitter settings set --model opus --effort high        # the effort of that model; a new model alone takes its default effort
 babysitter settings set --branch-update merge      # a branch behind its base gets a merge of the base, not a rebase
 babysitter settings set --update-on-github=false   # the agent updates a branch behind its base, GitHub does not
-babysitter settings set --screen-reader=false      # the agent draws its full terminal interface from the next session start
+babysitter settings set --screen-reader            # the agent draws plain text in place of its full terminal interface from the next session start
 ```
 
 The notification flags of `settings set` are in

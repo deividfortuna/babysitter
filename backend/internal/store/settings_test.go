@@ -492,3 +492,35 @@ func TestUpgradeGivesTheWatchALongestIntervalNoShorterThanItsInterval(t *testing
 		})
 	}
 }
+
+func TestUpgradeTurnsTheScreenReaderModeOff(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	path := filepath.Join(t.TempDir(), "babysitter.db")
+	db, err := sql.Open("sqlite3", "file:"+path+"?_foreign_keys=on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := migrateTo(ctx, db, schemaBeforeScreenReaderOff); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := db.ExecContext(ctx, "UPDATE settings SET screen_reader = 1 WHERE id = 1"); err != nil {
+		t.Fatal(err)
+	}
+	if err := db.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	s, err := Open(path)
+	if err != nil {
+		t.Fatalf("Open() after the upgrade error = %v", err)
+	}
+	defer s.Close()
+	got, err := s.Settings(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.ScreenReader {
+		t.Fatal("ScreenReader = true after the upgrade, want false")
+	}
+}

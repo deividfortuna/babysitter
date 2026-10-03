@@ -26,10 +26,10 @@ func (fx *fixture) settings(s store.Settings) {
 	}
 }
 
-func TestStartWithoutScreenReaderLaunchesTheFullInterface(t *testing.T) {
+func TestStartWithScreenReaderLaunchesThePlainTextInterface(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	fx.settings(store.Settings{ScreenReader: false})
+	fx.settings(store.Settings{ScreenReader: true})
 
 	fx.start()
 
@@ -37,8 +37,8 @@ func TestStartWithoutScreenReaderLaunchesTheFullInterface(t *testing.T) {
 	if h == nil {
 		t.Fatal("no session started")
 	}
-	if slices.Contains(h.spec.Argv, "--screen-reader") {
-		t.Fatalf("the screen reader mode is on when the setting is off: %v", h.spec.Argv)
+	if !slices.Contains(h.spec.Argv, "--screen-reader") {
+		t.Fatalf("the screen reader mode is off when the setting is on: %v", h.spec.Argv)
 	}
 }
 
