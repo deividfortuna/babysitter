@@ -208,11 +208,8 @@ func loggedCommand(command string) string {
 
 func (s *Service) reportState(ctx context.Context, id int64, l *live, event string, payload []byte) {
 	s.noteLimit(ctx, id, event, payload)
-	state, ok := l.State().Next(event, payload)
-	if !ok {
-		return
-	}
-	if !l.report(state, s.now()) {
+	state, changed := l.reportEvent(event, payload, s.now())
+	if !changed {
 		return
 	}
 	s.store.PublishSession(l.key)

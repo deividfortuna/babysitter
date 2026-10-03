@@ -69,9 +69,23 @@ func (l *live) holdsMessages(now time.Time) bool {
 	return now.Sub(lastSignal) < silentTurn
 }
 
+func (l *live) reportEvent(event string, payload []byte, at time.Time) (agent.State, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	state, ok := l.state.Next(event, payload)
+	if !ok {
+		return "", false
+	}
+	return state, l.reportLocked(state, at)
+}
+
 func (l *live) report(state agent.State, at time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.reportLocked(state, at)
+}
+
+func (l *live) reportLocked(state agent.State, at time.Time) bool {
 	changed := l.state != state && l.state != agent.StateExited
 	if changed {
 		l.state = state

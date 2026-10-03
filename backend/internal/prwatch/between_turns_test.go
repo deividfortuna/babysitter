@@ -3,6 +3,7 @@ package prwatch
 import (
 	"context"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -113,5 +114,32 @@ func TestACompactionInTheTurnKeepsTheMessageWaiting(t *testing.T) {
 	fx.poll(w)
 	if msgs := h.messages(); len(msgs) != 1 {
 		t.Fatalf("an agent that compacted its context in the turn was told: %q", msgs)
+	}
+}
+
+func TestAnIdleNoticeThatRacesTheStopKeepsTheAgentWaiting(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	l := fx.svc.sessions.get(w.ID)
+	for range 300 {
+		fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+		var wg sync.WaitGroup
+		for _, h := range []struct{ event, payload string }{
+			{agent.EventStop, `{"background_tasks":[{"id":"b1","type":"shell","status":"running","description":"sleep 150"}]}`},
+			{agent.EventNotification, `{"notification_type":"idle_prompt"}`},
+		} {
+			wg.Go(func() {
+				if _, err := fx.svc.Hook(ctx, w.ID, h.event, []byte(h.payload)); err != nil {
+					t.Errorf("Hook(%s) error = %v", h.event, err)
+				}
+			})
+		}
+		wg.Wait()
+		fx.svc.wg.Wait()
+		if got := l.State(); got != agent.StateWaiting {
+			t.Fatalf("state after a Stop with background work and an idle notice = %q, want %q", got, agent.StateWaiting)
+		}
 	}
 }
