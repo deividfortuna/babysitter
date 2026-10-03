@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 	"github.com/google/go-github/v91/github"
 
+	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/events"
 	"github.com/deividfortuna/babysitter/internal/ghauth"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
@@ -99,5 +101,48 @@ func TestAFailedWriteOfTheGitConfigIsTriedAgain(t *testing.T) {
 	case <-written:
 	case <-time.After(5 * time.Second):
 		t.Fatal("the git config was not written again after the failure")
+	}
+}
+
+func TestAFailedRunStopsWritingTheGitConfigOfTheSessions(t *testing.T) {
+	t.Setenv("GITHUB_TOKEN", "")
+	dir := t.TempDir()
+	taken, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer taken.Close()
+	gh := ghfake.New().Serve(t)
+	auth := ghauth.New(dir, ghauth.WithGH(func(context.Context) (string, error) { return "", errors.New("no gh") }))
+	cfg := Config{
+		DataDir:    dir,
+		Auth:       auth,
+		DBPath:     filepath.Join(dir, "babysitter.db"),
+		Port:       taken.Addr().(*net.TCPAddr).Port,
+		AgentBin:   agentOff,
+		CopilotBin: filepath.Join(dir, "no-copilot"),
+		Interval:   time.Minute,
+		Log:        slog.New(slog.DiscardHandler),
+		NewClient:  func(context.Context) (*github.Client, error) { return gh.NewClient() },
+	}
+
+	if err := Run(t.Context(), cfg); err == nil {
+		t.Fatal("Run() on a port in use = nil, want an error")
+	}
+	signIn := `{"login":"alice","accessToken":"ghu_app"}`
+	if err := os.WriteFile(filepath.Join(dir, "github-app.json"), []byte(signIn), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := auth.Credential(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(300 * time.Millisecond)
+
+	got, err := os.ReadFile(agent.AppGitConfigPath(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("app.gitconfig = %q after Run returned, want nothing written by a daemon that stopped", got)
 	}
 }

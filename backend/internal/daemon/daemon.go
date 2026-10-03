@@ -98,6 +98,8 @@ func Run(ctx context.Context, cfg Config) error {
 		log.Warn("the agent sessions report nothing, and their git gets no GitHub credential while the app is in use: the babysitter command is not known", "err", err)
 		exe = ""
 	}
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 	credentialHelper := agent.CredentialHelper(exe, cfg.DataDir)
 	auth, err := newAuthController(ctx, cfg, bus, log, credentialHelper)
 	if err != nil {
@@ -171,9 +173,6 @@ func Run(ctx context.Context, cfg Config) error {
 		},
 		Log: log.With("component", "autostart"),
 	}).Run
-
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
 
 	var srv *httpd.Server
 	handler := httpd.NewRouter(httpd.Deps{
