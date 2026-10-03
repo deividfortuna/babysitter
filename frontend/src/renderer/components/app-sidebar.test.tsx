@@ -1,10 +1,11 @@
 import { screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { expect, test, vi } from "vite-plus/test";
+import { http, HttpResponse } from "msw";
 import type { ComponentProps } from "react";
 import { buildNotification, buildRateLimit, buildRepo, buildWatch } from "@test/fixtures";
 import { renderWithProviders } from "@test/test-utils";
-import { serveApi } from "@test/msw";
+import { apiUrl, server, serveApi } from "@test/msw";
 import { bridge } from "@/lib/bridge";
 import { AppSidebar } from "./app-sidebar";
 
@@ -108,8 +109,83 @@ test("keeps the actions of a repository shown while its menu is open", async () 
   const more = await screen.findByRole("button", { name: "More" });
   await user.click(more);
 
-  expect(await screen.findByRole("menuitem", { name: "Sync now" })).toBeVisible();
+  expect(await screen.findByRole("menuitem", { name: /^Sync now/ })).toBeVisible();
   expect(more).toHaveAttribute("data-state", "open");
+});
+
+test("shows the key of each action of a repository in its menu", async () => {
+  serveApi({ watches: [], repos: [buildRepo()], pullRequests: [] });
+  const user = userEvent.setup();
+
+  renderSidebar();
+  await user.click(await screen.findByRole("button", { name: "More" }));
+
+  const sync = await screen.findByRole("menuitem", { name: /^Sync now/ });
+  const remove = screen.getByRole("menuitem", { name: /^Remove/ });
+  expect(sync).toHaveTextContent(/R$/);
+  expect(remove).toHaveTextContent(/D$/);
+});
+
+test("R in the menu of a repository asks for a sync and closes the menu", async () => {
+  const synced = vi.fn();
+  serveApi({ watches: [], repos: [buildRepo()], pullRequests: [] });
+  server.use(
+    http.post(apiUrl("/api/v1/sync"), () => {
+      synced();
+      return HttpResponse.json({ accepted: true }, { status: 202 });
+    }),
+  );
+  const user = userEvent.setup();
+
+  renderSidebar();
+  await user.click(await screen.findByRole("button", { name: "More" }));
+  await screen.findByRole("menu");
+  await user.keyboard("r");
+
+  await vi.waitFor(() => expect(synced).toHaveBeenCalledTimes(1));
+  expect(screen.queryByRole("menu")).toBeNull();
+});
+
+test("D in the menu of a repository removes it and closes the menu", async () => {
+  const removed = vi.fn();
+  serveApi({ watches: [], repos: [buildRepo({ id: 7 })], pullRequests: [] });
+  server.use(
+    http.delete(apiUrl("/api/v1/repos/:id"), ({ params }) => {
+      removed(params.id);
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+  const user = userEvent.setup();
+
+  renderSidebar();
+  await user.click(await screen.findByRole("button", { name: "More" }));
+  await screen.findByRole("menu");
+  await user.keyboard("d");
+
+  await vi.waitFor(() => expect(removed).toHaveBeenCalledWith("7"));
+  expect(screen.queryByRole("menu")).toBeNull();
+});
+
+test("R and D do nothing while the menu of a repository is closed", async () => {
+  const requests = vi.fn();
+  serveApi({ watches: [], repos: [buildRepo()], pullRequests: [] });
+  server.use(
+    http.post(apiUrl("/api/v1/sync"), () => {
+      requests();
+      return HttpResponse.json({ accepted: true }, { status: 202 });
+    }),
+    http.delete(apiUrl("/api/v1/repos/:id"), () => {
+      requests();
+      return new HttpResponse(null, { status: 204 });
+    }),
+  );
+  const user = userEvent.setup();
+
+  renderSidebar();
+  await screen.findByRole("button", { name: "More" });
+  await user.keyboard("rd");
+
+  expect(requests).not.toHaveBeenCalled();
 });
 
 test("names the actions of a repository in a tooltip on hover", async () => {

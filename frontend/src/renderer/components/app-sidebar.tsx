@@ -6,21 +6,19 @@ import {
   EyeIcon,
   FolderGitIcon,
   MessageCircleIcon,
-  MoreHorizontalIcon,
   PlusIcon,
-  RefreshCwIcon,
   SettingsIcon,
-  Trash2Icon,
   UserRoundIcon,
 } from "lucide-react";
 import { useNotifications } from "@/hooks/useNotifications";
 import { usePulls } from "@/hooks/usePulls";
-import { useRemoveRepo, useRepos, useRequestSync } from "@/hooks/useRepos";
+import { useRepos } from "@/hooks/useRepos";
 import { useViewer, type Viewer } from "@/hooks/useViewer";
 import { useWatches } from "@/hooks/useWatches";
 import type { DiscoveredDaemon } from "../../shared/connections";
 import type { DaemonStatus } from "../../shared/daemon-status";
 import { ConnectionSwitcher } from "@/components/connection-switcher";
+import { RepoActionsMenu } from "@/components/repo-actions-menu";
 import { RateLimitCard } from "@/components/rate-limit-card";
 import { UpdateCard } from "@/components/update-card";
 import type { SettingsCategory } from "@/components/settings-dialog";
@@ -29,13 +27,6 @@ import { initials } from "@/lib/initials";
 import { Tip } from "@/components/tip";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import {
   Sidebar,
   SidebarContent,
@@ -46,7 +37,6 @@ import {
   SidebarGroupLabel,
   SidebarHeader,
   SidebarMenu,
-  SidebarMenuAction,
   SidebarMenuBadge,
   SidebarMenuButton,
   SidebarMenuItem,
@@ -119,8 +109,6 @@ export function AppSidebar({
   const pulls = usePulls(enabled);
   const notifications = useNotifications(enabled);
   const unreadCount = notifications.data?.unreadCount ?? 0;
-  const removeRepo = useRemoveRepo();
-  const requestSync = useRequestSync();
   const viewer = useViewer(enabled);
 
   const activeCount = watches.data?.filter((w) => w.status === "active").length ?? 0;
@@ -220,32 +208,7 @@ export function AppSidebar({
                         <span className="ml-auto font-mono text-2xs text-muted-foreground">{count}</span>
                       ) : null}
                     </SidebarMenuButton>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Tip label="More actions">
-                          <SidebarMenuAction showOnHover>
-                            <MoreHorizontalIcon />
-                            <span className="sr-only">More</span>
-                          </SidebarMenuAction>
-                        </Tip>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent side="right" align="start">
-                        <DropdownMenuGroup>
-                          <DropdownMenuItem disabled={requestSync.isPending} onClick={() => requestSync.mutate()}>
-                            <RefreshCwIcon />
-                            Sync now
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            variant="destructive"
-                            disabled={removeRepo.isPending}
-                            onClick={() => removeRepo.mutate(repo.id)}
-                          >
-                            <Trash2Icon />
-                            Remove
-                          </DropdownMenuItem>
-                        </DropdownMenuGroup>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <RepoActionsMenu repo={repo} />
                   </SidebarMenuItem>
                 );
               })}

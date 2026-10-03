@@ -43,3 +43,6 @@ export function terminalShortcut(): string {
 export function openInShortcut(): string {
   return commandShortcut("O");
 }
+
+export const REFRESH_KEY = "r";
+export const REMOVE_KEY = "d";
