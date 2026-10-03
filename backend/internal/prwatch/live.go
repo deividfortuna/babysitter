@@ -20,6 +20,7 @@ const (
 	readyPoll    = 100 * time.Millisecond
 	startupGrace = 15 * time.Second
 	stopTimeout  = 10 * time.Second
+	silentTurn   = 10 * time.Minute
 )
 
 type live struct {
@@ -53,6 +54,19 @@ func (l *live) State() agent.State {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	return l.state
+}
+
+func (l *live) holdsMessages(now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if !l.state.Working() {
+		return false
+	}
+	lastSignal := l.signalAt
+	if lastSignal.IsZero() {
+		lastSignal = l.startedAt
+	}
+	return now.Sub(lastSignal) < silentTurn
 }
 
 func (l *live) report(state agent.State, at time.Time) bool {

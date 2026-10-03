@@ -1370,7 +1370,11 @@ waits on a permission decision, `exited` when its process ended. A
 compaction of the context in the middle of a turn does not end the
 turn. A watch is not ready to merge while the agent is `waiting`. A
 message about the pull request waits while the agent needs you, so it
-never answers in your place. A session that exited starts again with
+never answers in your place. It also waits while the agent is
+`starting` or `active`, and goes out when the turn ends, so it never
+cuts into a turn. A new session gets the items after its first turn.
+When the hooks of a working agent stay silent for 10 minutes, the
+message goes out anyway. A message that you send goes at once. A session that exited starts again with
 the next message, on the same conversation, so nothing it learned is
 lost. If the worktree of the watch is gone, the daemon makes it again
 from the work branch before the session starts, so the commits that

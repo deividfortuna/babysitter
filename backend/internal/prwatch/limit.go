@@ -79,10 +79,10 @@ func (s *Service) resumeAfterLimit(ctx context.Context, w store.Watch) {
 	if !s.limitIsOver(w) {
 		return
 	}
-	_, err := s.deliver(ctx, w, limitContinueMessage, "told the agent to continue after its usage limit", deliverRoutine, nil)
+	_, err := s.deliver(ctx, w, limitContinueMessage, "told the agent to continue after its usage limit", deliverBetweenTurns, nil)
 	switch {
-	case errors.Is(err, ErrAgentBusy):
-		s.log.Info("the agent waits on you, it continues after its usage limit at the next poll", "watch", w.ID)
+	case errors.Is(err, ErrAgentBusy), errors.Is(err, ErrAgentWorking):
+		s.log.Info("the agent is not free, it continues after its usage limit at the next poll", "watch", w.ID, "reason", err)
 		return
 	case err != nil:
 		s.agentFailed(ctx, w, "tell the agent to continue after its usage limit", err)

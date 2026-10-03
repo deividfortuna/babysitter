@@ -102,6 +102,7 @@ func TestTheAgentRebasesABlockedBranchBehindItsBaseWhenGitHubIsOff(t *testing.T)
 	fx := newFixture(t)
 	w := fx.startWith(func(r *StartRequest) { r.UpdateOnGitHub = new(false) })
 	h := fx.host.last()
+	fx.agentIdle(w)
 
 	fx.blockedBehind(2)
 	fx.poll(w)
@@ -159,12 +160,13 @@ func TestAWatchThatStartsBehindTellsNothingWhileGitHubUpdatesTheBranch(t *testin
 	fx := newFixture(t)
 	fx.behind()
 	fx.failBuild("")
-	w := fx.start()
+	w := fx.startWorking()
 	h := fx.host.last()
 	if kinds := fx.kinds(w); !slices.Contains(kinds, string(store.ActivityBranchUpdated)) || len(h.messages()) != 1 {
 		t.Fatalf("kinds = %v, messages = %q, want only the opening message while GitHub moves the branch", kinds, h.messages())
 	}
 
+	fx.agentIdle(w)
 	fx.poll(w)
 	msgs := h.messages()
 	if len(msgs) != 2 || !strings.Contains(msgs[1], "build") {
@@ -234,6 +236,7 @@ func TestTheAgentMergesTheBaseWhenTheWatchSaysMerge(t *testing.T) {
 	fx := newFixture(t)
 	w := fx.startWith(func(r *StartRequest) { r.BranchUpdate, r.UpdateOnGitHub = new(store.BranchMerge), new(false) })
 	h := fx.host.last()
+	fx.agentIdle(w)
 
 	fx.behind()
 	fx.poll(w)
@@ -252,6 +255,7 @@ func TestTheAgentMergesTheBaseToSolveAConflictWhenTheWatchSaysMerge(t *testing.T
 	fx := newFixture(t)
 	w := fx.startWith(func(r *StartRequest) { r.BranchUpdate = new(store.BranchMerge) })
 	h := fx.host.last()
+	fx.agentIdle(w)
 
 	fx.update(func() { fx.pr.MergeableState = "dirty" })
 	fx.poll(w)
@@ -319,7 +323,7 @@ func TestTheWorkBranchFollowsTheBranchGitHubRebased(t *testing.T) {
 func TestGitHubWaitsWhileTheAgentWorks(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	w := fx.start()
+	w := fx.startWorking()
 	h := fx.host.last()
 
 	fx.behind()
@@ -858,7 +862,7 @@ func TestAStartBehindTellsNothingWhenTheAcceptedUpdateCannotBeRecorded(t *testin
 	fx.refuse("branch_updated_refused", "INSERT ON watch_activity WHEN NEW.kind = 'branch_updated'")
 	fx.behind()
 	fx.failBuild("")
-	w := fx.start()
+	w := fx.startWorking()
 	if msgs := fx.host.last().messages(); len(msgs) != 1 {
 		t.Fatalf("kinds = %v, messages = %q, want only the opening message", fx.kinds(w), msgs)
 	}

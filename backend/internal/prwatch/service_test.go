@@ -867,6 +867,32 @@ func (fx *fixture) newService() *Service {
 
 func (fx *fixture) start() store.Watch {
 	fx.t.Helper()
+	w := fx.startWorking()
+	fx.endOpeningTurn(w)
+	return fx.watch(w)
+}
+
+func (fx *fixture) endOpeningTurn(w store.Watch) {
+	fx.t.Helper()
+	l := fx.svc.sessions.get(w.ID)
+	if l == nil || !l.State().Working() {
+		return
+	}
+	fx.hook(w, agent.EventStop, `{}`)
+	todo, err := fx.st.UnnudgedActionable(context.Background(), w.ID)
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	if len(todo) == 0 {
+		return
+	}
+	if err := fx.svc.Poll(context.Background(), w.ID); err != nil {
+		fx.t.Fatalf("Poll() after the opening turn error = %v", err)
+	}
+}
+
+func (fx *fixture) startWorking() store.Watch {
+	fx.t.Helper()
 	w, err := fx.svc.Start(context.Background(), StartRequest{
 		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
 	})
@@ -945,7 +971,7 @@ func TestStartOpensASessionAndIntroducesThePullRequest(t *testing.T) {
 	fx.update(func() {
 		fx.pr.IssueComments = []ghfake.Comment{{ID: 10, Author: "bob", CreatedAt: ghfake.At("2026-09-01T00:00:00Z"), Body: "old comment", URL: "https://c/10"}}
 	})
-	w := fx.start()
+	w := fx.startWorking()
 	if w.Status != store.WatchActive || w.HeadSHA != "abc" || w.BotLogin != "alice" || w.HeadRef != "fix" || w.BaseRef != "main" ||
 		w.GitUserName != "Alice" || w.GitUserEmail != "alice@example.com" || w.CheckStates["build"] != "passed" || w.WorkBranch != "babysitter/fix" {
 		t.Fatalf("watch = %+v", w)
@@ -1372,6 +1398,11 @@ func TestHooksGateTheMessages(t *testing.T) {
 		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
 	})
 	fx.poll(w)
+	if len(h.messages()) != 1 {
+		t.Fatalf("a working agent was told: %q", h.messages())
+	}
+	fx.agentIdle(w)
+	fx.poll(w)
 	if len(h.messages()) != 2 {
 		t.Fatalf("messages = %q", h.messages())
 	}
@@ -1475,6 +1506,10 @@ func TestSessionExitStartsAgainOnTheNextMessage(t *testing.T) {
 	if fx.host.count() != 3 || strings.Contains(strings.Join(third.spec.Argv, " "), "--resume") {
 		t.Fatalf("third launch = %v", third.spec.Argv)
 	}
+	if msgs := third.messages(); len(msgs) != 1 {
+		t.Fatalf("a new conversation got a message before its opening turn ended: %q", msgs)
+	}
+	fx.endOpeningTurn(w)
 	if msgs := third.messages(); len(msgs) != 2 || !strings.Contains(msgs[0], "babysitting") || !strings.Contains(msgs[1], "second") {
 		t.Fatalf("messages = %q", msgs)
 	}
@@ -1529,6 +1564,7 @@ func TestSessionFailuresAreRecordedAndRetried(t *testing.T) {
 		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
 	})
 	fx.poll(w)
+	fx.endOpeningTurn(w)
 	equal(t, fx.kinds(w), []string{"watch_started", "agent_failed", "comment", "session_started", "nudged", "nudged"})
 	if msgs := fx.host.last().messages(); len(msgs) != 2 || !strings.Contains(msgs[0], "babysitting") || !strings.Contains(msgs[1], "first") {
 		t.Fatalf("messages = %q", msgs)
@@ -2098,10 +2134,7 @@ func TestStopAgreesWithItsActivityAboutTheWorktree(t *testing.T) {
 func TestPollPutsTheLogOfAFailedJobInTheMessage(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), StartRequest{Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
+	w := fx.start()
 	setup := []string{"##[group]Run actions/checkout@v4", "##[endgroup]"}
 	for i := range 200 {
 		setup = append(setup, fmt.Sprintf("Syncing repository, object %d", i))
@@ -2149,10 +2182,7 @@ func TestPollPutsTheLogOfAFailedJobInTheMessage(t *testing.T) {
 func TestPollKeepsTheMessageWhenTheLogCannotBeRead(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), StartRequest{Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
+	w := fx.start()
 	fx.failBuild("")
 	fx.update(func() {
 		fx.pr.CheckRuns = []ghfake.CheckRun{{ID: 1, Name: "build", Status: "completed", Conclusion: "failure"}}
@@ -2177,6 +2207,7 @@ func TestPollDropsTheLogCommandWhenGitHubServesNoLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
+	fx.endOpeningTurn(w)
 	fx.failBuild(stampedLog("##[error]Process completed with exit code 1."))
 	fx.logStatus(http.StatusNotFound)
 
@@ -2202,6 +2233,7 @@ func TestPollKeepsTheLogCommandWhenTheLogReadFailedForAnotherReason(t *testing.T
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
+	fx.endOpeningTurn(w)
 	fx.failBuild(stampedLog("##[error]Process completed with exit code 1."))
 	fx.logStatus(http.StatusBadGateway)
 
