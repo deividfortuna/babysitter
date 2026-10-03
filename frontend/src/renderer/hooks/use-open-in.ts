@@ -1,5 +1,5 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { isOpenTarget, type OpenTarget } from "../../shared/open-in";
 import { bridge } from "@/lib/bridge";
 import { openInTargetsQueryKey } from "@/lib/query-keys";
@@ -36,10 +36,10 @@ export function useOpenIn(enabled: boolean) {
   const storedIsInstalled = stored !== null && targets.includes(stored);
   const preferred = storedIsInstalled ? stored : (targets[0] ?? null);
 
-  const setPreferred = (target: OpenTarget) => {
+  const setPreferred = useCallback((target: OpenTarget) => {
     setStored(target);
     storeTarget(target);
-  };
+  }, []);
 
   return { targets, preferred, setPreferred };
 }

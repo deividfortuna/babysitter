@@ -13,6 +13,14 @@ export function commandModifier(): Modifier {
   return isMac ? "metaKey" : "ctrlKey";
 }
 
+function commandShortcut(letter: string): string {
+  return isMac ? `⌘${letter}` : `Ctrl+${letter}`;
+}
+
 export function sidebarShortcut(): string {
-  return isMac ? "⌘B" : "Ctrl+B";
+  return commandShortcut("B");
+}
+
+export function openInShortcut(): string {
+  return commandShortcut("O");
 }

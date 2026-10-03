@@ -197,11 +197,7 @@ export function WatchDetail({ id, enabled, onStopped, onWatchPR, onThisMachine =
                 </a>
               </Meta>
               <ViewHeaderActions className={actionsClearPanelToggle ? clearsPanelToggle : undefined}>
-                <OpenInButton
-                  watch={watch}
-                  onThisMachine={onThisMachine}
-                  onOpen={(request) => openFolder.mutate(request)}
-                />
+                <OpenInButton watch={watch} onThisMachine={onThisMachine} onOpen={openFolder.mutate} />
                 {active ? (
                   <>
                     <ViewHeaderButton variant="outline" onClick={() => setStopping(true)}>

@@ -1,4 +1,4 @@
-import { screen } from "@testing-library/react";
+import { fireEvent, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, expect, test, vi } from "vite-plus/test";
 import type { OpenTarget } from "../../shared/open-in";
@@ -75,7 +75,28 @@ test("the menu lists each installed editor and the file manager", async () => {
   await user.click(await screen.findByRole("button", { name: "Open in…" }));
 
   const items = await screen.findAllByRole("menuitem");
-  expect(items.map((item) => item.textContent)).toEqual(["Cursor", "IntelliJ IDEA", "Files"]);
+  expect(items.map((item) => item.textContent)).toEqual(["CursorCtrl+O", "IntelliJ IDEA", "Files"]);
+});
+
+test("Ctrl+O opens the worktree in the editor that the button shows", async () => {
+  window.localStorage.setItem("open_in_editor", "zed");
+  const { launch } = installed(["vscode", "zed", "file-manager"]);
+
+  renderWatch(buildWatch({ id: 42, worktreeDir: WORKTREE }));
+  await screen.findByRole("button", { name: "Open" });
+  fireEvent.keyDown(window, { ctrlKey: true, key: "o" });
+
+  await waitFor(() => expect(launch).toHaveBeenCalledWith(42, "zed"));
+});
+
+test("Ctrl+O opens nothing for a watch of a remote daemon", async () => {
+  const { launch } = installed(["vscode", "file-manager"]);
+
+  renderWatch(buildWatch({ id: 42, worktreeDir: WORKTREE }), false);
+  await waitForHeader();
+  fireEvent.keyDown(window, { ctrlKey: true, key: "o" });
+
+  expect(launch).not.toHaveBeenCalled();
 });
 
 test("an editor kept from before that is gone now falls back to the first installed one", async () => {

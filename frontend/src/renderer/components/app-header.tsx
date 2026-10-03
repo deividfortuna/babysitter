@@ -1,22 +1,13 @@
 import type { MouseEvent, ReactNode } from "react";
 import { ArrowLeftIcon, ArrowRightIcon, MenuIcon } from "lucide-react";
-import { Tip } from "@/components/tip";
+import { Tip, TipLabel } from "@/components/tip";
 import { Button } from "@/components/ui/button";
-import { Kbd } from "@/components/ui/kbd";
 import { SidebarTrigger } from "@/components/ui/sidebar";
 import { historyShortcuts } from "@/hooks/use-history-shortcuts";
 import type { HistoryControls } from "@/hooks/use-view-history";
 import { bridge } from "@/lib/bridge";
 import { isWindows } from "@/lib/platform";
 import { sidebarShortcut } from "@/lib/shortcuts";
-
-function TipLabel({ label, shortcut }: { label: string; shortcut: string }) {
-  return (
-    <>
-      {label} <Kbd>{shortcut}</Kbd>
-    </>
-  );
-}
 
 function HistoryButton({
   label,

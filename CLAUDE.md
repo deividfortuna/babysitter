@@ -136,7 +136,7 @@ carries little more than daemon status and the app log.
 `src/shared/open-in.ts`) and opens the worktree of a watch in one of them
 or in the file manager, with the env of the login shell. The "Open" split
 button in the watch title calls it through `window.babysitter.openIn`,
-only for the local daemon. The renderer sends a watch id, not a path:
+only for the local daemon, and Cmd+O (Ctrl+O) presses its main button. The renderer sends a watch id, not a path:
 `src/main/watch-folders.ts` reads that watch from the local daemon and
 gives its folder, so the renderer cannot open any other path.
 `src/main/app-log.ts` is the log of the main process, in
