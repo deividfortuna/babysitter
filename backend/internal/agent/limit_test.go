@@ -72,3 +72,24 @@ func TestLimitOfReadsOnlyARateLimitFailure(t *testing.T) {
 		}
 	}
 }
+
+func TestResetTimeKeepsTheClockOnADaylightSavingDay(t *testing.T) {
+	t.Parallel()
+	london := mustZone(t, "Europe/London")
+	cases := []struct {
+		now  time.Time
+		text string
+		want time.Time
+	}{
+		{time.Date(2026, 3, 29, 10, 0, 0, 0, london), "resets 3pm (Europe/London)", time.Date(2026, 3, 29, 15, 0, 0, 0, london)},
+		{time.Date(2026, 3, 28, 10, 0, 0, 0, london), "resets Mar 29, 3pm (Europe/London)", time.Date(2026, 3, 29, 15, 0, 0, 0, london)},
+		{time.Date(2026, 10, 25, 10, 0, 0, 0, london), "resets 3pm (Europe/London)", time.Date(2026, 10, 25, 15, 0, 0, 0, london)},
+		{time.Date(2026, 3, 28, 16, 0, 0, 0, london), "resets 3pm (Europe/London)", time.Date(2026, 3, 29, 15, 0, 0, 0, london)},
+	}
+	for _, tc := range cases {
+		got, ok := resetTime(tc.text, tc.now)
+		if !ok || !got.Equal(tc.want) {
+			t.Errorf("resetTime(%q) at %v = %v, %v, want %v", tc.text, tc.now, got, ok, tc.want)
+		}
+	}
+}

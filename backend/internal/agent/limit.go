@@ -31,32 +31,32 @@ func resetTime(text string, now time.Time) (time.Time, bool) {
 		return time.Time{}, false
 	}
 	month, monthDay, year, hour, minute, half, zone := m[1], m[2], m[3], m[4], m[5], m[6], m[7]
-	clock, ok := clockOf(hour, minute, half)
+	clockHour, clockMinute, ok := clockOf(hour, minute, half)
 	if !ok {
 		return time.Time{}, false
 	}
 	local := now.In(zoneOf(zone, now.Location()))
 	if month == "" {
-		return nextClock(local, clock), true
+		return nextClock(local, clockHour, clockMinute), true
 	}
-	return dateClock(local, month, monthDay, year, clock)
+	return dateClock(local, month, monthDay, year, clockHour, clockMinute)
 }
 
-func clockOf(hour, minute, half string) (time.Duration, bool) {
+func clockOf(hour, minute, half string) (h, m int, ok bool) {
 	h, err := strconv.Atoi(hour)
 	onClockFace := err == nil && h >= 1 && h <= 12
 	if !onClockFace {
-		return 0, false
+		return 0, 0, false
 	}
-	m, err := minutesOf(minute)
+	m, err = minutesOf(minute)
 	if err != nil {
-		return 0, false
+		return 0, 0, false
 	}
 	h %= 12
 	if strings.EqualFold(half, "pm") {
 		h += 12
 	}
-	return time.Duration(h)*time.Hour + time.Duration(m)*time.Minute, true
+	return h, m, true
 }
 
 func minutesOf(minute string) (int, error) {
@@ -84,16 +84,15 @@ func zoneOf(name string, fallback *time.Location) *time.Location {
 	return loc
 }
 
-func nextClock(local time.Time, clock time.Duration) time.Time {
-	day := time.Date(local.Year(), local.Month(), local.Day(), 0, 0, 0, 0, local.Location())
-	reset := day.Add(clock)
+func nextClock(local time.Time, h, m int) time.Time {
+	reset := time.Date(local.Year(), local.Month(), local.Day(), h, m, 0, 0, local.Location())
 	if !reset.After(local) {
-		reset = day.AddDate(0, 0, 1).Add(clock)
+		reset = time.Date(local.Year(), local.Month(), local.Day()+1, h, m, 0, 0, local.Location())
 	}
 	return reset
 }
 
-func dateClock(local time.Time, month, monthDay, year string, clock time.Duration) (time.Time, bool) {
+func dateClock(local time.Time, month, monthDay, year string, h, m int) (time.Time, bool) {
 	parsed, err := time.Parse("Jan 2", month+" "+monthDay)
 	if err != nil {
 		return time.Time{}, false
@@ -104,7 +103,7 @@ func dateClock(local time.Time, month, monthDay, year string, clock time.Duratio
 			return time.Time{}, false
 		}
 	}
-	reset := time.Date(y, parsed.Month(), parsed.Day(), 0, 0, 0, 0, local.Location()).Add(clock)
+	reset := time.Date(y, parsed.Month(), parsed.Day(), h, m, 0, 0, local.Location())
 	if year == "" && !reset.After(local) {
 		reset = reset.AddDate(1, 0, 0)
 	}
