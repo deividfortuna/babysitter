@@ -82,8 +82,9 @@ func (s *Service) deliver(ctx context.Context, w store.Watch, text, summary stri
 }
 
 func (s *Service) send(ctx context.Context, w store.Watch, l *live, text, summary, source string, rows []store.Activity) (store.Activity, error) {
-	l.nextTurn()
+	l.nextTurn(s.now())
 	if err := l.handle.Send(ctx, text); err != nil {
+		l.dropPrompt()
 		s.queueEndTurn(w.ID, l.turnSeq())
 		return store.Activity{}, err
 	}

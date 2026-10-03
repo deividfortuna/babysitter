@@ -143,3 +143,29 @@ func TestAnIdleNoticeThatRacesTheStopKeepsTheAgentWaiting(t *testing.T) {
 		}
 	}
 }
+
+func TestAnItemWaitsForTheOpeningTurnOfASessionThatSaidItStarted(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.failBuild(stampedLog("##[group]Run go test ./...", "##[endgroup]", "--- FAIL: TestThing", "##[error]Process completed with exit code 1."))
+	const firstWatch = 1
+	fx.host.onReady = func() {
+		if _, err := fx.svc.Hook(context.Background(), firstWatch, agent.EventSessionStart, []byte(`{"source":"startup"}`)); err != nil {
+			t.Errorf("Hook(session-start) error = %v", err)
+		}
+	}
+	w := fx.startWith(func(*StartRequest) {})
+	h := fx.host.last()
+	if msgs := h.messages(); len(msgs) != 1 || !strings.Contains(msgs[0], "babysitting") {
+		t.Fatalf("messages before the opening turn began = %q", msgs)
+	}
+
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.hook(w, agent.EventStop, `{}`)
+	if err := fx.svc.Poll(context.Background(), w.ID); err != nil {
+		t.Fatal(err)
+	}
+	if msgs := h.messages(); len(msgs) != 2 || !strings.Contains(msgs[1], "Failed: build") {
+		t.Fatalf("messages after the opening turn = %q", msgs)
+	}
+}

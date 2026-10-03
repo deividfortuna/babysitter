@@ -34,14 +34,24 @@ type live struct {
 	mu       sync.Mutex
 	state    agent.State
 	signalAt time.Time
+	promptAt time.Time
 	stopping bool
 	turn     uint64
 }
 
-func (l *live) nextTurn() {
+func (l *live) nextTurn(at time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.turn++
+	if l.signals {
+		l.promptAt = at
+	}
+}
+
+func (l *live) dropPrompt() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.promptAt = time.Time{}
 }
 
 func (l *live) turnSeq() uint64 {
@@ -59,12 +69,16 @@ func (l *live) State() agent.State {
 func (l *live) holdsMessages(now time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	if !l.state.Working() {
+	prompted := !l.promptAt.IsZero()
+	if !l.state.Working() && !prompted {
 		return false
 	}
 	lastSignal := l.signalAt
 	if lastSignal.IsZero() {
 		lastSignal = l.startedAt
+	}
+	if l.promptAt.After(lastSignal) {
+		lastSignal = l.promptAt
 	}
 	return now.Sub(lastSignal) < silentTurn
 }
@@ -72,11 +86,18 @@ func (l *live) holdsMessages(now time.Time) bool {
 func (l *live) reportEvent(event string, payload []byte, at time.Time) (agent.State, bool) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	if takesPrompt(event) {
+		l.promptAt = time.Time{}
+	}
 	state, ok := l.state.Next(event, payload)
 	if !ok {
 		return "", false
 	}
 	return state, l.reportLocked(state, at)
+}
+
+func takesPrompt(event string) bool {
+	return event == agent.EventUserPromptSubmit || event == agent.EventStop || event == agent.EventStopFailure
 }
 
 func (l *live) report(state agent.State, at time.Time) bool {
@@ -99,6 +120,7 @@ func (l *live) markExited(at time.Time) (stopping bool) {
 	defer l.mu.Unlock()
 	l.state = agent.StateExited
 	l.signalAt = at
+	l.promptAt = time.Time{}
 	return l.stopping
 }
 

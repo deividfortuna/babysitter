@@ -641,6 +641,7 @@ type fakeHandle struct {
 	stopErr  error
 	screen   string
 	onSend   func()
+	onReady  func()
 	onResize func(TerminalSize)
 	size     TerminalSize
 }
@@ -666,7 +667,12 @@ func (h *fakeHandle) Send(_ context.Context, text string) error {
 	return nil
 }
 
-func (h *fakeHandle) Ready(context.Context) error { return nil }
+func (h *fakeHandle) Ready(context.Context) error {
+	if h.onReady != nil {
+		h.onReady()
+	}
+	return nil
+}
 
 func (h *fakeHandle) Interrupt() error { return nil }
 
@@ -749,6 +755,7 @@ type fakeHost struct {
 	handles  []*fakeHandle
 	startErr error
 	onStart  func()
+	onReady  func()
 }
 
 func (f *fakeHost) Start(_ context.Context, spec session.Spec) (session.Handle, error) {
@@ -758,7 +765,7 @@ func (f *fakeHost) Start(_ context.Context, spec session.Spec) (session.Handle, 
 		return nil, f.startErr
 	}
 	size := TerminalSize{Rows: spec.Rows, Cols: spec.Cols}
-	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles), size: size}
+	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles), size: size, onReady: f.onReady}
 	f.handles = append(f.handles, h)
 	hook := f.onStart
 	f.mu.Unlock()
@@ -1185,6 +1192,7 @@ func TestPollTellsTheAgentOnce(t *testing.T) {
 	if len(h.messages()) != 2 {
 		t.Fatal("the comments were told twice")
 	}
+	fx.agentIdle(w)
 
 	fx.update(func() {
 		fx.pr.CheckRuns = []ghfake.CheckRun{{ID: 1, Name: "build", Status: "completed", Conclusion: "failure", URL: "https://ci/1"}}
@@ -1220,6 +1228,7 @@ func TestPollTellsTheAgentOnce(t *testing.T) {
 	if got.HeadSHA != "def" || got.GreenSHA != "def" {
 		t.Fatalf("watch = %+v", got)
 	}
+	fx.agentIdle(w)
 
 	if _, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{UpdateOnGitHub: new(false)}); err != nil {
 		t.Fatal(err)
@@ -1571,6 +1580,7 @@ func TestSessionFailuresAreRecordedAndRetried(t *testing.T) {
 	}
 
 	h := fx.host.last()
+	fx.agentIdle(w)
 	h.mu.Lock()
 	h.sendErr = errors.New("terminal gone")
 	h.mu.Unlock()
