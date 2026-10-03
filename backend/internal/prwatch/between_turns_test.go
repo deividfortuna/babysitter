@@ -74,6 +74,30 @@ func TestTheAuthorTypesIntoAWorkingAgent(t *testing.T) {
 	}
 }
 
+func TestTheEndOfATurnWakesThePollOnlyAfterTheTurnIsClosed(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.failBuild(stampedLog("##[group]Run go test ./...", "##[endgroup]", "--- FAIL: TestThing", "##[error]Process completed with exit code 1."))
+	w := fx.startWith(func(*StartRequest) {})
+	fx.svc.schedule.polled(w.ID, fx.clock(), slowDown, fx.svc.cadence())
+
+	release := make(chan struct{})
+	fx.svc.spawn(fx.svc.turns.queue(w.ID, func() { <-release }))
+	if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventStop, []byte(`{}`)); err != nil {
+		close(release)
+		t.Fatalf("Hook(stop) error = %v", err)
+	}
+	dueBeforeClose := fx.due(w)
+	close(release)
+	fx.svc.wg.Wait()
+	if dueBeforeClose {
+		t.Fatal("the end of the turn woke the poll before the turn was closed")
+	}
+	if !fx.due(w) {
+		t.Fatal("the closed turn did not wake the watch for the failed check that waits")
+	}
+}
+
 func TestACompactionInTheTurnKeepsTheMessageWaiting(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)

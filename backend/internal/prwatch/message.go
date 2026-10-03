@@ -222,11 +222,21 @@ func (s *Service) reportState(ctx context.Context, id int64, l *live, event stri
 		s.spawn(s.turns.queue(id, func() { s.startTurn(id, work) }))
 	case state.EndsTurn():
 		s.queueEndTurn(id, l.turnSeq())
-		s.kickForUntold(ctx, id)
+		s.spawn(s.turns.queue(id, func() { s.kickForWaiting(id) }))
 	}
 }
 
-func (s *Service) kickForUntold(ctx context.Context, id int64) {
+func (s *Service) kickForWaiting(id int64) {
+	ctx := context.WithoutCancel(s.background())
+	w, err := s.store.GetWatch(ctx, id)
+	if err != nil {
+		s.log.Error("read the watch at the end of the turn", "watch", id, "err", err)
+		return
+	}
+	if s.limitIsOver(w) {
+		s.Kick(id)
+		return
+	}
 	todo, err := s.store.UnnudgedActionable(ctx, id)
 	if err != nil {
 		s.log.Error("read the messages that wait for the end of the turn", "watch", id, "err", err)

@@ -144,3 +144,23 @@ func TestIdleNoticeKeepsTheAgentWaitingOnBackgroundWork(t *testing.T) {
 		t.Fatalf("state after the background work ends = %q, want %q", got, agent.StateIdle)
 	}
 }
+
+func TestATurnThatEndsAfterTheResetWakesThePollToContinue(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.hitLimit(w, fx.clock().UTC().Add(time.Hour).Truncate(time.Minute))
+
+	fx.advance(time.Hour)
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.poll(w)
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("a working agent was told to continue: %q", msgs)
+	}
+	fx.svc.schedule.polled(w.ID, fx.clock(), slowDown, fx.svc.cadence())
+	fx.hook(w, agent.EventStopFailure, `{"error":"overloaded"}`)
+	if !fx.due(w) {
+		t.Fatal("the end of the turn did not wake the watch to continue after the reset")
+	}
+}
