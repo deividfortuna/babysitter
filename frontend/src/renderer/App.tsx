@@ -23,6 +23,7 @@ import { useNativeNotifications } from "@/hooks/useNativeNotifications";
 import { useNotificationsPresent } from "@/hooks/useNotificationsPresent";
 import { useSettings } from "@/hooks/useSettings";
 import { useCommandPaletteShortcut } from "@/hooks/use-command-palette-shortcut";
+import { useCommandShortcut } from "@/hooks/use-command-shortcut";
 import { useHistoryShortcuts } from "@/hooks/use-history-shortcuts";
 import { useSidebarWidth } from "@/hooks/use-sidebar-width";
 import { useViewHistory } from "@/hooks/use-view-history";
@@ -114,6 +115,7 @@ export function App() {
   const firstStart = !daemonAnswered && status.state === "starting";
   const openPalette = useCallback(() => setPaletteOpen(true), []);
   useCommandPaletteShortcut(openPalette, !firstStart);
+  useCommandShortcut(".", openSettings, !firstStart);
 
   function screen() {
     switch (view.kind) {

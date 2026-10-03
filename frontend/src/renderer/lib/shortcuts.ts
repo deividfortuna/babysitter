@@ -44,5 +44,9 @@ export function openInShortcut(): string {
   return commandShortcut("O");
 }
 
+export function settingsShortcut(): string {
+  return commandShortcut(".");
+}
+
 export const REFRESH_KEY = "r";
 export const REMOVE_KEY = "d";
