@@ -35,9 +35,18 @@ function typesAltGraphSymbol(event: KeyboardEvent): boolean {
   return !isMac && event.getModifierState("AltGraph") && !LATIN_LETTER_OR_DIGIT.test(event.key);
 }
 
+// Some layouts, such as French AZERTY, need Shift to type a symbol like
+// the period, so Shift is allowed when it is what types the symbol.
+function shiftTypes(event: KeyboardEvent, chord: Chord): boolean {
+  return !LATIN_LETTER_OR_DIGIT.test(chord.key) && event.key === chord.key;
+}
+
 function presses(event: KeyboardEvent, chord: Chord): boolean {
   if (typesAltGraphSymbol(event)) return false;
-  return pressedKey(event) === chord.key && onlyModifiers(event, chordModifiers(chord));
+  if (pressedKey(event) !== chord.key) return false;
+  const modifiers = chordModifiers(chord);
+  if (onlyModifiers(event, modifiers)) return true;
+  return shiftTypes(event, chord) && onlyModifiers(event, [...modifiers, "shiftKey"]);
 }
 
 function runs(event: KeyboardEvent, chord: Chord): boolean {

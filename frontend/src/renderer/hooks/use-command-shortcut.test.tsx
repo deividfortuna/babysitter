@@ -36,3 +36,42 @@ test.each([
 
   expect(onPress).toHaveBeenCalledTimes(runs ? 1 : 0);
 });
+
+test.each([
+  { name: "a US layout", mac: false, keys: { ctrlKey: true, key: ".", code: "Period" }, runs: true },
+  {
+    name: "a French AZERTY layout, where Shift types the period",
+    mac: false,
+    keys: { ctrlKey: true, shiftKey: true, key: ".", code: "Comma" },
+    runs: true,
+  },
+  {
+    name: "a French AZERTY layout on macOS",
+    mac: true,
+    keys: { metaKey: true, shiftKey: true, key: ".", code: "Comma" },
+    runs: true,
+  },
+  {
+    name: "Shift on a US layout",
+    mac: false,
+    keys: { ctrlKey: true, shiftKey: true, key: ">", code: "Period" },
+    runs: false,
+  },
+])("the period on $name runs: $runs", ({ mac, keys, runs }) => {
+  platform.isMac = mac;
+  const onPress = vi.fn();
+  renderHook(() => useCommandShortcut(".", onPress, true));
+
+  fireEvent.keyDown(window, keys);
+
+  expect(onPress).toHaveBeenCalledTimes(runs ? 1 : 0);
+});
+
+test("Shift does not stand in for a letter", () => {
+  const onPress = vi.fn();
+  renderHook(() => useCommandShortcut("p", onPress, true));
+
+  fireEvent.keyDown(window, { ctrlKey: true, shiftKey: true, key: "P", code: "KeyP" });
+
+  expect(onPress).not.toHaveBeenCalled();
+});
