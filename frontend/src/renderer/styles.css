@@ -133,8 +133,8 @@
   --label-7: #9a6700;
   --label-8: #bc4c00;
   --scrollbar-width: 6px;
-  --scrollbar-thumb: rgb(217 217 217);
-  --scrollbar-thumb-hover: rgb(191 191 191);
+  --scrollbar-thumb: rgb(133 133 133);
+  --scrollbar-thumb-hover: rgb(107 107 107);
   --terminal-selection: #54aeff66;
   --diff-add-bar: #1a7f37;
   --diff-del-bar: #cf222e;
