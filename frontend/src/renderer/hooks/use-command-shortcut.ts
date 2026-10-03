@@ -22,6 +22,7 @@ export function useCommandShortcut(key: string, onPress: () => void, allowed: bo
     function onKeyDown(event: KeyboardEvent) {
       if (!runs(event, key)) return;
       event.preventDefault();
+      if (event.repeat) return;
       onPress();
     }
 

@@ -89,6 +89,18 @@ test("Ctrl+O opens the worktree in the editor that the button shows", async () =
   await waitFor(() => expect(launch).toHaveBeenCalledWith(42, "zed"));
 });
 
+test("holding Ctrl+O opens the worktree one time", async () => {
+  const { launch } = installed(["vscode", "file-manager"]);
+
+  renderWatch(buildWatch({ id: 42, worktreeDir: WORKTREE }));
+  await screen.findByRole("button", { name: "Open" });
+  fireEvent.keyDown(window, { ctrlKey: true, key: "o" });
+  fireEvent.keyDown(window, { ctrlKey: true, key: "o", repeat: true });
+  fireEvent.keyDown(window, { ctrlKey: true, key: "o", repeat: true });
+
+  await waitFor(() => expect(launch).toHaveBeenCalledOnce());
+});
+
 test("Ctrl+O opens nothing for a watch of a remote daemon", async () => {
   const { launch } = installed(["vscode", "file-manager"]);
 
