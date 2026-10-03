@@ -55,7 +55,7 @@ func TestALimitedAgentGetsNoMessageUntilTheReset(t *testing.T) {
 	if msgs := h.messages(); len(msgs) != 1 {
 		t.Fatalf("a limited agent was told: %q", msgs)
 	}
-	if blockers := fx.watch(w).ReadyBlockers; !slices.ContainsFunc(blockers, func(b string) bool { return strings.Contains(b, "usage limit") }) {
+	if _, blockers := fx.svc.Readiness(fx.watch(w), agent.StateIdle); !slices.ContainsFunc(blockers, func(b string) bool { return strings.Contains(b, "usage limit") }) {
 		t.Fatalf("blockers = %q", blockers)
 	}
 
@@ -162,5 +162,38 @@ func TestATurnThatEndsAfterTheResetWakesThePollToContinue(t *testing.T) {
 	fx.hook(w, agent.EventStopFailure, `{"error":"overloaded"}`)
 	if !fx.due(w) {
 		t.Fatal("the end of the turn did not wake the watch to continue after the reset")
+	}
+}
+
+func TestALimitTakesTheReadinessAwayAtOnce(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	fx.good()
+	w := fx.start()
+	fx.agentIdle(w)
+	fx.poll(w)
+	fx.poll(w)
+	readiness := func() (*time.Time, []string) {
+		info, _ := fx.svc.Session(context.Background(), w)
+		return fx.svc.Readiness(fx.watch(w), info.State)
+	}
+	if since, blockers := readiness(); since == nil {
+		t.Fatalf("a good watch is not ready: %q", blockers)
+	}
+	limitBlocks := func(b string) bool { return strings.Contains(b, "usage limit") }
+
+	fx.hitLimit(w, fx.clock().Add(time.Hour))
+	if since, blockers := readiness(); since != nil || !slices.ContainsFunc(blockers, limitBlocks) {
+		t.Fatalf("readiness after the limit, before a poll = %v, %q", since, blockers)
+	}
+	fx.poll(w)
+	if since, blockers := readiness(); since != nil || len(slices.DeleteFunc(slices.Clone(blockers), limitBlocks)) != 0 || !slices.ContainsFunc(blockers, limitBlocks) {
+		t.Fatalf("readiness after a poll = %v, %q, want the limit once", since, blockers)
+	}
+
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.agentIdle(w)
+	if _, blockers := readiness(); slices.ContainsFunc(blockers, limitBlocks) {
+		t.Fatalf("blockers after the limit was cleared = %q", blockers)
 	}
 }

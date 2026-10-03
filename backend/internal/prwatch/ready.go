@@ -19,7 +19,7 @@ func (s *Service) blockers(w store.Watch, snap *snapshot.Snapshot, state agentSt
 	for i := range out {
 		out[i] = redact.Text(out[i])
 	}
-	for _, own := range []string{state.untold, state.proposal, state.author, state.limit} {
+	for _, own := range []string{state.untold, state.proposal, state.author} {
 		if own != "" {
 			out = append(out, own)
 		}
@@ -38,6 +38,9 @@ func Readiness(w store.Watch, state agent.State, now time.Time, interval time.Du
 	blockers := append([]string{}, w.ReadyBlockers...)
 	if word, busy := agentBusyWord(state); busy {
 		return nil, append(blockers, word)
+	}
+	if limit := limitBlocker(w); limit != "" {
+		return nil, append(blockers, limit)
 	}
 	if !settled(w.ReadySince, now, interval) {
 		return nil, blockers
@@ -73,7 +76,7 @@ func agentBusyWord(state agent.State) (string, bool) {
 func (s *Service) assess(ctx context.Context, w store.Watch, snap *snapshot.Snapshot, state agentStatus, newHead bool) error {
 	now := s.now()
 	blockers := s.blockers(w, snap, state)
-	if _, busy := agentBusyWord(state.session.State); busy || len(blockers) > 0 {
+	if _, busy := agentBusyWord(state.session.State); busy || state.limit != "" || len(blockers) > 0 {
 		return s.store.SetWatchReadiness(ctx, w.ID, nil, blockers)
 	}
 	since := w.ReadySince
