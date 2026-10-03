@@ -241,6 +241,15 @@
   :is(button, a, input, select, textarea, [role="separator"]) {
     @apply app-no-drag;
   }
+  :is(
+    [data-slot="dropdown-menu-content"],
+    [data-slot="dropdown-menu-sub-content"],
+    [data-slot="select-content"],
+    [data-slot="dialog-content"],
+    [data-slot="sheet-content"]
+  ) {
+    @apply app-no-drag;
+  }
   [data-slot="dialog-content"] {
     max-height: var(--size-dialog-height);
     overflow-y: auto;
