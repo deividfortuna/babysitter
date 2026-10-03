@@ -86,7 +86,11 @@ func (g *Git) Create(ctx context.Context, source, dir, branch, upstream string) 
 
 func (g *Git) Restore(ctx context.Context, source, dir, branch, upstream string) error {
 	_, _ = g.git(ctx, source, "worktree", "prune")
-	if !g.branchExists(ctx, source, branch) {
+	exists, err := g.hasBranch(ctx, source, branch)
+	if err != nil {
+		return fmt.Errorf("look for the branch %s: %w", branch, err)
+	}
+	if !exists {
 		return g.Create(ctx, source, dir, branch, upstream)
 	}
 	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
@@ -127,8 +131,21 @@ func (g *Git) removeBranch(ctx context.Context, source, branch string) error {
 }
 
 func (g *Git) branchExists(ctx context.Context, source, branch string) bool {
+	exists, err := g.hasBranch(ctx, source, branch)
+	return exists && err == nil
+}
+
+func (g *Git) hasBranch(ctx context.Context, source, branch string) (bool, error) {
 	_, err := g.git(ctx, source, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
-	return err == nil
+	refMissing := execx.ExitCode(err) == 1
+	switch {
+	case err == nil:
+		return true, nil
+	case refMissing:
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 func removeWorktreeDir(dir string) error {

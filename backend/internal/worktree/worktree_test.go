@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deividfortuna/babysitter/internal/execx"
 	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
@@ -352,5 +353,47 @@ func TestRemoveIgnoresABranchThatIsAlreadyGone(t *testing.T) {
 
 	if err := g.Remove(ctx, author, dir, "babysitter/never-made"); err != nil {
 		t.Fatalf("Remove() of a watch that was never started = %v", err)
+	}
+}
+
+func TestRestoreStopsWhenGitCannotSayWhetherTheBranchExists(t *testing.T) {
+	t.Parallel()
+	var calls []string
+	g := &Git{Run: func(ctx context.Context, _, _ string, _ []string, _ string, args ...string) (string, error) {
+		calls = append(calls, strings.Join(args[2:], " "))
+		if args[2] == "rev-parse" {
+			return "", context.DeadlineExceeded
+		}
+		return "", nil
+	}}
+	source := t.TempDir()
+	err := g.Restore(context.Background(), source, filepath.Join(source, "wt"), "babysitter/fix", "origin/fix")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Restore() error = %v, want the error of git", err)
+	}
+	for _, c := range calls {
+		if strings.HasPrefix(c, "worktree add") {
+			t.Fatalf("Restore() ran %q after git failed, want no worktree add", c)
+		}
+	}
+}
+
+func TestRestoreCreatesTheBranchWhenGitSaysItIsMissing(t *testing.T) {
+	t.Parallel()
+	var calls []string
+	g := &Git{Run: func(ctx context.Context, _, _ string, _ []string, _ string, args ...string) (string, error) {
+		calls = append(calls, strings.Join(args[2:], " "))
+		if args[2] == "rev-parse" {
+			return "", &execx.ExitError{Name: "git", Args: args, Code: 1}
+		}
+		return "", nil
+	}}
+	source := t.TempDir()
+	dir := filepath.Join(source, "wt")
+	if err := g.Restore(context.Background(), source, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	if want := "worktree add -q -B babysitter/fix " + dir + " origin/fix"; calls[len(calls)-1] != want {
+		t.Fatalf("last git call = %q, want %q", calls[len(calls)-1], want)
 	}
 }
