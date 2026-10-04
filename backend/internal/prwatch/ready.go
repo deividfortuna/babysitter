@@ -39,6 +39,9 @@ func Readiness(w store.Watch, state agent.State, now time.Time, interval time.Du
 	if word, busy := agentBusyWord(state); busy {
 		return nil, append(blockers, word)
 	}
+	if limit := limitBlocker(w); limit != "" {
+		return nil, append(blockers, limit)
+	}
 	if !settled(w.ReadySince, now, interval) {
 		return nil, blockers
 	}
@@ -59,6 +62,8 @@ func agentBusyWord(state agent.State) (string, bool) {
 		return "the agent is starting", true
 	case agent.StateActive:
 		return "the agent is still working", true
+	case agent.StateWaiting:
+		return "the background work of the agent still runs", true
 	case agent.StateWaitingInput:
 		return "the agent asks you a question", true
 	case agent.StateBlocked:
@@ -71,7 +76,7 @@ func agentBusyWord(state agent.State) (string, bool) {
 func (s *Service) assess(ctx context.Context, w store.Watch, snap *snapshot.Snapshot, state agentStatus, newHead bool) error {
 	now := s.now()
 	blockers := s.blockers(w, snap, state)
-	if _, busy := agentBusyWord(state.session.State); busy || len(blockers) > 0 {
+	if _, busy := agentBusyWord(state.session.State); busy || state.limit != "" || len(blockers) > 0 {
 		return s.store.SetWatchReadiness(ctx, w.ID, nil, blockers)
 	}
 	since := w.ReadySince

@@ -328,6 +328,7 @@ func TestARebaseThatConflictsGoesToTheAgentAndItsResolutionAsks(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	fx.endOpeningTurn(w)
 	fx.propose(w)
 	told := len(fx.messages())
 

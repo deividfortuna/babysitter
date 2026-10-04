@@ -135,6 +135,7 @@ type Watch struct {
 	KeepWorktree      bool
 	BranchUpdate      BranchUpdate
 	UpdateOnGitHub    bool
+	AgentLimitedUntil *time.Time
 }
 
 func (w Watch) Asks() bool { return w.ApprovalMode == ApprovalManual }
@@ -169,7 +170,7 @@ const watchColumns = `id, owner, name, number, url, title, author, bot_login, he
 	consecutive_errors, head_sha, pr_state, mergeable_state, check_states, green_sha, summary, include_own, agent_session,
 	approvals_required, merge_method, ready_since, ready_blockers, approval_mode, auto_approve_rebase,
 	taken_over_at, taken_over_pid, handback_start, auto_reason, merge_when_ready, update_type, keep_worktree, effort,
-	branch_update, update_on_github, author_avatar_url`
+	branch_update, update_on_github, author_avatar_url, agent_limited_until`
 
 func (s *Store) CreateWatch(ctx context.Context, w Watch) (Watch, error) {
 	if w.CheckStates == nil {
@@ -354,10 +355,10 @@ func (s *Store) SetWatchSummary(ctx context.Context, id int64, summary json.RawM
 
 func scanWatch(row scanner) (Watch, error) {
 	var (
-		w                                                               Watch
-		stoppedAt, lastPollAt, lastHeartbeatAt, readySince, takenOverAt sql.NullString
-		startedAt, checkStates, summary, blockers                       string
-		includeExisting, includeOwn                                     int
+		w                                                                             Watch
+		stoppedAt, lastPollAt, lastHeartbeatAt, readySince, takenOverAt, limitedUntil sql.NullString
+		startedAt, checkStates, summary, blockers                                     string
+		includeExisting, includeOwn                                                   int
 	)
 	err := row.Scan(&w.ID, &w.Owner, &w.Name, &w.Number, &w.URL, &w.Title, &w.Author, &w.BotLogin, &w.HeadRef, &w.BaseRef,
 		&w.SourceDir, &w.WorktreeDir, &w.WorkBranch, &w.GitUserName, &w.GitUserEmail, &w.Provider, &w.Model, &w.Status, &w.StopReason,
@@ -365,7 +366,7 @@ func scanWatch(row scanner) (Watch, error) {
 		&w.ConsecutiveErrors, &w.HeadSHA, &w.PRState, &w.MergeableState, &checkStates, &w.GreenSHA, &summary, &includeOwn, &w.AgentSession,
 		&w.ApprovalsRequired, &w.MergeMethod, &readySince, &blockers, &w.ApprovalMode, &w.AutoApproveRebase,
 		&takenOverAt, &w.TakenOverPID, &w.HandbackStart, &w.AutoReason, &w.MergeWhenReady, &w.UpdateType, &w.KeepWorktree, &w.Effort,
-		&w.BranchUpdate, &w.UpdateOnGitHub, &w.AuthorAvatarURL)
+		&w.BranchUpdate, &w.UpdateOnGitHub, &w.AuthorAvatarURL, &limitedUntil)
 	if err != nil {
 		return Watch{}, err
 	}
@@ -389,6 +390,9 @@ func scanWatch(row scanner) (Watch, error) {
 	if w.TakenOverAt, err = timePtrFromDB(takenOverAt); err != nil {
 		return Watch{}, err
 	}
+	if w.AgentLimitedUntil, err = timePtrFromDB(limitedUntil); err != nil {
+		return Watch{}, err
+	}
 	w.ReadyBlockers = []string{}
 	if err := json.Unmarshal([]byte(blockers), &w.ReadyBlockers); err != nil {
 		return Watch{}, err
@@ -406,6 +410,25 @@ func (s *Store) SetWatchAgentSession(ctx context.Context, id int64, session stri
 		return fmt.Errorf("set watch agent session: %w", err)
 	}
 	return nil
+}
+
+func (s *Store) SetWatchAgentLimit(ctx context.Context, id int64, until *time.Time) error {
+	if _, err := s.db.ExecContext(ctx, "UPDATE watches SET agent_limited_until = ? WHERE id = ?", timePtrToDB(until), id); err != nil {
+		return fmt.Errorf("set watch agent limit: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ClearWatchAgentLimit(ctx context.Context, id int64, until time.Time) (bool, error) {
+	res, err := s.db.ExecContext(ctx, "UPDATE watches SET agent_limited_until = NULL WHERE id = ? AND agent_limited_until = ?", id, timeToDB(until))
+	if err != nil {
+		return false, fmt.Errorf("clear watch agent limit: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("clear watch agent limit: %w", err)
+	}
+	return n == 1, nil
 }
 
 func (s *Store) PublishSession(k WatchKey) {

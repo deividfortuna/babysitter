@@ -19,20 +19,38 @@ import (
 
 var ErrAgentBusy = errors.New("the agent waits on the author")
 
+var ErrAgentWorking = errors.New("the agent is still working")
+
 var ErrWatchStopped = errors.New("the watch is stopped")
 
 type deliverPolicy int
 
 const (
 	deliverRoutine deliverPolicy = iota
+	deliverBetweenTurns
 	deliverAuthor
 )
 
-func (p deliverPolicy) blocks(state agent.State) bool {
+func (p deliverPolicy) refusal(l *live, now time.Time) error {
+	state := l.State()
 	if p == deliverAuthor {
-		return state == agent.StateBlocked
+		return authorRefusal(state)
 	}
-	return state.NeedsInput()
+	if state.NeedsInput() {
+		return ErrAgentBusy
+	}
+	turnRuns := p == deliverBetweenTurns && l.holdsMessages(now)
+	if turnRuns {
+		return ErrAgentWorking
+	}
+	return nil
+}
+
+func authorRefusal(state agent.State) error {
+	if state == agent.StateBlocked {
+		return ErrAgentBusy
+	}
+	return nil
 }
 
 func (p deliverPolicy) source() string {
@@ -44,7 +62,12 @@ func (p deliverPolicy) source() string {
 
 func (s *Service) waitsOnAuthor(w store.Watch) bool {
 	l := s.sessions.get(w.ID)
-	return l != nil && deliverRoutine.blocks(l.State())
+	return l != nil && l.State().NeedsInput()
+}
+
+func (s *Service) agentWorks(w store.Watch) bool {
+	l := s.sessions.get(w.ID)
+	return l != nil && l.holdsMessages(s.now())
 }
 
 func (s *Service) deliver(ctx context.Context, w store.Watch, text, summary string, policy deliverPolicy, rows []store.Activity) (store.Activity, error) {
@@ -52,15 +75,16 @@ func (s *Service) deliver(ctx context.Context, w store.Watch, text, summary stri
 	if err != nil {
 		return store.Activity{}, err
 	}
-	if policy.blocks(l.State()) {
-		return store.Activity{}, ErrAgentBusy
+	if err := policy.refusal(l, s.now()); err != nil {
+		return store.Activity{}, err
 	}
 	return s.send(ctx, w, l, text, summary, policy.source(), rows)
 }
 
 func (s *Service) send(ctx context.Context, w store.Watch, l *live, text, summary, source string, rows []store.Activity) (store.Activity, error) {
-	l.nextTurn()
+	l.nextTurn(s.now())
 	if err := l.handle.Send(ctx, text); err != nil {
+		l.dropPrompt()
 		s.queueEndTurn(w.ID, l.turnSeq())
 		return store.Activity{}, err
 	}
@@ -184,11 +208,9 @@ func loggedCommand(command string) string {
 }
 
 func (s *Service) reportState(ctx context.Context, id int64, l *live, event string, payload []byte) {
-	state, ok := agent.StateOf(event, payload)
-	if !ok {
-		return
-	}
-	if !l.report(state, s.now()) {
+	s.noteLimit(ctx, id, event, payload)
+	state, changed := l.reportEvent(event, payload, s.now())
+	if !changed {
 		return
 	}
 	s.store.PublishSession(l.key)
@@ -198,6 +220,28 @@ func (s *Service) reportState(ctx context.Context, id int64, l *live, event stri
 		s.spawn(s.turns.queue(id, func() { s.startTurn(id, work) }))
 	case state.EndsTurn():
 		s.queueEndTurn(id, l.turnSeq())
+		s.spawn(s.turns.queue(id, func() { s.kickForWaiting(id) }))
+	}
+}
+
+func (s *Service) kickForWaiting(id int64) {
+	ctx := context.WithoutCancel(s.background())
+	w, err := s.store.GetWatch(ctx, id)
+	if err != nil {
+		s.log.Error("read the watch at the end of the turn", "watch", id, "err", err)
+		return
+	}
+	if s.limitIsOver(w) {
+		s.Kick(id)
+		return
+	}
+	todo, err := s.store.UnnudgedActionable(ctx, id)
+	if err != nil {
+		s.log.Error("read the messages that wait for the end of the turn", "watch", id, "err", err)
+		return
+	}
+	if len(todo) > 0 {
+		s.Kick(id)
 	}
 }
 

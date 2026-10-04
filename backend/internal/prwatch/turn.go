@@ -19,7 +19,12 @@ func (s *Service) pushes(w store.Watch) bool {
 
 func (s *Service) quiet(w store.Watch) bool {
 	l := s.sessions.get(w.ID)
-	return l == nil || l.State().EndsTurn()
+	if l == nil {
+		return true
+	}
+	state := l.State()
+	backgroundWorkRuns := state == agent.StateWaiting
+	return state.EndsTurn() && !backgroundWorkRuns
 }
 
 func (s *Service) syncWork(ctx context.Context, w store.Watch) {

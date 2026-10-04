@@ -36,6 +36,7 @@ type agentStatus struct {
 	untold   string
 	proposal string
 	author   string
+	limit    string
 }
 
 func (s *Service) agentStatus(ctx context.Context, w store.Watch, pending []store.Activity) (agentStatus, error) {
@@ -47,12 +48,12 @@ func (s *Service) agentStatus(ctx context.Context, w store.Watch, pending []stor
 	if err != nil {
 		return agentStatus{}, err
 	}
-	return agentStatus{session: session, untold: untold(pending), proposal: proposal, author: s.authorBlocker(w)}, nil
+	return agentStatus{session: session, untold: untold(pending), proposal: proposal, author: s.authorBlocker(w), limit: limitBlocker(w)}, nil
 }
 
 func (a agentStatus) done() bool {
 	_, busy := agentBusyWord(a.session.State)
-	return !busy && a.untold == "" && a.proposal == "" && a.author == ""
+	return !busy && a.untold == "" && a.proposal == "" && a.author == "" && a.limit == ""
 }
 
 func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch) error {
@@ -93,6 +94,7 @@ func (s *Service) poll(ctx context.Context, client *github.Client, w store.Watch
 	}
 	if s.hostsSession(w) {
 		s.tellHandback(ctx, w)
+		s.resumeAfterLimit(ctx, w)
 	}
 	pending, err := s.tell(ctx, client, w)
 	if err != nil {
@@ -252,6 +254,14 @@ func (s *Service) tell(ctx context.Context, client *github.Client, w store.Watch
 		s.log.Info("the agent waits on you, the message waits for the next poll", "watch", w.ID)
 		return todo, nil
 	}
+	if limited(w) {
+		s.log.Info("the agent hit its usage limit, the message waits for the reset", "watch", w.ID, "until", *w.AgentLimitedUntil)
+		return todo, nil
+	}
+	if s.agentWorks(w) {
+		s.log.Info("the agent is still working, the message waits for the end of its turn", "watch", w.ID)
+		return todo, nil
+	}
 	if s.waitsForGitHub(ctx, w) {
 		s.log.Info("GitHub updates the branch, the message waits for the new head", "watch", w.ID)
 		return todo, nil
@@ -261,10 +271,21 @@ func (s *Service) tell(ctx context.Context, client *github.Client, w store.Watch
 		return todo, err
 	}
 	s.syncWork(ctx, w)
-	_, err = s.deliver(ctx, w, m.text, m.summary, deliverRoutine, m.rows)
+	stillLimited, err := s.limitedNow(ctx, w.ID)
+	if err != nil {
+		return todo, err
+	}
+	if stillLimited {
+		s.log.Info("the agent hit its usage limit during the poll, the message waits for the reset", "watch", w.ID)
+		return todo, nil
+	}
+	_, err = s.deliver(ctx, w, m.text, m.summary, deliverBetweenTurns, m.rows)
 	switch {
 	case errors.Is(err, ErrAgentBusy):
 		s.log.Info("the agent waits on you, the message waits for the next poll", "watch", w.ID)
+		return todo, nil
+	case errors.Is(err, ErrAgentWorking):
+		s.log.Info("the agent is still working, the message waits for the end of its turn", "watch", w.ID)
 		return todo, nil
 	case err != nil:
 		s.agentFailed(ctx, w, "send a message to the agent", err)

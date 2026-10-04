@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -188,6 +189,7 @@ type fakeGit struct {
 	created   []string
 	sources   []string
 	removed   []string
+	restored  []string
 	removeErr error
 	fetchErr  error
 	onFetch   func()
@@ -220,7 +222,20 @@ func (g *fakeGit) Create(_ context.Context, source, dir, branch, upstream string
 	if hook != nil {
 		hook()
 	}
-	return nil
+	return os.MkdirAll(dir, 0o750)
+}
+
+func (g *fakeGit) Restore(_ context.Context, source, dir, branch, upstream string) error {
+	g.mu.Lock()
+	g.restored = append(g.restored, source+" "+dir+" "+branch+" "+upstream)
+	g.mu.Unlock()
+	return os.MkdirAll(dir, 0o750)
+}
+
+func (g *fakeGit) restores() []string {
+	g.mu.Lock()
+	defer g.mu.Unlock()
+	return append([]string(nil), g.restored...)
 }
 
 func (g *fakeGit) Remove(_ context.Context, _, dir, _ string) error {
@@ -230,7 +245,7 @@ func (g *fakeGit) Remove(_ context.Context, _, dir, _ string) error {
 		return g.removeErr
 	}
 	g.removed = append(g.removed, dir)
-	return nil
+	return os.RemoveAll(dir)
 }
 
 func (g *fakeGit) createdDirs() []string {
@@ -627,6 +642,7 @@ type fakeHandle struct {
 	stopErr  error
 	screen   string
 	onSend   func()
+	onReady  func()
 	onResize func(TerminalSize)
 	size     TerminalSize
 }
@@ -652,7 +668,12 @@ func (h *fakeHandle) Send(_ context.Context, text string) error {
 	return nil
 }
 
-func (h *fakeHandle) Ready(context.Context) error { return nil }
+func (h *fakeHandle) Ready(context.Context) error {
+	if h.onReady != nil {
+		h.onReady()
+	}
+	return nil
+}
 
 func (h *fakeHandle) Interrupt() error { return nil }
 
@@ -735,6 +756,7 @@ type fakeHost struct {
 	handles  []*fakeHandle
 	startErr error
 	onStart  func()
+	onReady  func()
 }
 
 func (f *fakeHost) Start(_ context.Context, spec session.Spec) (session.Handle, error) {
@@ -744,7 +766,7 @@ func (f *fakeHost) Start(_ context.Context, spec session.Spec) (session.Handle, 
 		return nil, f.startErr
 	}
 	size := TerminalSize{Rows: spec.Rows, Cols: spec.Cols}
-	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles), size: size}
+	h := &fakeHandle{spec: spec, done: make(chan struct{}), pid: 1000 + len(f.handles), size: size, onReady: f.onReady}
 	f.handles = append(f.handles, h)
 	hook := f.onStart
 	f.mu.Unlock()
@@ -853,6 +875,32 @@ func (fx *fixture) newService() *Service {
 
 func (fx *fixture) start() store.Watch {
 	fx.t.Helper()
+	w := fx.startWorking()
+	fx.endOpeningTurn(w)
+	return fx.watch(w)
+}
+
+func (fx *fixture) endOpeningTurn(w store.Watch) {
+	fx.t.Helper()
+	l := fx.svc.sessions.get(w.ID)
+	if l == nil || !l.State().Working() {
+		return
+	}
+	fx.hook(w, agent.EventStop, `{}`)
+	todo, err := fx.st.UnnudgedActionable(context.Background(), w.ID)
+	if err != nil {
+		fx.t.Fatal(err)
+	}
+	if len(todo) == 0 {
+		return
+	}
+	if err := fx.svc.Poll(context.Background(), w.ID); err != nil {
+		fx.t.Fatalf("Poll() after the opening turn error = %v", err)
+	}
+}
+
+func (fx *fixture) startWorking() store.Watch {
+	fx.t.Helper()
 	w, err := fx.svc.Start(context.Background(), StartRequest{
 		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
 	})
@@ -931,7 +979,7 @@ func TestStartOpensASessionAndIntroducesThePullRequest(t *testing.T) {
 	fx.update(func() {
 		fx.pr.IssueComments = []ghfake.Comment{{ID: 10, Author: "bob", CreatedAt: ghfake.At("2026-09-01T00:00:00Z"), Body: "old comment", URL: "https://c/10"}}
 	})
-	w := fx.start()
+	w := fx.startWorking()
 	if w.Status != store.WatchActive || w.HeadSHA != "abc" || w.BotLogin != "alice" || w.HeadRef != "fix" || w.BaseRef != "main" ||
 		w.GitUserName != "Alice" || w.GitUserEmail != "alice@example.com" || w.CheckStates["build"] != "passed" || w.WorkBranch != "babysitter/fix" {
 		t.Fatalf("watch = %+v", w)
@@ -1145,6 +1193,7 @@ func TestPollTellsTheAgentOnce(t *testing.T) {
 	if len(h.messages()) != 2 {
 		t.Fatal("the comments were told twice")
 	}
+	fx.agentIdle(w)
 
 	fx.update(func() {
 		fx.pr.CheckRuns = []ghfake.CheckRun{{ID: 1, Name: "build", Status: "completed", Conclusion: "failure", URL: "https://ci/1"}}
@@ -1180,6 +1229,7 @@ func TestPollTellsTheAgentOnce(t *testing.T) {
 	if got.HeadSHA != "def" || got.GreenSHA != "def" {
 		t.Fatalf("watch = %+v", got)
 	}
+	fx.agentIdle(w)
 
 	if _, err := fx.svc.SetMergeRules(context.Background(), w.ID, MergeRulesChange{UpdateOnGitHub: new(false)}); err != nil {
 		t.Fatal(err)
@@ -1345,6 +1395,9 @@ func TestHooksGateTheMessages(t *testing.T) {
 	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventUserPromptSubmit, []byte(`{}`)); err != nil || state() != agent.StateActive {
 		t.Fatalf("state after submit = %q, %v", state(), err)
 	}
+	if _, err := fx.svc.Hook(ctx, w.ID, agent.EventSessionStart, []byte(`{"source":"compact"}`)); err != nil || state() != agent.StateActive {
+		t.Fatalf("state after a compaction in the turn = %q, %v", state(), err)
+	}
 	if _, err := fx.svc.Hook(ctx, w.ID, "bogus", nil); err == nil {
 		t.Fatal("an unknown event was accepted")
 	}
@@ -1354,6 +1407,11 @@ func TestHooksGateTheMessages(t *testing.T) {
 	fx.update(func() {
 		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
 	})
+	fx.poll(w)
+	if len(h.messages()) != 1 {
+		t.Fatalf("a working agent was told: %q", h.messages())
+	}
+	fx.agentIdle(w)
 	fx.poll(w)
 	if len(h.messages()) != 2 {
 		t.Fatalf("messages = %q", h.messages())
@@ -1458,11 +1516,43 @@ func TestSessionExitStartsAgainOnTheNextMessage(t *testing.T) {
 	if fx.host.count() != 3 || strings.Contains(strings.Join(third.spec.Argv, " "), "--resume") {
 		t.Fatalf("third launch = %v", third.spec.Argv)
 	}
+	if msgs := third.messages(); len(msgs) != 1 {
+		t.Fatalf("a new conversation got a message before its opening turn ended: %q", msgs)
+	}
+	fx.endOpeningTurn(w)
 	if msgs := third.messages(); len(msgs) != 2 || !strings.Contains(msgs[0], "babysitting") || !strings.Contains(msgs[1], "second") {
 		t.Fatalf("messages = %q", msgs)
 	}
 	if got, _ := fx.st.GetWatch(ctx, w.ID); got.AgentSession == "" || got.AgentSession == stored.AgentSession {
 		t.Fatalf("agent session of the new conversation = %q", got.AgentSession)
+	}
+}
+
+func TestAWorktreeThatIsGoneIsMadeAgainBeforeTheAgentStarts(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	ctx := context.Background()
+	stored, _ := fx.st.GetWatch(ctx, w.ID)
+	if got := fx.git.restores(); len(got) != 0 {
+		t.Fatalf("restores of a worktree that is there = %v", got)
+	}
+
+	fx.advance(time.Hour)
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+	if err := os.RemoveAll(stored.WorktreeDir); err != nil {
+		t.Fatal(err)
+	}
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+
+	want := stored.SourceDir + " " + stored.WorktreeDir + " " + stored.WorkBranch + " origin/" + stored.HeadRef
+	equal(t, fx.git.restores(), []string{want})
+	if fx.host.count() != 2 || fx.host.last().spec.Dir != stored.WorktreeDir {
+		t.Fatalf("sessions = %d, last dir = %s", fx.host.count(), fx.host.last().spec.Dir)
 	}
 }
 
@@ -1484,12 +1574,14 @@ func TestSessionFailuresAreRecordedAndRetried(t *testing.T) {
 		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
 	})
 	fx.poll(w)
+	fx.endOpeningTurn(w)
 	equal(t, fx.kinds(w), []string{"watch_started", "agent_failed", "comment", "session_started", "nudged", "nudged"})
 	if msgs := fx.host.last().messages(); len(msgs) != 2 || !strings.Contains(msgs[0], "babysitting") || !strings.Contains(msgs[1], "first") {
 		t.Fatalf("messages = %q", msgs)
 	}
 
 	h := fx.host.last()
+	fx.agentIdle(w)
 	h.mu.Lock()
 	h.sendErr = errors.New("terminal gone")
 	h.mu.Unlock()
@@ -2053,10 +2145,7 @@ func TestStopAgreesWithItsActivityAboutTheWorktree(t *testing.T) {
 func TestPollPutsTheLogOfAFailedJobInTheMessage(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), StartRequest{Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
+	w := fx.start()
 	setup := []string{"##[group]Run actions/checkout@v4", "##[endgroup]"}
 	for i := range 200 {
 		setup = append(setup, fmt.Sprintf("Syncing repository, object %d", i))
@@ -2104,10 +2193,7 @@ func TestPollPutsTheLogOfAFailedJobInTheMessage(t *testing.T) {
 func TestPollKeepsTheMessageWhenTheLogCannotBeRead(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), StartRequest{Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
+	w := fx.start()
 	fx.failBuild("")
 	fx.update(func() {
 		fx.pr.CheckRuns = []ghfake.CheckRun{{ID: 1, Name: "build", Status: "completed", Conclusion: "failure"}}
@@ -2132,6 +2218,7 @@ func TestPollDropsTheLogCommandWhenGitHubServesNoLog(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
+	fx.endOpeningTurn(w)
 	fx.failBuild(stampedLog("##[error]Process completed with exit code 1."))
 	fx.logStatus(http.StatusNotFound)
 
@@ -2157,6 +2244,7 @@ func TestPollKeepsTheLogCommandWhenTheLogReadFailedForAnotherReason(t *testing.T
 	if err != nil {
 		t.Fatalf("Start() error = %v", err)
 	}
+	fx.endOpeningTurn(w)
 	fx.failBuild(stampedLog("##[error]Process completed with exit code 1."))
 	fx.logStatus(http.StatusBadGateway)
 
@@ -2256,4 +2344,36 @@ func (fx *fixture) advance(d time.Duration) {
 	fx.nowMu.Lock()
 	defer fx.nowMu.Unlock()
 	fx.now = fx.now.Add(d)
+}
+
+func TestAWorktreeThatCannotBeReadStopsTheSessionFromStarting(t *testing.T) {
+	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports a path under a file as not found, so no stat fails another way")
+	}
+	fx := newFixture(t)
+	w := fx.start()
+	stored := fx.watch(w)
+	fx.advance(time.Hour)
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+	parent := filepath.Dir(stored.WorktreeDir)
+	if err := os.RemoveAll(parent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(parent, []byte("not a directory\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+
+	if fx.host.count() != 1 || len(fx.git.restores()) != 0 {
+		t.Fatalf("sessions = %d, restores = %v, want no session in a worktree that cannot be read", fx.host.count(), fx.git.restores())
+	}
+	rows := fx.activity(w)
+	if last := rows[len(rows)-1]; last.Kind != store.ActivityAgentFailed || !strings.Contains(string(last.Payload), "not a directory") {
+		t.Fatalf("last row = %+v, want the failure to read the worktree", last)
+	}
 }

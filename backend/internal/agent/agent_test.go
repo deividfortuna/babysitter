@@ -17,12 +17,17 @@ func TestStateOf(t *testing.T) {
 		known   bool
 	}{
 		{EventSessionStart, `{}`, StateIdle, true},
+		{EventSessionStart, `{"source":"resume"}`, StateIdle, true},
+		{EventSessionStart, `{"source":"compact"}`, "", false},
 		{EventUserPromptSubmit, `{}`, StateActive, true},
 		{EventPreToolUse, `{}`, StateActive, true},
 		{EventPostToolUse, `{}`, StateActive, true},
 		{EventPostToolUseFailed, `{}`, StateActive, true},
 		{EventPermissionRequest, `{"tool_name":"Bash"}`, StateBlocked, true},
 		{EventStop, `{}`, StateIdle, true},
+		{EventStop, `{"background_tasks":[]}`, StateIdle, true},
+		{EventStop, `{"background_tasks":[{"id":"b1","type":"shell","status":"running","description":"npm test"}]}`, StateWaiting, true},
+		{EventStopFailure, `{"error":"rate_limit"}`, StateIdle, true},
 		{EventNotification, `{"notification_type":"idle_prompt"}`, StateIdle, true},
 		{EventNotification, `{"notification_type":"permission_prompt"}`, StateBlocked, true},
 		{EventNotification, `{"notification_type":"agent_needs_input"}`, StateWaitingInput, true},
@@ -48,6 +53,40 @@ func TestStateOf(t *testing.T) {
 	}
 	if ValidEvent("bogus") || !StateIdle.Valid() || State("x").Valid() {
 		t.Fatal("validity")
+	}
+}
+
+func TestNextKeepsWaitingOnAnIdleNotice(t *testing.T) {
+	t.Parallel()
+	cases := []struct {
+		from    State
+		event   string
+		payload string
+		want    State
+		known   bool
+	}{
+		{StateWaiting, EventNotification, `{"notification_type":"idle_prompt"}`, "", false},
+		{StateWaiting, EventNotification, `{"notification_type":"agent_completed"}`, "", false},
+		{StateWaiting, EventNotification, `{"notification_type":"agent_needs_input"}`, StateWaitingInput, true},
+		{StateWaiting, EventUserPromptSubmit, `{}`, StateActive, true},
+		{StateWaiting, EventStop, `{}`, StateIdle, true},
+		{StateActive, EventNotification, `{"notification_type":"idle_prompt"}`, StateIdle, true},
+	}
+	for _, tc := range cases {
+		got, known := tc.from.Next(tc.event, json.RawMessage(tc.payload))
+		if got != tc.want || known != tc.known {
+			t.Errorf("%s.Next(%s, %s) = %q, %v, want %q, %v", tc.from, tc.event, tc.payload, got, known, tc.want, tc.known)
+		}
+	}
+}
+
+func TestNextKeepsTheStateOnACompaction(t *testing.T) {
+	t.Parallel()
+	for _, from := range []State{StateStarting, StateActive, StateIdle, StateWaiting} {
+		got, known := from.Next(EventSessionStart, json.RawMessage(`{"source":"compact"}`))
+		if got != from || !known {
+			t.Errorf("%s.Next(session-start, compact) = %q, %v, want %q, true", from, got, known, from)
+		}
 	}
 }
 

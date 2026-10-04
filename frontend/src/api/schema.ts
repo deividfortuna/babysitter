@@ -806,7 +806,7 @@ export interface components {
         };
         HookParams: {
             /** @enum {string} */
-            event: "session-start" | "user-prompt-submit" | "pre-tool-use" | "post-tool-use" | "post-tool-use-failure" | "permission-request" | "stop" | "notification" | "session-end";
+            event: "session-start" | "user-prompt-submit" | "pre-tool-use" | "post-tool-use" | "post-tool-use-failure" | "permission-request" | "stop" | "stop-failure" | "notification" | "session-end";
             payload: {
                 [key: string]: unknown;
             } | null;
@@ -1402,10 +1402,10 @@ export interface components {
             /** Format: date-time */
             startedAt?: string | null;
             /**
-             * @description What the agent does now. none: no session; starting: the process runs and said nothing yet; idle: waits for a message; active: works; waiting_input: asked you a question; blocked: waits on a permission decision; exited: the process ended
+             * @description What the agent does now. none: no session; starting: the process runs and said nothing yet; idle: waits for a message; active: works; waiting: ended its turn, but its background work still runs and can wake it; waiting_input: asked you a question; blocked: waits on a permission decision; exited: the process ended
              * @enum {string}
              */
-            state: "none" | "starting" | "idle" | "active" | "waiting_input" | "blocked" | "exited";
+            state: "none" | "starting" | "idle" | "active" | "waiting" | "waiting_input" | "blocked" | "exited";
         };
         HttpdSessionOutput: {
             output: string;

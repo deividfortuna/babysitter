@@ -11,7 +11,6 @@ its issue does and goes with the fix.
 | 04  | prwatch cleanups, as a backlog: 04.4 left                             | none, code only |
 | 05  | Nothing guards the page size of the thread comments                   | none |
 | 18  | A proposal opens for a turn that already ended                       | [18](<docs/evidences/18. A proposal opens for a turn that already ended.md>), QA: not reproducible; rebase: not reproduced |
-| 23  | A message typed right after the opening message reaches the agent cut | [23](<docs/evidences/23. A message typed right after the opening message reaches the agent cut.md>), QA: not reproduced; rebase: not reproduced |
 | 25  | The app promises a reject it cannot do, and keeps the refusal on the next proposal | [25](<docs/evidences/25. The app promises a reject it cannot do, and keeps the refusal on the next proposal.md>), refusal fixed, dialog open; rebase: refusal fixed, dialog open |
 | 29  | The merge blockers keep the proposal of the last poll until the next poll | none, seen in the check of 27 |
 | 38  | The header of a watch cuts the title of the pull request to one letter | none, seen in the check of 30 to 37 |
@@ -90,30 +89,6 @@ request can show as ready to merge.
 
 Fix: make `startTurn` check the turn it belongs to, as `endTurn` does
 with `turnSeq`.
-
-## 23. A message typed right after the opening message reaches the agent cut
-
-**Evidence:** [23](<docs/evidences/23. A message typed right after the opening message reaches the agent cut.md>).
-**Not verified:** seen once, no test yet.
-**QA 2026-09-23: not reproduced** in two tries, a new watch that reports
-the items that exist (1.37 s between the messages) and a restart with a
-comment waiting (0.363 s, the gap of the first run). The agent got each
-message whole. It stays open.
-**Regression check 2026-09-24 at `3c87078`: not reproduced.** A restart
-with a comment waiting typed the two messages 0.350 s apart into Claude
-Code 2.1.280, and the agent got both whole.
-
-Found: 2026-09-23, the evidence run of 13 to 22, watch 1 on
-`deividfortuna/gha-playground#11`. The daemon started a new session and
-typed the opening message and a message about one review comment 0.35
-seconds apart. The agent got only `ground/pull/11`, the end of the
-second message. The daemon marked the comment told, so no poll sends it
-again, and the reviewer gets no answer.
-
-`deliverRoutine` blocks only while the agent asks the author something,
-so a routine message goes into a session that is busy with its first
-turn. Decide: hold a routine message until the opening turn ends, or
-type the untold rows into the opening message.
 
 ## 25. The app promises a reject it cannot do, and keeps the refusal on the next proposal
 

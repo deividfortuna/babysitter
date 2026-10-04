@@ -1363,14 +1363,39 @@ what went out, until the next proposal asks.
 The daemon knows what the agent does. The agent reports each turn
 through its hooks, and `watch list`, `watch status` and the app show
 the state: `none` before the first session (`no session` in
-`watch status`), `starting`, `idle`, `active`, `waiting_input` when the
-agent asked you a question, `blocked` when it waits on a permission
-decision, `exited` when its process ended. A message about the pull
-request waits while the agent needs you, so it never answers in your
-place. A session that exited starts again with the next message, on the
-same conversation, so nothing it learned is lost. A daemon that
-restarts starts the session of every watch at once, on the same
-conversation. Claude Code takes its hooks on the
+`watch status`), `starting`, `idle`, `active`, `waiting` when the agent
+ended its turn but its background work still runs and can wake it,
+`waiting_input` when the agent asked you a question, `blocked` when it
+waits on a permission decision, `exited` when its process ended. A
+compaction of the context in the middle of a turn does not end the
+turn. A watch is not ready to merge while the agent is `waiting`. A
+message about the pull request waits while the agent needs you, so it
+never answers in your place. It also waits while the agent is
+`starting` or `active`, and goes out when the turn ends, so it never
+cuts into a turn. A new session gets the items after its first turn.
+When the hooks of a working agent stay silent for 10 minutes, the
+message goes out anyway. A message that you send goes at once. A session that exited starts again with
+the next message, on the same conversation, so nothing it learned is
+lost. If the worktree of the watch is gone, the daemon makes it again
+from the work branch before the session starts, so the commits that
+are not pushed stay. If the work branch is gone too, the daemon fetches
+the pull request branch and makes the work branch again from it, and
+the commits that were only on the lost branch are not on it. A daemon that restarts starts the session of every
+watch at once, on the same conversation.
+
+When Claude Code stops a turn because the usage limit is reached, the
+daemon reads the reset time from the message of the limit and keeps it
+on the watch. The activity records `agent_failed` with the time. Until
+then, no message of a poll goes to the agent and the watch is not ready
+to merge. A message that you send, your decision on a proposal and a
+conflict the daemon cannot rebase still go at once: they have no retry,
+and they stay in the conversation for the agent after the reset. The first poll after the reset tells the agent to continue its work,
+and the messages that waited go at the next poll. When the message
+gives no reset time, the daemon tries again after 30 minutes. A turn
+that ends without a failure clears the limit. Copilot CLI does not
+report its limits through hooks, so the daemon does not see them.
+
+Claude Code takes its hooks on the
 command line. Copilot CLI loads them from a plugin in
 `<data dir>/agent-plugins/<watch id>`, which the daemon writes before the
 start with `--plugin-dir`. The plugin is outside the worktree, so the

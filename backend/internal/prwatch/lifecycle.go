@@ -605,8 +605,12 @@ func (f worktreeFate) gone() bool {
 	return f == worktreeRemoved || f == worktreeBranchLeft
 }
 
+func (s *Service) managesWorktree(w store.Watch) bool {
+	return s.git != nil && w.WorktreeDir != ""
+}
+
 func (s *Service) removeWorktree(ctx context.Context, w store.Watch) worktreeFate {
-	if s.git == nil || w.WorktreeDir == "" {
+	if !s.managesWorktree(w) {
 		return worktreeNotTried
 	}
 	if err := s.git.Remove(ctx, w.SourceDir, w.WorktreeDir, w.WorkBranch); err != nil {

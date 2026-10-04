@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/deividfortuna/babysitter/internal/execx"
 	"github.com/deividfortuna/babysitter/internal/gitrepo"
 )
 
@@ -94,6 +95,57 @@ func TestCreateAndRemove(t *testing.T) {
 	}
 	if err := g.Remove(ctx, author, dir, "babysitter/fix"); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestRestoreKeepsTheCommitsOfTheBranch(t *testing.T) {
+	t.Parallel()
+	_, author, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	dir := filepath.Join(t.TempDir(), "wt", "octo-hello-3")
+	if err := g.Create(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "c.txt", "three\n")
+	git(t, dir, "add", "c.txt")
+	git(t, dir, "-c", "commit.gpgsign=false", "commit", "-q", "-m", "add c")
+	unpushed := git(t, dir, "rev-parse", "HEAD")
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := g.Restore(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if h := git(t, dir, "rev-parse", "HEAD"); h != unpushed {
+		t.Fatalf("restored head = %s, want the unpushed commit %s", h, unpushed)
+	}
+	if b := git(t, dir, "rev-parse", "--abbrev-ref", "HEAD"); b != "babysitter/fix" {
+		t.Fatalf("restored branch = %q", b)
+	}
+}
+
+func TestRestoreCreatesTheBranchItLost(t *testing.T) {
+	t.Parallel()
+	_, author, _ := repos(t)
+	ctx := context.Background()
+	g := New()
+	dir := filepath.Join(t.TempDir(), "wt", "octo-hello-3")
+	if err := g.Create(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+	git(t, author, "worktree", "prune")
+	git(t, author, "branch", "-q", "-D", "babysitter/fix")
+
+	if err := g.Restore(ctx, author, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if h := git(t, dir, "rev-parse", "HEAD"); h != git(t, author, "rev-parse", "origin/fix") {
+		t.Fatalf("restored head = %s, want the head of origin/fix", h)
 	}
 }
 
@@ -301,5 +353,123 @@ func TestRemoveIgnoresABranchThatIsAlreadyGone(t *testing.T) {
 
 	if err := g.Remove(ctx, author, dir, "babysitter/never-made"); err != nil {
 		t.Fatalf("Remove() of a watch that was never started = %v", err)
+	}
+}
+
+func TestRestoreStopsWhenGitCannotSayWhetherTheBranchExists(t *testing.T) {
+	t.Parallel()
+	var calls []string
+	g := &Git{Run: func(ctx context.Context, _, _ string, _ []string, _ string, args ...string) (string, error) {
+		calls = append(calls, strings.Join(args[2:], " "))
+		if args[2] == "rev-parse" {
+			return "", context.DeadlineExceeded
+		}
+		return "", nil
+	}}
+	source := t.TempDir()
+	err := g.Restore(context.Background(), source, filepath.Join(source, "wt"), "babysitter/fix", "origin/fix")
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Restore() error = %v, want the error of git", err)
+	}
+	for _, c := range calls {
+		if strings.HasPrefix(c, "worktree add") {
+			t.Fatalf("Restore() ran %q after git failed, want no worktree add", c)
+		}
+	}
+}
+
+func TestRestoreCreatesTheBranchWhenGitSaysItIsMissing(t *testing.T) {
+	t.Parallel()
+	var calls []string
+	g := &Git{Run: func(ctx context.Context, _, _ string, _ []string, _ string, args ...string) (string, error) {
+		calls = append(calls, strings.Join(args[2:], " "))
+		if args[2] == "rev-parse" {
+			return "", &execx.ExitError{Name: "git", Args: args, Code: 1}
+		}
+		return "", nil
+	}}
+	source := t.TempDir()
+	dir := filepath.Join(source, "wt")
+	if err := g.Restore(context.Background(), source, dir, "babysitter/fix", "origin/fix"); err != nil {
+		t.Fatalf("Restore() error = %v", err)
+	}
+	want := []string{"fetch -q origin +refs/heads/fix:refs/remotes/origin/fix", "worktree add -q -B babysitter/fix " + dir + " origin/fix"}
+	if got := calls[len(calls)-2:]; got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("last git calls = %q, want %q", got, want)
+	}
+}
+
+func TestRestoreStopsWhenTheUpstreamOfALostBranchCannotBeFetched(t *testing.T) {
+	t.Parallel()
+	var calls []string
+	g := &Git{Run: func(ctx context.Context, _, _ string, _ []string, _ string, args ...string) (string, error) {
+		calls = append(calls, strings.Join(args[2:], " "))
+		switch args[2] {
+		case "rev-parse":
+			return "", &execx.ExitError{Name: "git", Args: args, Code: 1}
+		case "fetch":
+			return "", errors.New("network down")
+		}
+		return "", nil
+	}}
+	source := t.TempDir()
+	if err := g.Restore(context.Background(), source, filepath.Join(source, "wt"), "babysitter/fix", "origin/fix"); err == nil {
+		t.Fatal("Restore() made the branch again from an upstream it could not fetch")
+	}
+	for _, c := range calls {
+		if strings.HasPrefix(c, "worktree add") {
+			t.Fatalf("Restore() ran %q after the fetch failed", c)
+		}
+	}
+}
+
+func TestRestoreRightAfterTheWorktreeWasDeleted(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	root := t.TempDir()
+	source := filepath.Join(root, "source")
+	git(t, root, "init", "-q", "-b", "main", source)
+	git(t, source, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init")
+	ctx := context.Background()
+	g := New()
+	dir := filepath.Join(root, "wt", "octo-hello-3")
+	if err := g.Create(ctx, source, dir, "babysitter/fix", "main"); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "unpushed")
+	unpushed := git(t, dir, "rev-parse", "HEAD")
+	if err := os.RemoveAll(dir); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := g.Restore(ctx, source, dir, "babysitter/fix", "main"); err != nil {
+		t.Fatalf("Restore() a worktree deleted a moment ago error = %v", err)
+	}
+	if h := git(t, dir, "rev-parse", "HEAD"); h != unpushed {
+		t.Fatalf("restored head = %s, want the unpushed commit %s", h, unpushed)
+	}
+}
+
+func TestFetchUpdatesTheTrackingRefOfASingleBranchClone(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	root := t.TempDir()
+	origin := filepath.Join(root, "origin")
+	git(t, root, "init", "-q", "-b", "main", origin)
+	git(t, origin, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init")
+	git(t, origin, "checkout", "-q", "-b", "fix")
+	git(t, origin, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "fix")
+	source := filepath.Join(root, "source")
+	git(t, root, "clone", "-q", "--single-branch", "-b", "main", origin, source)
+
+	if err := New().Fetch(context.Background(), source, "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := git(t, source, "rev-parse", "refs/remotes/origin/fix"), git(t, origin, "rev-parse", "fix"); got != want {
+		t.Fatalf("origin/fix = %s, want %s", got, want)
 	}
 }

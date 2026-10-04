@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 	"strconv"
 	"sync"
@@ -19,6 +20,7 @@ const (
 	readyPoll    = 100 * time.Millisecond
 	startupGrace = 15 * time.Second
 	stopTimeout  = 10 * time.Second
+	silentTurn   = 10 * time.Minute
 )
 
 type live struct {
@@ -32,14 +34,24 @@ type live struct {
 	mu       sync.Mutex
 	state    agent.State
 	signalAt time.Time
+	promptAt time.Time
 	stopping bool
 	turn     uint64
 }
 
-func (l *live) nextTurn() {
+func (l *live) nextTurn(at time.Time) {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 	l.turn++
+	if l.signals {
+		l.promptAt = at
+	}
+}
+
+func (l *live) dropPrompt() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.promptAt = time.Time{}
 }
 
 func (l *live) turnSeq() uint64 {
@@ -54,9 +66,47 @@ func (l *live) State() agent.State {
 	return l.state
 }
 
+func (l *live) holdsMessages(now time.Time) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	prompted := !l.promptAt.IsZero()
+	if !l.state.Working() && !prompted {
+		return false
+	}
+	lastSignal := l.signalAt
+	if lastSignal.IsZero() {
+		lastSignal = l.startedAt
+	}
+	if l.promptAt.After(lastSignal) {
+		lastSignal = l.promptAt
+	}
+	return now.Sub(lastSignal) < silentTurn
+}
+
+func (l *live) reportEvent(event string, payload []byte, at time.Time) (agent.State, bool) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if takesPrompt(event) {
+		l.promptAt = time.Time{}
+	}
+	state, ok := l.state.Next(event, payload)
+	if !ok {
+		return "", false
+	}
+	return state, l.reportLocked(state, at)
+}
+
+func takesPrompt(event string) bool {
+	return event == agent.EventUserPromptSubmit || event == agent.EventStop || event == agent.EventStopFailure
+}
+
 func (l *live) report(state agent.State, at time.Time) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
+	return l.reportLocked(state, at)
+}
+
+func (l *live) reportLocked(state agent.State, at time.Time) bool {
 	changed := l.state != state && l.state != agent.StateExited
 	if changed {
 		l.state = state
@@ -70,6 +120,7 @@ func (l *live) markExited(at time.Time) (stopping bool) {
 	defer l.mu.Unlock()
 	l.state = agent.StateExited
 	l.signalAt = at
+	l.promptAt = time.Time{}
 	return l.stopping
 }
 
@@ -153,6 +204,9 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 	if err != nil {
 		return nil, err
 	}
+	if err := s.ensureWorktree(ctx, w); err != nil {
+		return nil, err
+	}
 	sessionID, resume := w.AgentSession, w.AgentSession != ""
 	if !resume {
 		sessionID = runner.NewSessionID()
@@ -207,6 +261,24 @@ func (s *Service) ensureSession(ctx context.Context, w store.Watch) (*live, erro
 		return l, err
 	}
 	return l, nil
+}
+
+func (s *Service) ensureWorktree(ctx context.Context, w store.Watch) error {
+	if !s.managesWorktree(w) {
+		return nil
+	}
+	_, err := os.Stat(w.WorktreeDir)
+	if err == nil {
+		return nil
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("look at the worktree %s: %w", w.WorktreeDir, err)
+	}
+	s.log.Warn("the worktree of the watch is gone, make it again", "watch", w.ID, "dir", w.WorktreeDir)
+	if err := s.git.Restore(ctx, w.SourceDir, w.WorktreeDir, w.WorkBranch, "origin/"+w.HeadRef); err != nil {
+		return fmt.Errorf("make the worktree %s again: %w", w.WorktreeDir, err)
+	}
+	return nil
 }
 
 func (s *Service) catchUpSize(watchID int64, l *live, startSize TerminalSize) {

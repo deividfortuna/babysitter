@@ -17,6 +17,7 @@ var ErrBranchLeft = errors.New("the private branch of the worktree was not delet
 type Manager interface {
 	Fetch(ctx context.Context, source, upstream string) error
 	Create(ctx context.Context, source, dir, branch, upstream string) error
+	Restore(ctx context.Context, source, dir, branch, upstream string) error
 	Remove(ctx context.Context, source, dir, branch string) error
 }
 
@@ -67,7 +68,8 @@ func (g *Git) Fetch(ctx context.Context, source, upstream string) error {
 	if err := g.Auth.CheckRemote(ctx, remote, false, gitInSource); err != nil {
 		return fmt.Errorf("fetch %s: %w", upstream, err)
 	}
-	if _, err := g.git(ctx, source, "fetch", "-q", remote, ref); err != nil {
+	refspec := "+refs/heads/" + ref + ":refs/remotes/" + remote + "/" + ref
+	if _, err := g.git(ctx, source, "fetch", "-q", remote, refspec); err != nil {
 		return fmt.Errorf("fetch %s: %w (was the branch pushed?)", upstream, err)
 	}
 	return nil
@@ -78,6 +80,27 @@ func (g *Git) Create(ctx context.Context, source, dir, branch, upstream string) 
 		return fmt.Errorf("create worktree dir: %w", err)
 	}
 	if _, err := g.git(ctx, source, "worktree", "add", "-q", "-B", branch, dir, upstream); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (g *Git) Restore(ctx context.Context, source, dir, branch, upstream string) error {
+	_, _ = g.git(ctx, source, "worktree", "prune")
+	exists, err := g.hasBranch(ctx, source, branch)
+	if err != nil {
+		return fmt.Errorf("look for the branch %s: %w", branch, err)
+	}
+	if !exists {
+		if err := g.Fetch(ctx, source, upstream); err != nil {
+			return err
+		}
+		return g.Create(ctx, source, dir, branch, upstream)
+	}
+	if err := os.MkdirAll(filepath.Dir(dir), 0o750); err != nil {
+		return fmt.Errorf("create worktree dir: %w", err)
+	}
+	if _, err := g.git(ctx, source, "worktree", "add", "-q", dir, branch); err != nil {
 		return err
 	}
 	return nil
@@ -112,8 +135,21 @@ func (g *Git) removeBranch(ctx context.Context, source, branch string) error {
 }
 
 func (g *Git) branchExists(ctx context.Context, source, branch string) bool {
+	exists, err := g.hasBranch(ctx, source, branch)
+	return exists && err == nil
+}
+
+func (g *Git) hasBranch(ctx context.Context, source, branch string) (bool, error) {
 	_, err := g.git(ctx, source, "rev-parse", "--verify", "--quiet", "refs/heads/"+branch)
-	return err == nil
+	refMissing := execx.ExitCode(err) == 1
+	switch {
+	case err == nil:
+		return true, nil
+	case refMissing:
+		return false, nil
+	default:
+		return false, err
+	}
 }
 
 func removeWorktreeDir(dir string) error {
