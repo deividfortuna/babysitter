@@ -4,7 +4,6 @@ import { api, apiErrorMessage } from "../lib/api-client";
 import { notificationsQueryKey } from "../lib/query-keys";
 
 export type Notification = components["schemas"]["HttpdNotification"];
-export type NotificationList = components["schemas"]["HttpdNotificationList"];
 
 const PAGE_SIZE = 200;
 

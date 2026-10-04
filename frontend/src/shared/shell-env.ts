@@ -82,10 +82,6 @@ function appOwned(env: Env): Env {
   return Object.fromEntries(Object.entries(env).filter(([name]) => ownedByApp(name)));
 }
 
-export async function resolveDaemonEnv(options: DaemonEnvOptions): Promise<Env> {
-  return (await readDaemonEnv(options)).env;
-}
-
 async function readDaemonEnv({
   platform,
   env,
