@@ -852,11 +852,12 @@ func newFixture(t *testing.T) *fixture {
 		t.Fatal(err)
 	}
 	fx.svc = fx.newService()
+	t.Cleanup(func() { fx.svc.wg.Wait() })
 	return fx
 }
 
 func (fx *fixture) newService() *Service {
-	return New(Deps{
+	svc := New(Deps{
 		Log:           testutil.Logger(fx.t),
 		Store:         fx.st,
 		NewClient:     func(context.Context) (*github.Client, error) { return fx.client, nil },
@@ -871,6 +872,8 @@ func (fx *fixture) newService() *Service {
 		CheckAccess:   fx.access,
 	}, WithClock(func() time.Time { return fx.clock() }), WithInterval(time.Minute),
 		WithProcessAlive(func(int) bool { return fx.authorAlive.Load() }))
+	fx.t.Cleanup(svc.wg.Wait)
+	return svc
 }
 
 func (fx *fixture) start() store.Watch {
