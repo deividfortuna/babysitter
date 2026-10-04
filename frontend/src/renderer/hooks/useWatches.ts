@@ -4,7 +4,6 @@ import { api, apiErrorMessage } from "../lib/api-client";
 import { watchListQueryKey, watchesQueryKey } from "../lib/query-keys";
 
 export type Watch = components["schemas"]["HttpdWatch"];
-export type WatchSummary = components["schemas"]["HttpdWatchSummary"];
 export type StartWatchRequest = components["schemas"]["HttpdStartWatchRequest"];
 export type MergeMethod = NonNullable<Watch["mergeMethod"]>;
 export type BranchUpdate = Watch["branchUpdate"];

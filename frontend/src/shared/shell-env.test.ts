@@ -4,7 +4,7 @@ import {
   daemonEnvOnce,
   loginShellProbe,
   parseShellEnv,
-  resolveDaemonEnv,
+  type DaemonEnvOptions,
   withFallbackPath,
   type ShellRunner,
 } from "./shell-env";
@@ -13,6 +13,10 @@ const launchdEnv = { HOME: "/Users/ana", PATH: "/usr/bin:/bin:/usr/sbin:/sbin" }
 
 function shellOutput(...records: string[]): string {
   return `Last login: today\n${SHELL_ENV_MARKER}${records.join("\0")}\0`;
+}
+
+function daemonEnv(options: DaemonEnvOptions) {
+  return daemonEnvOnce(options)();
 }
 
 const probeCommand = `printf '%s' '${SHELL_ENV_MARKER}'; env -0`;
@@ -126,7 +130,7 @@ describe("withFallbackPath", () => {
   });
 });
 
-describe("resolveDaemonEnv", () => {
+describe("the environment of the daemon", () => {
   test("gives the daemon the environment of the login shell under the variables of the app", async () => {
     const run = vi.fn(async () =>
       shellOutput(
@@ -136,7 +140,7 @@ describe("resolveDaemonEnv", () => {
       ),
     );
 
-    const env = await resolveDaemonEnv({
+    const env = await daemonEnv({
       platform: "darwin",
       env: { ...launchdEnv, SHELL: "/bin/zsh" },
       home: "/Users/ana",
@@ -166,7 +170,7 @@ describe("resolveDaemonEnv", () => {
       XPC_SERVICE_NAME: "0",
     };
 
-    const env = await resolveDaemonEnv({ platform: "darwin", env: appEnv, home: "/Users/ana", run });
+    const env = await daemonEnv({ platform: "darwin", env: appEnv, home: "/Users/ana", run });
 
     expect(env.SSH_AUTH_SOCK).toBe("/Users/ana/.1password/agent.sock");
     expect(env.HOME).toBe("/Users/ana");
@@ -178,7 +182,7 @@ describe("resolveDaemonEnv", () => {
   test("falls back to the path of the app with the usual directories when the shell fails, and says so", async () => {
     const log = vi.fn();
 
-    const env = await resolveDaemonEnv({
+    const env = await daemonEnv({
       platform: "darwin",
       env: launchdEnv,
       home: "/Users/ana",
@@ -191,7 +195,7 @@ describe("resolveDaemonEnv", () => {
   });
 
   test("falls back when the shell throws", async () => {
-    const env = await resolveDaemonEnv({
+    const env = await daemonEnv({
       platform: "linux",
       env: launchdEnv,
       home: "/home/ana",
@@ -207,7 +211,7 @@ describe("resolveDaemonEnv", () => {
     const run = vi.fn();
     const env = { Path: "C:\\Windows" };
 
-    expect(await resolveDaemonEnv({ platform: "win32", env, home: "C:\\Users\\ana", run })).toEqual(env);
+    expect(await daemonEnv({ platform: "win32", env, home: "C:\\Users\\ana", run })).toEqual(env);
     expect(run).not.toHaveBeenCalled();
   });
 });
