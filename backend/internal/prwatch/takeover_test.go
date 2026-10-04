@@ -198,16 +198,6 @@ func (fx *fixture) refusedTakeover(w store.Watch) {
 	}
 }
 
-func TestATakeoverThatFailsToDeclineAProposalIsUndone(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.startManual()
-	fx.propose(w)
-	fx.refuse("decline_refused", "UPDATE OF status ON proposals WHEN NEW.status = 'declined'")
-
-	fx.refusedTakeover(w)
-}
-
 func TestARefusedTakeoverDeclinesNoProposal(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
@@ -234,15 +224,34 @@ func TestARefusedTakeoverDeclinesNoProposal(t *testing.T) {
 
 func TestATakeoverThatFailsToDeclineLeavesTheSessionOfTheDaemonRunning(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
-	fx.refuse("decline_refused", "UPDATE OF status ON proposals WHEN NEW.status = 'declined'")
+	cases := []struct {
+		name  string
+		start func(fx *fixture) store.Watch
+	}{
+		{name: "an open turn", start: func(fx *fixture) store.Watch {
+			w := fx.start()
+			fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+			return w
+		}},
+		{name: "a proposal that waits for the author", start: func(fx *fixture) store.Watch {
+			w := fx.startManual()
+			fx.propose(w)
+			return w
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := c.start(fx)
+			fx.refuse("decline_refused", "UPDATE OF status ON proposals WHEN NEW.status = 'declined'")
 
-	fx.refusedTakeover(w)
+			fx.refusedTakeover(w)
 
-	if fx.svc.sessions.get(w.ID) == nil || fx.host.last().wasStopped() {
-		t.Fatal("the refused takeover stopped the session of the daemon and left its turn open")
+			if fx.svc.sessions.get(w.ID) == nil || fx.host.last().wasStopped() {
+				t.Fatal("the refused takeover stopped the session of the daemon")
+			}
+		})
 	}
 }
 

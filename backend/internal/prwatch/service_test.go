@@ -1071,61 +1071,82 @@ func TestStartWithARunnerWithoutASystemPromptSendsTheRulesFirst(t *testing.T) {
 	}
 }
 
-func TestStartOnConflictTellsTheAgent(t *testing.T) {
+func TestStartTellsTheAgentWhatIsWrongWithThePullRequest(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	fx.update(func() { fx.pr.MergeableState = "dirty" })
-	w := fx.start()
-	if w.MergeableState != "dirty" {
-		t.Fatalf("watch = %+v", w)
+	cases := []struct {
+		name      string
+		arrange   func(fx *fixture)
+		state     func(w store.Watch) string
+		wantState string
+		kind      string
+		message   []string
+		told      string
+	}{
+		{
+			name:      "a merge conflict",
+			arrange:   func(fx *fixture) { fx.update(func() { fx.pr.MergeableState = "dirty" }) },
+			state:     func(w store.Watch) string { return string(w.MergeableState) },
+			wantState: "dirty",
+			kind:      "conflict",
+			message:   []string{"There are merge conflicts on PR #3", "the daemon pushes it when your turn ends"},
+			told:      "told the agent about a merge conflict",
+		},
+		{
+			name: "red checks",
+			arrange: func(fx *fixture) {
+				fx.failBuild(stampedLog("##[group]Run go test ./...", "##[endgroup]", "--- FAIL: TestThing", "##[error]Process completed with exit code 1."))
+			},
+			state:     func(w store.Watch) string { return string(w.CheckStates["build"]) },
+			wantState: "failed",
+			kind:      "check_failed",
+			message:   []string{"Failed: build (failure)", "--- FAIL: TestThing"},
+			told:      "told the agent about 1 failed check",
+		},
 	}
-	equal(t, fx.kinds(w), []string{"watch_started", "conflict", "session_started", "nudged", "nudged"})
-	msgs := fx.host.last().messages()
-	if len(msgs) != 2 || !strings.Contains(msgs[1], "There are merge conflicts on PR #3") || !strings.Contains(msgs[1], "the daemon pushes it when your turn ends") {
-		t.Fatalf("messages = %q", msgs)
-	}
-	rows := fx.activity(w)
-	if rows[1].NudgedAt == nil || rows[4].Summary != "told the agent about a merge conflict" {
-		t.Fatalf("rows = %+v", rows)
-	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			tc.arrange(fx)
 
-	fx.poll(w)
-	equal(t, fx.kinds(w), []string{"watch_started", "conflict", "session_started", "nudged", "nudged"})
-	if len(fx.host.last().messages()) != 2 {
-		t.Fatal("the conflict was told twice")
-	}
-}
+			w := fx.start()
 
-func TestStartOnRedChecksTellsTheAgent(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.failBuild(stampedLog("##[group]Run go test ./...", "##[endgroup]", "--- FAIL: TestThing", "##[error]Process completed with exit code 1."))
-	w := fx.start()
-	if w.CheckStates["build"] != "failed" {
-		t.Fatalf("watch = %+v", w)
-	}
-	equal(t, fx.kinds(w), []string{"watch_started", "check_failed", "session_started", "nudged", "nudged"})
-	msgs := fx.host.last().messages()
-	if len(msgs) != 2 || !strings.Contains(msgs[1], "Failed: build (failure)") || !strings.Contains(msgs[1], "--- FAIL: TestThing") {
-		t.Fatalf("messages = %q", msgs)
-	}
-	rows := fx.activity(w)
-	if rows[1].NudgedAt == nil || rows[4].Summary != "told the agent about 1 failed check" {
-		t.Fatalf("rows = %+v", rows)
-	}
+			if got := tc.state(w); got != tc.wantState {
+				t.Fatalf("watch = %+v, want %q", w, tc.wantState)
+			}
+			kinds := []string{"watch_started", tc.kind, "session_started", "nudged", "nudged"}
+			equal(t, fx.kinds(w), kinds)
+			msgs := fx.host.last().messages()
+			if len(msgs) != 2 {
+				t.Fatalf("messages = %q", msgs)
+			}
+			for _, want := range tc.message {
+				if !strings.Contains(msgs[1], want) {
+					t.Errorf("message = %q, want %q", msgs[1], want)
+				}
+			}
+			rows := fx.activity(w)
+			if rows[1].NudgedAt == nil {
+				t.Fatalf("the %s row was not nudged: %+v", tc.kind, rows[1])
+			}
+			if rows[4].Summary != tc.told {
+				t.Fatalf("nudge row = %q, want %q", rows[4].Summary, tc.told)
+			}
 
-	fx.poll(w)
-	equal(t, fx.kinds(w), []string{"watch_started", "check_failed", "session_started", "nudged", "nudged"})
-	if len(fx.host.last().messages()) != 2 {
-		t.Fatal("the failed check was told twice")
-	}
+			fx.poll(w)
+			equal(t, fx.kinds(w), kinds)
+			if len(fx.host.last().messages()) != 2 {
+				t.Fatalf("the agent heard of the %s twice", tc.name)
+			}
 
-	stopped, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{})
-	if err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-	if !strings.Contains(string(stopped.Summary), `"check_failed":1`) {
-		t.Fatalf("summary = %s", stopped.Summary)
+			stopped, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{})
+			if err != nil {
+				t.Fatalf("Stop() error = %v", err)
+			}
+			if want := fmt.Sprintf(`"%s":1`, tc.kind); !strings.Contains(string(stopped.Summary), want) {
+				t.Fatalf("summary = %s, want %s", stopped.Summary, want)
+			}
+		})
 	}
 }
 
@@ -1827,106 +1848,58 @@ func TestWithoutAgentsReviewItemsNotify(t *testing.T) {
 	}
 }
 
-func TestStartStoresModel(t *testing.T) {
+func TestStartStoresTheAgentAndLaunchesItWithIt(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
-		SourceDir: fx.dir,
-		Provider:  ProviderClaude,
-		Model:     "Sonnet",
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
+	cases := []struct {
+		name        string
+		runnerModel string
+		model       string
+		effort      string
+		wantErr     error
+		wantModel   string
+		wantEffort  string
+		wantArgv    []string
+	}{
+		{name: "the model of the request", model: "Sonnet", wantModel: "sonnet", wantArgv: []string{"--model sonnet"}},
+		{name: "the effort of the request", model: "opus", effort: "XHigh", wantModel: "opus", wantEffort: "xhigh", wantArgv: []string{"--model opus", "--effort xhigh"}},
+		{name: "an effort the model of the runner does not take", runnerModel: "haiku", effort: "high", wantErr: ErrBadEffort},
+		{name: "an effort for a runner model the manifest lacks", runnerModel: "claude-opus-5-5", effort: "high", wantEffort: "high", wantArgv: []string{"--effort high"}},
+		{name: "a model the provider does not offer", model: "gpt-5.3-codex", wantErr: ErrBadModel},
 	}
-	if w.Model != "sonnet" {
-		t.Fatalf("watch model = %q", w.Model)
-	}
-	if argv := strings.Join(fx.host.last().spec.Argv, " "); !strings.Contains(argv, "--model sonnet") {
-		t.Fatalf("launch = %s", argv)
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			fx.svc.agents[ProviderClaude] = &fakeRunner{signals: true, model: tc.runnerModel}
 
-func TestStartStoresTheEffortAndLaunchesTheAgentWithIt(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
-		SourceDir: fx.dir,
-		Provider:  ProviderClaude,
-		Model:     "opus",
-		Effort:    "XHigh",
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if w.Effort != "xhigh" {
-		t.Fatalf("watch effort = %q", w.Effort)
-	}
-	if argv := strings.Join(fx.host.last().spec.Argv, " "); !strings.Contains(argv, "--effort xhigh") {
-		t.Fatalf("launch = %s", argv)
-	}
-}
+			w, err := fx.svc.Start(context.Background(), StartRequest{
+				Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
+				SourceDir: fx.dir,
+				Provider:  ProviderClaude,
+				Model:     tc.model,
+				Effort:    tc.effort,
+			})
 
-func TestStartRejectsAnEffortTheModelDoesNotTake(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	_, err := fx.svc.Start(context.Background(), StartRequest{
-		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
-		SourceDir: fx.dir,
-		Provider:  ProviderClaude,
-		Model:     "haiku",
-		Effort:    "high",
-	})
-	if !errors.Is(err, ErrBadEffort) {
-		t.Fatalf("Start() error = %v, want ErrBadEffort", err)
-	}
-}
-
-func TestStartChecksTheEffortAgainstTheModelOfTheRunner(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.svc.agents[ProviderClaude] = &fakeRunner{signals: true, model: "haiku"}
-	_, err := fx.svc.Start(context.Background(), StartRequest{
-		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
-		SourceDir: fx.dir,
-		Provider:  ProviderClaude,
-		Effort:    "high",
-	})
-	if !errors.Is(err, ErrBadEffort) {
-		t.Fatalf("Start() error = %v, want ErrBadEffort", err)
-	}
-}
-
-func TestStartKeepsTheEffortOfTheDefaultModelForARunnerModelTheManifestLacks(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.svc.agents[ProviderClaude] = &fakeRunner{signals: true, model: "claude-opus-5-5"}
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
-		SourceDir: fx.dir,
-		Provider:  ProviderClaude,
-		Effort:    "high",
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if w.Effort != "high" {
-		t.Fatalf("watch effort = %q", w.Effort)
-	}
-}
-
-func TestStartRejectsAModelTheProviderDoesNotOffer(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	_, err := fx.svc.Start(context.Background(), StartRequest{
-		Target:    snapshot.Target{Owner: "octo", Name: "hello", Number: 3},
-		SourceDir: fx.dir,
-		Provider:  ProviderClaude,
-		Model:     "gpt-5.3-codex",
-	})
-	if !errors.Is(err, ErrBadModel) {
-		t.Fatalf("Start() error = %v, want ErrBadModel", err)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("Start() error = %v, want %v", err, tc.wantErr)
+			}
+			if tc.wantErr != nil {
+				if n := fx.host.count(); n != 0 {
+					t.Fatalf("a refused start launched %d sessions", n)
+				}
+				return
+			}
+			got, want := [2]string{w.Model, w.Effort}, [2]string{tc.wantModel, tc.wantEffort}
+			if got != want {
+				t.Fatalf("watch model and effort = %q, want %q", got, want)
+			}
+			argv := strings.Join(fx.host.last().spec.Argv, " ")
+			for _, want := range tc.wantArgv {
+				if !strings.Contains(argv, want) {
+					t.Errorf("launch = %s, want %q", argv, want)
+				}
+			}
+		})
 	}
 }
 
@@ -1959,72 +1932,81 @@ func TestIntervalWords(t *testing.T) {
 	}
 }
 
-func TestStopRemovesTheWorktree(t *testing.T) {
+func TestStopReportsWhatBecameOfTheWorktree(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	before := len(fx.git.removedDirs())
+	cases := []struct {
+		name    string
+		arrange func(fx *fixture)
+		opts    StopOptions
+		removed bool
+		summary []string
+		note    func(w store.Watch) []string
+	}{
+		{
+			name:    "a stop removes the worktree",
+			removed: true,
+			note:    func(store.Watch) []string { return []string{"worktree removed"} },
+		},
+		{
+			name: "a stop that asks to keep the worktree",
+			opts: StopOptions{KeepWorktree: new(true)},
+			note: func(w store.Watch) []string { return []string{"worktree kept at " + w.WorktreeDir} },
+		},
+		{
+			name: "a removal that fails",
+			arrange: func(fx *fixture) {
+				fx.git.mu.Lock()
+				fx.git.removeErr = errors.New("worktree is locked")
+				fx.git.mu.Unlock()
+			},
+			note: func(store.Watch) []string { return []string{"its removal failed"} },
+		},
+		{
+			name:    "a removal that leaves the branch in the checkout",
+			arrange: func(fx *fixture) { fx.svc.git = &branchLeftGit{fx.git} },
+			removed: true,
+			summary: []string{`"workBranchLeft":"babysitter/fix"`},
+			note: func(w store.Watch) []string {
+				return []string{"worktree removed", w.WorkBranch, w.SourceDir}
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := fx.start()
+			if tc.arrange != nil {
+				tc.arrange(fx)
+			}
+			before := len(fx.git.removedDirs())
 
-	stopped, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{})
-	if err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-	removed := fx.git.removedDirs()
-	if len(removed) != before+1 || removed[len(removed)-1] != w.WorktreeDir {
-		t.Fatalf("removed = %v, want %s last", removed, w.WorktreeDir)
-	}
-	if !strings.Contains(string(stopped.Summary), `"worktreeRemoved":true`) {
-		t.Fatalf("summary = %s", stopped.Summary)
-	}
-	msgs := fx.notes.messages()
-	if !strings.Contains(msgs[len(msgs)-1], "worktree removed") {
-		t.Fatalf("last notification = %q", msgs[len(msgs)-1])
-	}
-}
+			stopped, err := fx.svc.Stop(context.Background(), w.ID, tc.opts)
+			if err != nil {
+				t.Fatalf("Stop() error = %v", err)
+			}
 
-func TestStopKeepsTheWorktreeWhenAsked(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	before := fx.git.removedDirs()
-
-	stopped, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{KeepWorktree: new(true)})
-	if err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-	if got := fx.git.removedDirs(); len(got) != len(before) {
-		t.Fatalf("removed = %v, want no removal", got)
-	}
-	if !strings.Contains(string(stopped.Summary), `"worktreeRemoved":false`) {
-		t.Fatalf("summary = %s", stopped.Summary)
-	}
-	msgs := fx.notes.messages()
-	if !strings.Contains(msgs[len(msgs)-1], "worktree kept at "+w.WorktreeDir) {
-		t.Fatalf("last notification = %q", msgs[len(msgs)-1])
-	}
-}
-
-func TestStopSaysSoWhenTheRemovalFails(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.git.mu.Lock()
-	fx.git.removeErr = errors.New("worktree is locked")
-	fx.git.mu.Unlock()
-
-	stopped, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{})
-	if err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-	if stopped.Status != store.WatchStopped {
-		t.Fatalf("Stop() = %+v", stopped)
-	}
-	if !strings.Contains(string(stopped.Summary), `"worktreeRemoved":false`) {
-		t.Fatalf("summary = %s", stopped.Summary)
-	}
-	msgs := fx.notes.messages()
-	if !strings.Contains(msgs[len(msgs)-1], "its removal failed") {
-		t.Fatalf("last notification = %q", msgs[len(msgs)-1])
+			if stopped.Status != store.WatchStopped {
+				t.Fatalf("Stop() = %+v", stopped)
+			}
+			removed := fx.git.removedDirs()[before:]
+			if got := slices.Equal(removed, []string{w.WorktreeDir}); got != tc.removed {
+				t.Fatalf("removed = %v, want the removal of %s to be %v", removed, w.WorktreeDir, tc.removed)
+			}
+			summary := append([]string{fmt.Sprintf(`"worktreeRemoved":%v`, tc.removed)}, tc.summary...)
+			for _, want := range summary {
+				if !strings.Contains(string(stopped.Summary), want) {
+					t.Errorf("summary = %s, want %s", stopped.Summary, want)
+				}
+			}
+			msgs := fx.notes.messages()
+			last := msgs[len(msgs)-1]
+			for _, want := range tc.note(w) {
+				if !strings.Contains(last, want) {
+					t.Errorf("last notification = %q, want %q", last, want)
+				}
+			}
+		})
 	}
 }
 
@@ -2082,38 +2064,12 @@ func TestStopWritesTheStopBeforeItRemovesTheWorktree(t *testing.T) {
 }
 
 type branchLeftGit struct {
-	fakeGit
+	*fakeGit
 }
 
 func (g *branchLeftGit) Remove(ctx context.Context, source, dir, branch string) error {
 	_ = g.fakeGit.Remove(ctx, source, dir, branch)
 	return fmt.Errorf("%w: %s", worktree.ErrBranchLeft, branch)
-}
-
-func TestStopReportsTheWorktreeGoneWhenOnlyTheBranchStays(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.svc.git = &branchLeftGit{}
-
-	stopped, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{})
-	if err != nil {
-		t.Fatalf("Stop() error = %v", err)
-	}
-	if !strings.Contains(string(stopped.Summary), `"worktreeRemoved":true`) {
-		t.Fatalf("summary = %s", stopped.Summary)
-	}
-	if !strings.Contains(string(stopped.Summary), `"workBranchLeft":"babysitter/fix"`) {
-		t.Fatalf("the summary names no branch that stays: %s", stopped.Summary)
-	}
-	msgs := fx.notes.messages()
-	last := msgs[len(msgs)-1]
-	if !strings.Contains(last, "worktree removed") {
-		t.Fatalf("last notification = %q", last)
-	}
-	if !strings.Contains(last, w.WorkBranch) || !strings.Contains(last, w.SourceDir) {
-		t.Fatalf("the stop says nothing about the branch that stays in the checkout: %q", last)
-	}
 }
 
 func TestStopAgreesWithItsActivityAboutTheWorktree(t *testing.T) {
@@ -2214,49 +2170,43 @@ func TestPollKeepsTheMessageWhenTheLogCannotBeRead(t *testing.T) {
 	}
 }
 
-func TestPollDropsTheLogCommandWhenGitHubServesNoLog(t *testing.T) {
+func TestPollKeepsTheLogCommandOnlyWhenTheLogMayBeRead(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), fx.startRequest())
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
+	cases := []struct {
+		name        string
+		status      int
+		wantCommand string
+		wantNoLog   bool
+	}{
+		{"GitHub serves no log", http.StatusNotFound, "", true},
+		{"the log read failed for another reason", http.StatusBadGateway, "gh api repos/octo/hello/actions/jobs/9/logs", false},
 	}
-	fx.endOpeningTurn(w)
-	fx.failBuild(stampedLog("##[error]Process completed with exit code 1."))
-	fx.logStatus(http.StatusNotFound)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := fx.start()
+			fx.failBuild(stampedLog("##[error]Process completed with exit code 1."))
+			fx.logStatus(tc.status)
 
-	fx.poll(w)
+			fx.poll(w)
 
-	msgs := fx.host.last().messages()
-	last := msgs[len(msgs)-1]
-	if !strings.Contains(last, "Failed: build") {
-		t.Fatalf("the message lacks the failed check:\n%s", last)
-	}
-	if strings.Contains(last, "gh api") {
-		t.Errorf("the message hands the agent a command that answers 404:\n%s", last)
-	}
-	if !strings.Contains(last, "GitHub serves no log for this job") {
-		t.Errorf("the message does not say that the log is not there:\n%s", last)
-	}
-}
-
-func TestPollKeepsTheLogCommandWhenTheLogReadFailedForAnotherReason(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w, err := fx.svc.Start(context.Background(), fx.startRequest())
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	fx.endOpeningTurn(w)
-	fx.failBuild(stampedLog("##[error]Process completed with exit code 1."))
-	fx.logStatus(http.StatusBadGateway)
-
-	fx.poll(w)
-
-	msgs := fx.host.last().messages()
-	last := msgs[len(msgs)-1]
-	if !strings.Contains(last, "gh api repos/octo/hello/actions/jobs/9/logs") {
-		t.Errorf("the message drops the log command of a read that may work again:\n%s", last)
+			msgs := fx.host.last().messages()
+			last := msgs[len(msgs)-1]
+			if !strings.Contains(last, "Failed: build") {
+				t.Fatalf("the message lacks the failed check:\n%s", last)
+			}
+			hasCommand := tc.wantCommand != ""
+			if got := strings.Contains(last, "gh api"); got != hasCommand {
+				t.Errorf("the message has a log command = %v, want %v:\n%s", got, hasCommand, last)
+			}
+			if !strings.Contains(last, tc.wantCommand) {
+				t.Errorf("the message lacks %q:\n%s", tc.wantCommand, last)
+			}
+			if got := strings.Contains(last, "GitHub serves no log for this job"); got != tc.wantNoLog {
+				t.Errorf("the message says that the log is not there = %v, want %v:\n%s", got, tc.wantNoLog, last)
+			}
+		})
 	}
 }
 

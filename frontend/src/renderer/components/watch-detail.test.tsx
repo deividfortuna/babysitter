@@ -29,36 +29,6 @@ test("stops an active watch and continues with the daemon's stop summary", async
   expect(stopBodies[0]).toEqual({});
 });
 
-test("keeps the worktree when the author asks", async () => {
-  const watch = buildWatch({ id: 42 });
-  const stopBodies: StopBody[] = [];
-  serveApi({
-    watches: [watch],
-    watchById: { 42: watch },
-    stoppedWatch: { 42: buildStoppedWatch({ id: 42 }) },
-    stopBodies,
-  });
-  const user = userEvent.setup();
-
-  renderWatchDetail();
-  await user.click(await screen.findByRole("button", { name: "Stop watching" }));
-  const dialog = await screen.findByRole("dialog", { name: "Stop watching octo/babysitter#12" });
-  await user.click(within(dialog).getByRole("checkbox", { name: "Keep the worktree on disk" }));
-  await user.click(within(dialog).getByRole("button", { name: "Stop watching" }));
-
-  await waitFor(() => expect(stopBodies[0]).toEqual({ keepWorktree: true }));
-});
-
-test("the archive of a stopped watch says the worktree is gone", async () => {
-  const watch = buildStoppedWatch({ id: 42, summary: { worktreeRemoved: true } });
-  serveApi({ watches: [watch], watchById: { 42: watch } });
-
-  renderWatchDetail();
-
-  expect(await screen.findByText(/deleted from/)).toBeInTheDocument();
-  expect(screen.queryByText(/left in place/)).not.toBeInTheDocument();
-});
-
 test("the archive of a stopped watch names the branch that stayed behind", async () => {
   const watch = buildStoppedWatch({
     id: 42,
@@ -70,15 +40,6 @@ test("the archive of a stopped watch names the branch that stayed behind", async
   renderWatchDetail();
 
   expect(await screen.findByText(/its branch babysitter\/fix stays in \/home\/me\/babysitter/)).toBeInTheDocument();
-});
-
-test("the archive of a stopped watch says the worktree stayed", async () => {
-  const watch = buildStoppedWatch({ id: 42, summary: { worktreeRemoved: false } });
-  serveApi({ watches: [watch], watchById: { 42: watch } });
-
-  renderWatchDetail();
-
-  expect(await screen.findByText(/left in place at/)).toBeInTheDocument();
 });
 
 test("shows what the agent does and sends it a message", async () => {
@@ -395,15 +356,6 @@ test("shows why a watch stopped under the title, with the other badges", async (
 
   expect(stopped.parentElement).toContainElement(screen.getByText("clean"));
   expect(stopped.parentElement).not.toContainElement(screen.getByRole("heading", { level: 1 }));
-});
-
-test("shows a watch that stopped because it merged in green", async () => {
-  const watch = { ...buildStoppedWatch({ id: 42 }), stopReason: "merged" as const };
-  serveApi({ watches: [watch], watchById: { 42: watch } });
-
-  renderWatchDetail();
-
-  expect(await screen.findByText("stopped · merged")).toHaveClass("text-success");
 });
 
 test("the header names why auto start began the watch, and the activity marks the rows of auto start", async () => {

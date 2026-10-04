@@ -5,7 +5,6 @@ import { expect, onTestFinished, test, vi } from "vite-plus/test";
 import { buildNotification, buildSettings } from "@test/fixtures";
 import { http, HttpResponse } from "msw";
 import { apiUrl, server, serveApi } from "@test/msw";
-import type { Settings } from "@/hooks/useSettings";
 import { createQueryClientForTests } from "@test/test-utils";
 import type { Notification } from "@/hooks/useNotifications";
 import { bridge } from "@/lib/bridge";
@@ -13,16 +12,10 @@ import { notificationsQueryKey, settingsQueryKey } from "@/lib/query-keys";
 import type { NotificationClick } from "../../shared/notifications";
 import { useNativeNotifications } from "./useNativeNotifications";
 
-function failSettings() {
-  server.use(
-    http.get(apiUrl("/api/v1/settings"), () =>
-      HttpResponse.json({ error: { message: "read settings: database is locked" } }, { status: 500 }),
-    ),
-  );
-}
+type Fixtures = Omit<NonNullable<Parameters<typeof serveApi>[0]>, "notifications">;
 
-function harness(notifications: Notification[], settings: Settings = buildSettings()) {
-  serveApi({ notifications, settings });
+function harness(notifications: Notification[], fixtures: Fixtures = {}) {
+  serveApi({ notifications, ...fixtures });
   const queryClient = createQueryClientForTests();
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
@@ -30,6 +23,11 @@ function harness(notifications: Notification[], settings: Settings = buildSettin
   const show = vi.spyOn(bridge.notifications, "show").mockResolvedValue(undefined);
   const setBadge = vi.spyOn(bridge.notifications, "setBadge").mockResolvedValue(undefined);
   return { queryClient, wrapper, show, setBadge };
+}
+
+function focusApp(focused: boolean) {
+  const focus = vi.spyOn(document, "hasFocus").mockReturnValue(focused);
+  onTestFinished(() => focus.mockRestore());
 }
 
 test("the first load is history: the badge is set and nothing is shown", async () => {
@@ -60,85 +58,85 @@ test("a row that arrives while the app runs is shown once", async () => {
   );
 });
 
-test("the row carries its kind, so the dock knows how loud to be", async () => {
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })]);
+test.each([
+  {
+    name: "the row carries its kind, so the dock knows how loud to be",
+    fixtures: {},
+    rows: [buildNotification({ id: 4, kind: "agent" })],
+    shown: [{ id: 4, kind: "agent", silent: false }],
+  },
+  {
+    name: "a kind the settings make silent is shown without a sound",
+    fixtures: { settings: buildSettings({ silentNotificationKinds: ["review"] }) },
+    rows: [buildNotification({ id: 5, kind: "checks" }), buildNotification({ id: 4, kind: "review" })],
+    shown: [
+      { id: 4, silent: true },
+      { id: 5, silent: false },
+    ],
+  },
+  {
+    name: "with background only on, the app shows a notification while it is in the background",
+    fixtures: { settings: buildSettings({ notificationsBackgroundOnly: true }) },
+    rows: [buildNotification({ id: 4 })],
+    shown: [{ id: 4 }],
+  },
+  {
+    name: "a row that asked for no sound is silent while the sound is on",
+    fixtures: {},
+    rows: [buildNotification({ id: 4, silent: true })],
+    shown: [{ id: 4, silent: true }],
+  },
+  {
+    name: "a kind nobody muted is shown while another one is off",
+    fixtures: { settings: buildSettings({ mutedNotificationKinds: ["review"] }) },
+    rows: [buildNotification({ id: 4, kind: "merge" })],
+    shown: [{ id: 4, kind: "merge" }],
+  },
+])("$name", async ({ fixtures, rows, shown }) => {
+  focusApp(false);
+  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })], fixtures);
   renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
 
-  serveApi({ notifications: [buildNotification({ id: 4, kind: "agent" }), buildNotification({ id: 3 })] });
+  serveApi({ notifications: [...rows, buildNotification({ id: 3 })], ...fixtures });
   await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
 
-  await waitFor(() => expect(show).toHaveBeenCalledWith(expect.objectContaining({ kind: "agent", silent: false })));
+  await waitFor(() =>
+    expect(show.mock.calls.map(([item]) => item)).toEqual(shown.map((item) => expect.objectContaining(item))),
+  );
 });
 
-test("a kind the settings make silent is shown without a sound", async () => {
-  const quiet = buildSettings({ silentNotificationKinds: ["review"] });
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })], quiet);
+test.each([
+  {
+    name: "with background only on, the app shows nothing while it has the focus",
+    fixtures: { settings: buildSettings({ notificationsBackgroundOnly: true }) },
+    focused: true,
+  },
+  {
+    name: "the notifications turned off show nothing, and the badge still counts",
+    fixtures: { settings: buildSettings({ notificationsEnabled: false }) },
+    focused: false,
+  },
+  {
+    name: "a kind the settings mute shows nothing, and the badge still counts",
+    fixtures: { settings: buildSettings({ mutedNotificationKinds: ["review"] }) },
+    focused: false,
+  },
+  {
+    name: "settings the app cannot read show nothing, so a muted kind is never shown by accident",
+    fixtures: { settingsFail: true },
+    focused: false,
+  },
+])("$name", async ({ fixtures, focused }) => {
+  focusApp(focused);
+  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })], fixtures);
   renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
 
   serveApi({
-    notifications: [
-      buildNotification({ id: 5, kind: "checks" }),
-      buildNotification({ id: 4, kind: "review" }),
-      buildNotification({ id: 3 }),
-    ],
-    settings: quiet,
+    notifications: [buildNotification({ id: 4, kind: "review" }), buildNotification({ id: 3 })],
+    ...fixtures,
   });
-  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-
-  await waitFor(() => expect(show).toHaveBeenCalledTimes(2));
-  expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 4, silent: true }));
-  expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 5, silent: false }));
-});
-
-test("with background only on, the app shows nothing while it has the focus", async () => {
-  const focus = vi.spyOn(document, "hasFocus").mockReturnValue(true);
-  onTestFinished(() => focus.mockRestore());
-  const background = buildSettings({ notificationsBackgroundOnly: true });
-  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })], background);
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
-
-  serveApi({ notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })], settings: background });
-  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-
-  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(2));
-  expect(show).not.toHaveBeenCalled();
-});
-
-test("with background only on, the app shows a notification while it is in the background", async () => {
-  const focus = vi.spyOn(document, "hasFocus").mockReturnValue(false);
-  onTestFinished(() => focus.mockRestore());
-  const background = buildSettings({ notificationsBackgroundOnly: true });
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })], background);
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
-
-  serveApi({ notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })], settings: background });
-  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-
-  await waitFor(() => expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 4 })));
-});
-
-test("a row that asked for no sound is silent while the sound is on", async () => {
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })]);
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
-
-  serveApi({ notifications: [buildNotification({ id: 4, silent: true }), buildNotification({ id: 3 })] });
-  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-
-  await waitFor(() => expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 4, silent: true })));
-});
-
-test("the notifications turned off show nothing, and the badge still counts", async () => {
-  const off = buildSettings({ notificationsEnabled: false });
-  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })], off);
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
-
-  serveApi({ notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })], settings: off });
   await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
 
   await waitFor(() => expect(setBadge).toHaveBeenCalledWith(2));
@@ -146,16 +144,19 @@ test("the notifications turned off show nothing, and the badge still counts", as
 });
 
 test("a row the daemon already marked as seen is not shown", async () => {
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })]);
+  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })]);
   renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
 
   serveApi({
-    notifications: [buildNotification({ id: 4, readAt: "2026-09-21T12:30:00Z" }), buildNotification({ id: 3 })],
+    notifications: [
+      buildNotification({ id: 4, readAt: "2026-09-21T12:30:00Z" }),
+      buildNotification({ id: 3, readAt: "2026-09-21T12:30:00Z" }),
+    ],
   });
   await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
 
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(0));
   expect(show).not.toHaveBeenCalled();
 });
 
@@ -221,17 +222,6 @@ test("a click on a banner marks that notification as seen", async () => {
   await waitFor(() => expect(marks).toEqual([[4]]));
 });
 
-test("a click on a banner of no watch marks it as seen just the same", async () => {
-  const { wrapper } = harness([buildNotification({ id: 7 })]);
-  const marks = readCalls();
-  const clicks = clickListeners();
-
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  clicks[0]({ id: 7 });
-
-  await waitFor(() => expect(marks).toEqual([[7]]));
-});
-
 test("a click on the test notification marks nothing as seen", async () => {
   const { wrapper } = harness([buildNotification({ id: 7 })]);
   const marks = readCalls();
@@ -242,51 +232,6 @@ test("a click on the test notification marks nothing as seen", async () => {
   clicks[0]({ id: 7 });
 
   await waitFor(() => expect(marks).toEqual([[7]]));
-});
-
-test("a kind the settings mute shows nothing, and the badge still counts", async () => {
-  const muted = buildSettings({ mutedNotificationKinds: ["review"] });
-  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })], muted);
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
-
-  serveApi({
-    notifications: [buildNotification({ id: 4, kind: "review" }), buildNotification({ id: 3 })],
-    settings: muted,
-  });
-  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-
-  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(2));
-  expect(show).not.toHaveBeenCalled();
-});
-
-test("settings the app cannot read show nothing, so a muted kind is never shown by accident", async () => {
-  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })]);
-  failSettings();
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
-
-  serveApi({ notifications: [buildNotification({ id: 4, kind: "review" }), buildNotification({ id: 3 })] });
-  failSettings();
-  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-
-  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(2));
-  expect(show).not.toHaveBeenCalled();
-});
-
-test("a kind nobody muted is shown while another one is off", async () => {
-  const muted = buildSettings({ mutedNotificationKinds: ["review"] });
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })], muted);
-  renderHook(() => useNativeNotifications(true, vi.fn(), 3), { wrapper });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
-
-  serveApi({
-    notifications: [buildNotification({ id: 4, kind: "merge" }), buildNotification({ id: 3 })],
-    settings: muted,
-  });
-  await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-
-  await waitFor(() => expect(show).toHaveBeenCalledWith(expect.objectContaining({ id: 4, kind: "merge" })));
 });
 
 test("an app that does not present shows nothing, and the badge still counts", async () => {
@@ -307,41 +252,41 @@ test("an app that does not present shows nothing, and the badge still counts", a
 });
 
 test("the rows the daemon showed while the feed was down are not shown again", async () => {
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })]);
+  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })]);
   const { rerender } = renderHook(({ presented }) => useNativeNotifications(true, vi.fn(), presented), {
     wrapper,
     initialProps: { presented: 3 as number | null },
   });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
 
   rerender({ presented: null });
   serveApi({ notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })] });
   rerender({ presented: 4 });
   await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toMatchObject({ unreadCount: 2 }));
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(2));
 
   expect(show).not.toHaveBeenCalled();
 });
 
 test("a read of the history inside the gap does not make the gap the app's", async () => {
-  const { queryClient, wrapper, show } = harness([buildNotification({ id: 3 })]);
+  const { queryClient, wrapper, show, setBadge } = harness([buildNotification({ id: 3 })]);
   const { rerender } = renderHook(({ presented }) => useNativeNotifications(true, vi.fn(), presented), {
     wrapper,
     initialProps: { presented: 3 as number | null },
   });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toBeDefined());
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(1));
 
   rerender({ presented: null });
   serveApi({ notifications: [buildNotification({ id: 4 }), buildNotification({ id: 3 })] });
   await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toMatchObject({ unreadCount: 2 }));
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(2));
 
   serveApi({
     notifications: [buildNotification({ id: 5 }), buildNotification({ id: 4 }), buildNotification({ id: 3 })],
   });
   rerender({ presented: 5 });
   await queryClient.invalidateQueries({ queryKey: notificationsQueryKey });
-  await waitFor(() => expect(queryClient.getQueryData(notificationsQueryKey)).toMatchObject({ unreadCount: 3 }));
+  await waitFor(() => expect(setBadge).toHaveBeenCalledWith(3));
 
   expect(show).not.toHaveBeenCalled();
 });

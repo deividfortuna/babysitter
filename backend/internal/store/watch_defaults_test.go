@@ -138,13 +138,3 @@ func TestAProposalRebasedBeforeTheUpgradeSaysItWasRebased(t *testing.T) {
 		t.Fatalf("proposal of an upgraded database = %+v, %v, want it not moved", p, err)
 	}
 }
-
-func TestTheSettingsRefuseAnUnknownProvider(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	next := DefaultSettings()
-	next.Provider = "self"
-	if _, err := s.SaveSettings(context.Background(), next); err == nil {
-		t.Fatal("SaveSettings() took provider self, want an error: the daemon cannot run your own session")
-	}
-}

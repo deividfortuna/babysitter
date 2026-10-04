@@ -211,27 +211,6 @@ func TestABlockerCarriesNoTokenOfTheErrorBehindIt(t *testing.T) {
 	}
 }
 
-func TestAMessageTheAgentWasNotToldBlocksReadiness(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.good()
-	w := fx.start()
-	if _, err := fx.svc.Hook(context.Background(), w.ID, agent.EventPermissionRequest, []byte(`{"tool_name":"Bash"}`)); err != nil {
-		t.Fatal(err)
-	}
-	fx.update(func() {
-		fx.pr.IssueComments = []ghfake.Comment{{ID: 31, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:30:00Z"), Body: "please rename x", URL: "https://github.com/octo/hello/pull/3#issuecomment-31"}}
-	})
-	fx.poll(w)
-	got := fx.watch(w)
-	if got.ReadySince != nil {
-		t.Fatalf("since = %v, want nil", got.ReadySince)
-	}
-	if !slices.Contains(got.ReadyBlockers, "the agent was not told about 1 comment yet") {
-		t.Fatalf("blockers = %v", got.ReadyBlockers)
-	}
-}
-
 func TestTheBlockerNamesWhatTheMessageOfThePollLeftUntold(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
@@ -254,6 +233,9 @@ func TestTheBlockerNamesWhatTheMessageOfThePollLeftUntold(t *testing.T) {
 	fx.poll(w)
 
 	got := fx.watch(w)
+	if got.ReadySince != nil {
+		t.Fatalf("since = %v, want nil", got.ReadySince)
+	}
 	if !slices.Contains(got.ReadyBlockers, "the agent was not told about 1 comment yet") {
 		t.Fatalf("blockers = %v, want the comment alone", got.ReadyBlockers)
 	}

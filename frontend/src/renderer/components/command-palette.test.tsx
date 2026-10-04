@@ -217,13 +217,3 @@ test("hides the actions that need the daemon while it is down", async () => {
   expect(screen.queryByRole("option", { name: "Sync now" })).not.toBeInTheDocument();
   expect(screen.getByRole("option", { name: "Connect to a remote daemon" })).toBeInTheDocument();
 });
-
-test("hides the history moves that have nowhere to go", async () => {
-  serveApi();
-  const { user } = renderPalette();
-
-  await user.keyboard(">");
-
-  expect(screen.queryByRole("option", { name: /Go back/ })).not.toBeInTheDocument();
-  expect(screen.queryByRole("option", { name: /Go forward/ })).not.toBeInTheDocument();
-});

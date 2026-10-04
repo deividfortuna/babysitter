@@ -48,14 +48,6 @@ test("keeps the title in the view header while stopped watches load, fail or are
   expectViewTitle("Stopped");
 });
 
-test("shows a watch that stopped because it merged in green", async () => {
-  serveApi({ watches: [{ ...buildStoppedWatch(), stopReason: "merged" as const }] });
-
-  renderWithProviders(<StoppedView enabled onNavigate={vi.fn()} />);
-
-  expect(await screen.findByText("stopped · merged")).toHaveClass("text-success");
-});
-
 test("groups stopped watches into today and earlier", async () => {
   const now = new Date();
   const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 1).toISOString();

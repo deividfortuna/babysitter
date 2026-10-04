@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sync"
 	"syscall"
+	"time"
 	"unsafe"
 
 	"github.com/charmbracelet/x/conpty"
@@ -20,6 +21,7 @@ type PTY struct {
 	Timing Timing
 
 	beforeJob func()
+	stopGrace time.Duration
 }
 
 func New() *PTY {
@@ -75,11 +77,12 @@ func (h *PTY) Start(_ context.Context, spec Spec) (Handle, error) {
 		term.Close()
 	}()
 	p := &process{
-		term:   term,
-		pid:    pid,
-		log:    log,
-		timing: h.Timing,
-		done:   make(chan struct{}),
+		term:      term,
+		pid:       pid,
+		log:       log,
+		timing:    h.Timing,
+		stopGrace: h.graceBeforeKill(),
+		done:      make(chan struct{}),
 		wait: func() error {
 			<-exited
 			return exitErr

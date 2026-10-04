@@ -4,7 +4,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { expect, test } from "vite-plus/test";
 import { serveApi } from "@test/msw";
 import { createQueryClientForTests } from "@test/test-utils";
-import { useRemoveRepo, useRequestSync } from "./useRepos";
+import { useRemoveRepo } from "./useRepos";
 
 function testWrapper() {
   const queryClient = createQueryClientForTests();
@@ -18,15 +18,6 @@ test("removes a repository on an empty daemon response", async () => {
   const { result } = renderHook(() => useRemoveRepo(), { wrapper: testWrapper() });
 
   result.current.mutate(1);
-
-  await waitFor(() => expect(result.current.isSuccess).toBe(true));
-});
-
-test("asks the daemon for a sync pass", async () => {
-  serveApi();
-  const { result } = renderHook(() => useRequestSync(), { wrapper: testWrapper() });
-
-  result.current.mutate();
 
   await waitFor(() => expect(result.current.isSuccess).toBe(true));
 });

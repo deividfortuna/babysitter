@@ -31,15 +31,16 @@ test("a focusable warning tells both versions to a keyboard user", async () => {
 });
 
 test("a daemon on the version of the app, or of no known version, shows no warning", async () => {
-  const getVersion = vi.spyOn(bridge.app, "getVersion").mockResolvedValue("0.2.0");
+  vi.spyOn(bridge.app, "getVersion").mockResolvedValue("0.2.0");
 
   renderWithProviders(
     <>
       <VersionWarning name="same" version="v0.2.0" />
       <VersionWarning name="unknown" />
+      <VersionWarning name="other" version="0.1.0" />
     </>,
   );
 
-  await vi.waitFor(() => expect(getVersion).toHaveBeenCalled());
-  expect(screen.queryByRole("img")).toBeNull();
+  const other = await screen.findByRole("img", { name: versionWarning("other", "0.1.0", "0.2.0") });
+  expect(screen.getAllByRole("img")).toEqual([other]);
 });

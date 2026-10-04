@@ -53,47 +53,51 @@ func (fx *fixture) activityOf(w store.Watch, kind store.ActivityKind) store.Acti
 	return store.Activity{}
 }
 
-func TestABranchBehindItsBaseIsRebasedOnGitHubAndTheAgentHearsNothing(t *testing.T) {
+func TestABranchBehindItsBaseIsUpdatedOnGitHubAndTheAgentHearsNothing(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	h := fx.host.last()
-	fx.agentIdle(w)
-
-	fx.behind()
-	fx.poll(w)
-	fx.poll(w)
-
-	equal(t, fx.kinds(w), []string{"watch_started", "session_started", "nudged", "behind", "branch_updated", "commit", "checks_green"})
-	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "REBASE", ExpectedHead: "abc"}}) {
-		t.Fatalf("branch updates = %+v, want one rebase that expects abc", got)
+	cases := []struct {
+		name         string
+		branchUpdate store.BranchUpdate
+		fallBehind   func(fx *fixture)
+		want         ghfake.BranchUpdate
+		summary      string
+	}{
+		{
+			name: "a rebase of a branch behind", branchUpdate: store.BranchRebase, fallBehind: (*fixture).behind,
+			want: ghfake.BranchUpdate{Method: "REBASE", ExpectedHead: "abc"}, summary: "GitHub accepted the request to rebase fix onto main at abc",
+		},
+		{
+			name: "a rebase of a blocked branch behind", branchUpdate: store.BranchRebase, fallBehind: func(fx *fixture) { fx.blockedBehind(2) },
+			want: ghfake.BranchUpdate{Method: "REBASE", ExpectedHead: "abc"}, summary: "GitHub accepted the request to rebase fix onto main at abc",
+		},
+		{
+			name: "a merge of the base into a branch behind", branchUpdate: store.BranchMerge, fallBehind: (*fixture).behind,
+			want: ghfake.BranchUpdate{Method: "MERGE", ExpectedHead: "abc"}, summary: "GitHub accepted the request to merge main into fix at abc",
+		},
 	}
-	if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, "GitHub accepted the request to rebase fix onto main at abc") {
-		t.Fatalf("summary = %q", a.Summary)
-	}
-	if msgs := h.messages(); len(msgs) != 1 {
-		t.Fatalf("messages = %q, want only the opening message", msgs)
-	}
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := fx.startWith(func(r *StartRequest) { r.BranchUpdate = new(c.branchUpdate) })
+			h := fx.host.last()
+			fx.agentIdle(w)
 
-func TestABlockedBranchBehindItsBaseIsRebasedOnGitHub(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	h := fx.host.last()
-	fx.agentIdle(w)
+			c.fallBehind(fx)
+			fx.poll(w)
+			fx.poll(w)
 
-	fx.blockedBehind(2)
-	fx.poll(w)
-
-	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "REBASE", ExpectedHead: "abc"}}) {
-		t.Fatalf("branch updates = %+v, want one rebase that expects abc", got)
-	}
-	if kinds := fx.kinds(w); !slices.Contains(kinds, string(store.ActivityBehind)) {
-		t.Fatalf("kinds = %v, want a behind row", kinds)
-	}
-	if msgs := h.messages(); len(msgs) != 1 {
-		t.Fatalf("messages = %q, want only the opening message", msgs)
+			equal(t, fx.kinds(w), []string{"watch_started", "session_started", "nudged", "behind", "branch_updated", "commit", "checks_green"})
+			if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{c.want}) {
+				t.Fatalf("branch updates = %+v, want %+v", got, c.want)
+			}
+			if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, c.summary) {
+				t.Fatalf("summary = %q, want %q", a.Summary, c.summary)
+			}
+			if msgs := h.messages(); len(msgs) != 1 {
+				t.Fatalf("messages = %q, want only the opening message", msgs)
+			}
+		})
 	}
 }
 
@@ -165,44 +169,15 @@ func TestAWatchThatStartsBehindTellsNothingWhileGitHubUpdatesTheBranch(t *testin
 	if kinds := fx.kinds(w); !slices.Contains(kinds, string(store.ActivityBranchUpdated)) || len(h.messages()) != 1 {
 		t.Fatalf("kinds = %v, messages = %q, want only the opening message while GitHub moves the branch", kinds, h.messages())
 	}
+	if got := fx.branchUpdates(); len(got) != 1 {
+		t.Fatalf("branch updates = %+v, want one", got)
+	}
 
 	fx.agentIdle(w)
 	fx.poll(w)
 	msgs := h.messages()
 	if len(msgs) != 2 || !strings.Contains(msgs[1], "build") {
 		t.Fatalf("messages = %q, want the failed build told on the head GitHub made", msgs)
-	}
-}
-
-func TestAWatchThatMergesTheBaseAsksGitHubForAMerge(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.startWith(func(r *StartRequest) { r.BranchUpdate = new(store.BranchMerge) })
-	fx.agentIdle(w)
-
-	fx.behind()
-	fx.poll(w)
-
-	if got := fx.branchUpdates(); !slices.Equal(got, []ghfake.BranchUpdate{{Method: "MERGE", ExpectedHead: "abc"}}) {
-		t.Fatalf("branch updates = %+v, want one merge that expects abc", got)
-	}
-	if a := fx.activityOf(w, store.ActivityBranchUpdated); !strings.Contains(a.Summary, "GitHub accepted the request to merge main into fix at abc") {
-		t.Fatalf("summary = %q", a.Summary)
-	}
-}
-
-func TestABranchBehindAtTheStartIsUpdatedOnGitHub(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.behind()
-
-	fx.start()
-
-	if got := fx.branchUpdates(); len(got) != 1 {
-		t.Fatalf("branch updates = %+v, want one", got)
-	}
-	if msgs := fx.host.last().messages(); len(msgs) != 1 {
-		t.Fatalf("messages = %q, want only the opening message", msgs)
 	}
 }
 
@@ -269,54 +244,78 @@ func TestTheAgentMergesTheBaseToSolveAConflictWhenTheWatchSaysMerge(t *testing.T
 	}
 }
 
-func TestADependabotBranchIsNotUpdatedOnGitHub(t *testing.T) {
+func TestABranchTheDaemonDoesNotPushIsNotUpdatedOnGitHub(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	fx.update(func() { fx.pr.Author = "dependabot[bot]" })
-	w := fx.start()
-	fx.agentIdle(w)
+	cases := []struct {
+		name  string
+		start func(fx *fixture) store.Watch
+	}{
+		{name: "Dependabot owns the branch", start: func(fx *fixture) store.Watch {
+			fx.update(func() { fx.pr.Author = "dependabot[bot]" })
+			w := fx.start()
+			fx.agentIdle(w)
+			return w
+		}},
+		{name: "the session of the author pushes the branch", start: func(fx *fixture) store.Watch {
+			fx.checkout("fix")
+			return fx.startSelf()
+		}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := c.start(fx)
 
-	fx.behind()
-	fx.poll(w)
+			fx.behind()
+			fx.poll(w)
 
-	if got := fx.branchUpdates(); len(got) != 0 {
-		t.Fatalf("branch updates = %+v, want none: Dependabot owns the branch", got)
+			if got := fx.branchUpdates(); len(got) != 0 {
+				t.Fatalf("branch updates = %+v, want none", got)
+			}
+		})
 	}
 }
 
-func TestASelfWatchIsNotUpdatedOnGitHub(t *testing.T) {
+func TestTheWorkBranchFollowsABranchThatWasRewritten(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	fx.checkout("fix")
-	w := fx.startSelf()
-
-	fx.behind()
-	fx.poll(w)
-
-	if got := fx.branchUpdates(); len(got) != 0 {
-		t.Fatalf("branch updates = %+v, want none: the session of the author pushes the branch", got)
+	cases := []struct {
+		name    string
+		rewrite func(fx *fixture, w store.Watch) string
+	}{
+		{name: "GitHub rebased it", rewrite: func(fx *fixture, w store.Watch) string {
+			fx.behind()
+			fx.poll(w)
+			var rebased string
+			fx.update(func() { rebased = fx.pr.HeadSHA })
+			fx.rel.set(func(f *fakeRelease) { f.history[rebased] = []string{"base"}; f.remote = rebased })
+			fx.agentIdle(w)
+			return rebased
+		}},
+		{name: "someone else rewrote it", rewrite: func(fx *fixture, w store.Watch) string {
+			fx.update(func() { fx.pr.HeadSHA = "x1" })
+			fx.rel.set(func(f *fakeRelease) { f.history["x1"] = []string{"base"}; f.remote = "x1" })
+			fx.poll(w)
+			return "x1"
+		}},
 	}
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := fx.start()
+			fx.agentIdle(w)
+			rewritten := c.rewrite(fx, w)
 
-func TestTheWorkBranchFollowsTheBranchGitHubRebased(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.agentIdle(w)
-	fx.behind()
-	fx.poll(w)
-	var rebased string
-	fx.update(func() { rebased = fx.pr.HeadSHA })
-	fx.rel.set(func(f *fakeRelease) { f.history[rebased] = []string{"base"}; f.remote = rebased })
-	fx.agentIdle(w)
+			fx.update(func() {
+				fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:05:00Z"), Body: "one more thing", URL: "https://c/11"}}
+			})
+			fx.poll(w)
 
-	fx.update(func() {
-		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:05:00Z"), Body: "one more thing", URL: "https://c/11"}}
-	})
-	fx.poll(w)
-
-	if work, _ := fx.rel.Head(context.Background(), ""); work != rebased {
-		t.Fatalf("work branch = %s, want it on %s, where GitHub put the pull request branch", work, rebased)
+			if work, _ := fx.rel.Head(context.Background(), ""); work != rewritten {
+				t.Fatalf("work branch = %s, want it on %s: it had nothing that the rewritten branch lacks", work, rewritten)
+			}
+		})
 	}
 }
 
@@ -549,25 +548,6 @@ func TestAnAcceptedUpdateStallsWhenTheHeadIsNoLongerACandidate(t *testing.T) {
 				t.Fatalf("messages = %q, want the comment told once the update stalled", msgs)
 			}
 		})
-	}
-}
-
-func TestTheWorkBranchFollowsABranchSomeoneElseRewrote(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.agentIdle(w)
-	fx.update(func() { fx.pr.HeadSHA = "x1" })
-	fx.rel.set(func(f *fakeRelease) { f.history["x1"] = []string{"base"}; f.remote = "x1" })
-	fx.poll(w)
-
-	fx.update(func() {
-		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:05:00Z"), Body: "one more thing", URL: "https://c/11"}}
-	})
-	fx.poll(w)
-
-	if work, _ := fx.rel.Head(context.Background(), ""); work != "x1" {
-		t.Fatalf("work branch = %s, want x1: it had nothing that the rewritten branch lacks", work)
 	}
 }
 

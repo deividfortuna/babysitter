@@ -14,44 +14,34 @@ import (
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
-func TestEachFailedCheckTakesTheJobOfItsOwnName(t *testing.T) {
+func TestAFailedCheckTakesTheJobOfItsNameInItsRun(t *testing.T) {
 	t.Parallel()
-	jobs := []snapshot.FailedJob{
-		{RunID: 77, JobID: 9, JobName: "build", LogsEndpoint: "repos/octo/hello/actions/jobs/9/logs"},
-		{RunID: 77, JobID: 12, JobName: "test", LogsEndpoint: "repos/octo/hello/actions/jobs/12/logs"},
+	build77 := snapshot.FailedJob{RunID: 77, JobID: 9, JobName: "build", LogsEndpoint: "repos/octo/hello/actions/jobs/9/logs"}
+	test77 := snapshot.FailedJob{RunID: 77, JobID: 12, JobName: "test", LogsEndpoint: "repos/octo/hello/actions/jobs/12/logs"}
+	lint88 := snapshot.FailedJob{RunID: 88, JobID: 21, JobName: "lint", LogsEndpoint: "repos/octo/hello/actions/jobs/21/logs"}
+	build90 := snapshot.FailedJob{RunID: 90, JobID: 30, JobName: "build", LogsEndpoint: "repos/octo/hello/actions/jobs/30/logs"}
+	cases := []struct {
+		name  string
+		jobs  []snapshot.FailedJob
+		check string
+		runID int64
+		want  snapshot.FailedJob
+		found bool
+	}{
+		{name: "the first job of the run has its name", jobs: []snapshot.FailedJob{build77, test77}, check: "build", runID: 77, want: build77, found: true},
+		{name: "a later job of the run has its name", jobs: []snapshot.FailedJob{build77, test77}, check: "test", runID: 77, want: test77, found: true},
+		{name: "no job of the run has its name", jobs: []snapshot.FailedJob{lint88}, check: "CI", runID: 88, want: lint88, found: true},
+		{name: "another run has a job of the same name", jobs: []snapshot.FailedJob{build77, build90}, check: "build", runID: 90, want: build90, found: true},
+		{name: "no job of its run and none of its name", jobs: []snapshot.FailedJob{build77}, check: "lint", runID: 88},
 	}
-	rows := []store.Activity{
-		{ID: 1, Kind: store.ActivityCheckFailed, Payload: withJobFields(mustJSON(map[string]any{"check": "build", "run_id": 77}), jobs[0])},
-		{ID: 2, Kind: store.ActivityCheckFailed, Payload: withJobFields(mustJSON(map[string]any{"check": "test", "run_id": 77}), jobs[1])},
-	}
-	items := toItems(rows)
-	for i, want := range jobs {
-		if items[i].JobName != want.JobName || items[i].JobID != want.JobID || items[i].LogsEndpoint != want.LogsEndpoint {
-			t.Errorf("the check %q took job %q (%d, %s), want %q", items[i].Check, items[i].JobName, items[i].JobID, items[i].LogsEndpoint, want.JobName)
-		}
-	}
-}
-
-func TestAFailedRunWithoutAJobOfItsNameTakesTheJobOfThatRun(t *testing.T) {
-	t.Parallel()
-	jobs := []snapshot.FailedJob{
-		{RunID: 88, JobID: 21, JobName: "lint", LogsEndpoint: "repos/octo/hello/actions/jobs/21/logs"},
-	}
-	got, ok := jobOf(jobs, "CI", 88)
-	if !ok || got.JobID != 21 {
-		t.Errorf("the run took job %d, want the only failed job of run 88", got.JobID)
-	}
-}
-
-func TestAFailedCheckTakesTheJobOfItsOwnRun(t *testing.T) {
-	t.Parallel()
-	jobs := []snapshot.FailedJob{
-		{RunID: 77, JobID: 9, JobName: "build", LogsEndpoint: "repos/octo/hello/actions/jobs/9/logs"},
-		{RunID: 90, JobID: 30, JobName: "build", LogsEndpoint: "repos/octo/hello/actions/jobs/30/logs"},
-	}
-	got, ok := jobOf(jobs, "build", 90)
-	if !ok || got.RunID != 90 || got.JobID != 30 {
-		t.Errorf("the check of run 90 took job %d of run %d, want job 30 of run 90", got.JobID, got.RunID)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			got, ok := jobOf(c.jobs, c.check, c.runID)
+			if got != c.want || ok != c.found {
+				t.Fatalf("jobOf(%q, run %d) = job %d of run %d, %v, want job %d of run %d, %v", c.check, c.runID, got.JobID, got.RunID, ok, c.want.JobID, c.want.RunID, c.found)
+			}
+		})
 	}
 }
 

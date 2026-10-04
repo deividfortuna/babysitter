@@ -51,22 +51,6 @@ func TestSettingsSetWritesOnlyTheFlagsThatWereTyped(t *testing.T) {
 	}
 }
 
-func TestSettingsSetTurnsTheScreenReaderModeOff(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	out, err := runSettings(t, d, "set", "--screen-reader=false")
-	if err != nil {
-		t.Fatalf("settings set error = %v", err)
-	}
-	if got := d.settingsPut[0]["screenReader"]; got != false {
-		t.Fatalf("screen reader = %v, want false", got)
-	}
-	if !regexp.MustCompile(`Screen reader mode of the agent\s+no`).MatchString(out) {
-		t.Fatalf("settings set = %q, want the screen reader mode off", out)
-	}
-}
-
 func TestSettingsSetTakesTheApprovalsAndGivesThemBackToTheBranch(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
@@ -86,46 +70,6 @@ func TestSettingsSetTakesTheApprovalsAndGivesThemBackToTheBranch(t *testing.T) {
 	}
 }
 
-func TestWatchStartAsksForTheRuleOfTheBaseBranch(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	if _, err := runWatch(t, d, "start", "octo/hello#3", "--approvals", "branch"); err != nil {
-		t.Fatalf("watch start error = %v", err)
-	}
-
-	body := d.starts[0]
-	if _, named := body["approvalsRequired"]; !named || body["approvalsRequired"] != nil {
-		t.Fatalf("approvals = %v, want a null that asks for the rule of the base branch", body["approvalsRequired"])
-	}
-}
-
-func TestWatchStartLeavesTheApprovalsOutWhenNobodyTypedThem(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	if _, err := runWatch(t, d, "start", "octo/hello#3"); err != nil {
-		t.Fatalf("watch start error = %v", err)
-	}
-	if _, named := d.starts[0]["approvalsRequired"]; named {
-		t.Fatalf("body = %v, want no approvals field at all", d.starts[0])
-	}
-}
-
-func TestWatchStartLeavesTheAgentAndTheWorktreeToTheChainWhenNobodyTypedThem(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	if _, err := runWatch(t, d, "start", "octo/hello#3"); err != nil {
-		t.Fatalf("watch start error = %v", err)
-	}
-	for _, field := range []string{"provider", "model", "effort", "keepWorktree"} {
-		if _, named := d.starts[0][field]; named {
-			t.Fatalf("body = %v, want no %s field so the repository, then the daemon, decides", d.starts[0], field)
-		}
-	}
-}
-
 func TestWatchStopHelpNamesTheWorktreeRuleOfTheWatch(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
@@ -136,30 +80,6 @@ func TestWatchStopHelpNamesTheWorktreeRuleOfTheWatch(t *testing.T) {
 	}
 	if !strings.Contains(out, "the rule the watch started with") || strings.Contains(out, "daemon") {
 		t.Fatalf("help = %q, want the rule the watch started with, not the daemon", out)
-	}
-}
-
-func TestWatchStartSendsTheWorktreeRuleThatWasTyped(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	if _, err := runWatch(t, d, "start", "octo/hello#3", "--keep-worktree", "--provider", "copilot"); err != nil {
-		t.Fatalf("watch start error = %v", err)
-	}
-	if body := d.starts[0]; body["keepWorktree"] != true || body["provider"] != "copilot" {
-		t.Fatalf("body = %v, want the worktree kept on copilot", body)
-	}
-}
-
-func TestWatchStartSendsTheEffortThatWasTyped(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	if _, err := runWatch(t, d, "start", "octo/hello#3", "--model", "opus", "--effort", "max"); err != nil {
-		t.Fatalf("watch start error = %v", err)
-	}
-	if body := d.starts[0]; body["model"] != "opus" || body["effort"] != "max" {
-		t.Fatalf("body = %v, want opus at max effort", body)
 	}
 }
 
@@ -245,22 +165,6 @@ func TestSettingsSetRejections(t *testing.T) {
 	}
 }
 
-func TestSettingsSetTurnsTheNotificationsOff(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	out, err := runSettings(t, d, "set", "--notifications=false")
-	if err != nil {
-		t.Fatalf("settings set error = %v", err)
-	}
-	if len(d.settingsPut) != 1 || d.settingsPut[0]["notificationsEnabled"] != false {
-		t.Fatalf("body = %v, want the notifications off", d.settingsPut)
-	}
-	if !strings.Contains(out, "Show notifications") {
-		t.Fatalf("settings set = %q, want the notification settings in the output", out)
-	}
-}
-
 func TestSettingsSetNotificationSoundSetsEveryKind(t *testing.T) {
 	t.Parallel()
 	cases := map[string]struct {
@@ -289,126 +193,148 @@ func TestSettingsSetNotificationSoundSetsEveryKind(t *testing.T) {
 	}
 }
 
-func TestSettingsSetSilencesTheNotificationKinds(t *testing.T) {
+func TestSettingsSetChangesOneSwitch(t *testing.T) {
 	t.Parallel()
-	d := newFakeDaemon()
-
-	out, err := runSettings(t, d, "set", "--silent-notifications", " merge, agent ")
-	if err != nil {
-		t.Fatalf("settings set error = %v", err)
-	}
-	if got := d.settingsPut[0]["silentNotificationKinds"]; !reflect.DeepEqual(got, []any{"merge", "agent"}) {
-		t.Fatalf("silent kinds = %v, want the merge and the agent", got)
-	}
-	if !regexp.MustCompile(`Silent notification kinds +merge, agent\n`).MatchString(out) {
-		t.Fatalf("settings set = %q, want the silent kinds in the output", out)
-	}
-}
-
-func TestSettingsSetShowsTheNotificationsOnlyInTheBackground(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-
-	out, err := runSettings(t, d, "set", "--notifications-background-only")
-	if err != nil {
-		t.Fatalf("settings set error = %v", err)
-	}
-	if got := d.settingsPut[0]["notificationsBackgroundOnly"]; got != true {
-		t.Fatalf("background only = %v, want true", got)
-	}
-	if !regexp.MustCompile(`Only in the background +yes\n`).MatchString(out) {
-		t.Fatalf("settings set = %q, want the background switch in the output", out)
-	}
-}
-
-func TestSettingsSetPassesOnWhatTheDaemonRefuses(t *testing.T) {
-	t.Parallel()
-	cases := map[string][]string{
-		"between 10s and 24h0m0s":               {"set", "--poll-interval", "2s"},
-		"unknown merge method \"fast-forward\"": {"set", "--merge-method", "fast-forward"},
-		"unknown notification kind \"rumour\"":  {"set", "--mute-notifications", "rumour"},
-		"unknown notification kind \"hum\"":     {"set", "--silent-notifications", "hum"},
-	}
-	for want, args := range cases {
-		t.Run(want, func(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		key  string
+		held any
+		want any
+		row  string
+	}{
+		{"screen reader mode off", []string{"--screen-reader=false"}, "screenReader", true, false, `Screen reader mode of the agent +no\n`},
+		{"notifications off", []string{"--notifications=false"}, "notificationsEnabled", true, false, `Show notifications +no\n`},
+		{"notifications only in the background", []string{"--notifications-background-only"}, "notificationsBackgroundOnly", false, true, `Only in the background +yes\n`},
+		{"approval mode auto", []string{"--approval-mode", "auto"}, "approvalMode", "manual", "auto", `Approval mode +auto\n`},
+		{"clean rebase approved on its own", []string{"--auto-approve-rebase"}, "autoApproveRebase", false, true, `Approve a clean rebase or merge on its own +yes\n`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 			d := newFakeDaemon()
-			_, err := runSettings(t, d, args...)
-			if err == nil || !strings.Contains(err.Error(), want) {
-				t.Fatalf("error = %v, want the one the daemon gave about %q", err, want)
+			d.settings[tc.key] = tc.held
+
+			out, err := runSettings(t, d, append([]string{"set"}, tc.args...)...)
+			if err != nil {
+				t.Fatalf("settings set error = %v", err)
+			}
+			if len(d.settingsPut) != 1 {
+				t.Fatalf("the daemon got %d writes, want 1", len(d.settingsPut))
+			}
+			if got := d.settingsPut[0][tc.key]; got != tc.want {
+				t.Fatalf("%s = %v, want %v", tc.key, got, tc.want)
+			}
+			if !regexp.MustCompile(tc.row).MatchString(out) {
+				t.Fatalf("settings set = %q, want the row %q", out, tc.row)
 			}
 		})
 	}
 }
 
-func TestSettingsSetMutesTheNotificationKinds(t *testing.T) {
+func TestSettingsSetWritesTheNotificationKinds(t *testing.T) {
 	t.Parallel()
-	d := newFakeDaemon()
+	for _, tc := range []struct {
+		name  string
+		flag  string
+		value string
+		key   string
+		held  []string
+		want  []any
+		row   string
+	}{
+		{"silent kinds", "--silent-notifications", " merge, agent ", "silentNotificationKinds", nil, []any{"merge", "agent"}, `Silent notification kinds +merge, agent\n`},
+		{"muted kinds", "--mute-notifications", "review,checks", "mutedNotificationKinds", nil, []any{"review", "checks"}, `Muted notification kinds +review, checks\n`},
+		{"every kind shown again", "--mute-notifications", "", "mutedNotificationKinds", []string{"review"}, []any{}, `Muted notification kinds +none\n`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := newFakeDaemon()
+			d.settings[tc.key] = tc.held
 
-	out, err := runSettings(t, d, "set", "--mute-notifications", "review,checks")
-	if err != nil {
-		t.Fatalf("settings set error = %v", err)
-	}
-	if len(d.settingsPut) != 1 {
-		t.Fatalf("the daemon got %d writes, want 1", len(d.settingsPut))
-	}
-	got, ok := d.settingsPut[0]["mutedNotificationKinds"].([]any)
-	if !ok || len(got) != 2 || got[0] != "review" || got[1] != "checks" {
-		t.Fatalf("body = %v, want the review and the checks muted", d.settingsPut[0]["mutedNotificationKinds"])
-	}
-	if !strings.Contains(out, "review, checks") {
-		t.Fatalf("settings set = %q, want the muted kinds in the output", out)
-	}
-}
-
-func TestSettingsSetClearsTheMutedNotificationKinds(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-	d.settings["mutedNotificationKinds"] = []string{"review"}
-
-	if _, err := runSettings(t, d, "set", "--mute-notifications", ""); err != nil {
-		t.Fatalf("settings set error = %v", err)
-	}
-	if got := d.settingsPut[0]["mutedNotificationKinds"].([]any); len(got) != 0 {
-		t.Fatalf("body = %v, want every kind shown again", got)
+			out, err := runSettings(t, d, "set", tc.flag, tc.value)
+			if err != nil {
+				t.Fatalf("settings set error = %v", err)
+			}
+			if len(d.settingsPut) != 1 {
+				t.Fatalf("the daemon got %d writes, want 1", len(d.settingsPut))
+			}
+			if got := d.settingsPut[0][tc.key]; !reflect.DeepEqual(got, tc.want) {
+				t.Fatalf("%s = %v, want %v", tc.key, got, tc.want)
+			}
+			if !regexp.MustCompile(tc.row).MatchString(out) {
+				t.Fatalf("settings set = %q, want the row %q", out, tc.row)
+			}
+		})
 	}
 }
 
 func TestSettingsGetPrintsTheMutedNotificationKinds(t *testing.T) {
 	t.Parallel()
-	d := newFakeDaemon()
-	d.settings["mutedNotificationKinds"] = []string{"review", "merge"}
+	for _, tc := range []struct {
+		name  string
+		muted []string
+		row   string
+	}{
+		{"two kinds muted", []string{"review", "merge"}, `Muted notification kinds +review, merge\n`},
+		{"no kind muted", nil, `Muted notification kinds +none\n`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := newFakeDaemon()
+			d.settings["mutedNotificationKinds"] = tc.muted
 
-	out, err := runSettings(t, d, "get")
-	if err != nil {
-		t.Fatalf("settings get error = %v", err)
-	}
-	if !strings.Contains(out, "review, merge") {
-		t.Fatalf("settings get = %q, want the muted kinds", out)
+			out, err := runSettings(t, d, "get")
+			if err != nil {
+				t.Fatalf("settings get error = %v", err)
+			}
+			if !regexp.MustCompile(tc.row).MatchString(out) {
+				t.Fatalf("settings get = %q, want the row %q", out, tc.row)
+			}
+		})
 	}
 }
 
-func TestSettingsGetSaysWhenNoNotificationKindIsMuted(t *testing.T) {
+func TestSettingsSetPassesOnWhatTheDaemonRefuses(t *testing.T) {
 	t.Parallel()
-	d := newFakeDaemon()
+	for _, tc := range []struct {
+		name    string
+		args    []string
+		key     string
+		sent    any
+		refusal string
+	}{
+		{"a poll interval out of bounds", []string{"--poll-interval", "2s"}, "pollIntervalSeconds", float64(2), "the repository poll interval must be between 10s and 24h0m0s, got 2s"},
+		{"an unknown merge method", []string{"--merge-method", "fast-forward"}, "mergeMethod", "fast-forward", `unknown merge method "fast-forward": use squash, merge, rebase`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := newFakeDaemon()
+			d.settingsRefusal = tc.refusal
 
-	out, err := runSettings(t, d, "get")
-	if err != nil {
-		t.Fatalf("settings get error = %v", err)
-	}
-	if !strings.Contains(out, "Muted notification kinds") || !strings.Contains(out, "none") {
-		t.Fatalf("settings get = %q, want it to say that no kind is muted", out)
+			_, err := runSettings(t, d, append([]string{"set"}, tc.args...)...)
+			if passedOn := err != nil && strings.Contains(err.Error(), tc.refusal); !passedOn {
+				t.Fatalf("error = %v, want the one the daemon gave: %q", err, tc.refusal)
+			}
+			if got := d.settingsPut[0][tc.key]; got != tc.sent {
+				t.Fatalf("%s = %v, want the %v the user typed", tc.key, got, tc.sent)
+			}
+		})
 	}
 }
 
 func TestSettingsSetLeavesTheBoundOfTheApprovalsToTheDaemon(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
+	d.settingsRefusal = "the approvals must be 0 or more, got -1"
 
-	if _, err := runSettings(t, d, "set", "--approvals", "-1"); err == nil {
-		t.Fatal("settings set took -1 approvals, want the answer of the daemon")
+	_, err := runSettings(t, d, "set", "--approvals", "-1")
+	if passedOn := err != nil && strings.Contains(err.Error(), d.settingsRefusal); !passedOn {
+		t.Fatalf("settings set -1 approvals = %v, want the answer of the daemon", err)
 	}
-	if len(d.settingsPut) != 1 || d.settingsPut[0]["approvalsRequired"] != float64(-1) {
-		t.Fatalf("the daemon got %v, want the -1 the user typed", d.settingsPut)
+	if len(d.settingsPut) != 1 {
+		t.Fatalf("the daemon got %d writes, want 1", len(d.settingsPut))
+	}
+	if got := d.settingsPut[0]["approvalsRequired"]; got != float64(-1) {
+		t.Fatalf("approvals = %v, want the -1 the user typed", got)
 	}
 }

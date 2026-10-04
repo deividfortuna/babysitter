@@ -76,88 +76,99 @@ test.skipIf(isWindows)("skips a file on the PATH that does not run", async () =>
   expect(await resolveEditorCommand(editor("vscode"), "linux", { PATH: bin, HOME: "/nowhere" })).toBeNull();
 });
 
-test("finds VS Code inside its app bundle on macOS when the PATH does not have it", async () => {
-  const code = "/Users/me/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+const vscodeBundle = "/Users/me/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code";
+const zedCli = "/Applications/Zed.app/Contents/MacOS/cli";
+const golandScript = "/Users/me/Library/Application Support/JetBrains/Toolbox/scripts/goland";
+const kiroBundle = "/Applications/Kiro.app/Contents/Resources/app/bin/kiro";
+const pycharmScript = "/home/me/.local/share/JetBrains/Toolbox/scripts/pycharm";
+const vscodeShim = "C:\\Tools\\code.cmd";
+const vscodeProgramFiles = "C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd";
+const ideaExe = "C:\\Program Files\\JetBrains\\IntelliJ IDEA 2026.2\\bin\\idea64.exe";
 
-  const command = await resolveEditorCommand(editor("vscode"), "darwin", { HOME: "/Users/me" }, fakeFiles([code]));
-
-  expect(command).toEqual({ command: code, args: [] });
-});
-
-test("finds the Zed cli inside its app bundle on macOS", async () => {
-  const cli = "/Applications/Zed.app/Contents/MacOS/cli";
-
-  expect(await resolveEditorCommand(editor("zed"), "darwin", {}, fakeFiles([cli]))).toEqual({ command: cli, args: [] });
-});
-
-test("finds a JetBrains IDE in the Toolbox scripts on macOS", async () => {
-  const script = "/Users/me/Library/Application Support/JetBrains/Toolbox/scripts/goland";
-
-  const command = await resolveEditorCommand(editor("goland"), "darwin", { HOME: "/Users/me" }, fakeFiles([script]));
-
-  expect(command).toEqual({ command: script, args: [] });
-});
-
-test("opens Cursor in the editor window and not in the agents window", async () => {
-  const command = await resolveEditorCommand(editor("cursor"), "linux", { PATH: "/bin" }, fakeFiles(["/bin/cursor"]));
-
-  expect(command).toEqual({ command: "/bin/cursor", args: ["--classic"] });
-});
-
-test("starts Kiro from its app bundle without the ide argument of its cli", async () => {
-  const kiro = "/Applications/Kiro.app/Contents/Resources/app/bin/kiro";
-
-  expect(await resolveEditorCommand(editor("kiro"), "darwin", {}, fakeFiles([kiro]))).toEqual({
-    command: kiro,
-    args: [],
-  });
-});
-
-test("finds a JetBrains IDE in a Toolbox folder on Linux", async () => {
-  const script = "/home/me/.local/share/JetBrains/Toolbox/scripts/pycharm";
-
-  const command = await resolveEditorCommand(editor("pycharm"), "linux", { HOME: "/home/me" }, fakeFiles([script]));
-
-  expect(command).toEqual({ command: script, args: [] });
-});
-
-test("finds the command shim of VS Code on Windows with the PATHEXT of the env", async () => {
-  const shim = "C:\\Tools\\code.cmd";
-
-  const command = await resolveEditorCommand(
-    editor("vscode"),
-    "win32",
-    { Path: "C:\\Tools", PATHEXT: ".EXE;.CMD" },
-    fakeFiles([shim]),
-  );
-
-  expect(command).toEqual({ command: shim, args: [] });
-});
-
-test("finds VS Code in Program Files on Windows when the PATH does not have it", async () => {
-  const shim = "C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd";
-
-  const command = await resolveEditorCommand(
-    editor("vscode"),
-    "win32",
-    { ProgramFiles: "C:\\Program Files" },
-    fakeFiles([shim]),
-  );
-
-  expect(command).toEqual({ command: shim, args: [] });
-});
-
-test("finds a JetBrains IDE in a versioned folder on Windows", async () => {
-  const exe = "C:\\Program Files\\JetBrains\\IntelliJ IDEA 2026.2\\bin\\idea64.exe";
-
-  const command = await resolveEditorCommand(
-    editor("idea"),
-    "win32",
-    { ProgramFiles: "C:\\Program Files" },
-    fakeFiles([exe], { "C:\\Program Files\\JetBrains": ["IntelliJ IDEA 2026.2", "GoLand 2026.2"] }),
-  );
-
-  expect(command).toEqual({ command: exe, args: [] });
+test.each<{
+  name: string;
+  id: string;
+  platform: NodeJS.Platform;
+  env: Record<string, string>;
+  files: string[];
+  listings?: Record<string, string[]>;
+  expected: { command: string; args: string[] };
+}>([
+  {
+    name: "finds VS Code inside its app bundle on macOS when the PATH does not have it",
+    id: "vscode",
+    platform: "darwin",
+    env: { HOME: "/Users/me" },
+    files: [vscodeBundle],
+    expected: { command: vscodeBundle, args: [] },
+  },
+  {
+    name: "finds the Zed cli inside its app bundle on macOS",
+    id: "zed",
+    platform: "darwin",
+    env: {},
+    files: [zedCli],
+    expected: { command: zedCli, args: [] },
+  },
+  {
+    name: "finds a JetBrains IDE in the Toolbox scripts on macOS",
+    id: "goland",
+    platform: "darwin",
+    env: { HOME: "/Users/me" },
+    files: [golandScript],
+    expected: { command: golandScript, args: [] },
+  },
+  {
+    name: "opens Cursor in the editor window and not in the agents window",
+    id: "cursor",
+    platform: "linux",
+    env: { PATH: "/bin" },
+    files: ["/bin/cursor"],
+    expected: { command: "/bin/cursor", args: ["--classic"] },
+  },
+  {
+    name: "starts Kiro from its app bundle without the ide argument of its cli",
+    id: "kiro",
+    platform: "darwin",
+    env: {},
+    files: [kiroBundle],
+    expected: { command: kiroBundle, args: [] },
+  },
+  {
+    name: "finds a JetBrains IDE in a Toolbox folder on Linux",
+    id: "pycharm",
+    platform: "linux",
+    env: { HOME: "/home/me" },
+    files: [pycharmScript],
+    expected: { command: pycharmScript, args: [] },
+  },
+  {
+    name: "finds the command shim of VS Code on Windows with the PATHEXT of the env",
+    id: "vscode",
+    platform: "win32",
+    env: { Path: "C:\\Tools", PATHEXT: ".EXE;.CMD" },
+    files: [vscodeShim],
+    expected: { command: vscodeShim, args: [] },
+  },
+  {
+    name: "finds VS Code in Program Files on Windows when the PATH does not have it",
+    id: "vscode",
+    platform: "win32",
+    env: { ProgramFiles: "C:\\Program Files" },
+    files: [vscodeProgramFiles],
+    expected: { command: vscodeProgramFiles, args: [] },
+  },
+  {
+    name: "finds a JetBrains IDE in a versioned folder on Windows",
+    id: "idea",
+    platform: "win32",
+    env: { ProgramFiles: "C:\\Program Files" },
+    files: [ideaExe],
+    listings: { "C:\\Program Files\\JetBrains": ["IntelliJ IDEA 2026.2", "GoLand 2026.2"] },
+    expected: { command: ideaExe, args: [] },
+  },
+])("$name", async ({ id, platform, env, files, listings, expected }) => {
+  expect(await resolveEditorCommand(editor(id), platform, env, fakeFiles(files, listings))).toEqual(expected);
 });
 
 test("runs a command shim on Windows through cmd with every argument quoted", () => {

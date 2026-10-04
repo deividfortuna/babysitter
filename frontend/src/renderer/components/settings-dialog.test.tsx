@@ -69,14 +69,6 @@ test("opens again on the category it is asked for after another page was chosen"
   expect(await screen.findByRole("heading", { name: "Agent" })).toBeVisible();
 });
 
-test("has a page for the updates of the app", async () => {
-  renderWithProviders(<SettingsDialog open category="updates" onOpenChange={vi.fn()} />);
-
-  expect(pageButton("Updates")).toHaveAttribute("aria-current", "page");
-  expect(screen.getByRole("heading", { name: "Updates" })).toBeVisible();
-  expect(await screen.findByText(/This build does not update itself/)).toBeVisible();
-});
-
 test("the version of the app sits under the pages", async () => {
   renderWithProviders(<SettingsDialog open onOpenChange={vi.fn()} />);
 

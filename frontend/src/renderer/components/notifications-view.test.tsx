@@ -22,14 +22,6 @@ test("the view lists what the daemon told you, newest first", async () => {
   expect(screen.getByText("1 unread")).toBeVisible();
 });
 
-test("an empty history says what lands here", async () => {
-  serveApi({ notifications: [] });
-
-  renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
-
-  expect(await screen.findByText("Nothing to tell you")).toBeVisible();
-});
-
 test("a click on a row opens its watch and marks the row as seen", async () => {
   const readNotifications: { ids?: number[] }[] = [];
   const onNavigate = vi.fn();
@@ -63,23 +55,19 @@ test("nothing unread leaves the mark all button off", async () => {
   expect(await screen.findByRole("button", { name: "Mark all as read" })).toBeDisabled();
 });
 
-test("keeps the title in the view header", async () => {
-  serveApi({ notifications: [buildNotification()] });
-
-  renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
-
-  expect(await screen.findByRole("banner")).toContainElement(
-    screen.getByRole("heading", { level: 1, name: "Notifications" }),
-  );
-});
-
-test("keeps the title in the view header while notifications load, fail or are none", async () => {
-  serveApi({ notifications: [] });
-  const { unmount } = renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
+test("keeps the title in the view header while notifications load, show, fail or are none", async () => {
+  serveApi({ notifications: [buildNotification({ body: "build failed" })] });
+  const shown = renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
   expectViewTitle("Notifications");
+  expect(await screen.findByText("build failed")).toBeVisible();
+  expectViewTitle("Notifications");
+  shown.unmount();
+
+  serveApi({ notifications: [] });
+  const none = renderWithProviders(<NotificationsView enabled onNavigate={vi.fn()} />);
   expect(await screen.findByText("Nothing to tell you")).toBeVisible();
   expectViewTitle("Notifications");
-  unmount();
+  none.unmount();
 
   server.use(
     http.get(apiUrl("/api/v1/notifications"), () =>

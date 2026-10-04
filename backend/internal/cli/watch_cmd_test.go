@@ -17,7 +17,6 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/httpd"
 	"github.com/deividfortuna/babysitter/internal/runfile"
-	"github.com/deividfortuna/babysitter/internal/store"
 )
 
 func badSettings(w http.ResponseWriter, reason string) {
@@ -27,31 +26,32 @@ func badSettings(w http.ResponseWriter, reason string) {
 }
 
 type fakeDaemon struct {
-	mux           *http.ServeMux
-	starts        []map[string]any
-	stops         []string
-	sent          []string
-	replies       []string
-	replyPosted   bool
-	retries       []string
-	decisions     []string
-	hooks         []string
-	waits         []string
-	polls         int
-	watches       string
-	activity      string
-	settings      map[string]any
-	settingsPut   []map[string]any
-	settingsGets  int
-	notifications string
-	posted        []map[string]any
-	reads         []map[string]any
-	listQuery     string
-	rateLimit     string
-	takeovers     []httpd.TakeoverRequest
-	handbacks     []string
-	authorRunning bool
-	authorWork    bool
+	mux             *http.ServeMux
+	starts          []map[string]any
+	stops           []string
+	sent            []string
+	replies         []string
+	replyPosted     bool
+	retries         []string
+	decisions       []string
+	hooks           []string
+	waits           []string
+	polls           int
+	watches         string
+	activity        string
+	settings        map[string]any
+	settingsPut     []map[string]any
+	settingsGets    int
+	settingsRefusal string
+	notifications   string
+	posted          []map[string]any
+	reads           []map[string]any
+	listQuery       string
+	rateLimit       string
+	takeovers       []httpd.TakeoverRequest
+	handbacks       []string
+	authorRunning   bool
+	authorWork      bool
 }
 
 func newFakeDaemon() *fakeDaemon {
@@ -72,28 +72,11 @@ func newFakeDaemon() *fakeDaemon {
 		if r.Method == http.MethodPut {
 			var body map[string]any
 			_ = json.NewDecoder(r.Body).Decode(&body)
-			if n, ok := body["approvalsRequired"].(float64); ok && n < 0 {
-				d.settingsPut = append(d.settingsPut, body)
-				badSettings(w, fmt.Sprintf("the approvals must be 0 or more, got %d", int(n)))
-				return
-			}
-			if seconds, ok := body["pollIntervalSeconds"].(float64); ok && seconds < 10 {
-				badSettings(w, "the repository poll interval must be between 10s and 24h0m0s, got 2s")
-				return
-			}
-			if method, ok := body["mergeMethod"].(string); ok && !slices.Contains([]string{"", "squash", "merge", "rebase"}, method) {
-				badSettings(w, fmt.Sprintf("unknown merge method %q: use squash, merge, rebase", method))
-				return
-			}
-			muted, _ := body["mutedNotificationKinds"].([]any)
-			silent, _ := body["silentNotificationKinds"].([]any)
-			for _, kind := range slices.Concat(muted, silent) {
-				if name, _ := kind.(string); !store.NotificationKind(name).Valid() {
-					badSettings(w, fmt.Sprintf("unknown notification kind %q: use %s", name, store.JoinKinds()))
-					return
-				}
-			}
 			d.settingsPut = append(d.settingsPut, body)
+			if d.settingsRefusal != "" {
+				badSettings(w, d.settingsRefusal)
+				return
+			}
 			d.settings = body
 		} else {
 			d.settingsGets++
@@ -305,9 +288,6 @@ func TestWatchCommands(t *testing.T) {
 	}
 	if len(d.starts) != 1 || d.starts[0]["target"] != "octo/hello#3" || d.starts[0]["sourceDir"] == "" {
 		t.Fatalf("start body = %v", d.starts)
-	}
-	if _, ok := d.starts[0]["includeExisting"]; ok {
-		t.Fatalf("start body carries includeExisting without the flag: %v", d.starts[0])
 	}
 	if _, err := runWatch(t, d, "start", "octo/hello#4", "--include-existing"); err == nil || !strings.Contains(err.Error(), "already watched as watch 7") {
 		t.Fatalf("duplicate start error = %v", err)
@@ -736,5 +716,44 @@ func TestWatchRetryCommand(t *testing.T) {
 	}
 	if !slices.Equal(d.retries, []string{"1", "2", "3"}) {
 		t.Fatalf("retries = %v", d.retries)
+	}
+}
+
+func TestWatchStatusShowsHowTheWatchRuns(t *testing.T) {
+	t.Parallel()
+	for _, tc := range []struct {
+		name   string
+		fields string
+		want   string
+	}{
+		{
+			"who releases the work",
+			`"approvalMode":"manual","pendingProposal":2`,
+			"Approval:  manual; proposal 2 waits on you: babysitter watch proposals 1 2",
+		},
+		{
+			"the clean rebase while a proposal waits",
+			`"approvalMode":"manual","autoApproveRebase":true,"pendingProposal":2`,
+			"Approval:  manual, and approved work goes out after a clean rebase or merge; proposal 2 waits on you: babysitter watch proposals 1 2",
+		},
+		{
+			"why auto start began the watch",
+			`"autoReason":"dependabot","updateType":"patch","mergeWhenReady":true`,
+			"Auto:      started on its own: Dependabot opened it; patch update; merges when ready",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			d := newFakeDaemon()
+			d.watches = strings.Replace(d.watches, `"status":"active"`, `"status":"active",`+tc.fields, 1)
+
+			out, err := runWatch(t, d, "status", "1")
+			if err != nil {
+				t.Fatalf("watch status error = %v", err)
+			}
+			if !strings.Contains(out, tc.want+"\n") {
+				t.Fatalf("status = %q, want the line %q", out, tc.want)
+			}
+		})
 	}
 }

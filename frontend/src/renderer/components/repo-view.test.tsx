@@ -27,28 +27,6 @@ test("announces that repository details are loading", async () => {
   expect(screen.getByRole("status", { name: "Loading repository details" })).toBeVisible();
 });
 
-test("shows the daemon error when repository details cannot load", async () => {
-  serveApi({ watches: [], pullRequests: [] });
-  server.use(
-    http.get(apiUrl("/api/v1/repos"), () =>
-      HttpResponse.json({ error: { message: "GitHub token expired" } }, { status: 401 }),
-    ),
-  );
-
-  renderView();
-
-  expect(await screen.findByText("GitHub token expired")).toBeVisible();
-});
-
-test("explains when the selected repository is no longer registered", async () => {
-  serveApi({ repos: [], watches: [], pullRequests: [] });
-
-  renderView();
-
-  expect(await screen.findByText("octo/babysitter is not registered")).toBeVisible();
-  expect(screen.getByRole("button", { name: "Show every watch" })).toBeVisible();
-});
-
 test("shows an open pull request and selects it to start watching", async () => {
   const pullRequest = buildPullRequest();
   const onWatchPull = vi.fn();
@@ -98,23 +76,20 @@ test("puts the watches that need you first in the watched list", async () => {
   expect(within(watching).getByRole("button", { name: "Review proposal 2" })).toBeVisible();
 });
 
-test("keeps the title in the view header", async () => {
+test("keeps the title in the view header while the repository loads, shows, fails or is gone", async () => {
   serveApi({ repos: [buildRepo()], watches: [], pullRequests: [] });
+  const shown = renderView();
+  expectViewTitle("octo/babysitter");
+  expect(await screen.findByRole("button", { name: "Sync now" })).toBeVisible();
+  expectViewTitle("octo/babysitter");
+  shown.unmount();
 
-  renderView();
-
-  expect(await screen.findByRole("banner")).toContainElement(
-    screen.getByRole("heading", { level: 1, name: "octo/babysitter" }),
-  );
-});
-
-test("keeps the title in the view header while the repository loads, fails or is gone", async () => {
   serveApi({ repos: [], watches: [], pullRequests: [] });
-  const { unmount } = renderView();
-  expectViewTitle("octo/babysitter");
+  const gone = renderView();
   expect(await screen.findByText("octo/babysitter is not registered")).toBeVisible();
+  expect(screen.getByRole("button", { name: "Show every watch" })).toBeVisible();
   expectViewTitle("octo/babysitter");
-  unmount();
+  gone.unmount();
 
   server.use(
     http.get(apiUrl("/api/v1/repos"), () =>

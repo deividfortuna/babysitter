@@ -58,14 +58,6 @@ test("the header ends with a no-drag space under the panel icon, so a click on t
   expect(space).toHaveAttribute("data-slot", "panel-toggle-space");
 });
 
-test("the header no longer holds the approval mode", async () => {
-  renderDetail({ approvalMode: "manual" });
-
-  await screen.findByRole("button", { name: "Watch settings" });
-  expect(screen.queryByLabelText("Approval mode")).toBeNull();
-  expect(screen.queryByText("approve a clean rebase")).toBeNull();
-});
-
 test("the panel holds the copy of the defaults of this watch", async () => {
   const { user } = renderDetail({
     approvalMode: "manual",

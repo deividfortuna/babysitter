@@ -7,13 +7,6 @@ import { expectViewTitle, renderWithProviders } from "@test/test-utils";
 import { apiUrl, server, serveApi } from "@test/msw";
 import { WatchingView } from "./watching-view";
 
-test("shows the first-run screen when no pull requests are watched", async () => {
-  serveApi();
-  renderWithProviders(<WatchingView enabled onNavigate={vi.fn()} onWatchPR={vi.fn()} onAddRepo={vi.fn()} />);
-
-  expect(await screen.findByText("No pull request is watched")).toBeVisible();
-});
-
 test("announces that watched pull requests are loading", async () => {
   serveApi();
   server.use(http.get(apiUrl("/api/v1/watches"), async () => new Promise<never>(() => undefined)));

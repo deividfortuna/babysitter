@@ -57,17 +57,33 @@ func TestEachQuietPollDoublesTheWaitUpToTheLongestInterval(t *testing.T) {
 	}
 }
 
-func TestActivityBringsTheWaitBackToTheShortestInterval(t *testing.T) {
+func TestASlowWatchComesBackToTheShortestInterval(t *testing.T) {
 	t.Parallel()
-	sc := newSchedule()
-	for range 3 {
-		sc.polled(1, scheduleStart, slowDown, testCadence)
+	cases := []struct {
+		name  string
+		reset func(sc *schedule)
+	}{
+		{name: "activity in a poll", reset: func(sc *schedule) { sc.polled(1, scheduleStart, speedUp, testCadence) }},
+		{name: "a row between polls", reset: func(sc *schedule) {
+			sc.stir(1)
+			sc.calm(1)
+		}},
+		{name: "a new cadence", reset: func(sc *schedule) { sc.restart() }},
 	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			sc := newSchedule()
+			for range 3 {
+				sc.polled(1, scheduleStart, slowDown, testCadence)
+			}
 
-	sc.polled(1, scheduleStart, speedUp, testCadence)
+			c.reset(sc)
 
-	if got := dueAfter(t, sc, 1, testCadence); got != time.Minute {
-		t.Fatalf("wait after activity = %s, want the shortest interval, 1m0s", got)
+			if got := dueAfter(t, sc, 1, testCadence); got != time.Minute {
+				t.Fatalf("wait after %s = %s, want the shortest interval, 1m0s", c.name, got)
+			}
+		})
 	}
 }
 
@@ -97,21 +113,6 @@ func TestAFixedCadenceNeverSlowsDown(t *testing.T) {
 	}
 }
 
-func TestARowBetweenPollsBringsASlowWatchBackToTheShortestInterval(t *testing.T) {
-	t.Parallel()
-	sc := newSchedule()
-	for range 3 {
-		sc.polled(1, scheduleStart, slowDown, testCadence)
-	}
-
-	sc.stir(1)
-	sc.calm(1)
-
-	if got := dueAfter(t, sc, 1, testCadence); got != time.Minute {
-		t.Fatalf("wait after a row between polls = %s, want the shortest interval, 1m0s", got)
-	}
-}
-
 func TestAWakeMakesOnlyThatWatchDue(t *testing.T) {
 	t.Parallel()
 	sc := newSchedule()
@@ -125,20 +126,6 @@ func TestAWakeMakesOnlyThatWatchDue(t *testing.T) {
 	}
 	if !sc.due(2, scheduleStart, testCadence) {
 		t.Fatal("watch 2 is not due after the wake")
-	}
-}
-
-func TestANewCadenceStartsEveryWatchAtTheShortestInterval(t *testing.T) {
-	t.Parallel()
-	sc := newSchedule()
-	for range 3 {
-		sc.polled(1, scheduleStart, slowDown, testCadence)
-	}
-
-	sc.restart()
-
-	if got := dueAfter(t, sc, 1, testCadence); got != time.Minute {
-		t.Fatalf("wait after a new cadence = %s, want the shortest interval, 1m0s", got)
 	}
 }
 

@@ -75,6 +75,9 @@ func TestTailCountsAnUnfinishedLastLine(t *testing.T) {
 		want string
 	}{
 		{"the last line, finished", "one\ntwo\nthree\n", 1, "three\n"},
+		{"two lines, the last finished", "one\ntwo\nthree\n", 2, "two\nthree\n"},
+		{"every line, without a count", "one\ntwo\nthree\n", 0, "one\ntwo\nthree\n"},
+		{"an empty log", "", 3, ""},
 		{"the last line, unfinished", "one\ntwo\nthree", 1, "three"},
 		{"two lines, the last unfinished", "one\ntwo\nthree", 2, "two\nthree"},
 		{"every line, the last unfinished", "one\ntwo\nthree", 3, "one\ntwo\nthree"},

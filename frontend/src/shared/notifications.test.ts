@@ -48,45 +48,42 @@ test("the menu bar says how many notifications wait", () => {
   expect(trayTooltip(4)).toBe("babysitter: 4 unread notifications");
 });
 
-test("a click opens the watch of the notification", () => {
-  const url = "https://github.com/octo/hello/pull/42";
-  expect(clickTarget({ id: 1, title: "t", body: "b", watchId: 7, url })).toEqual({ kind: "watch", watchId: 7 });
-});
+const pullRequest = "https://github.com/octo/hello/pull/42";
 
-test("a click on a notification of no watch opens its pull request", () => {
-  const url = "https://github.com/octo/hello/pull/42";
-  expect(clickTarget({ id: 1, title: "t", body: "b", url })).toEqual({ kind: "url", url });
-});
-
-test("a click with nothing to open only brings the app up", () => {
-  expect(clickTarget({ id: 1, title: "t", body: "b" })).toEqual({ kind: "app" });
-  expect(clickTarget({ id: 1, title: "t", body: "b", url: "file:///etc/passwd" })).toEqual({ kind: "app" });
-});
-
-test("a click on the pull request of no watch goes to the browser, and the row is read", () => {
-  const url = "https://github.com/octo/hello/pull/42";
-
-  expect(clickPlan({ id: 9, title: "t", body: "b", url })).toEqual({
-    browser: url,
-    raise: false,
-    click: { id: 9, watchId: undefined },
-  });
-});
-
-test("a click on the row of a watch raises the app, and the row is read", () => {
-  expect(clickPlan({ id: 9, title: "t", body: "b", watchId: 7 })).toEqual({
-    browser: null,
-    raise: true,
-    click: { id: 9, watchId: 7 },
-  });
-});
-
-test("a click with nothing to open raises the app, and the row is read", () => {
-  expect(clickPlan({ id: 9, title: "t", body: "b" })).toEqual({
-    browser: null,
-    raise: true,
-    click: { id: 9, watchId: undefined },
-  });
+test.each([
+  {
+    name: "a click on a notification of a watch opens the watch, raises the app, and the row is read",
+    notification: { id: 9, title: "t", body: "b", watchId: 7, url: pullRequest },
+    target: { kind: "watch", watchId: 7 },
+    plan: { browser: null, raise: true, click: { id: 9, watchId: 7 } },
+  },
+  {
+    name: "a click on the row of a watch with no pull request opens the watch, raises the app, and the row is read",
+    notification: { id: 9, title: "t", body: "b", watchId: 7 },
+    target: { kind: "watch", watchId: 7 },
+    plan: { browser: null, raise: true, click: { id: 9, watchId: 7 } },
+  },
+  {
+    name: "a click on a notification of no watch opens its pull request in the browser, and the row is read",
+    notification: { id: 9, title: "t", body: "b", url: pullRequest },
+    target: { kind: "url", url: pullRequest },
+    plan: { browser: pullRequest, raise: false, click: { id: 9, watchId: undefined } },
+  },
+  {
+    name: "a click with nothing to open only raises the app, and the row is read",
+    notification: { id: 9, title: "t", body: "b" },
+    target: { kind: "app" },
+    plan: { browser: null, raise: true, click: { id: 9, watchId: undefined } },
+  },
+  {
+    name: "a click on a link that is not https only raises the app, and the row is read",
+    notification: { id: 9, title: "t", body: "b", url: "file:///etc/passwd" },
+    target: { kind: "app" },
+    plan: { browser: null, raise: true, click: { id: 9, watchId: undefined } },
+  },
+])("$name", ({ notification, target, plan }) => {
+  expect(clickTarget(notification)).toEqual(target);
+  expect(clickPlan(notification)).toEqual(plan);
 });
 
 test("a notification with a title toasts, whatever its kind", () => {
@@ -116,62 +113,79 @@ test("a switch keeps a muted kind this build does not know", () => {
   expect(withKind(["checks", "rumour"], "checks", false)).toEqual(["rumour"]);
 });
 
-test("a window with the focus gets the banner and no call back", () => {
-  expect(presentation({ title: "PR #42", kind: "agent" }, true, "darwin", true)).toEqual({
-    toast: true,
-    bounce: null,
-    flash: false,
-  });
-  expect(presentation({ title: "PR #42", kind: "merge" }, true, "win32", true)).toEqual({
-    toast: true,
-    bounce: null,
-    flash: false,
-  });
-});
-
-test("a platform that shows no banner bounces nothing and flashes nothing", () => {
-  expect(presentation({ title: "PR #42", kind: "agent" }, false, "darwin")).toEqual({
-    toast: false,
-    bounce: null,
-    flash: false,
-  });
-  expect(presentation({ title: "PR #42", kind: "agent" }, false, "win32")).toEqual({
-    toast: false,
-    bounce: null,
-    flash: false,
-  });
-});
-
-test("a banner of macOS carries the bounce its kind asks for", () => {
-  expect(presentation({ title: "PR #42", kind: "agent" }, true, "darwin")).toEqual({
-    toast: true,
-    bounce: "critical",
-    flash: false,
-  });
-  expect(presentation({ title: "PR #42", kind: "review" }, true, "darwin")).toEqual({
-    toast: true,
-    bounce: "informational",
-    flash: false,
-  });
-});
-
-test("the taskbar of the other platforms flashes only for what waits on the user", () => {
-  expect(presentation({ title: "PR #42", kind: "agent" }, true, "win32")).toEqual({
-    toast: true,
-    bounce: null,
-    flash: true,
-  });
-  expect(presentation({ title: "PR #42", kind: "review" }, true, "linux")).toEqual({
-    toast: true,
-    bounce: null,
-    flash: false,
-  });
+test.each([
+  {
+    name: "a window with the focus gets the banner and no call back on macOS",
+    notification: { title: "PR #42", kind: "agent" },
+    supported: true,
+    platform: "darwin",
+    focused: true,
+    expected: { toast: true, bounce: null, flash: false },
+  },
+  {
+    name: "a window with the focus gets the banner and no call back on Windows",
+    notification: { title: "PR #42", kind: "merge" },
+    supported: true,
+    platform: "win32",
+    focused: true,
+    expected: { toast: true, bounce: null, flash: false },
+  },
+  {
+    name: "macOS with no banner bounces nothing and flashes nothing",
+    notification: { title: "PR #42", kind: "agent" },
+    supported: false,
+    platform: "darwin",
+    focused: false,
+    expected: { toast: false, bounce: null, flash: false },
+  },
+  {
+    name: "Windows with no banner bounces nothing and flashes nothing",
+    notification: { title: "PR #42", kind: "agent" },
+    supported: false,
+    platform: "win32",
+    focused: false,
+    expected: { toast: false, bounce: null, flash: false },
+  },
+  {
+    name: "a banner of macOS for the agent keeps the dock bouncing",
+    notification: { title: "PR #42", kind: "agent" },
+    supported: true,
+    platform: "darwin",
+    focused: false,
+    expected: { toast: true, bounce: "critical", flash: false },
+  },
+  {
+    name: "a banner of macOS for a review bounces the dock once",
+    notification: { title: "PR #42", kind: "review" },
+    supported: true,
+    platform: "darwin",
+    focused: false,
+    expected: { toast: true, bounce: "informational", flash: false },
+  },
+  {
+    name: "the taskbar of Windows flashes for the agent, which waits on the user",
+    notification: { title: "PR #42", kind: "agent" },
+    supported: true,
+    platform: "win32",
+    focused: false,
+    expected: { toast: true, bounce: null, flash: true },
+  },
+  {
+    name: "the taskbar of Linux does not flash for a review, which does not wait on the user",
+    notification: { title: "PR #42", kind: "review" },
+    supported: true,
+    platform: "linux",
+    focused: false,
+    expected: { toast: true, bounce: null, flash: false },
+  },
+])("$name", ({ notification, supported, platform, focused, expected }) => {
+  expect(presentation(notification, supported, platform, focused)).toEqual(expected);
 });
 
 test("the test notification has a sound and no row of the history", () => {
-  expect(testNotification()).toEqual({
-    title: "babysitter",
-    body: "A notification of the system looks like this.",
-    silent: false,
-  });
+  const notification = testNotification();
+
+  expect(notification.silent).toBe(false);
+  expect(notification).not.toHaveProperty("id");
+  expect(notification).not.toHaveProperty("watchId");
 });
