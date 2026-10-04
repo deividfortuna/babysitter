@@ -84,10 +84,16 @@ func (s *Service) limitIsOver(w store.Watch) bool {
 }
 
 func (s *Service) resumeAfterLimit(ctx context.Context, w store.Watch) {
+	stored, err := s.store.GetWatch(ctx, w.ID)
+	if err != nil {
+		s.log.Error("read the usage limit before the agent continues", "watch", w.ID, "err", err)
+		return
+	}
+	w = stored
 	if !s.limitIsOver(w) {
 		return
 	}
-	_, err := s.deliver(ctx, w, limitContinueMessage, "told the agent to continue after its usage limit", deliverBetweenTurns, nil)
+	_, err = s.deliver(ctx, w, limitContinueMessage, "told the agent to continue after its usage limit", deliverBetweenTurns, nil)
 	switch {
 	case errors.Is(err, ErrAgentBusy), errors.Is(err, ErrAgentWorking):
 		s.log.Info("the agent is not free, it continues after its usage limit at the next poll", "watch", w.ID, "reason", err)

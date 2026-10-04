@@ -308,3 +308,45 @@ func TestALimitThatComesAfterTheContinueMessageStays(t *testing.T) {
 		t.Fatalf("limited until = %v, want the newer limit %v", got, later)
 	}
 }
+
+func TestANewerLimitThatComesDuringThePollHoldsTheContinueMessage(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	ctx := context.Background()
+	fx.hitLimit(w, fx.clock().UTC().Add(time.Hour).Truncate(time.Minute))
+	fx.advance(time.Hour)
+
+	later := fx.clock().UTC().Add(2 * time.Hour).Truncate(time.Minute)
+	payload, err := json.Marshal(map[string]string{
+		"error":                  "rate_limit",
+		"last_assistant_message": fmt.Sprintf("You've hit your session limit · resets %s (UTC)", later.Format("3:04pm")),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var once sync.Once
+	fx.api.React(ghfake.RoutePull, func(ghfake.Action) (ghfake.Response, bool) {
+		once.Do(func() {
+			for _, e := range []struct {
+				event   string
+				payload []byte
+			}{{agent.EventUserPromptSubmit, []byte(`{}`)}, {agent.EventStopFailure, payload}} {
+				if _, err := fx.svc.Hook(ctx, w.ID, e.event, e.payload); err != nil {
+					t.Errorf("Hook(%s) error = %v", e.event, err)
+				}
+			}
+		})
+		return ghfake.Response{}, false
+	})
+	fx.poll(w)
+	fx.svc.wg.Wait()
+
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("an agent at a newer limit was told: %q", msgs)
+	}
+	if got := fx.watch(w).AgentLimitedUntil; got == nil || !got.Equal(later) {
+		t.Fatalf("limited until = %v, want the newer limit %v", got, later)
+	}
+}
