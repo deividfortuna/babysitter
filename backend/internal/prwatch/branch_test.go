@@ -883,3 +883,24 @@ func TestATakeoverSaysWhenGitHubIsUpdatingTheBranch(t *testing.T) {
 		}
 	}
 }
+
+func TestGitHubWaitsWhileTheBackgroundWorkOfTheAgentRuns(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.hook(w, agent.EventStop, `{"background_tasks":[{"id":"b1","type":"shell","status":"running","description":"go test ./..."}]}`)
+
+	fx.behind()
+	fx.poll(w)
+	if got := fx.branchUpdates(); len(got) != 0 {
+		t.Fatalf("branch updates = %+v, want none while the background work runs in the worktree", got)
+	}
+
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.hook(w, agent.EventStop, `{"background_tasks":[]}`)
+	fx.poll(w)
+	if got := fx.branchUpdates(); len(got) != 1 {
+		t.Fatalf("branch updates = %+v, want one once the background work ended", got)
+	}
+}
