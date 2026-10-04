@@ -393,7 +393,7 @@ func TestRestoreCreatesTheBranchWhenGitSaysItIsMissing(t *testing.T) {
 	if err := g.Restore(context.Background(), source, dir, "babysitter/fix", "origin/fix"); err != nil {
 		t.Fatalf("Restore() error = %v", err)
 	}
-	want := []string{"fetch -q origin fix", "worktree add -q -B babysitter/fix " + dir + " origin/fix"}
+	want := []string{"fetch -q origin +refs/heads/fix:refs/remotes/origin/fix", "worktree add -q -B babysitter/fix " + dir + " origin/fix"}
 	if got := calls[len(calls)-2:]; got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("last git calls = %q, want %q", got, want)
 	}
@@ -449,5 +449,27 @@ func TestRestoreRightAfterTheWorktreeWasDeleted(t *testing.T) {
 	}
 	if h := git(t, dir, "rev-parse", "HEAD"); h != unpushed {
 		t.Fatalf("restored head = %s, want the unpushed commit %s", h, unpushed)
+	}
+}
+
+func TestFetchUpdatesTheTrackingRefOfASingleBranchClone(t *testing.T) {
+	t.Parallel()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git is not installed")
+	}
+	root := t.TempDir()
+	origin := filepath.Join(root, "origin")
+	git(t, root, "init", "-q", "-b", "main", origin)
+	git(t, origin, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "init")
+	git(t, origin, "checkout", "-q", "-b", "fix")
+	git(t, origin, "-c", "commit.gpgsign=false", "commit", "-q", "--allow-empty", "-m", "fix")
+	source := filepath.Join(root, "source")
+	git(t, root, "clone", "-q", "--single-branch", "-b", "main", origin, source)
+
+	if err := New().Fetch(context.Background(), source, "origin/fix"); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := git(t, source, "rev-parse", "refs/remotes/origin/fix"), git(t, origin, "rev-parse", "fix"); got != want {
+		t.Fatalf("origin/fix = %s, want %s", got, want)
 	}
 }

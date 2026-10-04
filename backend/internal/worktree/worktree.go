@@ -68,7 +68,8 @@ func (g *Git) Fetch(ctx context.Context, source, upstream string) error {
 	if err := g.Auth.CheckRemote(ctx, remote, false, gitInSource); err != nil {
 		return fmt.Errorf("fetch %s: %w", upstream, err)
 	}
-	if _, err := g.git(ctx, source, "fetch", "-q", remote, ref); err != nil {
+	refspec := "+refs/heads/" + ref + ":refs/remotes/" + remote + "/" + ref
+	if _, err := g.git(ctx, source, "fetch", "-q", remote, refspec); err != nil {
 		return fmt.Errorf("fetch %s: %w (was the branch pushed?)", upstream, err)
 	}
 	return nil
