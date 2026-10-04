@@ -268,8 +268,11 @@ func (s *Service) ensureWorktree(ctx context.Context, w store.Watch) error {
 		return nil
 	}
 	_, err := os.Stat(w.WorktreeDir)
-	if !os.IsNotExist(err) {
+	if err == nil {
 		return nil
+	}
+	if !os.IsNotExist(err) {
+		return fmt.Errorf("look at the worktree %s: %w", w.WorktreeDir, err)
 	}
 	s.log.Warn("the worktree of the watch is gone, make it again", "watch", w.ID, "dir", w.WorktreeDir)
 	if err := s.git.Restore(ctx, w.SourceDir, w.WorktreeDir, w.WorkBranch, "origin/"+w.HeadRef); err != nil {

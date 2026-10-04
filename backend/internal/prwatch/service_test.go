@@ -2344,3 +2344,32 @@ func (fx *fixture) advance(d time.Duration) {
 	defer fx.nowMu.Unlock()
 	fx.now = fx.now.Add(d)
 }
+
+func TestAWorktreeThatCannotBeReadStopsTheSessionFromStarting(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	stored := fx.watch(w)
+	fx.advance(time.Hour)
+	fx.host.last().exit(errors.New("exit status 1"))
+	fx.waitKinds(w, []string{"watch_started", "session_started", "nudged", "session_exited"})
+	parent := filepath.Dir(stored.WorktreeDir)
+	if err := os.RemoveAll(parent); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(parent, []byte("not a directory\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "first", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+
+	if fx.host.count() != 1 || len(fx.git.restores()) != 0 {
+		t.Fatalf("sessions = %d, restores = %v, want no session in a worktree that cannot be read", fx.host.count(), fx.git.restores())
+	}
+	rows := fx.activity(w)
+	if last := rows[len(rows)-1]; last.Kind != store.ActivityAgentFailed || !strings.Contains(string(last.Payload), "not a directory") {
+		t.Fatalf("last row = %+v, want the failure to read the worktree", last)
+	}
+}
