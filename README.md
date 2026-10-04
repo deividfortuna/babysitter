@@ -1378,7 +1378,9 @@ message goes out anyway. A message that you send goes at once. A session that ex
 the next message, on the same conversation, so nothing it learned is
 lost. If the worktree of the watch is gone, the daemon makes it again
 from the work branch before the session starts, so the commits that
-are not pushed stay. A daemon that restarts starts the session of every
+are not pushed stay. If the work branch is gone too, the daemon fetches
+the pull request branch and makes the work branch again from it, and
+the commits that were only on the lost branch are not on it. A daemon that restarts starts the session of every
 watch at once, on the same conversation.
 
 When Claude Code stops a turn because the usage limit is reached, the
