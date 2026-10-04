@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"sync"
@@ -2347,6 +2348,9 @@ func (fx *fixture) advance(d time.Duration) {
 
 func TestAWorktreeThatCannotBeReadStopsTheSessionFromStarting(t *testing.T) {
 	t.Parallel()
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows reports a path under a file as not found, so no stat fails another way")
+	}
 	fx := newFixture(t)
 	w := fx.start()
 	stored := fx.watch(w)
