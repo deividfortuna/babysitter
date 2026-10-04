@@ -8,12 +8,15 @@ import (
 	"os"
 	"os/exec"
 	"syscall"
+	"time"
 
 	"github.com/creack/pty"
 )
 
 type PTY struct {
 	Timing Timing
+
+	stopGrace time.Duration
 }
 
 func New() *PTY {
@@ -45,6 +48,7 @@ func (h *PTY) Start(ctx context.Context, spec Spec) (Handle, error) {
 		pid:       pid,
 		log:       log,
 		timing:    h.Timing,
+		stopGrace: h.graceBeforeKill(),
 		done:      make(chan struct{}),
 		wait:      cmd.Wait,
 		terminate: func() { _ = syscall.Kill(-pid, syscall.SIGTERM) },

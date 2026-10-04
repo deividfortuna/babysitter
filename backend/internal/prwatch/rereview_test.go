@@ -130,18 +130,30 @@ var commentFromCarol = reviewOf(10, "COMMENTED", "old", "carol", "1 comment")
 
 func TestRereviewAsksOnlyTheThreadWritersThatReviewed(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	fx.update(func() {
-		fx.pr.Reviews = []ghfake.Review{commentFromBobOnTheHead}
-		fx.pr.Threads = threads(1, 0, "bob", "dave", "alice")
-	})
-	w := fx.start()
-	fx.agentIdle(w)
+	cases := []struct {
+		name    string
+		threads []ghfake.Thread
+	}{
+		{name: "threads the agent answered without a push", threads: threads(2, 0, "bob", "alice")},
+		{name: "a thread dave wrote in but never reviewed", threads: threads(1, 0, "bob", "dave", "alice")},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			fx.update(func() {
+				fx.pr.Reviews = []ghfake.Review{commentFromBobOnTheHead}
+				fx.pr.Threads = c.threads
+			})
+			w := fx.start()
+			fx.agentIdle(w)
 
-	fx.poll(w)
-	asked := fx.asked()
-	if len(asked) != 1 || strings.Join(asked[0], ",") != "bob" {
-		t.Fatalf("asked = %v, want bob alone: dave wrote in the thread but never reviewed", asked)
+			fx.poll(w)
+			asked := fx.asked()
+			if len(asked) != 1 || strings.Join(asked[0], ",") != "bob" {
+				t.Fatalf("asked = %v, want bob alone, who reviewed the head abc", asked)
+			}
+		})
 	}
 }
 
@@ -175,23 +187,6 @@ func TestRereviewAsksAgainAfterANewAnswerOnTheSameHead(t *testing.T) {
 }
 
 var commentFromBobOnTheHead = reviewOf(9, "COMMENTED", "abc", "bob", "2 comments")
-
-func TestRereviewAsksTheReviewerOfAThreadAnsweredWithoutAPush(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.update(func() {
-		fx.pr.Reviews = []ghfake.Review{commentFromBobOnTheHead}
-		fx.pr.Threads = threads(2, 0, "bob", "alice")
-	})
-	w := fx.start()
-	fx.agentIdle(w)
-
-	fx.poll(w)
-	asked := fx.asked()
-	if len(asked) != 1 || strings.Join(asked[0], ",") != "bob" {
-		t.Fatalf("asked = %v, want bob, whose threads the agent answered on the head he reviewed", asked)
-	}
-}
 
 func TestRereviewAsksOncePerHead(t *testing.T) {
 	t.Parallel()

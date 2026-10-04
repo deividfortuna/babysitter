@@ -232,20 +232,35 @@ func TestATurnOnAWorkBranchBehindTheHeadOffersNothing(t *testing.T) {
 	}
 }
 
-func TestAnAuthorMessageStartsATurn(t *testing.T) {
+func TestAnAuthorMessageStartsATurnOnTheHeadOfThePullRequest(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	ctx := context.Background()
 	w := fx.start()
 	fx.hook(w, agent.EventStop, `{}`)
-	if _, err := fx.svc.Send(ctx, w.ID, "use a table test"); err != nil {
+	fx.rel.moveRemote("abc", "t1")
+	h := fx.host.last()
+	told := len(h.messages())
+
+	if _, err := fx.svc.Send(context.Background(), w.ID, "use a table test"); err != nil {
 		t.Fatal(err)
 	}
+	if msgs := h.messages(); len(msgs) != told+1 || msgs[told] != "use a table test" {
+		t.Fatalf("messages = %q, want the message of the author typed", msgs[told:])
+	}
+	if !slices.Equal(fx.rel.ffs, []string{"t1"}) {
+		t.Fatalf("fast-forwards = %v, want the work branch on t1 before the message", fx.rel.ffs)
+	}
 	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
-	fx.rel.commit("abc", "w1")
+	if p := fx.proposal(w, 1); p.HeadSHA != "t1" || p.BaseSHA != "t1" {
+		t.Fatalf("proposal = %+v, want the turn on t1", p)
+	}
+	fx.rel.commit("t1", "w1")
 	fx.hook(w, agent.EventStop, `{}`)
-	if p := fx.proposal(w, 1); p.Status != store.ProposalReleased || len(fx.rel.pushed()) != 1 {
-		t.Fatalf("proposal = %+v, pushes %v", p, fx.rel.pushed())
+	if got := fx.rel.pushed(); !slices.Equal(got, []gitrelease.Push{{SHA: "w1", Branch: "fix"}}) {
+		t.Fatalf("pushes = %+v, want w1 to fix", got)
+	}
+	if p := fx.proposal(w, 1); p.Status != store.ProposalReleased {
+		t.Fatalf("proposal = %+v", p)
 	}
 }
 
@@ -326,21 +341,6 @@ func TestTheWorkBranchCatchesUpBeforeTheMessage(t *testing.T) {
 	}
 }
 
-func TestARewriteGoesOutWithTheLeasePinnedToTheHeadOfTheTurn(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.turn(w)
-	fx.rel.set(func(f *fakeRelease) {
-		f.history["r1"] = []string{"base"}
-		f.work = "r1"
-	})
-	fx.hook(w, agent.EventStop, `{}`)
-	if got := fx.rel.pushed(); !slices.Equal(got, []gitrelease.Push{{SHA: "r1", Branch: "fix", Lease: "abc"}}) {
-		t.Fatalf("pushes = %+v, want r1 with the lease on abc", got)
-	}
-}
-
 func TestARewriteDoesNotGoOutWithForceWhenTheWatchMerges(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
@@ -359,22 +359,35 @@ func TestARewriteDoesNotGoOutWithForceWhenTheWatchMerges(t *testing.T) {
 	}
 }
 
-func TestARewriteLeasesTheHeadItWasCheckedAgainst(t *testing.T) {
+func TestARewriteGoesOutWithTheLeaseOnTheHeadItWasCheckedAgainst(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.turn(w)
-	fx.rel.moveRemote("abc", "t1")
-	fx.rel.set(func(f *fakeRelease) {
-		f.history["r1"] = []string{"base"}
-		f.work = "r1"
-	})
-	fx.hook(w, agent.EventStop, `{}`)
-	if got := fx.rel.pushed(); !slices.Equal(got, []gitrelease.Push{{SHA: "r1", Branch: "fix", Lease: "t1"}}) {
-		t.Fatalf("pushes = %+v, want r1 with the lease on t1", got)
+	cases := []struct {
+		name     string
+		moveHead func(f *fakeRelease)
+		lease    string
+	}{
+		{name: "the head of the turn", moveHead: func(*fakeRelease) {}, lease: "abc"},
+		{name: "a head that moved during the turn", moveHead: func(f *fakeRelease) { f.moveRemote("abc", "t1") }, lease: "t1"},
 	}
-	if p := fx.proposal(w, 1); p.Status != store.ProposalReleased {
-		t.Fatalf("proposal = %+v", p)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			w := fx.start()
+			fx.turn(w)
+			c.moveHead(fx.rel)
+			fx.rel.set(func(f *fakeRelease) {
+				f.history["r1"] = []string{"base"}
+				f.work = "r1"
+			})
+			fx.hook(w, agent.EventStop, `{}`)
+			if got := fx.rel.pushed(); !slices.Equal(got, []gitrelease.Push{{SHA: "r1", Branch: "fix", Lease: c.lease}}) {
+				t.Fatalf("pushes = %+v, want r1 with the lease on %s", got, c.lease)
+			}
+			if p := fx.proposal(w, 1); p.Status != store.ProposalReleased {
+				t.Fatalf("proposal = %+v", p)
+			}
+		})
 	}
 }
 
@@ -423,6 +436,16 @@ func TestARebaseOfTheReleaseThatConflictsHandsTheWorkToTheAgent(t *testing.T) {
 	msgs := fx.host.last().messages()
 	if len(msgs) != told+1 || !strings.Contains(msgs[told], "x.go") {
 		t.Fatalf("messages = %q", msgs[told:])
+	}
+
+	told = len(msgs)
+	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
+	fx.hook(w, agent.EventStop, `{}`)
+	if msgs := fx.host.last().messages(); len(msgs) != told {
+		t.Fatalf("the work went back again: %q", msgs[told:])
+	}
+	if p := fx.proposal(w, 2); p.Status != store.ProposalFailed || p.HeadSHA != "t1" {
+		t.Fatalf("proposal = %+v", p)
 	}
 }
 
@@ -757,30 +780,6 @@ func TestTheNextTurnRebasesTheWorkOfAFailedTurn(t *testing.T) {
 		t.Fatalf("pushes = %+v, rebases %v", got, fx.rel.rebases)
 	}
 	if p := fx.proposal(w, 2); p.Status != store.ProposalReleased {
-		t.Fatalf("proposal = %+v", p)
-	}
-}
-
-func TestWorkHandedToTheAgentIsHandedOnce(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.turn(w)
-	fx.rel.commit("abc", "w1")
-	fx.rel.moveRemote("abc", "t1")
-	fx.rel.set(func(f *fakeRelease) {
-		f.missing = []string{"t1"}
-		f.rebaseErr = &gitrelease.ConflictError{Files: []string{"x.go"}}
-	})
-	fx.hook(w, agent.EventStop, `{}`)
-	told := len(fx.host.last().messages())
-
-	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
-	fx.hook(w, agent.EventStop, `{}`)
-	if msgs := fx.host.last().messages(); len(msgs) != told {
-		t.Fatalf("the work went back again: %q", msgs[told:])
-	}
-	if p := fx.proposal(w, 2); p.Status != store.ProposalFailed || p.HeadSHA != "t1" {
 		t.Fatalf("proposal = %+v", p)
 	}
 }

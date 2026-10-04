@@ -49,15 +49,11 @@ func TestWorktreeDirNameKeepsTheDirectoryUnderTheWorktreesRoot(t *testing.T) {
 func TestStartAnswersWithTheAgentSessionItOpened(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	w := fx.start()
+	w := fx.startWorking()
 	if w.AgentSession == "" {
 		t.Fatal("Start() answered with a watch that names no agent session")
 	}
-	stored, err := fx.st.GetWatch(context.Background(), w.ID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if w.AgentSession != stored.AgentSession {
+	if stored := fx.watch(w); w.AgentSession != stored.AgentSession {
 		t.Fatalf("agent session = %q, want %q", w.AgentSession, stored.AgentSession)
 	}
 }
@@ -248,38 +244,35 @@ func TestStartStopsWhenTheTokenCannotReachTheRepository(t *testing.T) {
 
 func TestStartOfAPullRequestGitHubHidesNamesTheMissingApp(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	fx.api.Fail(ghfake.RoutePull, http.StatusNotFound, "Not Found")
-	notInstalled := errors.New("the GitHub App is not installed on the repository")
-	fx.access = func(_ context.Context, _ *github.Client, repos ...string) error { return notInstalled }
-	fx.svc = fx.newService()
-
-	_, err := fx.svc.Start(context.Background(), fx.startRequest())
-
-	if !errors.Is(err, notInstalled) {
-		t.Fatalf("Start() error = %v, want %v and its install link over a bare not found", err, notInstalled)
+	cases := []struct {
+		name   string
+		target snapshot.Target
+	}{
+		{"the repository in the request", snapshot.Target{Owner: "octo", Name: "hello", Number: 3}},
+		{"the repository of the checkout", snapshot.Target{Number: 3}},
 	}
-}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			fx.api.Fail(ghfake.RoutePull, http.StatusNotFound, "Not Found")
+			notInstalled := errors.New("the GitHub App is not installed on the repository")
+			var asked [][]string
+			fx.access = func(_ context.Context, _ *github.Client, repos ...string) error {
+				asked = append(asked, repos)
+				return notInstalled
+			}
+			fx.svc = fx.newService()
 
-func TestStartFromACheckoutOfAPullRequestGitHubHidesNamesTheMissingApp(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.api.Fail(ghfake.RoutePull, http.StatusNotFound, "Not Found")
-	notInstalled := errors.New("the GitHub App is not installed on the repository")
-	var asked [][]string
-	fx.access = func(_ context.Context, _ *github.Client, repos ...string) error {
-		asked = append(asked, repos)
-		return notInstalled
-	}
-	fx.svc = fx.newService()
+			_, err := fx.svc.Start(context.Background(), StartRequest{Target: c.target, SourceDir: fx.dir})
 
-	_, err := fx.svc.Start(context.Background(), StartRequest{Target: snapshot.Target{Number: 3}, SourceDir: fx.dir})
-
-	if !errors.Is(err, notInstalled) {
-		t.Fatalf("Start() error = %v, want %v and its install link over a bare not found", err, notInstalled)
-	}
-	if len(asked) != 1 || !slices.Equal(asked[0], []string{"octo/hello"}) {
-		t.Fatalf("access asked for %v, want the repository of the checkout", asked)
+			if !errors.Is(err, notInstalled) {
+				t.Fatalf("Start() error = %v, want %v and its install link over a bare not found", err, notInstalled)
+			}
+			if len(asked) != 1 || !slices.Equal(asked[0], []string{"octo/hello"}) {
+				t.Fatalf("access asked for %v, want octo/hello", asked)
+			}
+		})
 	}
 }
 

@@ -60,31 +60,29 @@ func runGitCredential(t *testing.T, dataDir, operation, request string) (string,
 	return out.String(), err
 }
 
-func TestGitCredentialGivesTheAppToken(t *testing.T) {
-	t.Parallel()
-	dataDir := tokenDaemon(t, "ghu_app")
-
-	out, err := runGitCredential(t, dataDir, "get", "protocol=https\nhost=github.com\n\n")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := "username=x-access-token\npassword=ghu_app\n"; out != want {
-		t.Fatalf("output = %q, want %q", out, want)
-	}
-}
-
 func TestGitCredentialGivesTheAppTokenForGitHubInAnyCase(t *testing.T) {
 	t.Parallel()
 	dataDir := tokenDaemon(t, "ghu_app")
 
-	for _, host := range []string{"GitHub.com", "github.com.", "github.com:443", "github.com.:443"} {
-		out, err := runGitCredential(t, dataDir, "get", "protocol=HTTPS\nhost="+host+"\n\n")
-		if err != nil {
-			t.Fatal(err)
-		}
-		if want := "username=x-access-token\npassword=ghu_app\n"; out != want {
-			t.Fatalf("host %s: output = %q, want %q, so git does not ask the gh helper", host, out, want)
-		}
+	for _, tc := range []struct {
+		protocol string
+		host     string
+	}{
+		{"https", "github.com"},
+		{"HTTPS", "GitHub.com"},
+		{"HTTPS", "github.com."},
+		{"HTTPS", "github.com:443"},
+		{"HTTPS", "github.com.:443"},
+	} {
+		t.Run(tc.protocol+"://"+tc.host, func(t *testing.T) {
+			out, err := runGitCredential(t, dataDir, "get", "protocol="+tc.protocol+"\nhost="+tc.host+"\n\n")
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := "username=x-access-token\npassword=ghu_app\n"; out != want {
+				t.Fatalf("output = %q, want %q, so git does not ask the gh helper", out, want)
+			}
+		})
 	}
 }
 
@@ -128,45 +126,27 @@ func TestGitCredentialStopsGitWhenTheDaemonCannotGetTheAppToken(t *testing.T) {
 	}
 }
 
-func TestAuthTokenPrintsTheAppToken(t *testing.T) {
-	t.Parallel()
-	out, err := runAuthToken(t, tokenDaemon(t, "ghu_app"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if out != "ghu_app\n" {
-		t.Fatalf("output = %q, want the token", out)
-	}
-}
-
-func TestAuthTokenPrintsNothingWhenTheAppIsNotInUse(t *testing.T) {
+func TestAuthTokenPrintsTheAppTokenOfTheDaemon(t *testing.T) {
 	t.Parallel()
 	for _, tc := range []struct {
 		name    string
 		dataDir string
+		want    string
+		fails   bool
 	}{
-		{"the app not in use", tokenDaemon(t, "")},
-		{"no daemon", t.TempDir()},
+		{"the app in use", tokenDaemon(t, "ghu_app"), "ghu_app\n", false},
+		{"the app not in use", tokenDaemon(t, ""), "", false},
+		{"no daemon", t.TempDir(), "", false},
+		{"the daemon cannot get the app token", failingTokenDaemon(t), "", true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			out, err := runAuthToken(t, tc.dataDir)
-			if err != nil {
-				t.Fatalf("err = %v, want none", err)
+			if failed := err != nil; failed != tc.fails {
+				t.Fatalf("err = %v, want an error: %v", err, tc.fails)
 			}
-			if out != "" {
-				t.Fatalf("output = %q, want none", out)
+			if out != tc.want {
+				t.Fatalf("output = %q, want %q", out, tc.want)
 			}
 		})
-	}
-}
-
-func TestAuthTokenFailsWhenTheDaemonCannotGetTheAppToken(t *testing.T) {
-	t.Parallel()
-	out, err := runAuthToken(t, failingTokenDaemon(t))
-	if err == nil {
-		t.Fatal("err = nil, want the error of the daemon")
-	}
-	if out != "" {
-		t.Fatalf("output = %q, want none", out)
 	}
 }

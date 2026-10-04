@@ -57,26 +57,64 @@ func executableAt(path string) Option {
 	return WithExecutable(func() (string, error) { return path, nil })
 }
 
-func TestVersionFromTheAppTellsHowToUpgrade(t *testing.T) {
-	t.Parallel()
-	out := runVersion(t, WithVersion("0.2.0"), releasesServer(t, latestRelease("v0.3.0")), executableAt(appBinary))
-
-	want := "babysitter version 0.2.0\n" +
-		"babysitter 0.3.0 is out. The desktop app updates itself, or run: brew upgrade --cask babysitter\n"
-	if out != want {
-		t.Fatalf("version = %q, want %q", out, want)
-	}
+func unreachableReleases(t *testing.T) Option {
+	t.Helper()
+	srv := ghfake.Serve(t, http.NotFoundHandler())
+	srv.Close()
+	return WithReleaseClientFactory(func() (*github.Client, error) {
+		return srv.NewClient()
+	})
 }
 
-func TestVersionOutsideTheAppPointsAtTheReleasePage(t *testing.T) {
+func TestVersionTellsWhenANewerReleaseIsOut(t *testing.T) {
 	t.Parallel()
 	standalone := filepath.Join(t.TempDir(), "bin", "babysitter")
-	out := runVersion(t, WithVersion("0.2.0"), releasesServer(t, latestRelease("v0.3.0")), executableAt(standalone))
+	serving := func(g *ghfake.GitHub) func(*testing.T) Option {
+		return func(t *testing.T) Option { return releasesServer(t, g) }
+	}
+	for _, tc := range []struct {
+		name       string
+		version    string
+		releases   func(*testing.T) Option
+		executable string
+		want       string
+	}{
+		{
+			"from the app it tells how to upgrade", "0.2.0", serving(latestRelease("v0.3.0")), appBinary,
+			"babysitter version 0.2.0\n" +
+				"babysitter 0.3.0 is out. The desktop app updates itself, or run: brew upgrade --cask babysitter\n",
+		},
+		{
+			"outside the app it points at the release page", "0.2.0", serving(latestRelease("v0.3.0")), standalone,
+			"babysitter version 0.2.0\n" +
+				"babysitter 0.3.0 is out. Download it from https://github.com/deividfortuna/babysitter/releases/tag/v0.3.0\n",
+		},
+		{
+			"the latest release prints only the version", "0.3.0", serving(latestRelease("v0.3.0")), appBinary,
+			"babysitter version 0.3.0\n",
+		},
+		{
+			"a prerelease sees the stable release of its version", "0.3.0-beta.1", serving(latestRelease("v0.3.0")), appBinary,
+			"babysitter version 0.3.0-beta.1\n" +
+				"babysitter 0.3.0 is out. The desktop app updates itself, or run: brew upgrade --cask babysitter\n",
+		},
+		{
+			"quiet when GitHub has no release", "0.2.0", serving(ghfake.New()), appBinary,
+			"babysitter version 0.2.0\n",
+		},
+		{
+			"quiet when GitHub cannot be reached", "0.2.0", unreachableReleases, appBinary,
+			"babysitter version 0.2.0\n",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			out := runVersion(t, WithVersion(tc.version), tc.releases(t), executableAt(tc.executable))
 
-	want := "babysitter version 0.2.0\n" +
-		"babysitter 0.3.0 is out. Download it from https://github.com/deividfortuna/babysitter/releases/tag/v0.3.0\n"
-	if out != want {
-		t.Fatalf("version = %q, want %q", out, want)
+			if out != tc.want {
+				t.Fatalf("version = %q, want %q", out, tc.want)
+			}
+		})
 	}
 }
 
@@ -103,48 +141,6 @@ func TestVersionFollowsTheLinkThatHomebrewMakes(t *testing.T) {
 
 	if !bytes.Contains([]byte(out), []byte("brew upgrade --cask babysitter")) {
 		t.Fatalf("version = %q, want the Homebrew command", out)
-	}
-}
-
-func TestVersionOfTheLatestReleasePrintsOnlyTheVersion(t *testing.T) {
-	t.Parallel()
-	out := runVersion(t, WithVersion("0.3.0"), releasesServer(t, latestRelease("v0.3.0")), executableAt(appBinary))
-
-	if out != "babysitter version 0.3.0\n" {
-		t.Fatalf("version = %q", out)
-	}
-}
-
-func TestVersionOfAPrereleaseSeesTheStableReleaseOfItsVersion(t *testing.T) {
-	t.Parallel()
-	out := runVersion(t, WithVersion("0.3.0-beta.1"), releasesServer(t, latestRelease("v0.3.0")), executableAt(appBinary))
-
-	if !bytes.Contains([]byte(out), []byte("babysitter 0.3.0 is out.")) {
-		t.Fatalf("version = %q, want the notice", out)
-	}
-}
-
-func TestVersionIsQuietWhenGitHubHasNoRelease(t *testing.T) {
-	t.Parallel()
-	out := runVersion(t, WithVersion("0.2.0"), releasesServer(t, ghfake.New()), executableAt(appBinary))
-
-	if out != "babysitter version 0.2.0\n" {
-		t.Fatalf("version = %q", out)
-	}
-}
-
-func TestVersionIsQuietWhenGitHubCannotBeReached(t *testing.T) {
-	t.Parallel()
-	srv := ghfake.Serve(t, http.NotFoundHandler())
-	srv.Close()
-	unreachable := WithReleaseClientFactory(func() (*github.Client, error) {
-		return srv.NewClient()
-	})
-
-	out := runVersion(t, WithVersion("0.2.0"), unreachable, executableAt(appBinary))
-
-	if out != "babysitter version 0.2.0\n" {
-		t.Fatalf("version = %q", out)
 	}
 }
 

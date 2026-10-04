@@ -17,22 +17,27 @@ test("only stable and nightly are channels", () => {
   expect(isUpdateChannel(undefined)).toBe(false);
 });
 
-test("a stable build follows stable releases", () => {
-  expect(defaultChannel("0.2.0")).toBe("stable");
-});
-
-test("a nightly build follows nightlies, so it finds the next nightly", () => {
-  expect(defaultChannel("0.2.1-nightly.20260928.41")).toBe("nightly");
-});
-
-test("a build of any other prerelease follows stable releases", () => {
-  expect(defaultChannel("0.1.0-alpha.5")).toBe("stable");
-  expect(defaultChannel("0.2.1-preview.20260928.42")).toBe("stable");
-});
-
-test("a prerelease that only ends like a nightly follows stable releases, because the updater reads its first name as the channel", () => {
-  expect(defaultChannel("0.2.1-rc.1-nightly.20260928.41")).toBe("stable");
-  expect(defaultChannel("0.2.1-beta-nightly.20260928.41")).toBe("stable");
+test.each([
+  { name: "a stable build follows stable releases", version: "0.2.0", channel: "stable" },
+  {
+    name: "a nightly build follows nightlies, so it finds the next nightly",
+    version: "0.2.1-nightly.20260928.41",
+    channel: "nightly",
+  },
+  { name: "a build of an alpha follows stable releases", version: "0.1.0-alpha.5", channel: "stable" },
+  { name: "a build of a preview follows stable releases", version: "0.2.1-preview.20260928.42", channel: "stable" },
+  {
+    name: "a release candidate that only ends like a nightly follows stable releases, because the updater reads its first name as the channel",
+    version: "0.2.1-rc.1-nightly.20260928.41",
+    channel: "stable",
+  },
+  {
+    name: "a beta that only ends like a nightly follows stable releases, because the updater reads its first name as the channel",
+    version: "0.2.1-beta-nightly.20260928.41",
+    channel: "stable",
+  },
+])("$name", ({ version, channel }) => {
+  expect(defaultChannel(version)).toBe(channel);
 });
 
 test("a build with no saved choice downloads on its own and follows the channel of its version", () => {

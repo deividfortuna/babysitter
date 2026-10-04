@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"reflect"
 	"testing"
 	"time"
 
@@ -109,21 +110,48 @@ func TestATogglePointingAtACheckoutThatIsGoneIsRefused(t *testing.T) {
 	}
 }
 
-func TestAnUnknownModelIsRefused(t *testing.T) {
-	fx := newFixture(t)
-	for _, o := range []store.WatchOverrides{{Provider: "claude", Model: "gpt-9"}, {Model: "opus"}} {
-		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); !errors.Is(err, store.ErrInvalidRepoConfig) {
-			t.Errorf("%+v: Configure() = %v, want ErrInvalidRepoConfig", o, err)
-		}
+func TestAnAgentTheRulesRefuseIsNotStored(t *testing.T) {
+	cases := []struct {
+		name      string
+		overrides store.WatchOverrides
+	}{
+		{"an unknown model", store.WatchOverrides{Provider: "claude", Model: "gpt-9"}},
+		{"an effort the model does not take", store.WatchOverrides{Provider: "claude", Model: "haiku", Effort: "high"}},
+		{"an unknown provider", store.WatchOverrides{Provider: "gemini"}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fx := newFixture(t)
+			ctx := context.Background()
+			before, err := fx.st.GetRepoConfig(ctx, fx.repo.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+
+			if _, err := Configure(ctx, fx.st, fx.repo, Change{Overrides: &tc.overrides}, fx.now); !errors.Is(err, store.ErrInvalidRepoConfig) {
+				t.Fatalf("Configure() = %v, want ErrInvalidRepoConfig", err)
+			}
+
+			after, err := fx.st.GetRepoConfig(ctx, fx.repo.ID)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !reflect.DeepEqual(after, before) {
+				t.Fatalf("config = %+v after a refusal, want %+v", after, before)
+			}
+		})
 	}
 }
 
-func TestAnEffortTheModelDoesNotTakeIsRefused(t *testing.T) {
+func TestOverridesThatNameNoAgentAreStored(t *testing.T) {
 	fx := newFixture(t)
-	for _, o := range []store.WatchOverrides{{Provider: "claude", Model: "haiku", Effort: "high"}, {Effort: "high"}} {
-		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); !errors.Is(err, store.ErrInvalidRepoConfig) {
-			t.Errorf("%+v: Configure() = %v, want ErrInvalidRepoConfig", o, err)
-		}
+	o := store.WatchOverrides{ApprovalMode: store.ApprovalManual}
+	cfg, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now)
+	if err != nil {
+		t.Fatalf("Configure() = %v", err)
+	}
+	if !reflect.DeepEqual(cfg.Overrides, o) {
+		t.Fatalf("overrides = %+v, want %+v", cfg.Overrides, o)
 	}
 }
 
@@ -136,21 +164,5 @@ func TestTheAgentIsStoredWithTheIDsOfTheManifest(t *testing.T) {
 	}
 	if cfg.Overrides.Model != "opus" || cfg.Overrides.Effort != "high" {
 		t.Fatalf("overrides = %+v, want model opus and effort high", cfg.Overrides)
-	}
-}
-
-func TestAnUnknownProviderIsRefused(t *testing.T) {
-	fx := newFixture(t)
-	for _, provider := range []string{"gemini", "self"} {
-		o := store.WatchOverrides{Provider: provider}
-		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); !errors.Is(err, store.ErrInvalidRepoConfig) {
-			t.Errorf("provider %q: Configure() = %v, want ErrInvalidRepoConfig", provider, err)
-		}
-	}
-	for _, provider := range []string{"", "claude", "copilot"} {
-		o := store.WatchOverrides{Provider: provider}
-		if _, err := Configure(context.Background(), fx.st, fx.repo, Change{Overrides: &o}, fx.now); err != nil {
-			t.Errorf("provider %q: Configure() = %v", provider, err)
-		}
 	}
 }

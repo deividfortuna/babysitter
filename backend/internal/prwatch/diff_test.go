@@ -305,24 +305,38 @@ func TestAFailedRunTakesTheJobOfItsOwnRun(t *testing.T) {
 	}
 }
 
-func TestDiffRecordsBehindForANewHeadThatIsStillBehind(t *testing.T) {
+func TestDiffRecordsTheStateOfANewHeadOnceGitHubComputedIt(t *testing.T) {
 	t.Parallel()
-	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
-	s := greenSnapshot("abc")
-	s.PR.MergeableState = "behind"
-	_, prev := Diff(State{}, s, now)
-
-	s.PR.HeadSHA = "def"
-	s.PR.MergeableState = "unknown"
-	items, prev := Diff(prev, s, now)
-	if slices.ContainsFunc(items, isBehind) {
-		t.Fatalf("activity = %v, want no behind row while GitHub computes the state", items)
+	cases := []struct {
+		state store.MergeableState
+		kind  store.ActivityKind
+	}{
+		{state: "behind", kind: store.ActivityBehind},
+		{state: "dirty", kind: store.ActivityConflict},
 	}
+	for _, c := range cases {
+		t.Run(string(c.state), func(t *testing.T) {
+			t.Parallel()
+			now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
+			ofKind := func(a store.Activity) bool { return a.Kind == c.kind }
+			s := greenSnapshot("abc")
+			s.PR.MergeableState = c.state
+			_, prev := Diff(State{}, s, now)
 
-	s.PR.MergeableState = "behind"
-	items, _ = Diff(prev, s, now)
-	if !slices.ContainsFunc(items, func(a store.Activity) bool { return a.Ref == "behind@def" }) {
-		t.Fatalf("activity = %v, want behind@def: the new head is still behind", items)
+			s.PR.HeadSHA = "def"
+			s.PR.MergeableState = "unknown"
+			items, prev := Diff(prev, s, now)
+			if slices.ContainsFunc(items, ofKind) {
+				t.Fatalf("activity = %v, want no %s row while GitHub computes the state", items, c.kind)
+			}
+
+			s.PR.MergeableState = c.state
+			items, _ = Diff(prev, s, now)
+			want := string(c.kind) + "@def"
+			if !slices.ContainsFunc(items, func(a store.Activity) bool { return a.Ref == want }) {
+				t.Fatalf("activity = %v, want %s: the new head is still %s", items, want, c.state)
+			}
+		})
 	}
 }
 
@@ -343,23 +357,5 @@ func TestDiffRecordsBehindForABlockedBranchBehindItsBase(t *testing.T) {
 	}
 	if next.MergeableState != "blocked" {
 		t.Fatalf("mergeable state = %q, want what GitHub reports", next.MergeableState)
-	}
-}
-
-func TestDiffRecordsAConflictForANewHeadThatStillConflicts(t *testing.T) {
-	t.Parallel()
-	now := time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC)
-	s := greenSnapshot("abc")
-	s.PR.MergeableState = "dirty"
-	_, prev := Diff(State{}, s, now)
-
-	s.PR.HeadSHA = "def"
-	s.PR.MergeableState = "unknown"
-	_, prev = Diff(prev, s, now)
-
-	s.PR.MergeableState = "dirty"
-	items, _ := Diff(prev, s, now)
-	if !slices.ContainsFunc(items, func(a store.Activity) bool { return a.Ref == "conflict@def" }) {
-		t.Fatalf("activity = %v, want conflict@def: the new head still conflicts", items)
 	}
 }

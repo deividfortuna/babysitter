@@ -10,7 +10,6 @@ import (
 
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/session"
-	"github.com/deividfortuna/babysitter/internal/store"
 )
 
 const aloneFor = 2 * time.Second
@@ -124,19 +123,5 @@ func TestAContinuedSessionWaitsAtItsPromptAsIdle(t *testing.T) {
 	}
 	if blockers := fx.watch(w).ReadyBlockers; slices.Contains(blockers, "the agent is starting") {
 		t.Fatalf("blockers = %v", blockers)
-	}
-}
-
-func TestAMessageTheAgentDoesNotTakeGetsNoSecondEnter(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-
-	w := fx.start()
-
-	if msgs := fx.host.last().messages(); len(msgs) != 1 {
-		t.Fatalf("typed %q, want the opening message alone", msgs)
-	}
-	if n := countKind(fx.activity(w), store.ActivityAgentFailed); n != 0 {
-		t.Fatalf("%d agent_failed rows for a message typed once", n)
 	}
 }

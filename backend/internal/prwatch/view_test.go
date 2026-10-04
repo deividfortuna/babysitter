@@ -84,28 +84,6 @@ func TestViewIsNotChangedByTheRestOfThePoll(t *testing.T) {
 	}
 }
 
-func TestViewWaitsForTheLockOfTheWatch(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-
-	unlock := fx.svc.locks.Lock(w.ID)
-	done := make(chan error, 1)
-	go func() {
-		_, err := fx.svc.View(context.Background(), w.ID)
-		done <- err
-	}()
-	testutil.Eventually(t, func() bool { return fx.lockUsers(w.ID) >= 2 }, "View to wait on the lock of the watch")
-	if _, err := fx.svc.stop(context.Background(), w.ID, store.StopUser, "", StopOptions{}); err != nil {
-		unlock()
-		t.Fatal(err)
-	}
-	unlock()
-	if err := <-done; !errors.Is(err, ErrWatchStopped) {
-		t.Fatalf("View() during a stop error = %v, want ErrWatchStopped", err)
-	}
-}
-
 func TestDiffReadsTheDiffOfThePullRequestFromGitHub(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
@@ -130,26 +108,41 @@ func TestDiffReadsTheDiffOfThePullRequestFromGitHub(t *testing.T) {
 	}
 }
 
-func TestDiffWaitsForAStopThatHoldsTheLockOfTheWatch(t *testing.T) {
+func TestAReadWaitsForAStopThatHoldsTheLockOfTheWatch(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	fx.update(func() { fx.pr.Diff = "diff --git a/x.go b/x.go\n+new\n" })
-	w := fx.start()
-
-	unlock := fx.svc.locks.Lock(w.ID)
-	done := make(chan error, 1)
-	go func() {
-		_, err := fx.svc.Diff(context.Background(), w.ID)
-		done <- err
-	}()
-	testutil.Eventually(t, func() bool { return fx.lockUsers(w.ID) >= 2 }, "Diff to wait on the lock of the watch")
-	if _, err := fx.svc.stop(context.Background(), w.ID, store.StopUser, "", StopOptions{}); err != nil {
-		unlock()
-		t.Fatal(err)
+	cases := []struct {
+		name string
+		read func(svc *Service, id int64) error
+	}{
+		{name: "View", read: func(svc *Service, id int64) error {
+			_, err := svc.View(context.Background(), id)
+			return err
+		}},
+		{name: "Diff", read: func(svc *Service, id int64) error {
+			_, err := svc.Diff(context.Background(), id)
+			return err
+		}},
 	}
-	unlock()
-	if err := <-done; !errors.Is(err, ErrWatchStopped) {
-		t.Fatalf("Diff() during a stop error = %v, want ErrWatchStopped", err)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			fx.update(func() { fx.pr.Diff = "diff --git a/x.go b/x.go\n+new\n" })
+			w := fx.start()
+
+			unlock := fx.svc.locks.Lock(w.ID)
+			done := make(chan error, 1)
+			go func() { done <- c.read(fx.svc, w.ID) }()
+			testutil.Eventually(t, func() bool { return fx.lockUsers(w.ID) >= 2 }, "%s to wait on the lock of the watch", c.name)
+			if _, err := fx.svc.stop(context.Background(), w.ID, store.StopUser, "", StopOptions{}); err != nil {
+				unlock()
+				t.Fatal(err)
+			}
+			unlock()
+			if err := <-done; !errors.Is(err, ErrWatchStopped) {
+				t.Fatalf("%s() during a stop error = %v, want ErrWatchStopped", c.name, err)
+			}
+		})
 	}
 }
 

@@ -142,32 +142,72 @@ func TestEffortErrorNamesTheLevelsOfThatModel(t *testing.T) {
 	}
 }
 
-func TestNormalizeHostedAgentRefusesAnEffortTheModelDoesNotTake(t *testing.T) {
+func TestNormalizeHostedAgent(t *testing.T) {
 	t.Parallel()
-	if _, _, err := NormalizeHostedAgent(ProviderClaude, "haiku", "high"); !errors.Is(err, ErrBadEffort) {
-		t.Fatalf("NormalizeHostedAgent() = %v, want ErrBadEffort", err)
+	cases := []struct {
+		name       string
+		provider   string
+		model      string
+		effort     string
+		wantModel  string
+		wantEffort string
+		wantErr    error
+	}{
+		{name: "the IDs of the manifest", provider: ProviderClaude, model: " Opus ", effort: " High ", wantModel: "opus", wantEffort: "high"},
+		{name: "an effort the model does not take", provider: ProviderClaude, model: "haiku", effort: "high", wantErr: ErrBadEffort},
+		{name: "a self watch", provider: ProviderSelf, wantErr: ErrBadProvider},
+		{name: "no provider", model: "opus", wantErr: ErrBadProvider},
+		{name: "an unknown provider", provider: "gemini", wantErr: ErrBadProvider},
 	}
-	if _, _, err := NormalizeHostedAgent(ProviderClaude, "opus", "high"); err != nil {
-		t.Fatalf("NormalizeHostedAgent() = %v, want nil", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			model, effort, err := NormalizeHostedAgent(tc.provider, tc.model, tc.effort)
+			if !errors.Is(err, tc.wantErr) {
+				t.Fatalf("NormalizeHostedAgent(%q, %q, %q) error = %v, want %v", tc.provider, tc.model, tc.effort, err, tc.wantErr)
+			}
+			got, want := [2]string{model, effort}, [2]string{tc.wantModel, tc.wantEffort}
+			if got != want {
+				t.Fatalf("NormalizeHostedAgent(%q, %q, %q) = %q, want %q", tc.provider, tc.model, tc.effort, got, want)
+			}
+		})
 	}
 }
 
-func TestNormalizeHostedAgentGivesTheIDsOfTheManifest(t *testing.T) {
+func TestAManifestThatDoesNotHoldTogetherIsRefused(t *testing.T) {
 	t.Parallel()
-	model, effort, err := NormalizeHostedAgent(ProviderClaude, " Opus ", " High ")
-	if err != nil {
-		t.Fatalf("NormalizeHostedAgent() = %v", err)
+	cases := []struct {
+		name string
+		raw  string
+		want string
+	}{
+		{
+			"a model listed twice",
+			`{"effortSets":{},"providers":[{"id":"copilot","label":"Copilot","models":[{"id":"auto","label":"Auto"},{"id":"auto","label":"Auto"}]}]}`,
+			`"auto" of copilot is listed twice`,
+		},
+		{
+			"an unknown effort set",
+			`{"effortSets":{},"providers":[{"id":"claude","label":"Claude","models":[{"id":"","label":"Default","efforts":"missing"}]}]}`,
+			`"missing"`,
+		},
+		{
+			"an unknown effort level",
+			`{"effortLabels":{"low":"Low"},"effortSets":{"some":["low","ultra"]},"providers":[]}`,
+			`"ultra"`,
+		},
 	}
-	if model != "opus" || effort != "high" {
-		t.Fatalf("NormalizeHostedAgent() = %q, %q, want opus and high", model, effort)
-	}
-}
-
-func TestAManifestThatListsAModelTwiceIsRefused(t *testing.T) {
-	t.Parallel()
-	raw := `{"effortSets":{},"providers":[{"id":"copilot","label":"Copilot","models":[{"id":"auto","label":"Auto"},{"id":"auto","label":"Auto"}]}]}`
-	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"auto" of copilot is listed twice`) {
-		t.Fatalf("parseManifest() error = %v, want the repeated model named", err)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			_, err := parseManifest([]byte(tc.raw))
+			if err == nil {
+				t.Fatal("parseManifest() error = nil, want a refusal")
+			}
+			if !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("parseManifest() error = %v, want it to name %s", err, tc.want)
+			}
+		})
 	}
 }
 
@@ -197,21 +237,5 @@ func TestCopilotOffersTheEffortsOfEachModel(t *testing.T) {
 		if !slices.Equal(got, tc.efforts) {
 			t.Errorf("efforts of %s = %v, want %v", tc.model, got, tc.efforts)
 		}
-	}
-}
-
-func TestAManifestThatNamesAnUnknownEffortSetIsRefused(t *testing.T) {
-	t.Parallel()
-	raw := `{"effortSets":{},"providers":[{"id":"claude","label":"Claude","models":[{"id":"","label":"Default","efforts":"missing"}]}]}`
-	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"missing"`) {
-		t.Fatalf("parseManifest() error = %v, want the unknown set named", err)
-	}
-}
-
-func TestAManifestThatNamesAnUnknownEffortLevelIsRefused(t *testing.T) {
-	t.Parallel()
-	raw := `{"effortLabels":{"low":"Low"},"effortSets":{"some":["low","ultra"]},"providers":[]}`
-	if _, err := parseManifest([]byte(raw)); err == nil || !strings.Contains(err.Error(), `"ultra"`) {
-		t.Fatalf("parseManifest() error = %v, want the unknown level named", err)
 	}
 }

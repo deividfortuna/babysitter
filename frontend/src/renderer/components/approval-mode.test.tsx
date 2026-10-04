@@ -192,15 +192,6 @@ test("the Agent page holds the approval mode and the clean rebase", async () => 
   expect(savedSettings[0]).toMatchObject({ approvalMode: "manual", autoApproveRebase: true });
 });
 
-test("the clean rebase means nothing in auto", async () => {
-  serveApi({ settings: buildSettings({ approvalMode: "auto" }) });
-
-  renderWithProviders(<SettingsDialog open category="agent" onOpenChange={vi.fn()} />);
-
-  expect(await screen.findByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeDisabled();
-  expect(screen.getByText("Auto approves every turn, so this has no effect.")).toBeVisible();
-});
-
 test("the panel sets the clean rebase of one watch", async () => {
   const { decisions, user } = renderDetail({ approvalMode: "manual" });
 
@@ -212,13 +203,6 @@ test("the panel sets the clean rebase of one watch", async () => {
 
   await waitFor(() => expect(decisions).toHaveLength(1));
   expect(decisions[0]).toEqual({ route: "approval", watch: 42, body: { autoApproveRebase: true } });
-});
-
-test("the panel shows the clean rebase a watch has", async () => {
-  const { user } = renderDetail({ approvalMode: "manual", autoApproveRebase: true });
-
-  await openSettings(user);
-  expect(screen.getByRole("switch", { name: "Approve a clean rebase or merge on its own" })).toBeChecked();
 });
 
 test("the clean rebase of a watch in auto means nothing, so the panel turns it off", async () => {

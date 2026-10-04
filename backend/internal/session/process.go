@@ -12,16 +12,16 @@ import (
 )
 
 const (
-	defaultRows  = 30
-	defaultCols  = 180
-	keepBytes    = 256 << 10
-	maxLogBytes  = 4 << 20
-	logFileMode  = 0o600
-	stopGrace    = 5 * time.Second
-	stopPoll     = 50 * time.Millisecond
-	readyPoll    = 100 * time.Millisecond
-	interruptKey = "\x03"
-	submitKey    = "\r"
+	defaultRows      = 30
+	defaultCols      = 180
+	keepBytes        = 256 << 10
+	maxLogBytes      = 4 << 20
+	logFileMode      = 0o600
+	defaultStopGrace = 5 * time.Second
+	stopPoll         = 50 * time.Millisecond
+	readyPoll        = 100 * time.Millisecond
+	interruptKey     = "\x03"
+	submitKey        = "\r"
 )
 
 // A terminal is the master side of the pseudo terminal of one agent: the
@@ -36,10 +36,11 @@ type terminal interface {
 // agent and gives the process its terminal, its pid and the three calls
 // that differ by platform; the rest is shared.
 type process struct {
-	term   terminal
-	pid    int
-	log    *sessionLog
-	timing Timing
+	term      terminal
+	pid       int
+	log       *sessionLog
+	timing    Timing
+	stopGrace time.Duration
 
 	// wait returns once the agent exited, with its exit error.
 	wait func() error
@@ -66,6 +67,13 @@ func checkSpec(spec Spec) error {
 		return errors.New("a working directory is required")
 	}
 	return nil
+}
+
+func (h *PTY) graceBeforeKill() time.Duration {
+	if h.stopGrace > 0 {
+		return h.stopGrace
+	}
+	return defaultStopGrace
 }
 
 func size(spec Spec) (rows, cols uint16) {
@@ -302,7 +310,7 @@ func (p *process) Stop(ctx context.Context) error {
 		return nil
 	}
 	p.terminate()
-	deadline := time.Now().Add(stopGrace)
+	deadline := time.Now().Add(p.stopGrace)
 	for time.Now().Before(deadline) {
 		if p.exited() {
 			return nil

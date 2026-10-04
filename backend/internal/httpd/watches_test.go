@@ -269,8 +269,14 @@ func TestWatchRoutes(t *testing.T) {
 	if rec := call(t, h, http.MethodPost, "/watches/1/stop", `{"keepWorktree":true}`, nil); rec.Code != http.StatusOK {
 		t.Fatalf("stop keeping the worktree: %d %s", rec.Code, rec.Body)
 	}
-	if got := fw.stopped(); len(got) != 2 || got[0].KeepWorktree != nil || got[1].KeepWorktree == nil || !*got[1].KeepWorktree {
-		t.Fatalf("stops = %+v", got)
+	if rec := call(t, h, http.MethodPost, "/watches/1/stop", `{"keepWorktree":false}`, nil); rec.Code != http.StatusOK {
+		t.Fatalf("stop removing the worktree: %d %s", rec.Code, rec.Body)
+	}
+	if got := fw.stopped(); len(got) != 3 || got[0].KeepWorktree != nil || got[1].KeepWorktree == nil || !*got[1].KeepWorktree {
+		t.Fatalf("stops = %+v, want the worktree left to the rule of the watch, then kept", got)
+	}
+	if got := fw.stopped()[2].KeepWorktree; got == nil || *got {
+		t.Fatalf("keepWorktree = %v, want the false the body set", got)
 	}
 	if rec := call(t, h, http.MethodPost, "/watches/1/stop", `{"bogus":true}`, nil); rec.Code != http.StatusBadRequest {
 		t.Fatalf("stop with an unknown field: %d %s", rec.Code, rec.Body)
@@ -862,17 +868,6 @@ func TestAnOversizedBodyClosesTheConnection(t *testing.T) {
 	}
 	if !resp.Close {
 		t.Fatalf("the server kept the connection open after a body over the limit: Connection=%q", resp.Header.Get("Connection"))
-	}
-}
-
-func TestStartWatchRejectsNegativeApprovals(t *testing.T) {
-	t.Parallel()
-	h, _, fw := newTestAPI(t)
-	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#3","sourceDir":"/src","approvalsRequired":-1}`, nil); rec.Code != http.StatusBadRequest || !strings.Contains(rec.Body.String(), "approvalsRequired must be 0 or more") {
-		t.Fatalf("start: %d %s", rec.Code, rec.Body)
-	}
-	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#3","sourceDir":"/src"}`, nil); rec.Code != http.StatusCreated || len(fw.starts) != 1 || fw.starts[0].ApprovalsRequired.Set {
-		t.Fatalf("start without a count: %d %s, starts %+v", rec.Code, rec.Body, fw.starts)
 	}
 }
 

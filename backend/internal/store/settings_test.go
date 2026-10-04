@@ -6,6 +6,7 @@ import (
 	"errors"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 	"time"
 
@@ -22,6 +23,43 @@ func TestSettingsOfAFreshDatabaseAreTheDefaults(t *testing.T) {
 	}
 	if !reflect.DeepEqual(got, DefaultSettings()) {
 		t.Fatalf("Settings() = %+v, want the defaults %+v", got, DefaultSettings())
+	}
+	d := DefaultSettings()
+	defaults := map[string]bool{
+		"the notifications on": d.NotificationsEnabled,
+		"the notifications only while the app is in the background": d.NotificationsBackgroundOnly,
+		"every kind with a sound":                                   len(d.SilentNotificationKinds) == 0,
+		"every kind shown":                                          len(d.MutedNotificationKinds) == 0,
+		"the author releases each turn":                             d.ApprovalMode == ApprovalManual,
+		"no rebase approved on its own":                             !d.AutoApproveRebase,
+	}
+	for want, holds := range defaults {
+		if !holds {
+			t.Errorf("DefaultSettings() = %+v, want %s", d, want)
+		}
+	}
+}
+
+func notificationKindFields() map[string]struct {
+	kinds  func(*Settings) *[]NotificationKind
+	seed   string
+	stored string
+} {
+	return map[string]struct {
+		kinds  func(*Settings) *[]NotificationKind
+		seed   string
+		stored string
+	}{
+		"muted": {
+			kinds:  func(in *Settings) *[]NotificationKind { return &in.MutedNotificationKinds },
+			seed:   `UPDATE settings SET muted_notification_kinds = 'review,rumour'`,
+			stored: `SELECT muted_notification_kinds FROM settings WHERE id = 1`,
+		},
+		"silent": {
+			kinds:  func(in *Settings) *[]NotificationKind { return &in.SilentNotificationKinds },
+			seed:   `UPDATE settings SET silent_notification_kinds = 'review,rumour'`,
+			stored: `SELECT silent_notification_kinds FROM settings WHERE id = 1`,
+		},
 	}
 }
 
@@ -92,23 +130,36 @@ func TestSaveSettingsRejectsValuesTheDaemonCannotRun(t *testing.T) {
 	s, _ := openTemp(t)
 	ctx := context.Background()
 	approvals := -1
-	cases := map[string]Settings{
-		"poll interval below the floor":  {PollInterval: time.Second, WatchInterval: time.Minute},
-		"watch interval below the floor": {PollInterval: time.Minute, WatchInterval: time.Second},
-		"poll interval above the roof":   {PollInterval: 25 * time.Hour, WatchInterval: time.Minute},
-		"watch interval above the roof":  {PollInterval: time.Minute, WatchInterval: 25 * time.Hour},
-		"merge method unknown":           {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, MergeMethod: "fast-forward"},
-		"approvals below zero":           {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, ApprovalsRequired: &approvals},
-		"longest below the watch":        {PollInterval: time.Minute, WatchInterval: 5 * time.Minute, WatchMaxInterval: time.Minute},
-		"longest above the roof":         {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: 25 * time.Hour},
-		"check wait below the floor":     {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, CheckMaxInterval: time.Second},
-		"check wait above the roof":      {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, CheckMaxInterval: 25 * time.Hour},
-		"branch update unknown":          {PollInterval: time.Minute, WatchInterval: time.Minute, WatchMaxInterval: time.Hour, ApprovalMode: ApprovalAuto, Provider: "claude", BranchUpdate: "squash"},
+	cases := map[string]struct {
+		change func(*Settings)
+		reason string
+	}{
+		"poll interval below the floor":  {func(in *Settings) { in.PollInterval = time.Second }, "the repository poll interval"},
+		"poll interval above the roof":   {func(in *Settings) { in.PollInterval = 25 * time.Hour }, "the repository poll interval"},
+		"watch interval below the floor": {func(in *Settings) { in.WatchInterval = time.Second }, "the watch poll interval must"},
+		"watch interval above the roof":  {func(in *Settings) { in.WatchInterval = 25 * time.Hour }, "the watch poll interval must"},
+		"longest below the watch":        {func(in *Settings) { in.WatchMaxInterval = time.Minute }, "the longest watch poll interval"},
+		"longest above the roof":         {func(in *Settings) { in.WatchMaxInterval = 25 * time.Hour }, "the longest watch poll interval"},
+		"check wait below the floor":     {func(in *Settings) { in.CheckMaxInterval = time.Second }, "the longest check read interval"},
+		"check wait above the roof":      {func(in *Settings) { in.CheckMaxInterval = 25 * time.Hour }, "the longest check read interval"},
+		"merge method unknown":           {func(in *Settings) { in.MergeMethod = "fast-forward" }, "unknown merge method"},
+		"provider unknown":               {func(in *Settings) { in.Provider = "self" }, "unknown provider"},
+		"approval mode unknown":          {func(in *Settings) { in.ApprovalMode = "sometimes" }, "unknown approval mode"},
+		"branch update unknown":          {func(in *Settings) { in.BranchUpdate = "squash" }, "unknown branch update"},
+		"approvals below zero":           {func(in *Settings) { in.ApprovalsRequired = &approvals }, "the approvals must be 0 or more"},
+		"muted kind unknown":             {func(in *Settings) { in.MutedNotificationKinds = []NotificationKind{"rumour"} }, "unknown notification kind"},
+		"silent kind unknown":            {func(in *Settings) { in.SilentNotificationKinds = []NotificationKind{"rumour"} }, "unknown notification kind"},
 	}
-	for name, in := range cases {
+	for name, c := range cases {
 		t.Run(name, func(t *testing.T) {
-			if _, err := s.SaveSettings(ctx, in); err == nil {
-				t.Fatalf("SaveSettings(%+v) accepted the value, want an error", in)
+			in := DefaultSettings()
+			c.change(&in)
+			_, err := s.SaveSettings(ctx, in)
+			if !errors.Is(err, ErrInvalidSettings) {
+				t.Fatalf("SaveSettings(%+v) error = %v, want one that wraps ErrInvalidSettings", in, err)
+			}
+			if !strings.Contains(err.Error(), c.reason) {
+				t.Fatalf("SaveSettings(%+v) error = %v, want the reason %q", in, err, c.reason)
 			}
 		})
 	}
@@ -129,104 +180,66 @@ func TestSaveSettingsPublishesTheChange(t *testing.T) {
 	}
 }
 
-func TestDefaultSettingsShowNotificationsWithASound(t *testing.T) {
+func TestSaveSettingsOrdersTheNotificationKindsAndDropsTheRepeats(t *testing.T) {
 	t.Parallel()
-	got := DefaultSettings()
-	if !got.NotificationsEnabled {
-		t.Fatalf("DefaultSettings() = %+v, want the notifications on", got)
-	}
-	if len(got.SilentNotificationKinds) != 0 {
-		t.Fatalf("DefaultSettings() silences %v, want every kind with a sound", got.SilentNotificationKinds)
-	}
-	if !got.NotificationsBackgroundOnly {
-		t.Fatalf("DefaultSettings() = %+v, want the notifications only while the app is in the background", got)
+	for name, field := range notificationKindFields() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			s, _ := openTemp(t)
+			ctx := context.Background()
+			next := DefaultSettings()
+			*field.kinds(&next) = []NotificationKind{NotificationMerge, NotificationReview, NotificationMerge}
+
+			saved, err := s.SaveSettings(ctx, next)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := []NotificationKind{NotificationReview, NotificationMerge}
+			if got := *field.kinds(&saved); !reflect.DeepEqual(got, want) {
+				t.Fatalf("SaveSettings returned %v, want %v", got, want)
+			}
+			read, err := s.Settings(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if got := *field.kinds(&read); !reflect.DeepEqual(got, want) {
+				t.Fatalf("Settings() = %v, want %v", got, want)
+			}
+		})
 	}
 }
 
-func TestSaveSettingsTurnsTheNotificationsOff(t *testing.T) {
+func TestSettingsLeaveOutAnUnknownKindOnReadAndKeepItOnSave(t *testing.T) {
 	t.Parallel()
-	s, _ := openTemp(t)
-	ctx := context.Background()
-	want := DefaultSettings()
-	want.NotificationsEnabled = false
-	want.NotificationsBackgroundOnly = false
+	for name, field := range notificationKindFields() {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			s, _ := openTemp(t)
+			ctx := context.Background()
+			if _, err := s.db.ExecContext(ctx, field.seed); err != nil {
+				t.Fatal(err)
+			}
+			got, err := s.Settings(ctx)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if want := []NotificationKind{NotificationReview}; !reflect.DeepEqual(*field.kinds(&got), want) {
+				t.Fatalf("Settings() holds %v, want %v", *field.kinds(&got), want)
+			}
 
-	if _, err := s.SaveSettings(ctx, want); err != nil {
-		t.Fatal(err)
-	}
-	got, err := s.Settings(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.NotificationsEnabled {
-		t.Fatalf("Settings() = %+v, want the notifications off", got)
-	}
-	if got.NotificationsBackgroundOnly {
-		t.Fatalf("Settings() = %+v, want the notifications shown while the app has the focus too", got)
-	}
-}
+			*field.kinds(&got) = []NotificationKind{NotificationChecks}
+			if _, err := s.SaveSettings(ctx, got); err != nil {
+				t.Fatalf("SaveSettings() of what Settings() returned failed: %v", err)
+			}
 
-func TestSaveSettingsKeepsTheSilentNotificationKinds(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	ctx := context.Background()
-	next := DefaultSettings()
-	next.SilentNotificationKinds = []NotificationKind{NotificationMerge, NotificationReview, NotificationMerge}
-
-	saved, err := s.SaveSettings(ctx, next)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []NotificationKind{NotificationReview, NotificationMerge}
-	if !reflect.DeepEqual(saved.SilentNotificationKinds, want) {
-		t.Fatalf("SaveSettings returned %v, want %v", saved.SilentNotificationKinds, want)
-	}
-	got, err := s.Settings(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got.SilentNotificationKinds, want) {
-		t.Fatalf("Settings() = %v, want %v", got.SilentNotificationKinds, want)
-	}
-}
-
-func TestSaveSettingsRejectsAnUnknownSilentNotificationKind(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	next := DefaultSettings()
-	next.SilentNotificationKinds = []NotificationKind{"rumour"}
-
-	if _, err := s.SaveSettings(context.Background(), next); !errors.Is(err, ErrInvalidSettings) {
-		t.Fatalf("SaveSettings error = %v, want one that wraps ErrInvalidSettings", err)
-	}
-}
-
-func TestSaveSettingsKeepsASilentKindThisBuildDoesNotKnow(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	ctx := context.Background()
-	if _, err := s.db.ExecContext(ctx, `UPDATE settings SET silent_notification_kinds = 'merge,rumour'`); err != nil {
-		t.Fatal(err)
-	}
-	got, err := s.Settings(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := []NotificationKind{NotificationMerge}; !reflect.DeepEqual(got.SilentNotificationKinds, want) {
-		t.Fatalf("Settings() silences %v, want %v", got.SilentNotificationKinds, want)
-	}
-
-	got.SilentNotificationKinds = []NotificationKind{NotificationChecks}
-	if _, err := s.SaveSettings(ctx, got); err != nil {
-		t.Fatal(err)
-	}
-
-	var silent string
-	if err := s.db.QueryRowContext(ctx, `SELECT silent_notification_kinds FROM settings WHERE id = 1`).Scan(&silent); err != nil {
-		t.Fatal(err)
-	}
-	if silent != "checks,rumour" {
-		t.Fatalf("the row holds %q, want the unknown kind kept beside the new one", silent)
+			var stored string
+			if err := s.db.QueryRowContext(ctx, field.stored).Scan(&stored); err != nil {
+				t.Fatal(err)
+			}
+			if stored != "checks,rumour" {
+				t.Fatalf("the row holds %q, want the unknown kind kept beside the new one", stored)
+			}
+		})
 	}
 }
 
@@ -293,63 +306,6 @@ func TestUpgradeKeepsTheNotificationsSilentWhenTheSoundWasOff(t *testing.T) {
 	}
 }
 
-func TestSaveSettingsKeepsTheMutedNotificationKinds(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	ctx := context.Background()
-	want := DefaultSettings()
-	want.MutedNotificationKinds = []NotificationKind{NotificationReview, NotificationChecks}
-
-	saved, err := s.SaveSettings(ctx, want)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(saved.MutedNotificationKinds, want.MutedNotificationKinds) {
-		t.Fatalf("SaveSettings returned %v, want %v", saved.MutedNotificationKinds, want.MutedNotificationKinds)
-	}
-	got, err := s.Settings(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !reflect.DeepEqual(got.MutedNotificationKinds, want.MutedNotificationKinds) {
-		t.Fatalf("Settings() = %v, want %v", got.MutedNotificationKinds, want.MutedNotificationKinds)
-	}
-}
-
-func TestSaveSettingsOrdersTheMutedKindsAndDropsTheRepeats(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	next := DefaultSettings()
-	next.MutedNotificationKinds = []NotificationKind{NotificationMerge, NotificationAgent, NotificationMerge}
-
-	saved, err := s.SaveSettings(context.Background(), next)
-	if err != nil {
-		t.Fatal(err)
-	}
-	want := []NotificationKind{NotificationAgent, NotificationMerge}
-	if !reflect.DeepEqual(saved.MutedNotificationKinds, want) {
-		t.Fatalf("SaveSettings returned %v, want %v", saved.MutedNotificationKinds, want)
-	}
-}
-
-func TestSaveSettingsRejectsAnUnknownNotificationKind(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	next := DefaultSettings()
-	next.MutedNotificationKinds = []NotificationKind{"rumour"}
-
-	if _, err := s.SaveSettings(context.Background(), next); !errors.Is(err, ErrInvalidSettings) {
-		t.Fatalf("SaveSettings error = %v, want one that wraps ErrInvalidSettings", err)
-	}
-}
-
-func TestDefaultSettingsMuteNoKind(t *testing.T) {
-	t.Parallel()
-	if got := DefaultSettings().MutedNotificationKinds; len(got) != 0 {
-		t.Fatalf("DefaultSettings() mutes %v, want every kind shown", got)
-	}
-}
-
 func TestShowsNotificationFollowsTheSwitchAndTheMutedKinds(t *testing.T) {
 	t.Parallel()
 	muted := DefaultSettings()
@@ -373,53 +329,6 @@ func TestShowsNotificationFollowsTheSwitchAndTheMutedKinds(t *testing.T) {
 				t.Fatalf("ShowsNotification(%q) = %t, want %t", c.kind, got, c.want)
 			}
 		})
-	}
-}
-
-func TestSettingsLeaveOutAMutedKindThisBuildDoesNotKnow(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	ctx := context.Background()
-	if _, err := s.db.ExecContext(ctx, `UPDATE settings SET muted_notification_kinds = 'review,rumour'`); err != nil {
-		t.Fatal(err)
-	}
-
-	got, err := s.Settings(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if want := []NotificationKind{NotificationReview}; !reflect.DeepEqual(got.MutedNotificationKinds, want) {
-		t.Fatalf("Settings() mutes %v, want %v", got.MutedNotificationKinds, want)
-	}
-	if _, err := s.SaveSettings(ctx, got); err != nil {
-		t.Fatalf("SaveSettings() of what Settings() returned failed: %v", err)
-	}
-}
-
-func TestSaveSettingsKeepsAMutedKindThisBuildDoesNotKnow(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	ctx := context.Background()
-	if _, err := s.db.ExecContext(ctx, `UPDATE settings SET muted_notification_kinds = 'review,rumour'`); err != nil {
-		t.Fatal(err)
-	}
-	got, err := s.Settings(ctx)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	got.NotificationsBackgroundOnly = true
-	got.MutedNotificationKinds = []NotificationKind{NotificationChecks}
-	if _, err := s.SaveSettings(ctx, got); err != nil {
-		t.Fatal(err)
-	}
-
-	var muted string
-	if err := s.db.QueryRowContext(ctx, `SELECT muted_notification_kinds FROM settings WHERE id = 1`).Scan(&muted); err != nil {
-		t.Fatal(err)
-	}
-	if muted != "checks,rumour" {
-		t.Fatalf("the row holds %q, want the unknown kind kept beside the new one", muted)
 	}
 }
 

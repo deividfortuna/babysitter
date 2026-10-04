@@ -42,73 +42,134 @@ func TestStartWithScreenReaderLaunchesThePlainTextInterface(t *testing.T) {
 	}
 }
 
-func TestStartTakesTheDefaultsOfTheSettings(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	approvals := 3
-	fx.settings(store.Settings{IncludeExisting: true, IncludeOwn: true, ApprovalsRequired: &approvals, MergeMethod: "rebase"})
+type startedWith struct {
+	Provider          string
+	Model             string
+	Effort            string
+	MergeMethod       string
+	ApprovalMode      store.ApprovalMode
+	ApprovalsRequired int
+	IncludeExisting   bool
+	IncludeOwn        bool
+	KeepWorktree      bool
+	AutoApproveRebase bool
+}
 
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if !w.IncludeExisting || !w.IncludeOwn || w.MergeMethod != "rebase" || w.ApprovalsRequired != 3 {
-		t.Fatalf("watch = %+v, want the defaults of the settings", w)
+func startedWithOf(w store.Watch) startedWith {
+	return startedWith{
+		Provider: w.Provider, Model: w.Model, Effort: w.Effort, MergeMethod: w.MergeMethod,
+		ApprovalMode: w.ApprovalMode, ApprovalsRequired: w.ApprovalsRequired,
+		IncludeExisting: w.IncludeExisting, IncludeOwn: w.IncludeOwn, KeepWorktree: w.KeepWorktree, AutoApproveRebase: w.AutoApproveRebase,
 	}
 }
 
-func TestStartTakesTheRepositoryDefaultOverASettingThatNamesAMethod(t *testing.T) {
+func TestStartTakesEachFieldFromTheLayerThatSetsIt(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	fx.settings(store.Settings{MergeMethod: "rebase"})
-
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
-		MergeMethod: new(""),
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
+	cases := []struct {
+		name     string
+		settings store.Settings
+		repo     *store.WatchOverrides
+		request  StartRequest
+		want     startedWith
+	}{
+		{
+			name: "the settings without a repository row",
+			settings: store.Settings{
+				Model: "sonnet", Effort: "high", ApprovalsRequired: new(3), MergeMethod: "rebase", ApprovalMode: store.ApprovalManual,
+				IncludeExisting: true, IncludeOwn: true, KeepWorktree: true, AutoApproveRebase: true,
+			},
+			want: startedWith{
+				Provider: ProviderClaude, Model: "sonnet", Effort: "high", MergeMethod: "rebase", ApprovalMode: store.ApprovalManual, ApprovalsRequired: 3,
+				IncludeExisting: true, IncludeOwn: true, KeepWorktree: true, AutoApproveRebase: true,
+			},
+		},
+		{
+			name: "the settings where the repository is silent",
+			settings: store.Settings{
+				Provider: ProviderCopilot, Model: "auto", ApprovalsRequired: new(3), MergeMethod: "rebase", ApprovalMode: store.ApprovalManual,
+				IncludeExisting: true, KeepWorktree: true, AutoApproveRebase: true,
+			},
+			repo: &store.WatchOverrides{IncludeOwn: new(true)},
+			want: startedWith{
+				Provider: ProviderCopilot, Model: "auto", MergeMethod: "rebase", ApprovalMode: store.ApprovalManual, ApprovalsRequired: 3,
+				IncludeExisting: true, IncludeOwn: true, KeepWorktree: true, AutoApproveRebase: true,
+			},
+		},
+		{
+			name: "the repository over the settings",
+			settings: store.Settings{
+				ApprovalsRequired: new(3), MergeMethod: "rebase", ApprovalMode: store.ApprovalManual,
+				IncludeExisting: true, IncludeOwn: true, KeepWorktree: true, AutoApproveRebase: true,
+			},
+			repo: &store.WatchOverrides{
+				Provider: ProviderCopilot, Model: "auto", MergeMethod: "squash", ApprovalMode: store.ApprovalAuto,
+				ApprovalsSet: true, Approvals: new(1),
+				IncludeExisting: new(false), IncludeOwn: new(false), KeepWorktree: new(false), AutoApproveRebase: new(false),
+			},
+			want: startedWith{Provider: ProviderCopilot, Model: "auto", MergeMethod: "squash", ApprovalMode: store.ApprovalAuto, ApprovalsRequired: 1},
+		},
+		{
+			name: "the request over the settings",
+			settings: store.Settings{
+				MergeMethod: "rebase", ApprovalMode: store.ApprovalManual, IncludeExisting: true, IncludeOwn: true, AutoApproveRebase: true,
+			},
+			request: StartRequest{
+				IncludeExisting: new(false), IncludeOwn: new(false), ApprovalsRequired: ApprovalsOf(0), MergeMethod: new("squash"),
+				ApprovalMode: new(store.ApprovalAuto),
+			},
+			want: startedWith{Provider: ProviderClaude, MergeMethod: "squash", ApprovalMode: store.ApprovalAuto, AutoApproveRebase: true},
+		},
+		{
+			name: "the request over the repository",
+			repo: &store.WatchOverrides{
+				Provider: ProviderCopilot, Model: "auto", MergeMethod: "squash", ApprovalMode: store.ApprovalManual,
+				ApprovalsSet: true, Approvals: new(4), KeepWorktree: new(true), IncludeExisting: new(true),
+			},
+			request: StartRequest{
+				Provider: ProviderClaude, MergeMethod: new("merge"), ApprovalMode: new(store.ApprovalAuto),
+				ApprovalsRequired: ApprovalsOf(0), KeepWorktree: new(false), IncludeExisting: new(false),
+			},
+			want: startedWith{Provider: ProviderClaude, MergeMethod: "merge", ApprovalMode: store.ApprovalAuto},
+		},
+		{
+			name:     "the rule of the branch over a setting that names a number",
+			settings: store.Settings{ApprovalsRequired: new(5)},
+			request:  StartRequest{ApprovalsRequired: ApprovalsFromBranch()},
+			want:     startedWith{Provider: ProviderClaude, ApprovalMode: store.ApprovalAuto, ApprovalsRequired: 1},
+		},
+		{
+			name:     "the repository default over a setting that names a method",
+			settings: store.Settings{MergeMethod: "rebase"},
+			request:  StartRequest{MergeMethod: new("")},
+			want:     startedWith{Provider: ProviderClaude, ApprovalMode: store.ApprovalAuto, ApprovalsRequired: 1},
+		},
+		{
+			name:    "a model without a provider on the provider of the chain",
+			repo:    &store.WatchOverrides{Provider: ProviderCopilot, Model: "auto"},
+			request: StartRequest{Model: "gpt-5.3-codex"},
+			want:    startedWith{Provider: ProviderCopilot, Model: "gpt-5.3-codex", ApprovalMode: store.ApprovalAuto, ApprovalsRequired: 1},
+		},
 	}
-	if w.MergeMethod != "" {
-		t.Fatalf("merge method = %q, want the repository default the request asked for", w.MergeMethod)
-	}
-}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			fx.settings(tc.settings)
+			if tc.repo != nil {
+				fx.repoOverrides(*tc.repo)
+			}
 
-func TestStartTakesTheRuleOfTheBranchOverASettingThatNamesANumber(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.repo.Approvals["main"] = 2
-	approvals := 5
-	fx.settings(store.Settings{ApprovalsRequired: &approvals})
+			req := tc.request
+			req.Target, req.SourceDir = snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, fx.dir
+			w, err := fx.svc.Start(context.Background(), req)
+			if err != nil {
+				t.Fatalf("Start() error = %v", err)
+			}
 
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
-		ApprovalsRequired: ApprovalsFromBranch(),
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if w.ApprovalsRequired != 2 {
-		t.Fatalf("approvals = %d, want the 2 the base branch asks for", w.ApprovalsRequired)
-	}
-}
-
-func TestStartKeepsWhatTheRequestAsksFor(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.settings(store.Settings{IncludeExisting: true, IncludeOwn: true, MergeMethod: "rebase"})
-
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
-		IncludeExisting: new(false), IncludeOwn: new(false), ApprovalsRequired: ApprovalsOf(0), MergeMethod: new("squash"),
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if w.IncludeExisting || w.IncludeOwn || w.MergeMethod != "squash" || w.ApprovalsRequired != 0 {
-		t.Fatalf("watch = %+v, want what the request asked for", w)
+			if got := startedWithOf(w); got != tc.want {
+				t.Fatalf("watch = %+v, want %+v", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -183,87 +244,6 @@ func (fx *fixture) repoOverrides(o store.WatchOverrides) {
 	}
 }
 
-func TestStartTakesTheRepositoryOverTheSettings(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	approvals := 3
-	fx.settings(store.Settings{
-		ApprovalsRequired: &approvals, MergeMethod: "rebase", ApprovalMode: store.ApprovalManual,
-		IncludeExisting: true, IncludeOwn: true, KeepWorktree: true, AutoApproveRebase: true,
-	})
-	fx.repoOverrides(store.WatchOverrides{
-		Provider: ProviderCopilot, Model: "auto", MergeMethod: "squash", ApprovalMode: store.ApprovalAuto,
-		ApprovalsSet: true, Approvals: new(1),
-		IncludeExisting: new(false), IncludeOwn: new(false), KeepWorktree: new(false), AutoApproveRebase: new(false),
-	})
-
-	w := fx.start()
-
-	if w.Provider != ProviderCopilot || w.Model != "auto" || w.MergeMethod != "squash" || w.ApprovalMode != store.ApprovalAuto ||
-		w.ApprovalsRequired != 1 || w.IncludeExisting || w.IncludeOwn || w.KeepWorktree || w.AutoApproveRebase {
-		t.Fatalf("watch = %+v, want what the repository says", w)
-	}
-}
-
-func TestStartTakesTheSettingsWhereTheRepositoryIsSilent(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	approvals := 3
-	fx.settings(store.Settings{
-		Provider: ProviderCopilot, Model: "auto", ApprovalsRequired: &approvals, MergeMethod: "rebase",
-		ApprovalMode: store.ApprovalManual, IncludeExisting: true, KeepWorktree: true, AutoApproveRebase: true,
-	})
-	fx.repoOverrides(store.WatchOverrides{IncludeOwn: new(true)})
-
-	w := fx.start()
-
-	if w.Provider != ProviderCopilot || w.Model != "auto" || w.MergeMethod != "rebase" || w.ApprovalMode != store.ApprovalManual ||
-		w.ApprovalsRequired != 3 || !w.IncludeExisting || !w.IncludeOwn || !w.KeepWorktree || !w.AutoApproveRebase {
-		t.Fatalf("watch = %+v, want the settings with the one field the repository sets", w)
-	}
-}
-
-func TestStartTakesTheRequestOverTheRepository(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.settings(store.Settings{})
-	fx.repoOverrides(store.WatchOverrides{
-		Provider: ProviderCopilot, Model: "auto", MergeMethod: "squash", ApprovalMode: store.ApprovalManual,
-		ApprovalsSet: true, Approvals: new(4), KeepWorktree: new(true), IncludeExisting: new(true),
-	})
-
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
-		Provider: ProviderClaude, MergeMethod: new("merge"), ApprovalMode: new(store.ApprovalAuto),
-		ApprovalsRequired: ApprovalsOf(0), KeepWorktree: new(false), IncludeExisting: new(false),
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if w.Provider != ProviderClaude || w.Model != "" || w.MergeMethod != "merge" || w.ApprovalMode != store.ApprovalAuto ||
-		w.ApprovalsRequired != 0 || w.KeepWorktree || w.IncludeExisting {
-		t.Fatalf("watch = %+v, want what the request asked for", w)
-	}
-}
-
-func TestAModelWithoutAProviderRunsOnTheProviderOfTheChain(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.settings(store.Settings{})
-	fx.repoOverrides(store.WatchOverrides{Provider: ProviderCopilot, Model: "auto"})
-
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
-		Model: "gpt-5.3-codex",
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if w.Provider != ProviderCopilot || w.Model != "gpt-5.3-codex" {
-		t.Fatalf("agent = %s %s, want copilot with the model of the request", w.Provider, w.Model)
-	}
-}
-
 func TestTheEffortComesFromTheLayerThatGivesTheModel(t *testing.T) {
 	t.Parallel()
 	cases := []struct {
@@ -295,22 +275,6 @@ func TestTheEffortComesFromTheLayerThatGivesTheModel(t *testing.T) {
 				t.Fatalf("agent = %q at %q effort, want %q at %q", w.Model, w.Effort, tc.model, tc.want)
 			}
 		})
-	}
-}
-
-func TestTheSettingsGiveTheEffortWithoutARepositoryAgent(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.settings(store.Settings{Model: "sonnet", Effort: "high"})
-
-	w, err := fx.svc.Start(context.Background(), StartRequest{
-		Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir,
-	})
-	if err != nil {
-		t.Fatalf("Start() error = %v", err)
-	}
-	if w.Model != "sonnet" || w.Effort != "high" {
-		t.Fatalf("agent = %q at %q effort, want the sonnet at high effort of the settings", w.Model, w.Effort)
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"context"
 	"net/http"
 	"reflect"
-	"slices"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -52,6 +52,12 @@ func TestGetSettingsAnswersTheDefaultsOfAFreshDaemon(t *testing.T) {
 	}
 	if got.ApprovalsRequired != nil {
 		t.Fatalf("approvals = %d, want none so the rule of the base branch decides", *got.ApprovalsRequired)
+	}
+	if got.MutedNotificationKinds == nil {
+		t.Fatal("muted kinds = null, want an empty list so the client never reads null")
+	}
+	if got.SilentNotificationKinds == nil {
+		t.Fatal("silent kinds = null, want an empty list so the client never reads null")
 	}
 }
 
@@ -102,18 +108,14 @@ func TestPutSettingsStoresTheModelAndTheEffortWithTheIDsOfTheManifest(t *testing
 
 func TestPutSettingsRejectsWhatTheDaemonCannotRun(t *testing.T) {
 	t.Parallel()
-	h, _, _, applied := newTestAPISettings(t)
+	h, st, _, applied := newTestAPISettings(t)
 	cases := map[string]string{
-		"interval below the floor":  `{"pollIntervalSeconds":1,"watchIntervalSeconds":60,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
-		"merge method unknown":      `{"pollIntervalSeconds":60,"watchIntervalSeconds":60,"mergeMethod":"fast-forward","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
-		"approvals below zero":      `{"pollIntervalSeconds":60,"watchIntervalSeconds":60,"approvalsRequired":-1,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false}`,
-		"longest below the watch":   `{"watchIntervalSeconds":600,"watchMaxIntervalSeconds":300}`,
-		"body that is not JSON":     `not json`,
-		"field the daemon has not":  `{"pollIntervalSeconds":60,"colour":"blue"}`,
-		"provider of your session":  `{"provider":"self"}`,
-		"model of another provider": `{"provider":"claude","model":"auto"}`,
-		"effort the model lacks":    `{"provider":"claude","model":"haiku","effort":"high"}`,
-		"branch update unknown":     `{"branchUpdate":"squash"}`,
+		"settings the store refuses": `{"pollIntervalSeconds":1}`,
+		"body that is not JSON":      `not json`,
+		"field the daemon has not":   `{"pollIntervalSeconds":60,"colour":"blue"}`,
+		"provider of your session":   `{"provider":"self"}`,
+		"model of another provider":  `{"provider":"claude","model":"auto"}`,
+		"effort the model lacks":     `{"provider":"claude","model":"haiku","effort":"high"}`,
 	}
 	for name, body := range cases {
 		t.Run(name, func(t *testing.T) {
@@ -124,6 +126,13 @@ func TestPutSettingsRejectsWhatTheDaemonCannotRun(t *testing.T) {
 	}
 	if len(applied()) != 0 {
 		t.Fatalf("the daemon was handed %+v, want nothing for a rejected write", applied())
+	}
+	stored, err := st.Settings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(stored, store.DefaultSettings()) {
+		t.Fatalf("stored = %+v, want the defaults kept after rejected writes", stored)
 	}
 }
 
@@ -164,8 +173,12 @@ func TestStartWatchHandsTheWatchServiceWhatTheBodySaid(t *testing.T) {
 	if got = fw.started(); !got[2].ApprovalsRequired.Set || got[2].ApprovalsRequired.Count != nil {
 		t.Fatalf("approvals = %v, want the rule of the base branch the body asked for", got[2].ApprovalsRequired)
 	}
-	if rec := call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#7","sourceDir":"/src","approvalsRequired":-1}`, nil); rec.Code != http.StatusBadRequest {
+	rec = call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#7","sourceDir":"/src","approvalsRequired":-1}`, nil)
+	if rec.Code != http.StatusBadRequest {
 		t.Fatalf("start watch with -1 approvals: %d %s, want 400", rec.Code, rec.Body)
+	}
+	if !strings.Contains(rec.Body.String(), "approvalsRequired must be 0 or more") {
+		t.Fatalf("start watch with -1 approvals: %s, want the reason", rec.Body)
 	}
 
 	rec = call(t, h, http.MethodPost, "/watches", `{"target":"octo/hello#5","sourceDir":"/src","mergeMethod":""}`, nil)
@@ -174,27 +187,6 @@ func TestStartWatchHandsTheWatchServiceWhatTheBodySaid(t *testing.T) {
 	}
 	if got = fw.started(); got[3].MergeMethod == nil || *got[3].MergeMethod != "" {
 		t.Fatalf("merge method = %v, want the repository default the body asked for", got[3].MergeMethod)
-	}
-}
-
-func TestStopWatchHandsTheWatchServiceWhatTheBodySaid(t *testing.T) {
-	t.Parallel()
-	h, st, fw, _ := newTestAPISettings(t)
-	seedWatch(t, st)
-
-	if rec := call(t, h, http.MethodPost, "/watches/1/stop", "", nil); rec.Code != http.StatusOK {
-		t.Fatalf("stop watch: %d %s", rec.Code, rec.Body)
-	}
-	if got := fw.stopped(); len(got) != 1 || got[0].KeepWorktree != nil {
-		t.Fatalf("stop options = %+v, want the worktree left to the rule of the watch", got)
-	}
-
-	if rec := call(t, h, http.MethodPost, "/watches/1/stop", `{"keepWorktree":false}`, nil); rec.Code != http.StatusOK {
-		t.Fatalf("stop watch: %d %s", rec.Code, rec.Body)
-	}
-	got := fw.stopped()
-	if len(got) != 2 || got[1].KeepWorktree == nil || *got[1].KeepWorktree {
-		t.Fatalf("stop options = %+v, want the worktree removed as the request asked", got)
 	}
 }
 
@@ -224,64 +216,57 @@ func TestPutSettingsMutesTheNotificationKindsTheBodyNames(t *testing.T) {
 func TestPutSettingsKeepsEveryFieldTheBodyLeavesOut(t *testing.T) {
 	t.Parallel()
 	h, st, _, _ := newTestAPISettings(t)
+	approvals := 2
+	want := store.Settings{
+		PollInterval:                2 * time.Minute,
+		WatchInterval:               time.Minute,
+		WatchMaxInterval:            20 * time.Minute,
+		CheckMaxInterval:            20 * time.Minute,
+		ApprovalsRequired:           &approvals,
+		MergeMethod:                 "squash",
+		IncludeExisting:             true,
+		IncludeOwn:                  true,
+		KeepWorktree:                true,
+		NotificationsEnabled:        true,
+		NotificationsBackgroundOnly: true,
+		MutedNotificationKinds:      []store.NotificationKind{store.NotificationReview},
+		SilentNotificationKinds:     []store.NotificationKind{store.NotificationChecks},
+		ApprovalMode:                store.ApprovalAuto,
+		AutoApproveRebase:           true,
+		Provider:                    "copilot",
+		Model:                       "gpt-5.6-terra",
+		Effort:                      "none",
+		BranchUpdate:                store.BranchMerge,
+		UpdateOnGitHub:              true,
+		ScreenReader:                true,
+	}
+	full := `{"pollIntervalSeconds":120,"watchIntervalSeconds":60,"watchMaxIntervalSeconds":1200,"checkMaxIntervalSeconds":1200,` +
+		`"approvalsRequired":2,"mergeMethod":"squash","includeExisting":true,"includeOwn":true,"keepWorktree":true,` +
+		`"notificationsEnabled":true,"notificationsBackgroundOnly":true,"mutedNotificationKinds":["review"],"silentNotificationKinds":["checks"],` +
+		`"approvalMode":"auto","autoApproveRebase":true,"provider":"copilot","model":"gpt-5.6-terra","effort":"none",` +
+		`"branchUpdate":"merge","updateOnGitHub":true,"screenReader":true}`
+	if rec := call(t, h, http.MethodPut, "/settings", full, nil); rec.Code != http.StatusOK {
+		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
+	}
+	stored, err := st.Settings(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(stored, want) {
+		t.Fatalf("stored = %+v, want every field of the full body %+v", stored, want)
+	}
 
 	if rec := call(t, h, http.MethodPut, "/settings", `{"watchIntervalSeconds":600}`, nil); rec.Code != http.StatusOK {
 		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
 	}
 
-	stored, err := st.Settings(t.Context())
+	stored, err = st.Settings(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if stored.WatchInterval != 10*time.Minute {
-		t.Fatalf("stored = %+v, want the interval the body set", stored)
-	}
-	if stored.PollInterval != time.Minute {
-		t.Fatalf("stored = %+v, want the interval the body left out kept", stored)
-	}
-}
-
-func TestPutSettingsKeepsTheNotificationFieldsTheBodyLeavesOut(t *testing.T) {
-	t.Parallel()
-	h, st, _, _ := newTestAPISettings(t)
-
-	body := `{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":true}`
-	if rec := call(t, h, http.MethodPut, "/settings", body, nil); rec.Code != http.StatusOK {
-		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
-	}
-
-	stored, err := st.Settings(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !stored.NotificationsEnabled || len(stored.SilentNotificationKinds) != 0 {
-		t.Fatalf("stored = %+v, want the notifications and the sound left on", stored)
-	}
-	if !stored.KeepWorktree {
-		t.Fatalf("stored = %+v, want the field the body did set", stored)
-	}
-}
-
-func TestPutSettingsKeepsTheMutedKindsTheBodyLeavesOut(t *testing.T) {
-	t.Parallel()
-	h, st, _, _ := newTestAPISettings(t)
-
-	muted := `{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false,"mutedNotificationKinds":["review"]}`
-	if rec := call(t, h, http.MethodPut, "/settings", muted, nil); rec.Code != http.StatusOK {
-		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
-	}
-
-	older := `{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false}`
-	if rec := call(t, h, http.MethodPut, "/settings", older, nil); rec.Code != http.StatusOK {
-		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
-	}
-
-	stored, err := st.Settings(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Contains(stored.MutedNotificationKinds, store.NotificationReview) {
-		t.Fatalf("stored = %+v, want the review still muted", stored)
+	want.WatchInterval = 10 * time.Minute
+	if !reflect.DeepEqual(stored, want) {
+		t.Fatalf("stored = %+v, want the interval the body set and every field it left out kept %+v", stored, want)
 	}
 }
 
@@ -322,60 +307,5 @@ func TestPutSettingsTakesTheSilentKindsAndTheBackgroundSwitch(t *testing.T) {
 	}
 	if stored.PlaysSound(store.NotificationMerge) || !stored.PlaysSound(store.NotificationReview) {
 		t.Fatalf("stored = %+v, want the merge silent and the review with a sound", stored)
-	}
-}
-
-func TestPutSettingsKeepsTheSilentKindsTheBodyLeavesOut(t *testing.T) {
-	t.Parallel()
-	h, st, _, _ := newTestAPISettings(t)
-
-	if rec := call(t, h, http.MethodPut, "/settings", `{"silentNotificationKinds":["checks"],"notificationsBackgroundOnly":true}`, nil); rec.Code != http.StatusOK {
-		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
-	}
-	if rec := call(t, h, http.MethodPut, "/settings", `{"watchIntervalSeconds":600}`, nil); rec.Code != http.StatusOK {
-		t.Fatalf("put settings: %d %s", rec.Code, rec.Body)
-	}
-
-	stored, err := st.Settings(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !slices.Contains(stored.SilentNotificationKinds, store.NotificationChecks) || !stored.NotificationsBackgroundOnly {
-		t.Fatalf("stored = %+v, want the checks still silent and the background switch still on", stored)
-	}
-}
-
-func TestPutSettingsRejectsAnUnknownSilentNotificationKind(t *testing.T) {
-	t.Parallel()
-	h, _, _, _ := newTestAPISettings(t)
-
-	if rec := call(t, h, http.MethodPut, "/settings", `{"silentNotificationKinds":["rumour"]}`, nil); rec.Code != http.StatusBadRequest {
-		t.Fatalf("put settings: %d %s, want 400", rec.Code, rec.Body)
-	}
-}
-
-func TestPutSettingsRejectsAnUnknownNotificationKind(t *testing.T) {
-	t.Parallel()
-	h, _, _, _ := newTestAPISettings(t)
-
-	body := `{"pollIntervalSeconds":60,"watchIntervalSeconds":180,"mergeMethod":"","includeExisting":false,"includeOwn":false,"keepWorktree":false,"mutedNotificationKinds":["rumour"]}`
-	if rec := call(t, h, http.MethodPut, "/settings", body, nil); rec.Code != http.StatusBadRequest {
-		t.Fatalf("put settings: %d %s, want 400", rec.Code, rec.Body)
-	}
-}
-
-func TestGetSettingsAnswersAnEmptyListOfMutedKinds(t *testing.T) {
-	t.Parallel()
-	h, _, _ := newTestAPI(t)
-
-	var got Settings
-	if rec := call(t, h, http.MethodGet, "/settings", "", &got); rec.Code != http.StatusOK {
-		t.Fatalf("get settings: %d %s", rec.Code, rec.Body)
-	}
-	if got.MutedNotificationKinds == nil {
-		t.Fatal("muted kinds = null, want an empty list so the client never reads null")
-	}
-	if got.SilentNotificationKinds == nil {
-		t.Fatal("silent kinds = null, want an empty list so the client never reads null")
 	}
 }

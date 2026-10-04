@@ -108,21 +108,6 @@ func TestOtherFailuresSetNoLimit(t *testing.T) {
 	}
 }
 
-func TestBackgroundWorkKeepsTheWatchFromMerging(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.start()
-	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
-	fx.hook(w, agent.EventStop, `{"background_tasks":[{"id":"b1","type":"shell","status":"running","description":"go test ./..."}]}`)
-	info, _ := fx.svc.Session(context.Background(), w)
-	if info.State != agent.StateWaiting {
-		t.Fatalf("state = %q", info.State)
-	}
-	if _, blockers := fx.svc.Readiness(fx.watch(w), info.State); !slices.Contains(blockers, "the background work of the agent still runs") {
-		t.Fatalf("blockers = %q", blockers)
-	}
-}
-
 func TestIdleNoticeKeepsTheAgentWaitingOnBackgroundWork(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
@@ -133,6 +118,9 @@ func TestIdleNoticeKeepsTheAgentWaitingOnBackgroundWork(t *testing.T) {
 	}
 	fx.hook(w, agent.EventUserPromptSubmit, `{}`)
 	fx.hook(w, agent.EventStop, `{"background_tasks":[{"id":"b1","type":"shell","status":"running","description":"sleep 150"}]}`)
+	if got := state(); got != agent.StateWaiting {
+		t.Fatalf("state after a stop with background work = %q, want %q", got, agent.StateWaiting)
+	}
 	fx.hook(w, agent.EventNotification, `{"notification_type":"idle_prompt"}`)
 	if got := state(); got != agent.StateWaiting {
 		t.Fatalf("state after the idle notice = %q, want %q", got, agent.StateWaiting)

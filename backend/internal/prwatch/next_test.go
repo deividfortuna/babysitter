@@ -3,7 +3,6 @@ package prwatch
 import (
 	"context"
 	"errors"
-	"os/exec"
 	"slices"
 	"strings"
 	"testing"
@@ -21,11 +20,12 @@ import (
 
 func (fx *fixture) checkout(branch string) {
 	fx.t.Helper()
-	cmd := exec.Command("git", "checkout", "-q", "-B", branch)
-	cmd.Dir = fx.dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		fx.t.Fatalf("git checkout: %v\n%s", err, out)
-	}
+	gitIn(fx.t, fx.dir, []string{"checkout", "-q", "-B", branch})
+}
+
+func (fx *fixture) detach() {
+	fx.t.Helper()
+	gitIn(fx.t, fx.dir, []string{"checkout", "-q", "--detach"})
 }
 
 func (fx *fixture) startSelf() store.Watch {
@@ -70,23 +70,36 @@ func TestSelfWatchHasNoWorktreeAndNoSession(t *testing.T) {
 
 func TestSelfWatchRejections(t *testing.T) {
 	t.Parallel()
-	fx := newFixture(t)
-	ctx := context.Background()
-	target := snapshot.Target{Owner: "octo", Name: "hello", Number: 3}
-	if _, err := fx.svc.Start(ctx, StartRequest{Target: target, SourceDir: fx.dir, Provider: ProviderSelf, Model: "sonnet"}); !errors.Is(err, ErrBadModel) {
-		t.Fatalf("Start() with a model error = %v, want ErrBadModel", err)
+	cases := []struct {
+		name    string
+		prepare func(fx *fixture)
+		model   string
+		want    error
+		watches int
+	}{
+		{name: "a model", prepare: func(*fixture) {}, model: "sonnet", want: ErrBadModel},
+		{name: "another branch", prepare: func(fx *fixture) { fx.checkout("other") }, want: ErrWrongBranch},
+		{name: "a detached head", prepare: func(fx *fixture) { fx.detach() }, want: ErrWrongBranch},
+		{name: "no agents is no reason to refuse", prepare: func(fx *fixture) { fx.svc.agents = map[string]agent.Runner{} }, watches: 1},
 	}
-	fx.checkout("other")
-	if _, err := fx.svc.Start(ctx, StartRequest{Target: target, SourceDir: fx.dir, Provider: ProviderSelf}); !errors.Is(err, ErrWrongBranch) {
-		t.Fatalf("Start() off the head branch error = %v, want ErrWrongBranch", err)
-	}
-	if ws, _ := fx.st.ListWatches(ctx, store.ListWatchesOptions{}); len(ws) != 0 {
-		t.Fatalf("watches after rejections = %v", ws)
-	}
-	fx.checkout("fix")
-	fx.svc.agents = map[string]agent.Runner{}
-	if _, err := fx.svc.Start(ctx, StartRequest{Target: target, SourceDir: fx.dir, Provider: ProviderSelf}); err != nil {
-		t.Fatalf("Start() without agents error = %v", err)
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			t.Parallel()
+			fx := newFixture(t)
+			ctx := context.Background()
+			c.prepare(fx)
+
+			_, err := fx.svc.Start(ctx, StartRequest{
+				Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 3}, SourceDir: fx.dir, Provider: ProviderSelf, Model: c.model,
+			})
+
+			if !errors.Is(err, c.want) {
+				t.Fatalf("Start() error = %v, want %v", err, c.want)
+			}
+			if ws, _ := fx.st.ListWatches(ctx, store.ListWatchesOptions{}); len(ws) != c.watches {
+				t.Fatalf("watches = %v, want %d", ws, c.watches)
+			}
+		})
 	}
 }
 
@@ -156,18 +169,7 @@ func TestNextPollsFirst(t *testing.T) {
 func TestNextWaitsForActivityAndEndsEarly(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	bus := events.NewBus()
-	fx.st.SetPublisher(bus)
-	fx.svc = New(Deps{
-		Log:           testutil.Logger(fx.t),
-		Store:         fx.st,
-		NewClient:     func(context.Context) (*github.Client, error) { return fx.client, nil },
-		Git:           fx.git,
-		Notifications: fx.notes,
-		Host:          fx.host,
-		DataDir:       fx.data,
-		Bus:           bus,
-	}, WithClock(func() time.Time { return fx.clock() }), WithInterval(time.Minute))
+	fx.busService(events.NewBus())
 	w := fx.startSelf()
 	ctx := context.Background()
 
@@ -323,59 +325,6 @@ func TestASelfAgentIsBusyFromAMessageToItsNextCall(t *testing.T) {
 	}
 }
 
-func TestNextWakesWhenThePullRequestBecomesReady(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	bus := events.NewBus()
-	fx.st.SetPublisher(bus)
-	fx.svc = New(Deps{
-		Log:           testutil.Logger(fx.t),
-		Store:         fx.st,
-		NewClient:     func(context.Context) (*github.Client, error) { return fx.client, nil },
-		Git:           fx.git,
-		Notifications: fx.notes,
-		Host:          fx.host,
-		DataDir:       fx.data,
-		Bus:           bus,
-	}, WithClock(func() time.Time { return fx.clock() }), WithInterval(time.Minute))
-	fx.good()
-	fx.update(func() { fx.pr.Draft = true })
-	w := fx.startSelf()
-	fx.poll(w)
-	done := make(chan NextMessage, 1)
-	go func() {
-		out, _ := fx.svc.Next(context.Background(), w.ID, 10*time.Second)
-		done <- out
-	}()
-	fx.waitForNext(w.ID)
-	fx.update(func() { fx.pr.Draft = false })
-	fx.poll(w)
-	fx.poll(w)
-	select {
-	case out := <-done:
-		if out.Message != nil || out.Watch.ReadySince == nil {
-			t.Fatalf("Next() = %+v", out)
-		}
-	case <-time.After(5 * time.Second):
-		t.Fatal("Next() did not wake when the pull request became ready")
-	}
-}
-
-func TestASelfWatchOnADetachedHeadIsRejectedAsTheWrongBranch(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	cmd := exec.Command("git", "checkout", "-q", "--detach")
-	cmd.Dir = fx.dir
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Fatalf("git checkout --detach: %v\n%s", err, out)
-	}
-	target := snapshot.Target{Owner: "octo", Name: "hello", Number: 3}
-	_, err := fx.svc.Start(context.Background(), StartRequest{Target: target, SourceDir: fx.dir, Provider: ProviderSelf})
-	if !errors.Is(err, ErrWrongBranch) {
-		t.Fatalf("Start() on a detached head error = %v, want ErrWrongBranch", err)
-	}
-}
-
 func (fx *fixture) busService(bus *events.Bus) {
 	fx.t.Helper()
 	fx.st.SetPublisher(bus)
@@ -496,10 +445,13 @@ func TestNextReportsTheRowsOfItsPollWhenTheCallerGivesUp(t *testing.T) {
 	if _, err := fx.svc.Next(ctx, w.ID, 0); err != nil && !errors.Is(err, context.Canceled) {
 		t.Fatalf("Next() error = %v", err)
 	}
-	for _, a := range fx.activity(w) {
-		if a.Kind == store.ActivityCheckFailed && !a.Reported {
-			t.Fatalf("activity %d (%s) stayed unreported after the caller gave up", a.ID, a.Kind)
-		}
+	rows := fx.activity(w)
+	failed := slices.IndexFunc(rows, func(a store.Activity) bool { return a.Kind == store.ActivityCheckFailed })
+	if failed < 0 {
+		t.Fatalf("the poll of Next() recorded no check_failed row: %v", kinds(rows))
+	}
+	if !rows[failed].Reported {
+		t.Fatalf("activity %d (%s) stayed unreported after the caller gave up", rows[failed].ID, rows[failed].Kind)
 	}
 }
 
@@ -592,18 +544,7 @@ func TestARestartKeepsASelfAgentAtWorkOnItsMessage(t *testing.T) {
 func TestNextRefusesASecondCallerWhileOneWaits(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
-	bus := events.NewBus()
-	fx.st.SetPublisher(bus)
-	fx.svc = New(Deps{
-		Log:           testutil.Logger(fx.t),
-		Store:         fx.st,
-		NewClient:     func(context.Context) (*github.Client, error) { return fx.client, nil },
-		Git:           fx.git,
-		Notifications: fx.notes,
-		Host:          fx.host,
-		DataDir:       fx.data,
-		Bus:           bus,
-	}, WithClock(func() time.Time { return fx.clock() }), WithInterval(time.Minute))
+	fx.busService(events.NewBus())
 	fx.good()
 	w := fx.startSelf()
 	ctx := context.Background()

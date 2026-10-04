@@ -175,33 +175,6 @@ func TestWatchRetryTakesTheFailedProposal(t *testing.T) {
 	}
 }
 
-func TestWatchStatusSaysWhoReleasesTheWork(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-	d.watches = strings.Replace(d.watches, `"status":"active"`, `"status":"active","approvalMode":"manual","pendingProposal":2`, 1)
-	out, err := runWatch(t, d, "status", "1")
-	if err != nil || !strings.Contains(out, "Approval:  manual; proposal 2 waits on you: babysitter watch proposals 1 2") {
-		t.Fatalf("status = %q, %v", out, err)
-	}
-}
-
-func TestWatchStartTakesTheApprovalMode(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-	if _, err := runWatch(t, d, "start", "octo/hello#3"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runWatch(t, d, "start", "octo/hello#3", "--approval-mode", "manual", "--auto-approve-rebase"); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := d.starts[0]["approvalMode"]; ok {
-		t.Fatalf("a start without the flag named a mode: %v", d.starts[0])
-	}
-	if d.starts[1]["approvalMode"] != "manual" || d.starts[1]["autoApproveRebase"] != true {
-		t.Fatalf("start = %v", d.starts[1])
-	}
-}
-
 func TestWatchStartSaysASelfWatchIgnoresTheApprovalFlags(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
@@ -214,23 +187,6 @@ func TestWatchStartSaysASelfWatchIgnoresTheApprovalFlags(t *testing.T) {
 	out, err = runWatch(t, d, "start", "octo/hello#3", "--provider", "self", "--approval-mode", "auto")
 	if err != nil || strings.Contains(out, "ignores") {
 		t.Fatalf("a self start that asked for auto = %q, %v", out, err)
-	}
-}
-
-func TestSettingsSetTheApprovalMode(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-	d.settings["approvalMode"] = "manual"
-	d.settings["autoApproveRebase"] = false
-	out, err := runAgainstDaemon(t, d, "settings", "set", "--approval-mode", "auto", "--auto-approve-rebase")
-	if err != nil {
-		t.Fatalf("settings set = %v", err)
-	}
-	if put := d.settingsPut[0]; put["approvalMode"] != "auto" || put["autoApproveRebase"] != true {
-		t.Fatalf("put = %v", put)
-	}
-	if !strings.Contains(out, "Approval mode") || !strings.Contains(out, "Approve a clean rebase or merge on its own") {
-		t.Fatalf("settings = %q", out)
 	}
 }
 
@@ -276,17 +232,6 @@ func TestTheListCountsTheRepliesThatGoOut(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "1 reply, 2 dropped") {
 		t.Fatalf("list = %q", out.String())
-	}
-}
-
-func TestWatchStatusNamesTheCleanRebaseWhileAProposalWaits(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-	d.watches = strings.Replace(d.watches, `"status":"active"`, `"status":"active","approvalMode":"manual","autoApproveRebase":true,"pendingProposal":2`, 1)
-	out, err := runWatch(t, d, "status", "1")
-	want := "Approval:  manual, and approved work goes out after a clean rebase or merge; proposal 2 waits on you: babysitter watch proposals 1 2"
-	if err != nil || !strings.Contains(out, want) {
-		t.Fatalf("status = %q, %v", out, err)
 	}
 }
 

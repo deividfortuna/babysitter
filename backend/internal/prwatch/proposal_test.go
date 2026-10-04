@@ -11,7 +11,6 @@ import (
 	"github.com/deividfortuna/babysitter/internal/agent"
 	"github.com/deividfortuna/babysitter/internal/ghclient/ghfake"
 	"github.com/deividfortuna/babysitter/internal/gitrelease"
-	"github.com/deividfortuna/babysitter/internal/snapshot"
 	"github.com/deividfortuna/babysitter/internal/store"
 )
 
@@ -203,6 +202,16 @@ func TestAnEditedReplyIsPostedAndTheAgentHearsOfIt(t *testing.T) {
 	if got := fx.posted(); !slices.Equal(got, []string{"31:Renamed it, thanks for the catch."}) {
 		t.Fatalf("posted = %q", got)
 	}
+	row, ok, err := fx.st.ActivityByRef(ctx, w.ID, store.ActivityReplied, fmt.Sprint(fx.newestComment().ID))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("the edited reply has no replied row")
+	}
+	if want := "you replied in the thread of comment 31: Renamed it, thanks for the catch."; row.Summary != want {
+		t.Fatalf("replied row = %q, want %q", row.Summary, want)
+	}
 	msgs := fx.messages()
 	if len(msgs) != told+1 || !strings.Contains(msgs[told], "Renamed it, thanks for the catch.") || !strings.Contains(msgs[told], "Nothing to do now") {
 		t.Fatalf("messages = %q", msgs[told:])
@@ -267,40 +276,39 @@ func TestAStaleProposalIsRebasedAndOfferedAgain(t *testing.T) {
 	}
 }
 
-func TestApprovedWorkGoesOutAfterACleanRebase(t *testing.T) {
+func TestApprovedWorkOnABranchThatMovedWaitsForTheAuthorWithoutAutoApproveRebase(t *testing.T) {
 	t.Parallel()
-	for _, autoRebase := range []bool{true, false} {
-		fx := newFixture(t)
-		ctx := context.Background()
-		req := fx.startRequest()
-		req.ApprovalMode, req.AutoApproveRebase = new(store.ApprovalManual), new(autoRebase)
-		w, err := fx.svc.Start(ctx, req)
-		if err != nil {
-			t.Fatal(err)
-		}
-		fx.propose(w)
-		fx.update(func() { fx.pr.HeadSHA = "t1" })
-		fx.rel.moveRemote("abc", "t1")
-		fx.rel.set(func(f *fakeRelease) { f.missing = []string{"t1"} })
+	fx := newFixture(t)
+	ctx := context.Background()
+	req := fx.startRequest()
+	req.ApprovalMode, req.AutoApproveRebase = new(store.ApprovalManual), new(false)
+	w, err := fx.svc.Start(ctx, req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fx.propose(w)
+	fx.update(func() { fx.pr.HeadSHA = "t1" })
+	fx.rel.moveRemote("abc", "t1")
+	fx.rel.set(func(f *fakeRelease) { f.missing = []string{"t1"} })
 
-		p, err := fx.svc.Approve(ctx, w.ID, 1, Decision{})
-		if err != nil {
-			t.Fatal(err)
-		}
-		if autoRebase {
-			if p.Status != store.ProposalReleased || !slices.Equal(fx.rel.pushed(), []gitrelease.Push{{SHA: "w1-on-t1", Branch: "fix"}}) {
-				t.Fatalf("auto rebase: proposal = %+v, pushes %v", p, fx.rel.pushed())
-			}
-			continue
-		}
-		if p.Status != store.ProposalFailed || len(fx.rel.rebases) != 0 {
-			t.Fatalf("no auto rebase: approve on a branch that moved = %+v, rebases %v", p, fx.rel.rebases)
-		}
-		fx.poll(w)
-		p = fx.proposal(w, 1)
-		if p.Status != store.ProposalPending || p.ApprovedAt != nil || p.WorkSHA != "w1-on-t1" || len(fx.rel.pushed()) != 0 {
-			t.Fatalf("no auto rebase: proposal = %+v, pushes %v", p, fx.rel.pushed())
-		}
+	p, err := fx.svc.Approve(ctx, w.ID, 1, Decision{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if p.Status != store.ProposalFailed {
+		t.Fatalf("approve on a branch that moved = %+v, want it failed", p)
+	}
+	if len(fx.rel.rebases) != 0 {
+		t.Fatalf("rebases = %v, want none without auto approve rebase", fx.rel.rebases)
+	}
+	fx.poll(w)
+	p = fx.proposal(w, 1)
+	offeredAgain := p.Status == store.ProposalPending && p.ApprovedAt == nil && p.WorkSHA == "w1-on-t1"
+	if !offeredAgain {
+		t.Fatalf("proposal = %+v, want the rebased work offered again", p)
+	}
+	if pushed := fx.rel.pushed(); len(pushed) != 0 {
+		t.Fatalf("pushes = %v, want none before the author approves", pushed)
 	}
 }
 
@@ -495,19 +503,6 @@ func TestRejectingTheProposal(t *testing.T) {
 	}
 }
 
-func TestStopDeclinesThePendingProposal(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	w := fx.startManual()
-	fx.propose(w)
-	if _, err := fx.svc.Stop(context.Background(), w.ID, StopOptions{}); err != nil {
-		t.Fatal(err)
-	}
-	if p := fx.proposal(w, 1); p.Status != store.ProposalDeclined || len(fx.rel.pushed()) != 0 {
-		t.Fatalf("proposal = %+v, pushes %v", p, fx.rel.pushed())
-	}
-}
-
 func TestASelfWatchHasNoGate(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
@@ -529,22 +524,6 @@ func TestASelfWatchHasNoGate(t *testing.T) {
 	manual := store.ApprovalManual
 	if _, err := fx.svc.SetApproval(ctx, w.ID, ApprovalChange{Mode: &manual}); !errors.Is(err, ErrSelfWatch) {
 		t.Fatalf("SetApproval() error = %v", err)
-	}
-}
-
-func TestStartTakesTheApprovalModeOfTheSettings(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	fx.settings(store.Settings{ApprovalMode: store.ApprovalManual, AutoApproveRebase: true})
-	w := fx.start()
-	if w.ApprovalMode != store.ApprovalManual || !w.AutoApproveRebase {
-		t.Fatalf("watch = %+v", w)
-	}
-	fx.openPR(4)
-	req := StartRequest{Target: snapshot.Target{Owner: "octo", Name: "hello", Number: 4}, SourceDir: fx.dir, ApprovalMode: new(store.ApprovalAuto)}
-	other, err := fx.svc.Start(context.Background(), req)
-	if err != nil || other.ApprovalMode != store.ApprovalAuto {
-		t.Fatalf("a watch that asks for auto = %+v, %v", other, err)
 	}
 }
 
@@ -627,8 +606,12 @@ func TestAReplyAfterACleanRebaseNamesNoCommitThatNeverLanded(t *testing.T) {
 	fx.update(func() { fx.pr.HeadSHA = "t1" })
 	fx.rel.moveRemote("abc", "t1")
 	fx.rel.set(func(f *fakeRelease) { f.missing = []string{"t1"} })
-	if _, err := fx.svc.Approve(ctx, w.ID, 1, Decision{}); err != nil {
+	p, err := fx.svc.Approve(ctx, w.ID, 1, Decision{})
+	if err != nil {
 		t.Fatalf("Approve() error = %v", err)
+	}
+	if p.Status != store.ProposalReleased {
+		t.Fatalf("approve after a clean rebase = %+v, want it released", p)
 	}
 	fx.poll(w)
 
@@ -978,22 +961,6 @@ func TestATurnThatAnswersAConversationCommentAgainPostsOnce(t *testing.T) {
 	}
 }
 
-func TestTheRowOfAnEditedReplyNamesTheAuthor(t *testing.T) {
-	t.Parallel()
-	fx := newFixture(t)
-	ctx := context.Background()
-	w := fx.startManual()
-	p := fx.propose(w)
-
-	if _, err := fx.svc.Approve(ctx, w.ID, 1, Decision{Edits: map[int64]string{fx.replyID(p, 0): "Renamed it, thanks."}}); err != nil {
-		t.Fatal(err)
-	}
-	row, ok, err := fx.st.ActivityByRef(ctx, w.ID, store.ActivityReplied, fmt.Sprint(fx.newestComment().ID))
-	if err != nil || !ok || row.Summary != "you replied in the thread of comment 31: Renamed it, thanks." {
-		t.Fatalf("replied row = %+v, %v, %v", row, ok, err)
-	}
-}
-
 func TestTheStopRowNamesTheProposalItDeclined(t *testing.T) {
 	t.Parallel()
 	fx := newFixture(t)
@@ -1006,6 +973,9 @@ func TestTheStopRowNamesTheProposalItDeclined(t *testing.T) {
 	}
 	if p := fx.proposal(w, 1); p.Status != store.ProposalDeclined {
 		t.Fatalf("proposal = %+v", p)
+	}
+	if pushed := fx.rel.pushed(); len(pushed) != 0 {
+		t.Fatalf("pushes = %v, want none for a declined proposal", pushed)
 	}
 	rows := fx.activity(w)
 	last := rows[len(rows)-1]

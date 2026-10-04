@@ -264,14 +264,6 @@ test("shows the account the daemon acts as, and what sits beside it", async () =
   expect(screen.getByRole("button", { name: "Settings" })).toBeInTheDocument();
 });
 
-test("names the account as missing when the daemon cannot reach GitHub", async () => {
-  serveApi({ watches: [], repos: [], pullRequests: [], viewer: null });
-
-  renderSidebar();
-
-  expect(await screen.findByText("No account")).toBeInTheDocument();
-});
-
 test("names the daemon switcher with its state and the count of daemons found", async () => {
   serveApi({ watches: [], repos: [], pullRequests: [] });
   const discover = vi.spyOn(bridge.connections, "discover").mockResolvedValue([

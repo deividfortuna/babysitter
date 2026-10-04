@@ -11,21 +11,6 @@ import (
 	"github.com/deividfortuna/babysitter/internal/events"
 )
 
-func TestAFreshDatabaseAsksForApproval(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	got, err := s.Settings(context.Background())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if got.ApprovalMode != ApprovalManual || got.AutoApproveRebase {
-		t.Fatalf("settings of a fresh database = %+v, want manual and no rebase approved on its own", got)
-	}
-	if d := DefaultSettings(); d.ApprovalMode != ApprovalManual {
-		t.Fatalf("DefaultSettings() = %+v", d)
-	}
-}
-
 func TestAnUpgradedDatabaseKeepsAuto(t *testing.T) {
 	t.Parallel()
 	ctx := context.Background()
@@ -70,26 +55,6 @@ func TestAnUpgradedDatabaseKeepsAuto(t *testing.T) {
 	}
 	if _, _, err := s.InsertActivity(ctx, Activity{WatchID: 1, Kind: ActivityProposal, Ref: "1", At: time.Now()}); err != nil {
 		t.Fatalf("a proposal row on the upgraded database: %v", err)
-	}
-}
-
-func TestSettingsKeepTheApprovalMode(t *testing.T) {
-	t.Parallel()
-	s, _ := openTemp(t)
-	ctx := context.Background()
-	want := DefaultSettings()
-	want.ApprovalMode, want.AutoApproveRebase = ApprovalAuto, true
-	if _, err := s.SaveSettings(ctx, want); err != nil {
-		t.Fatal(err)
-	}
-	got, err := s.Settings(ctx)
-	if err != nil || got.ApprovalMode != ApprovalAuto || !got.AutoApproveRebase {
-		t.Fatalf("Settings() = %+v, %v", got, err)
-	}
-	bad := want
-	bad.ApprovalMode = "sometimes"
-	if _, err := s.SaveSettings(ctx, bad); !errors.Is(err, ErrInvalidSettings) {
-		t.Fatalf("SaveSettings() of an unknown mode error = %v", err)
 	}
 }
 

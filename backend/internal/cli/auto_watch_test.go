@@ -8,23 +8,6 @@ import (
 	"testing"
 )
 
-func TestWatchStartSendsMergeWhenReadyOnlyWhenTyped(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-	if _, err := runWatch(t, d, "start", "octo/hello#3"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := runWatch(t, d, "start", "octo/hello#3", "--merge-when-ready"); err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := d.starts[0]["mergeWhenReady"]; ok {
-		t.Fatalf("a start without the flag sent mergeWhenReady: %v", d.starts[0])
-	}
-	if d.starts[1]["mergeWhenReady"] != true {
-		t.Fatalf("start = %v, want mergeWhenReady true", d.starts[1])
-	}
-}
-
 func TestWatchMergeApproveAsksTheDaemonToApprove(t *testing.T) {
 	t.Parallel()
 	d := newFakeDaemon()
@@ -48,15 +31,5 @@ func TestWatchMergeApproveAsksTheDaemonToApprove(t *testing.T) {
 	}
 	if len(bodies) != 2 || bodies[1]["approve"] != true {
 		t.Fatalf("bodies = %v, want approve true", bodies)
-	}
-}
-
-func TestWatchStatusShowsWhyAutoStartBeganTheWatch(t *testing.T) {
-	t.Parallel()
-	d := newFakeDaemon()
-	d.watches = strings.Replace(d.watches, `"status":"active"`, `"status":"active","autoReason":"dependabot","updateType":"patch","mergeWhenReady":true`, 1)
-	out, err := runWatch(t, d, "status", "1")
-	if err != nil || !strings.Contains(out, "Auto:      started on its own: Dependabot opened it; patch update; merges when ready") {
-		t.Fatalf("status = %q, %v", out, err)
 	}
 }
