@@ -71,9 +71,12 @@ func (s *Service) clearLimit(ctx context.Context, id int64) {
 	s.store.PublishSession(w.Key())
 }
 
-func (s *Service) limitedNow(ctx context.Context, id int64) bool {
+func (s *Service) limitedNow(ctx context.Context, id int64) (bool, error) {
 	w, err := s.store.GetWatch(ctx, id)
-	return err == nil && limited(w)
+	if err != nil {
+		return false, fmt.Errorf("read the usage limit before the message: %w", err)
+	}
+	return limited(w), nil
 }
 
 func (s *Service) limitIsOver(w store.Watch) bool {

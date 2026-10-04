@@ -271,7 +271,11 @@ func (s *Service) tell(ctx context.Context, client *github.Client, w store.Watch
 		return todo, err
 	}
 	s.syncWork(ctx, w)
-	if s.limitedNow(ctx, w.ID) {
+	stillLimited, err := s.limitedNow(ctx, w.ID)
+	if err != nil {
+		return todo, err
+	}
+	if stillLimited {
 		s.log.Info("the agent hit its usage limit during the poll, the message waits for the reset", "watch", w.ID)
 		return todo, nil
 	}

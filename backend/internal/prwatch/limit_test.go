@@ -2,6 +2,7 @@ package prwatch
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"fmt"
 	"slices"
@@ -232,5 +233,34 @@ func TestALimitThatComesDuringThePollKeepsTheMessage(t *testing.T) {
 	}
 	if msgs := h.messages(); len(msgs) != 1 {
 		t.Fatalf("an agent that hit its limit during the poll was told: %q", msgs)
+	}
+}
+
+func TestThePollKeepsTheMessageWhenItCannotReadTheLimit(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	db, err := sql.Open("sqlite3", "file:"+fx.dbPath+"?_busy_timeout=5000")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { db.Close() })
+	fx.rel.duringFetch = func() {
+		if _, err := db.Exec("ALTER TABLE watches RENAME COLUMN agent_limited_until TO limit_unreadable"); err != nil {
+			t.Errorf("break the read of the limit: %v", err)
+		}
+	}
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "rename it", URL: "https://c/11"}}
+	})
+	fx.advance(time.Minute)
+	_ = fx.svc.Poll(context.Background(), w.ID)
+	fx.svc.wg.Wait()
+	if _, err := db.Exec("ALTER TABLE watches RENAME COLUMN limit_unreadable TO agent_limited_until"); err != nil {
+		t.Fatal(err)
+	}
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("the poll typed a message without knowing the limit: %q", msgs)
 	}
 }
