@@ -299,6 +299,21 @@ func TestNudgeTracking(t *testing.T) {
 	if got, _ := s.GetWatch(ctx, w.ID); got.AgentLimitedUntil == nil || !got.AgentLimitedUntil.Equal(reset) {
 		t.Fatalf("agent limited until = %v", got.AgentLimitedUntil)
 	}
+	if cleared, err := s.ClearWatchAgentLimit(ctx, w.ID, reset.Add(-time.Hour)); err != nil || cleared {
+		t.Fatalf("ClearWatchAgentLimit() of an older limit = %v, %v, want the newer limit kept", cleared, err)
+	}
+	if got, _ := s.GetWatch(ctx, w.ID); got.AgentLimitedUntil == nil || !got.AgentLimitedUntil.Equal(reset) {
+		t.Fatalf("agent limited until after clearing an older limit = %v", got.AgentLimitedUntil)
+	}
+	if cleared, err := s.ClearWatchAgentLimit(ctx, w.ID, reset); err != nil || !cleared {
+		t.Fatalf("ClearWatchAgentLimit() of the stored limit = %v, %v", cleared, err)
+	}
+	if got, _ := s.GetWatch(ctx, w.ID); got.AgentLimitedUntil != nil {
+		t.Fatalf("agent limited until after the clear = %v", got.AgentLimitedUntil)
+	}
+	if err := s.SetWatchAgentLimit(ctx, w.ID, &reset); err != nil {
+		t.Fatal(err)
+	}
 	if err := s.SetWatchAgentLimit(ctx, w.ID, nil); err != nil {
 		t.Fatal(err)
 	}

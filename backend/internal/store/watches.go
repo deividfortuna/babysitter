@@ -419,6 +419,18 @@ func (s *Store) SetWatchAgentLimit(ctx context.Context, id int64, until *time.Ti
 	return nil
 }
 
+func (s *Store) ClearWatchAgentLimit(ctx context.Context, id int64, until time.Time) (bool, error) {
+	res, err := s.db.ExecContext(ctx, "UPDATE watches SET agent_limited_until = NULL WHERE id = ? AND agent_limited_until = ?", id, timeToDB(until))
+	if err != nil {
+		return false, fmt.Errorf("clear watch agent limit: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("clear watch agent limit: %w", err)
+	}
+	return n == 1, nil
+}
+
 func (s *Store) PublishSession(k WatchKey) {
 	s.publish(events.WatchSession, k.Repo(), k.Number)
 }

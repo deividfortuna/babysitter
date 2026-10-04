@@ -96,5 +96,12 @@ func (s *Service) resumeAfterLimit(ctx context.Context, w store.Watch) {
 		s.agentFailed(ctx, w, "tell the agent to continue after its usage limit", err)
 		return
 	}
-	s.clearLimit(ctx, w.ID)
+	cleared, err := s.store.ClearWatchAgentLimit(ctx, w.ID, *w.AgentLimitedUntil)
+	if err != nil {
+		s.log.Error("clear the usage limit the agent continued from", "watch", w.ID, "err", err)
+		return
+	}
+	if cleared {
+		s.store.PublishSession(w.Key())
+	}
 }
