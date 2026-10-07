@@ -179,6 +179,9 @@ jobs:
       - name: Test
         run: pnpm run test:coverage
 
+      - name: Bundle the main process and the preload
+        run: pnpm exec vp pack
+
   workflows:
     name: Workflows
     runs-on: ubuntu-latest
