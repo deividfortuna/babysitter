@@ -1,9 +1,5 @@
 nodeLinker: hoisted
 
-overrides:
-  vite: npm:@voidzero-dev/vite-plus-core@1.0.0-rc.1
-  vitest: 5.0.1
-
 allowBuilds:
   electron-winstaller: true
   fsevents: true
@@ -11,4 +7,4 @@ allowBuilds:
 
 peerDependencyRules:
   allowedVersions:
-    vite: 1.0.0-rc.1
+    vite: 1.0.0
