@@ -40,9 +40,11 @@ and the watch flow in detail. Read it before changing `httpd`, `prwatch`,
   `out/stage` and runs electron-builder with `scripts/desktop-builder.ts`;
   the DMG, the zip, the NSIS installer and the update feed go to
   `out/release`. pnpm 12 installs it. `frontend/pnpm-workspace.yaml` holds
-  the pnpm settings: `nodeLinker: hoisted`, the `vite` and `vitest`
-  overrides, and `allowBuilds`, the only packages whose install scripts
-  run.
+  the pnpm settings: `nodeLinker: hoisted`, `allowBuilds`, the only
+  packages whose install scripts run, and a peer rule for the `vite`
+  alias. `vite-plus` brings its own `vitest`. The `vite` alias in
+  `package.json` must name the `vite-plus-core` version that `vite-plus`
+  uses, or `vp pack` fails.
 - `codegen/`: openapi-typescript, which writes `frontend/src/api/schema.ts`
   from `openapi.yaml`. It has its own lockfile because it uses the compiler
   API of TypeScript 5, which TypeScript 7 does not have.
