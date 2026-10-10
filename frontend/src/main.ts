@@ -416,8 +416,8 @@ function createWindow() {
   const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const mainWindow = new BrowserWindow({
     ...centeredBounds(workArea, { width: 1320, height: 860 }),
-    minWidth: 960,
-    minHeight: 640,
+    minWidth: Math.min(960, workArea.width),
+    minHeight: Math.min(640, workArea.height),
     backgroundColor: canvasColor(themePreference, nativeTheme.shouldUseDarkColors),
     icon: appIconPath(),
     ...titleBar(),
