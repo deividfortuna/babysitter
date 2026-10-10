@@ -212,6 +212,13 @@ vi.mock("electron", () => {
       },
     },
     Notification: FakeNotification,
+    screen: {
+      getCursorScreenPoint: () => ({ x: 2500, y: 400 }),
+      getDisplayNearestPoint: (point: { x: number; y: number }) => ({
+        workArea:
+          point.x >= 1920 ? { x: 1920, y: 0, width: 2560, height: 1415 } : { x: 0, y: 25, width: 1920, height: 1055 },
+      }),
+    },
     shell: {
       openExternal: (url: string) => electron.opened.push(url),
       openPath: async (dir: string) => {
@@ -352,6 +359,13 @@ test("the window paints in the theme the user chose, not the one of the system",
   electron.appEvents.get("ready")?.();
 
   expect(electron.windowOptions[0].backgroundColor).toBe("#0a0a0a");
+});
+
+test("the window opens in the center of the display under the cursor", async () => {
+  await loadMain();
+  electron.appEvents.get("ready")?.();
+
+  expect(electron.windowOptions[0]).toMatchObject({ x: 2540, y: 278, width: 1320, height: 860 });
 });
 
 test("on macOS the window buttons sit in the middle of the title bar", async () => {
