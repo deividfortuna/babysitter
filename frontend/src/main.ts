@@ -7,6 +7,7 @@ import {
   Menu,
   nativeTheme,
   Notification,
+  screen,
   shell,
   Tray,
   type BrowserWindowConstructorOptions,
@@ -31,6 +32,7 @@ import { readUpdateSettings, writeUpdateSettings } from "./main/update-settings"
 import { killLoginShells, shellRunner } from "./main/login-shell";
 import { openQueue } from "./main/pending-open";
 import { concealWindow, quitShortcut } from "./main/quit-shortcut";
+import { centeredBounds } from "./main/window-bounds";
 import { isMenuAnchor } from "./shared/app-menu";
 import { defaultDataDir } from "./shared/daemon-discovery";
 import { resolveDaemonLaunch } from "./shared/daemon-launch";
@@ -411,11 +413,11 @@ ipcMain.handle(DIALOG_PICK_DIRECTORY_CHANNEL, async (event: IpcMainInvokeEvent, 
 });
 
 function createWindow() {
+  const { workArea } = screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
   const mainWindow = new BrowserWindow({
-    width: 1320,
-    height: 860,
-    minWidth: 960,
-    minHeight: 640,
+    ...centeredBounds(workArea, { width: 1320, height: 860 }),
+    minWidth: Math.min(960, workArea.width),
+    minHeight: Math.min(640, workArea.height),
     backgroundColor: canvasColor(themePreference, nativeTheme.shouldUseDarkColors),
     icon: appIconPath(),
     ...titleBar(),

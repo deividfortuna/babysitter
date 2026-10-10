@@ -48,6 +48,7 @@ const electron = vi.hoisted(() => ({
   launches: [] as unknown[][],
   openedPaths: [] as string[],
   launcher: null as Launcher | null,
+  cursor: { x: 2500, y: 400 },
 }));
 
 vi.mock("./main/open-in", () => ({
@@ -212,6 +213,17 @@ vi.mock("electron", () => {
       },
     },
     Notification: FakeNotification,
+    screen: {
+      getCursorScreenPoint: () => electron.cursor,
+      getDisplayNearestPoint: (point: { x: number; y: number }) => ({
+        workArea:
+          point.x < 0
+            ? { x: -800, y: 0, width: 800, height: 575 }
+            : point.x >= 1920
+              ? { x: 1920, y: 0, width: 2560, height: 1415 }
+              : { x: 0, y: 25, width: 1920, height: 1055 },
+      }),
+    },
     shell: {
       openExternal: (url: string) => electron.opened.push(url),
       openPath: async (dir: string) => {
@@ -255,6 +267,7 @@ async function loadMain() {
   electron.launches.length = 0;
   electron.openedPaths.length = 0;
   electron.launcher = null;
+  electron.cursor = { x: 2500, y: 400 };
   vi.resetModules();
   await import("./main");
 }
@@ -352,6 +365,28 @@ test("the window paints in the theme the user chose, not the one of the system",
   electron.appEvents.get("ready")?.();
 
   expect(electron.windowOptions[0].backgroundColor).toBe("#0a0a0a");
+});
+
+test("the window opens in the center of the display under the cursor", async () => {
+  await loadMain();
+  electron.appEvents.get("ready")?.();
+
+  expect(electron.windowOptions[0]).toMatchObject({ x: 2540, y: 278, width: 1320, height: 860 });
+});
+
+test("on a display smaller than the minimum size the window still fits its work area", async () => {
+  await loadMain();
+  electron.cursor = { x: -400, y: 300 };
+  electron.appEvents.get("ready")?.();
+
+  expect(electron.windowOptions[0]).toMatchObject({
+    x: -800,
+    y: 0,
+    width: 800,
+    height: 575,
+    minWidth: 800,
+    minHeight: 575,
+  });
 });
 
 test("on macOS the window buttons sit in the middle of the title bar", async () => {
