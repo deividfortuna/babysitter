@@ -169,6 +169,9 @@ func reviewPayload(it snapshot.ReviewItem) map[string]any {
 		"body":               it.Body,
 		"created_at":         it.CreatedAt,
 	}
+	if it.Bot {
+		p["bot"] = true
+	}
 	if it.Path != "" {
 		p["path"] = it.Path
 	}

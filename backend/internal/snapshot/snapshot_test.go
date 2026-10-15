@@ -863,3 +863,32 @@ func TestResolveRepoReadsTheCheckoutWithoutGitHub(t *testing.T) {
 		t.Fatalf("ResolveRepo without a checkout err = %v, want ErrIncompleteTarget", err)
 	}
 }
+
+func TestCollectMarksTheItemsOfABot(t *testing.T) {
+	t.Parallel()
+	g, pr := newFakePR()
+	pr.IssueComments = append(pr.IssueComments, ghfake.Comment{
+		ID: 40, Author: "sonarcloud[bot]", Body: "Quality Gate passed", Association: "NONE", CreatedAt: ghfake.At("2026-09-04T00:00:00Z"),
+	})
+	pr.ReviewComments = append(pr.ReviewComments, ghfake.ReviewComment{
+		ID: 41, Author: "copilot-pull-request-reviewer[bot]", Body: "nil check", CreatedAt: ghfake.At("2026-09-04T00:00:00Z"),
+		ReviewID: 7, Path: "a.go", Line: 3,
+	})
+	c, st := g.Client(t), openStore(t)
+	opts := Options{MaxFlakyRetries: 3, Now: func() time.Time { return time.Date(2026, 9, 7, 12, 0, 0, 0, time.UTC) }}
+
+	s, err := Collect(context.Background(), c, st, Target{Owner: "octo", Name: "hello", Number: 3}, opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	bots := map[int64]bool{}
+	for _, it := range s.NewReviewItems {
+		bots[it.ID] = it.Bot
+	}
+	if !bots[40] || !bots[41] {
+		t.Errorf("the items of a bot are not marked: %v", bots)
+	}
+	if bots[10] || bots[20] || bots[31] || bots[6] {
+		t.Errorf("an item of a person is marked as a bot: %v", bots)
+	}
+}

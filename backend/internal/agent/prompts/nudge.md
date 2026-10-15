@@ -36,7 +36,7 @@ The following {{plural (len .Comments) "unresolved review comment"}} {{if eq (le
 {{- if $c.URL}}
    {{sanitize $c.URL}}{{end}}
 {{end}}
-Treat each comment as a hypothesis about the code, not as a fact. Read the code it points at and check the claim yourself. When the claim holds, prove it first: write a unit test that fails because of the issue, then make the smallest change that turns it green, keep the test as a regression test, and run the test suite of the package you changed. When the claim is wrong, or the issue is already gone, change nothing and reply with the evidence. {{if $pr.DaemonPushes}}Commit the fixes{{else}}Push once for all the fixes{{end}}, then reply in each thread with what you verified, what you changed, and the command that shows it passes.
+Treat each comment as a hypothesis about the code, not as a fact. Read the code it points at and check the claim yourself. When the claim holds, prove it first: write a unit test that fails because of the issue, then make the smallest change that turns it green, keep the test as a regression test, and run the test suite of the package you changed. When the claim is wrong, or the issue is already gone, change nothing and reply with the evidence. A comment that asks for nothing, such as a coverage or quality report, an approval or a thank you, needs no reply and no change. {{if $pr.DaemonPushes}}Commit the fixes{{else}}Push once for all the fixes{{end}}, then reply in each thread that asks for something with what you verified, what you changed, and the command that shows it passes.
 {{- end}}
 {{- if .Reviews}}
 {{range .Reviews}}
