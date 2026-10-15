@@ -723,7 +723,8 @@ The snapshot holds:
   submitted reviews that no earlier snapshot of this pull request showed.
   Pending reviews and their inline comments do not appear until the
   reviewer submits them, and a review that only comments with an empty
-  body does not appear at all. An inline comment gives its `path`, its
+  body does not appear at all. `bot` is true when a GitHub App wrote the
+  item. An inline comment gives its `path`, its
   `line`, the `side` of the diff that line is on (`LEFT` or `RIGHT`), and
   the `commit_id` the line refers to. When GitHub can no longer place an
   outdated comment on the current diff, `line` and `commit_id` are those
@@ -1019,8 +1020,11 @@ restart neither repeats old items nor loses new ones.
 The items that ask for work go to the agent as one message: the failed
 checks with the API path of their logs, the review comments with their
 ids and the file and line, the reviews, and the branch behind its base
-or in conflict with it. The text is typed into the terminal as you would
-type it. A `nudged` row in the activity keeps the message, and the app
+or in conflict with it. A conversation comment of a bot, such as a
+coverage or quality report, stays in the activity and does not go to the
+agent; an inline comment or a review of a bot does, because a reviewing
+bot asks for changes that way. The text is typed into the terminal as you
+would type it. A `nudged` row in the activity keeps the message, and the app
 shows it. The agent reads the logs and the code, decides on the merits,
 fixes what the branch broke, verifies with the narrowest check, commits
 in your voice, and replies in each thread through the daemon. A flaky

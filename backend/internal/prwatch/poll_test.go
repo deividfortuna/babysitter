@@ -230,3 +230,69 @@ func TestStartWithIncludeExistingRecoversWhatAnEarlierWatchMarked(t *testing.T) 
 		t.Fatalf("kinds = %v, want the comment handed over again", got)
 	}
 }
+
+func TestAConversationCommentOfABotStaysOutOfTheMessage(t *testing.T) {
+	t.Parallel()
+	ctx := context.Background()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+
+	fx.update(func() {
+		fx.pr.IssueComments = []ghfake.Comment{{ID: 11, Author: "sonarcloud[bot]", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "Quality Gate passed, 100% coverage", URL: "https://c/11"}}
+	})
+	fx.poll(w)
+
+	equal(t, fx.kinds(w), []string{"watch_started", "session_started", "nudged", "comment"})
+	if msgs := h.messages(); len(msgs) != 1 {
+		t.Fatalf("messages = %q, want only the opening message", msgs)
+	}
+	todo, err := fx.st.UnnudgedActionable(ctx, w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(todo) != 0 {
+		t.Fatalf("the comment of the bot still waits for the agent: %+v", todo)
+	}
+	stored, err := fx.st.GetWatch(ctx, w.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, b := range stored.ReadyBlockers {
+		if strings.Contains(b, "not told") {
+			t.Errorf("the comment of the bot blocks the merge: %q", b)
+		}
+	}
+
+	fx.update(func() {
+		fx.pr.IssueComments = append(fx.pr.IssueComments, ghfake.Comment{ID: 12, Author: "bob", CreatedAt: ghfake.At("2026-09-07T12:02:00Z"), Body: "please add a test", URL: "https://c/12"})
+	})
+	fx.poll(w)
+
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "please add a test") || strings.Contains(msgs[1], "Quality Gate") {
+		t.Fatalf("messages = %q, want the comment of bob alone in the second message", msgs)
+	}
+}
+
+func TestAnInlineCommentOfABotReachesTheAgent(t *testing.T) {
+	t.Parallel()
+	fx := newFixture(t)
+	w := fx.start()
+	h := fx.host.last()
+	fx.agentIdle(w)
+
+	fx.update(func() {
+		fx.pr.ReviewComments = []ghfake.ReviewComment{{
+			ID: 31, Author: "copilot-pull-request-reviewer[bot]", CreatedAt: ghfake.At("2026-09-07T12:01:00Z"), Body: "this can be nil", URL: "https://c/31",
+			Path: "x.go", Line: 4, CommitID: "abc",
+		}}
+	})
+	fx.poll(w)
+
+	msgs := h.messages()
+	if len(msgs) != 2 || !strings.Contains(msgs[1], "this can be nil") {
+		t.Fatalf("messages = %q, want the inline comment of the bot handed to the agent", msgs)
+	}
+}

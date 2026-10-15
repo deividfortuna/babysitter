@@ -372,6 +372,7 @@ func TestNudgeMessage(t *testing.T) {
 		"1. x.go:4 (@bob), comment id 31:",
 		"renamethis",
 		"2. (general) (@carol), comment id 11 on the conversation: answer it with `--to 11`, which posts your answer on the conversation:",
+		"A comment that asks for nothing, such as a coverage or quality report, an approval or a thank you, needs no reply and no change.",
 		"A review from @bob (changes_requested) is on",
 		"Review body:",
 		"Not yet",

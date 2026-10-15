@@ -641,7 +641,11 @@ func user(login string) *github.User {
 	if login == "" {
 		return nil
 	}
-	return &github.User{Login: new(login), AvatarURL: new(AvatarURL(login))}
+	kind := "User"
+	if strings.HasSuffix(login, "[bot]") {
+		kind = "Bot"
+	}
+	return &github.User{Login: new(login), Type: new(kind), AvatarURL: new(AvatarURL(login))}
 }
 
 func prAuthor(p *PR) *github.User {

@@ -306,8 +306,8 @@ func (s *Service) actionable(ctx context.Context, w store.Watch) ([]store.Activi
 	if err != nil {
 		return nil, err
 	}
-	current, stale := currentItems(todo, w.HeadSHA)
-	if err := s.store.MarkActivityNudged(ctx, ids(stale), s.now()); err != nil {
+	current, leftOut := currentItems(todo, w.HeadSHA)
+	if err := s.store.MarkActivityNudged(ctx, ids(leftOut), s.now()); err != nil {
 		return nil, err
 	}
 	return s.holdForGitHub(ctx, w, current)
@@ -413,15 +413,28 @@ func wantsLog(it agent.Item) bool {
 	return it.Kind == store.ActivityCheckFailed && it.JobID != 0
 }
 
-func currentItems(items []store.Activity, headSHA string) (current, stale []store.Activity) {
+func currentItems(items []store.Activity, headSHA string) (current, leftOut []store.Activity) {
 	for _, a := range items {
-		if staleCheck(a, headSHA) {
-			stale = append(stale, a)
+		if staleCheck(a, headSHA) || botNotice(a) {
+			leftOut = append(leftOut, a)
 			continue
 		}
 		current = append(current, a)
 	}
-	return current, stale
+	return current, leftOut
+}
+
+func botNotice(a store.Activity) bool {
+	if a.Kind != store.ActivityComment {
+		return false
+	}
+	var p struct {
+		Bot bool `json:"bot"`
+	}
+	if err := json.Unmarshal(a.Payload, &p); err != nil {
+		return false
+	}
+	return p.Bot
 }
 
 func staleCheck(a store.Activity, headSHA string) bool {

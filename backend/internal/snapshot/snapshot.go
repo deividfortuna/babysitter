@@ -218,6 +218,7 @@ type ReviewItem struct {
 	ID                int64                `json:"id"`
 	Author            string               `json:"author"`
 	AuthorAssociation string               `json:"author_association"`
+	Bot               bool                 `json:"bot,omitempty"`
 	CreatedAt         time.Time            `json:"created_at"`
 	Body              string               `json:"body"`
 	Path              string               `json:"path,omitempty"`
@@ -534,6 +535,7 @@ func reviewItems(issueComments []*github.IssueComment, reviewComments []*github.
 			ID:                c.GetID(),
 			Author:            c.GetUser().GetLogin(),
 			AuthorAssociation: c.GetAuthorAssociation(),
+			Bot:               isBot(c.GetUser()),
 			CreatedAt:         c.GetCreatedAt().Time,
 			Body:              c.GetBody(),
 			URL:               c.GetHTMLURL(),
@@ -552,6 +554,7 @@ func reviewItems(issueComments []*github.IssueComment, reviewComments []*github.
 			ID:                c.GetID(),
 			Author:            c.GetUser().GetLogin(),
 			AuthorAssociation: c.GetAuthorAssociation(),
+			Bot:               isBot(c.GetUser()),
 			CreatedAt:         c.GetCreatedAt().Time,
 			Body:              c.GetBody(),
 			Path:              c.GetPath(),
@@ -573,6 +576,7 @@ func reviewItems(issueComments []*github.IssueComment, reviewComments []*github.
 			ID:                r.GetID(),
 			Author:            r.GetUser().GetLogin(),
 			AuthorAssociation: r.GetAuthorAssociation(),
+			Bot:               isBot(r.GetUser()),
 			CreatedAt:         r.GetSubmittedAt().Time,
 			Body:              r.GetBody(),
 			State:             watcher.StateOf(r),
@@ -587,6 +591,10 @@ func reviewItems(issueComments []*github.IssueComment, reviewComments []*github.
 		)
 	})
 	return items
+}
+
+func isBot(u *github.User) bool {
+	return u.GetType() == "Bot"
 }
 
 func summarizeChecks(runs []*github.CheckRun, combined *github.CombinedStatus) Checks {
