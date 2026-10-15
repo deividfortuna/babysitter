@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { Configuration } from "electron-builder";
+import { notarizeApp, type NotaryKey } from "./notarize.ts";
 import { channelOfVersion, type Channel } from "./release-channel.ts";
 
 type Env = Record<string, string | undefined>;
@@ -18,19 +19,22 @@ export const APP_ID = "com.deividfortuna.babysitter";
 const PRODUCT_NAME = "Babysitter";
 const EXECUTABLE_NAME = "babysitter";
 
-type MacSignature = Pick<NonNullable<Configuration["mac"]>, "identity" | "hardenedRuntime" | "notarize">;
+type MacSignature = Pick<NonNullable<Configuration["mac"]>, "identity" | "hardenedRuntime">;
 
-const NO_SIGNATURE: MacSignature = { identity: null, notarize: false };
-const AD_HOC: MacSignature = { identity: "-", hardenedRuntime: false, notarize: false };
-const KEYCHAIN: MacSignature = { notarize: false };
+const NO_SIGNATURE: MacSignature = { identity: null };
+const AD_HOC: MacSignature = { identity: "-", hardenedRuntime: false };
+const KEYCHAIN: MacSignature = {};
 
 function setting(env: Env, name: string): string | undefined {
   const value = env[name]?.trim();
   return value ? value : undefined;
 }
 
-function hasNotaryKey(env: Env): boolean {
-  return ["APPLE_API_KEY", "APPLE_API_KEY_ID", "APPLE_API_ISSUER"].every((name) => setting(env, name));
+function notaryKey(env: Env): NotaryKey | undefined {
+  const key = setting(env, "APPLE_API_KEY");
+  const keyId = setting(env, "APPLE_API_KEY_ID");
+  const issuer = setting(env, "APPLE_API_ISSUER");
+  return key && keyId && issuer ? { key, keyId, issuer } : undefined;
 }
 
 function skipsSignature(env: Env): boolean {
@@ -50,9 +54,15 @@ function certificateName(identity: string): string {
 export function macSignature(env: Env): MacSignature {
   if (skipsSignature(env)) return NO_SIGNATURE;
   const identity = namedIdentity(env);
-  if (identity) return { identity: certificateName(identity), notarize: hasNotaryKey(env) };
+  if (identity) return { identity: certificateName(identity) };
   if (setting(env, "BABYSITTER_ADHOC_SIGN") === "1") return AD_HOC;
   return KEYCHAIN;
+}
+
+export function notaryHook(env: Env): Configuration["afterSign"] {
+  const key = notaryKey(env);
+  if (!key || !namedIdentity(env)) return undefined;
+  return (context) => notarizeApp(path.join(context.appOutDir, `${PRODUCT_NAME}.app`), key);
 }
 
 const FEED_CHANNELS: Partial<Record<Channel, "latest" | "nightly">> = { stable: "latest", nightly: "nightly" };
@@ -99,6 +109,7 @@ export function builderConfig(build: DesktopBuild): Configuration {
     npmRebuild: false,
     nodeGypRebuild: false,
     publish: updateFeed(build),
+    afterSign: notaryHook(build.env),
     electronFuses: {
       runAsNode: false,
       enableCookieEncryption: true,
@@ -113,6 +124,7 @@ export function builderConfig(build: DesktopBuild): Configuration {
       entitlements: asset("entitlements.mac.plist"),
       entitlementsInherit: asset("entitlements.mac.plist"),
       artifactName: "Babysitter-${version}-darwin-${arch}.${ext}",
+      notarize: false,
       ...macSignature(build.env),
     },
     dmg: { title: PRODUCT_NAME, icon: asset("icon.icns"), format: "ULFO" },
