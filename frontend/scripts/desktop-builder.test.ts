@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { expect, test } from "vite-plus/test";
-import { builderConfig, macSignature, updateFeed, type DesktopBuild } from "./desktop-builder";
+import type { AfterPackContext } from "electron-builder";
+import { beforeEach, expect, test, vi } from "vite-plus/test";
+import { builderConfig, macSignature, notaryHook, updateFeed, type DesktopBuild } from "./desktop-builder";
+import { notarizeApp } from "./notarize";
+
+vi.mock("./notarize", () => ({ notarizeApp: vi.fn(async () => {}) }));
+
+beforeEach(() => {
+  vi.mocked(notarizeApp).mockClear();
+});
 
 const notaryKey = {
   APPLE_API_KEY: "/tmp/AuthKey.p8",
@@ -28,57 +36,85 @@ const build = (overrides: Partial<DesktopBuild> = {}): DesktopBuild => ({
 
 test.each([
   {
-    name: "a machine with no setting signs with the identity the keychain holds and does not notarize",
+    name: "a machine with no setting signs with the identity the keychain holds",
     env: {},
-    signature: { notarize: false },
+    signature: {},
   },
   {
     name: "skip leaves the app without a signature, whatever else is set",
     env: { BABYSITTER_SKIP_SIGN: "1", BABYSITTER_SIGN_IDENTITY: identity, BABYSITTER_ADHOC_SIGN: "1" },
-    signature: { identity: null, notarize: false },
+    signature: { identity: null },
   },
   {
     name: "a named identity signs with that identity and keeps the hardened runtime that notarization asks for",
     env: { BABYSITTER_SIGN_IDENTITY: identity },
-    signature: { identity: certificate, notarize: false },
-  },
-  {
-    name: "a full App Store Connect key notarizes the app a named identity signs",
-    env: { BABYSITTER_SIGN_IDENTITY: identity, ...notaryKey },
-    signature: { identity: certificate, notarize: true },
-  },
-  {
-    name: "a partial App Store Connect key does not notarize",
-    env: { BABYSITTER_SIGN_IDENTITY: identity, APPLE_API_KEY: "/tmp/AuthKey.p8" },
-    signature: { identity: certificate, notarize: false },
+    signature: { identity: certificate },
   },
   {
     name: "ad hoc signs with the dash and leaves out the hardened runtime, whose library check refuses the framework",
     env: { BABYSITTER_ADHOC_SIGN: "1" },
-    signature: { identity: "-", hardenedRuntime: false, notarize: false },
-  },
-  {
-    name: "an ad hoc signature is never sent to notarization",
-    env: { BABYSITTER_ADHOC_SIGN: "1", ...notaryKey },
-    signature: { identity: "-", hardenedRuntime: false, notarize: false },
+    signature: { identity: "-", hardenedRuntime: false },
   },
   {
     name: "a named identity wins over ad hoc",
     env: { BABYSITTER_ADHOC_SIGN: "1", BABYSITTER_SIGN_IDENTITY: identity },
-    signature: { identity: certificate, notarize: false },
+    signature: { identity: certificate },
   },
   {
     name: "an identity without the Developer ID prefix, which electron-builder refuses, keeps its name",
     env: { BABYSITTER_SIGN_IDENTITY: certificate },
-    signature: { identity: certificate, notarize: false },
+    signature: { identity: certificate },
   },
   {
     name: "blank values count as not set",
     env: { BABYSITTER_SIGN_IDENTITY: "  ", BABYSITTER_ADHOC_SIGN: "" },
-    signature: { notarize: false },
+    signature: {},
   },
 ])("$name", ({ env, signature }) => {
   expect(macSignature(env)).toEqual(signature);
+});
+
+async function signed(platform: string, appOutDir: string): Promise<void> {
+  const hook = notaryHook({ BABYSITTER_SIGN_IDENTITY: identity, ...notaryKey });
+  if (typeof hook !== "function") throw new Error("no notary hook");
+  await hook({ appOutDir, electronPlatformName: platform } as AfterPackContext);
+}
+
+test("a full App Store Connect key notarizes the app a named identity signs, after the signature", async () => {
+  await signed("darwin", "/out/mac");
+
+  expect(notarizeApp).toHaveBeenCalledWith("/out/mac/Babysitter.app", {
+    key: "/tmp/AuthKey.p8",
+    keyId: "KEYID",
+    issuer: "issuer-uuid",
+  });
+});
+
+test("a Windows build is never sent to notarization, even with the Mac identity and key set", async () => {
+  await signed("win32", "/out/win-unpacked");
+
+  expect(notarizeApp).not.toHaveBeenCalled();
+});
+
+test.each([
+  {
+    name: "a partial App Store Connect key does not notarize",
+    env: { BABYSITTER_SIGN_IDENTITY: identity, APPLE_API_KEY: "/tmp/AuthKey.p8" },
+  },
+  { name: "an ad hoc signature is never sent to notarization", env: { BABYSITTER_ADHOC_SIGN: "1", ...notaryKey } },
+  { name: "the identity of the keychain is never sent to notarization", env: { ...notaryKey } },
+  {
+    name: "skip does not notarize, even with a named identity and a full key",
+    env: { BABYSITTER_SKIP_SIGN: "1", BABYSITTER_SIGN_IDENTITY: identity, ...notaryKey },
+  },
+])("$name", ({ env }) => {
+  expect(notaryHook(env)).toBeUndefined();
+});
+
+test("electron-builder leaves notarization to the hook, which retries each step of it on its own", () => {
+  const config = builderConfig(build({ env: { BABYSITTER_SIGN_IDENTITY: identity, ...notaryKey } }));
+  expect(config.mac?.notarize).toBe(false);
+  expect(config.afterSign).toBeTypeOf("function");
 });
 
 test("a stable build signed with a named identity reads the latest feed of the GitHub releases", () => {
