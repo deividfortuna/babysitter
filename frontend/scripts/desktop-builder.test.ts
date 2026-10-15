@@ -1,7 +1,15 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
-import { expect, test } from "vite-plus/test";
+import type { AfterPackContext } from "electron-builder";
+import { beforeEach, expect, test, vi } from "vite-plus/test";
 import { builderConfig, macSignature, notaryHook, updateFeed, type DesktopBuild } from "./desktop-builder";
+import { notarizeApp } from "./notarize";
+
+vi.mock("./notarize", () => ({ notarizeApp: vi.fn(async () => {}) }));
+
+beforeEach(() => {
+  vi.mocked(notarizeApp).mockClear();
+});
 
 const notaryKey = {
   APPLE_API_KEY: "/tmp/AuthKey.p8",
@@ -66,8 +74,26 @@ test.each([
   expect(macSignature(env)).toEqual(signature);
 });
 
-test("a full App Store Connect key notarizes the app a named identity signs, after the signature", () => {
-  expect(notaryHook({ BABYSITTER_SIGN_IDENTITY: identity, ...notaryKey })).toBeTypeOf("function");
+async function signed(platform: string, appOutDir: string): Promise<void> {
+  const hook = notaryHook({ BABYSITTER_SIGN_IDENTITY: identity, ...notaryKey });
+  if (typeof hook !== "function") throw new Error("no notary hook");
+  await hook({ appOutDir, electronPlatformName: platform } as AfterPackContext);
+}
+
+test("a full App Store Connect key notarizes the app a named identity signs, after the signature", async () => {
+  await signed("darwin", "/out/mac");
+
+  expect(notarizeApp).toHaveBeenCalledWith("/out/mac/Babysitter.app", {
+    key: "/tmp/AuthKey.p8",
+    keyId: "KEYID",
+    issuer: "issuer-uuid",
+  });
+});
+
+test("a Windows build is never sent to notarization, even with the Mac identity and key set", async () => {
+  await signed("win32", "/out/win-unpacked");
+
+  expect(notarizeApp).not.toHaveBeenCalled();
 });
 
 test.each([

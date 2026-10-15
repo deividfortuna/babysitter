@@ -62,7 +62,10 @@ export function macSignature(env: Env): MacSignature {
 export function notaryHook(env: Env): Configuration["afterSign"] {
   const key = notaryKey(env);
   if (!key || !namedIdentity(env)) return undefined;
-  return (context) => notarizeApp(path.join(context.appOutDir, `${PRODUCT_NAME}.app`), key);
+  return async (context) => {
+    if (context.electronPlatformName !== "darwin") return;
+    await notarizeApp(path.join(context.appOutDir, `${PRODUCT_NAME}.app`), key);
+  };
 }
 
 const FEED_CHANNELS: Partial<Record<Channel, "latest" | "nightly">> = { stable: "latest", nightly: "nightly" };
