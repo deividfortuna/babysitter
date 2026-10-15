@@ -1,5 +1,5 @@
 import { expect, test, vi } from "vite-plus/test";
-import { notarizeApp, type Command, type CommandResult } from "./notarize";
+import { commandRunner, notarizeApp, runCommand, type Command, type CommandResult } from "./notarize";
 
 const key = { key: "/tmp/AuthKey.p8", keyId: "KEYID", issuer: "issuer-uuid" };
 const app = "/build/mac/Babysitter.app";
@@ -76,4 +76,29 @@ test("a submission Apple refuses fails the build with the log of the notary and 
 
   await expect(notarizeApp(app, key, n.options)).rejects.toThrow(/ended Invalid\nissues: unsigned binary/);
   expect(n.commands.map(tool)).toEqual(["ditto", "submit", "wait", "log"]);
+});
+
+test("a command keeps all of an output longer than a megabyte", async () => {
+  const size = 2 * 1024 * 1024;
+  const script = `process.stdout.write("x".repeat(${size}))`;
+
+  const result = await runCommand({ command: process.execPath, args: ["-e", script] });
+
+  expect(result.status).toBe(0);
+  expect(result.output).toHaveLength(size);
+});
+
+test("a command that hangs is stopped at the timeout and fails with the reason", async () => {
+  const result = await commandRunner(200)({ command: "sleep", args: ["10"] });
+
+  expect(result.status).not.toBe(0);
+  expect(result.output).toContain("ETIMEDOUT");
+});
+
+test("a command that cannot start fails with the reason", async () => {
+  const result = await runCommand({ command: "no-such-notary-tool", args: [] });
+
+  expect(result.status).not.toBe(0);
+  expect(result.output).toContain("ENOENT");
+  expect(result.output).not.toContain("undefined");
 });

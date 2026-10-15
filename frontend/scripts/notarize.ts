@@ -20,10 +20,16 @@ export type NotaryOptions = {
 
 type Notary = Required<NotaryOptions>;
 
-export const runCommand: Runner = async ({ command, args, cwd }) => {
-  const result = spawnSync(command, args, { cwd, encoding: "utf8" });
-  return { status: result.status ?? 1, output: `${result.stdout}${result.stderr}` };
-};
+export function commandRunner(timeoutMs: number): Runner {
+  return async ({ command, args, cwd }) => {
+    const result = spawnSync(command, args, { cwd, encoding: "utf8", timeout: timeoutMs, maxBuffer: 64 * 1024 * 1024 });
+    const error = result.error ? `${result.error.message}\n` : "";
+    return { status: result.status ?? 1, output: `${error}${result.stdout ?? ""}${result.stderr ?? ""}` };
+  };
+}
+
+// A wait the timeout stops waits again for the same submission, so eight attempts stay within the six hours of a job.
+export const runCommand = commandRunner(30 * 60_000);
 
 const DEFAULTS: Notary = {
   run: runCommand,
