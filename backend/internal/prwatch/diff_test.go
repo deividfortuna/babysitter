@@ -270,6 +270,20 @@ func TestCurrentItems(t *testing.T) {
 	}
 }
 
+func TestCurrentItemsLeavesOutTheConversationCommentsOfABot(t *testing.T) {
+	t.Parallel()
+	items := []store.Activity{
+		{ID: 1, Kind: store.ActivityComment, Payload: json.RawMessage(`{"author":"sonarcloud[bot]","bot":true}`)},
+		{ID: 2, Kind: store.ActivityComment, Payload: json.RawMessage(`{"author":"sonarcloud[bot]"}`)},
+		{ID: 3, Kind: store.ActivityComment, Payload: json.RawMessage(`{"author":"bob"}`)},
+		{ID: 4, Kind: store.ActivityReviewComment, Payload: json.RawMessage(`{"author":"copilot-pull-request-reviewer[bot]","bot":true}`)},
+	}
+	got, leftOut := currentItems(items, "new")
+	if len(got) != 2 || got[0].ID != 3 || got[1].ID != 4 || len(leftOut) != 2 || leftOut[0].ID != 1 || leftOut[1].ID != 2 {
+		t.Fatalf("currentItems = %+v, left out %+v", got, leftOut)
+	}
+}
+
 func TestSummaryOfANonASCIICommentIsValidUTF8(t *testing.T) {
 	t.Parallel()
 	body := strings.Repeat("a", 116) + strings.Repeat("é", 20)

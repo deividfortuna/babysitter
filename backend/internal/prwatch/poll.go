@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/google/go-github/v91/github"
@@ -429,12 +430,13 @@ func botNotice(a store.Activity) bool {
 		return false
 	}
 	var p struct {
-		Bot bool `json:"bot"`
+		Author string `json:"author"`
+		Bot    bool   `json:"bot"`
 	}
 	if err := json.Unmarshal(a.Payload, &p); err != nil {
 		return false
 	}
-	return p.Bot
+	return p.Bot || strings.HasSuffix(p.Author, "[bot]")
 }
 
 func staleCheck(a store.Activity, headSHA string) bool {
