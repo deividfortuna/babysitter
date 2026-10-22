@@ -17,7 +17,13 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import type { DiffLineAnnotation } from "@pierre/diffs";
-import { CodeView, WorkerPoolContext, type CodeViewHandle, type CodeViewItem } from "@pierre/diffs/react";
+import {
+  CodeView,
+  WorkerPoolContext,
+  type CodeViewAnnotationArgs,
+  type CodeViewHandle,
+  type CodeViewItem,
+} from "@pierre/diffs/react";
 import type { ProposalDetail, ProposalReply } from "@/hooks/useProposals";
 import { useDiffPreferences, type DiffPreferences, type DiffStyle } from "@/hooks/use-diff-preferences";
 import { useTheme } from "@/hooks/use-theme";
@@ -596,7 +602,7 @@ function renderHeader(item: CodeViewItem<ReplyAnchor>) {
   return <FileHeaderSlot path={item.id} />;
 }
 
-function renderInlineReply(annotation: DiffLineAnnotation<ReplyAnchor>) {
+function renderInlineReply(...[annotation]: CodeViewAnnotationArgs<ReplyAnchor>) {
   return <InlineReply anchor={annotation.metadata} />;
 }
 

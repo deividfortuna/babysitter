@@ -1,12 +1,12 @@
 module github.com/deividfortuna/babysitter
 
-go 1.27.2
+go 1.27.3
 
 require (
-	github.com/Microsoft/go-winio v0.6.3
+	github.com/Microsoft/go-winio v0.6.4
 	github.com/charmbracelet/x/conpty v0.2.0
 	github.com/creack/pty v1.1.24
-	github.com/go-chi/chi/v5 v5.4.0
+	github.com/go-chi/chi/v5 v5.5.0
 	github.com/google/go-github/v91 v91.0.0
 	github.com/mattn/go-sqlite3 v1.14.52
 	github.com/spf13/cobra v1.10.2
