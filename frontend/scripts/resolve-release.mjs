@@ -16,15 +16,22 @@ const { GITHUB_EVENT_NAME, GITHUB_REF, GITHUB_REF_NAME, GITHUB_SHA, GITHUB_RUN_N
   process.env;
 const { DISPATCH_CHANNEL, DISPATCH_VERSION, GITHUB_OUTPUT } = process.env;
 
-function api(path, ...flags) {
-  return JSON.parse(execFileSync("gh", ["api", ...flags, `repos/${GITHUB_REPOSITORY}${path}`], { encoding: "utf8" }));
+function gh(path, ...flags) {
+  return execFileSync("gh", ["api", ...flags, `repos/${GITHUB_REPOSITORY}${path}`], { encoding: "utf8" });
 }
 
+function api(path) {
+  return JSON.parse(gh(path));
+}
+
+const publishedReleaseFilter =
+  ".[] | select(.draft | not) | select(.published_at) | {tag: .tag_name, publishedAt: .published_at}";
+
 function publishedReleases() {
-  return api("/releases?per_page=100", "--paginate", "--slurp")
-    .flat()
-    .filter((release) => !release.draft && release.published_at)
-    .map((release) => ({ tag: release.tag_name, publishedAt: release.published_at }));
+  return gh("/releases?per_page=100", "--paginate", "--jq", publishedReleaseFilter)
+    .split("\n")
+    .filter(Boolean)
+    .map((line) => JSON.parse(line));
 }
 
 function comparison(base, head) {
